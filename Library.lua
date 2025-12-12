@@ -8384,6 +8384,8 @@ function Library:CreateWindow(WindowInfo)
         local TabButton: TextButton
         local TabLabel
         local TabIcon
+        local TabIndicatorRef
+        local TabGlowRef
 
         local TabContainer
         local TabLeft
@@ -8461,8 +8463,8 @@ function Library:CreateWindow(WindowInfo)
             end
 
             -- Store indicator references for animation
-            local TabIndicatorRef = TabIndicator
-            local TabGlowRef = TabGlow
+            TabIndicatorRef = TabIndicator
+            TabGlowRef = TabGlow
 
             --// Tab Container \\--
             TabContainer = New("Frame", {
