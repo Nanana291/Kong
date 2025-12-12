@@ -3817,6 +3817,111 @@ do
         return Label
     end
 
+    function Funcs:AddDivider(Info)
+        Info = Info or {}
+
+        local Groupbox = self
+        local Container = Groupbox.Container
+
+        local Divider = {
+            Visible = Info.Visible ~= false,
+            Text = Info.Text,
+            Type = "Divider",
+        }
+
+        local height = Info.Text and 20 or 12
+
+        local Holder = New("Frame", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 0, height),
+            Visible = Divider.Visible,
+            Parent = Container,
+        })
+
+        local Line = New("Frame", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundColor3 = "OutlineColor",
+            Position = UDim2.fromScale(0.5, 0.5),
+            Size = UDim2.new(1, 0, 0, 1),
+            Parent = Holder,
+        })
+
+        -- Add text in middle if specified
+        if Info.Text then
+            local TextLabel = New("TextLabel", {
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                AutomaticSize = Enum.AutomaticSize.X,
+                BackgroundColor3 = "BackgroundColor",
+                Position = UDim2.fromScale(0.5, 0.5),
+                Size = UDim2.fromOffset(0, 14),
+                Text = "  " .. Info.Text .. "  ",
+                TextColor3 = "OutlineColor",
+                TextSize = 12,
+                Parent = Holder,
+            })
+            Divider.TextLabel = TextLabel
+        end
+
+        function Divider:SetVisible(Visible: boolean)
+            Divider.Visible = Visible
+            Holder.Visible = Divider.Visible
+            Groupbox:Resize()
+        end
+
+        function Divider:SetText(Text: string)
+            if Divider.TextLabel then
+                Divider.Text = Text
+                Divider.TextLabel.Text = "  " .. Text .. "  "
+            end
+        end
+
+        Groupbox:Resize()
+
+        Divider.Holder = Holder
+        table.insert(Groupbox.Elements, Divider)
+
+        return Divider
+    end
+
+    function Funcs:AddSpacer(Height)
+        Height = Height or 8
+
+        local Groupbox = self
+        local Container = Groupbox.Container
+
+        local Spacer = {
+            Height = Height,
+            Visible = true,
+            Type = "Spacer",
+        }
+
+        local Holder = New("Frame", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 0, Height),
+            Visible = true,
+            Parent = Container,
+        })
+
+        function Spacer:SetVisible(Visible: boolean)
+            Spacer.Visible = Visible
+            Holder.Visible = Spacer.Visible
+            Groupbox:Resize()
+        end
+
+        function Spacer:SetHeight(NewHeight: number)
+            Spacer.Height = NewHeight
+            Holder.Size = UDim2.new(1, 0, 0, NewHeight)
+            Groupbox:Resize()
+        end
+
+        Groupbox:Resize()
+
+        Spacer.Holder = Holder
+        table.insert(Groupbox.Elements, Spacer)
+
+        return Spacer
+    end
+
     function Funcs:AddButton(...)
         local function GetInfo(...)
             local Info = {}
@@ -3917,23 +4022,26 @@ do
             local bgColor = VariantStyle.bg
             local textColor = VariantStyle.text
 
-            -- Handle scheme colors vs direct colors
+            -- Convert scheme key strings to actual Color3 values
             local function GetColor(colorValue)
                 if typeof(colorValue) == "string" then
-                    return Library.Scheme[colorValue] or Library.Scheme.MainColor
+                    return Library.Scheme[colorValue] or Library.Scheme.FontColor
                 end
                 return colorValue
             end
 
+            local actualBgColor = GetColor(bgColor)
+            local actualTextColor = GetColor(textColor)
+
             local Base = New("TextButton", {
                 Active = not Button.Disabled and not Button.Loading,
-                BackgroundColor3 = Button.Disabled and "BackgroundColor" or (typeof(bgColor) == "string" and bgColor or bgColor),
+                BackgroundColor3 = Button.Disabled and Library.Scheme.BackgroundColor or actualBgColor,
                 ClipsDescendants = true,
                 Size = Button.Compact and UDim2.fromOffset(24, 21) or UDim2.fromScale(1, 1),
                 Text = (Button.Icon and not Button.Compact) and "" or (Button.Compact and "" or Button.Text),
                 TextSize = 14,
                 TextTransparency = Button.Disabled and 0.8 or (Button.Variant == "Default" and 0.4 or 0),
-                TextColor3 = typeof(textColor) == "string" and textColor or textColor,
+                TextColor3 = actualTextColor,
                 Visible = Button.Visible,
                 Parent = Holder,
             })
@@ -3941,7 +4049,7 @@ do
             -- Register color for theme support
             if typeof(bgColor) == "string" then
                 Library.Registry[Base] = Library.Registry[Base] or {}
-                Library.Registry[Base].BackgroundColor3 = bgColor
+                Library.Registry[Base].BackgroundColor3 = Button.Disabled and "BackgroundColor" or bgColor
             end
             if typeof(textColor) == "string" then
                 Library.Registry[Base] = Library.Registry[Base] or {}
@@ -3953,11 +4061,16 @@ do
                 Parent = Base,
             })
 
+            local strokeColor = Button.Variant == "Default" and Library.Scheme.OutlineColor or (typeof(bgColor) == "Color3" and bgColor or Library.Scheme.AccentColor)
             local Stroke = New("UIStroke", {
-                Color = Button.Variant == "Default" and "OutlineColor" or (typeof(bgColor) == "Color3" and bgColor or "AccentColor"),
+                Color = strokeColor,
                 Transparency = Button.Disabled and 0.5 or (Button.Variant == "Default" and 0 or 0.5),
                 Parent = Base,
             })
+            if Button.Variant == "Default" then
+                Library.Registry[Stroke] = Library.Registry[Stroke] or {}
+                Library.Registry[Stroke].Color = "OutlineColor"
+            end
 
             -- Add icon if specified
             local IconImage, IconContainer
@@ -3965,7 +4078,6 @@ do
                 local Icon = Library:GetCustomIcon(Button.Icon)
                 if Icon then
                     local iconSize = 14
-                    local textPadding = Button.Compact and 0 or 4
 
                     if not Button.Compact then
                         -- Container for icon + text layout
@@ -3975,7 +4087,7 @@ do
                             Parent = Base,
                         })
 
-                        local layout = New("UIListLayout", {
+                        New("UIListLayout", {
                             FillDirection = Enum.FillDirection.Horizontal,
                             HorizontalAlignment = Enum.HorizontalAlignment.Center,
                             VerticalAlignment = Enum.VerticalAlignment.Center,
@@ -3983,12 +4095,12 @@ do
                             Parent = IconContainer,
                         })
 
-                        -- Create icon
+                        -- Create icon (left side)
                         if not Button.IconRight then
                             IconImage = New("ImageLabel", {
                                 BackgroundTransparency = 1,
                                 Image = Icon.Url,
-                                ImageColor3 = typeof(textColor) == "string" and textColor or textColor,
+                                ImageColor3 = actualTextColor,
                                 ImageRectOffset = Icon.ImageRectOffset,
                                 ImageRectSize = Icon.ImageRectSize,
                                 Size = UDim2.fromOffset(iconSize, iconSize),
@@ -3996,8 +4108,7 @@ do
                                 Parent = IconContainer,
                             })
                             if typeof(textColor) == "string" then
-                                Library.Registry[IconImage] = Library.Registry[IconImage] or {}
-                                Library.Registry[IconImage].ImageColor3 = textColor
+                                Library.Registry[IconImage] = { ImageColor3 = textColor }
                             end
                         end
 
@@ -4008,23 +4119,22 @@ do
                             Size = UDim2.fromOffset(0, iconSize),
                             Text = Button.Text,
                             TextSize = 14,
-                            TextColor3 = typeof(textColor) == "string" and textColor or textColor,
+                            TextColor3 = actualTextColor,
                             TextTransparency = Button.Disabled and 0.8 or (Button.Variant == "Default" and 0.4 or 0),
                             LayoutOrder = 2,
                             Parent = IconContainer,
                         })
                         if typeof(textColor) == "string" then
-                            Library.Registry[TextLabel] = Library.Registry[TextLabel] or {}
-                            Library.Registry[TextLabel].TextColor3 = textColor
+                            Library.Registry[TextLabel] = { TextColor3 = textColor }
                         end
                         Button.TextLabel = TextLabel
 
-                        -- Create right icon if specified
+                        -- Create icon (right side)
                         if Button.IconRight then
                             IconImage = New("ImageLabel", {
                                 BackgroundTransparency = 1,
                                 Image = Icon.Url,
-                                ImageColor3 = typeof(textColor) == "string" and textColor or textColor,
+                                ImageColor3 = actualTextColor,
                                 ImageRectOffset = Icon.ImageRectOffset,
                                 ImageRectSize = Icon.ImageRectSize,
                                 Size = UDim2.fromOffset(iconSize, iconSize),
@@ -4032,8 +4142,7 @@ do
                                 Parent = IconContainer,
                             })
                             if typeof(textColor) == "string" then
-                                Library.Registry[IconImage] = Library.Registry[IconImage] or {}
-                                Library.Registry[IconImage].ImageColor3 = textColor
+                                Library.Registry[IconImage] = { ImageColor3 = textColor }
                             end
                         end
                     else
@@ -4042,7 +4151,7 @@ do
                             AnchorPoint = Vector2.new(0.5, 0.5),
                             BackgroundTransparency = 1,
                             Image = Icon.Url,
-                            ImageColor3 = typeof(textColor) == "string" and textColor or textColor,
+                            ImageColor3 = actualTextColor,
                             ImageRectOffset = Icon.ImageRectOffset,
                             ImageRectSize = Icon.ImageRectSize,
                             Position = UDim2.fromScale(0.5, 0.5),
@@ -4050,8 +4159,7 @@ do
                             Parent = Base,
                         })
                         if typeof(textColor) == "string" then
-                            Library.Registry[IconImage] = Library.Registry[IconImage] or {}
-                            Library.Registry[IconImage].ImageColor3 = textColor
+                            Library.Registry[IconImage] = { ImageColor3 = textColor }
                         end
                     end
                 end
@@ -4064,15 +4172,14 @@ do
                     AnchorPoint = Vector2.new(0.5, 0.5),
                     BackgroundTransparency = 1,
                     Image = "rbxassetid://4965945816",
-                    ImageColor3 = typeof(textColor) == "string" and textColor or textColor,
+                    ImageColor3 = actualTextColor,
                     Position = UDim2.fromScale(0.5, 0.5),
                     Size = UDim2.fromOffset(14, 14),
                     Visible = true,
                     Parent = Base,
                 })
                 if typeof(textColor) == "string" then
-                    Library.Registry[LoadingSpinner] = Library.Registry[LoadingSpinner] or {}
-                    Library.Registry[LoadingSpinner].ImageColor3 = textColor
+                    Library.Registry[LoadingSpinner] = { ImageColor3 = textColor }
                 end
 
                 -- Animate spinner
@@ -4092,6 +4199,7 @@ do
             Button.IconContainer = IconContainer
             Button.LoadingSpinner = LoadingSpinner
             Button.VariantStyle = VariantStyle
+            Button.GetColor = GetColor
 
             local PressDepth = 0
 
@@ -7521,8 +7629,8 @@ function Library:CreateWindow(WindowInfo)
         end
         Library:MakeOutline(MainFrame, WindowInfo.CornerRadius, 0)
 
-        -- Highlight/Glow effect - Soft diffuse shadow (like Canva cover shadows)
-        -- Using multiple layered shadows for a smooth, modern glow effect
+        -- Highlight/Glow effect - Modern diffuse shadow system
+        -- Creates a soft, spread shadow like professional design tools (Canva, Figma)
         local ShadowLayers = {}
 
         -- Create container for all shadow layers
@@ -7536,56 +7644,38 @@ function Library:CreateWindow(WindowInfo)
             Parent = MainFrame,
         })
 
-        -- Layer 1: Innermost soft glow (closest to UI)
-        local ShadowLayer1 = New("ImageLabel", {
-            Name = "ShadowLayer1",
-            AnchorPoint = Vector2.new(0.5, 0.5),
-            BackgroundTransparency = 1,
-            Image = "rbxassetid://6015897843",
-            ImageColor3 = Library.Scheme.HighlightColor,
-            ImageTransparency = 0.75,
-            Position = UDim2.fromScale(0.5, 0.5),
-            ScaleType = Enum.ScaleType.Slice,
-            Size = UDim2.new(1, 24, 1, 24),
-            SliceCenter = Rect.new(49, 49, 450, 450),
-            ZIndex = -1,
-            Parent = ShadowContainer,
-        })
-        table.insert(ShadowLayers, ShadowLayer1)
+        -- Shadow configuration for smooth gradient falloff
+        local ShadowConfig = {
+            { size = 12,  transparency = 0.6,  zIndex = -1 },  -- Core glow (brightest)
+            { size = 24,  transparency = 0.72, zIndex = -2 },  -- Inner spread
+            { size = 40,  transparency = 0.82, zIndex = -3 },  -- Mid spread
+            { size = 60,  transparency = 0.88, zIndex = -4 },  -- Outer spread
+            { size = 85,  transparency = 0.93, zIndex = -5 },  -- Far spread
+            { size = 115, transparency = 0.96, zIndex = -6 },  -- Ambient (softest)
+        }
 
-        -- Layer 2: Medium glow
-        local ShadowLayer2 = New("ImageLabel", {
-            Name = "ShadowLayer2",
-            AnchorPoint = Vector2.new(0.5, 0.5),
-            BackgroundTransparency = 1,
-            Image = "rbxassetid://6015897843",
-            ImageColor3 = Library.Scheme.HighlightColor,
-            ImageTransparency = 0.85,
-            Position = UDim2.fromScale(0.5, 0.5),
-            ScaleType = Enum.ScaleType.Slice,
-            Size = UDim2.new(1, 45, 1, 45),
-            SliceCenter = Rect.new(49, 49, 450, 450),
-            ZIndex = -2,
-            Parent = ShadowContainer,
-        })
-        table.insert(ShadowLayers, ShadowLayer2)
-
-        -- Layer 3: Outer diffuse glow (farthest from UI)
-        local ShadowLayer3 = New("ImageLabel", {
-            Name = "ShadowLayer3",
-            AnchorPoint = Vector2.new(0.5, 0.5),
-            BackgroundTransparency = 1,
-            Image = "rbxassetid://6015897843",
-            ImageColor3 = Library.Scheme.HighlightColor,
-            ImageTransparency = 0.92,
-            Position = UDim2.fromScale(0.5, 0.5),
-            ScaleType = Enum.ScaleType.Slice,
-            Size = UDim2.new(1, 70, 1, 70),
-            SliceCenter = Rect.new(49, 49, 450, 450),
-            ZIndex = -3,
-            Parent = ShadowContainer,
-        })
-        table.insert(ShadowLayers, ShadowLayer3)
+        -- Create shadow layers dynamically
+        for i, config in ipairs(ShadowConfig) do
+            local ShadowLayer = New("ImageLabel", {
+                Name = "ShadowLayer" .. i,
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                BackgroundTransparency = 1,
+                Image = "rbxassetid://6015897843",
+                ImageColor3 = Library.Scheme.HighlightColor,
+                ImageTransparency = config.transparency,
+                Position = UDim2.fromScale(0.5, 0.5),
+                ScaleType = Enum.ScaleType.Slice,
+                Size = UDim2.new(1, config.size, 1, config.size),
+                SliceCenter = Rect.new(49, 49, 450, 450),
+                ZIndex = config.zIndex,
+                Parent = ShadowContainer,
+            })
+            table.insert(ShadowLayers, {
+                Layer = ShadowLayer,
+                BaseSize = config.size,
+                BaseTransparency = config.transparency,
+            })
+        end
 
         -- Animated glow pulse effect
         local HighlightPulseTweens = {}
@@ -7600,39 +7690,56 @@ function Library:CreateWindow(WindowInfo)
                 ShadowContainer.Visible = true
 
                 -- Update colors for all layers
-                for _, layer in ipairs(ShadowLayers) do
-                    layer.ImageColor3 = Library.Scheme.HighlightColor
+                for _, layerData in ipairs(ShadowLayers) do
+                    layerData.Layer.ImageColor3 = Library.Scheme.HighlightColor
                 end
 
-                -- Create subtle breathing animation for each layer (offset timing)
-                local PulseTween1 = TweenService:Create(ShadowLayer1, TweenInfo.new(2.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
-                    ImageTransparency = 0.65,
-                    Size = UDim2.new(1, 28, 1, 28),
-                })
-                local PulseTween2 = TweenService:Create(ShadowLayer2, TweenInfo.new(3, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
-                    ImageTransparency = 0.78,
-                    Size = UDim2.new(1, 52, 1, 52),
-                })
-                local PulseTween3 = TweenService:Create(ShadowLayer3, TweenInfo.new(3.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
-                    ImageTransparency = 0.88,
-                    Size = UDim2.new(1, 80, 1, 80),
-                })
+                -- Create smooth wave animation (layers pulse in sequence)
+                for i, layerData in ipairs(ShadowLayers) do
+                    local layer = layerData.Layer
+                    local baseSize = layerData.BaseSize
+                    local baseTransparency = layerData.BaseTransparency
 
-                PulseTween1:Play()
-                task.delay(0.3, function() PulseTween2:Play() end)
-                task.delay(0.6, function() PulseTween3:Play() end)
+                    -- Each layer pulses with offset timing for wave effect
+                    local pulseSize = baseSize + 8
+                    local pulseTransparency = math.max(0.5, baseTransparency - 0.08)
 
-                table.insert(HighlightPulseTweens, PulseTween1)
-                table.insert(HighlightPulseTweens, PulseTween2)
-                table.insert(HighlightPulseTweens, PulseTween3)
+                    local PulseTween = TweenService:Create(layer,
+                        TweenInfo.new(3 + (i * 0.3), Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+                        {
+                            Size = UDim2.new(1, pulseSize, 1, pulseSize),
+                            ImageTransparency = pulseTransparency,
+                        }
+                    )
+
+                    task.delay(i * 0.15, function()
+                        if not Library.Unloaded then
+                            PulseTween:Play()
+                        end
+                    end)
+
+                    table.insert(HighlightPulseTweens, PulseTween)
+                end
             else
                 ShadowContainer.Visible = false
+            end
+        end
+
+        -- Function to set shadow intensity (0-1)
+        local function SetShadowIntensity(intensity)
+            for i, layerData in ipairs(ShadowLayers) do
+                local baseTransparency = layerData.BaseTransparency
+                local targetTransparency = 1 - ((1 - baseTransparency) * intensity)
+                TweenService:Create(layerData.Layer, Library.FadeTweenInfo, {
+                    ImageTransparency = targetTransparency,
+                }):Play()
             end
         end
 
         Library.ShadowContainer = ShadowContainer
         Library.ShadowLayers = ShadowLayers
         Library.UpdateHighlightGlow = UpdateHighlightGlow
+        Library.SetShadowIntensity = SetShadowIntensity
 
         UpdateHighlightGlow()
 
@@ -8136,6 +8243,32 @@ function Library:CreateWindow(WindowInfo)
             })
             table.insert(LayoutRefs.TabPadding, ButtonPadding)
 
+            -- Active indicator bar (left side accent line)
+            local TabIndicator = New("Frame", {
+                AnchorPoint = Vector2.new(0, 0.5),
+                BackgroundColor3 = "AccentColor",
+                Position = UDim2.new(0, -10, 0.5, 0),
+                Size = UDim2.fromOffset(3, 0),
+                Parent = TabButton,
+            })
+            New("UICorner", {
+                CornerRadius = UDim.new(0, 2),
+                Parent = TabIndicator,
+            })
+
+            -- Glow effect for active tab indicator
+            local TabGlow = New("ImageLabel", {
+                AnchorPoint = Vector2.new(0, 0.5),
+                BackgroundTransparency = 1,
+                Image = "rbxassetid://6015897843",
+                ImageColor3 = "AccentColor",
+                ImageTransparency = 1,
+                Position = UDim2.new(0, -14, 0.5, 0),
+                Size = UDim2.fromOffset(10, 30),
+                ZIndex = 0,
+                Parent = TabButton,
+            })
+
             TabLabel = New("TextLabel", {
                 BackgroundTransparency = 1,
                 Position = UDim2.fromOffset(30, 0),
@@ -8161,6 +8294,10 @@ function Library:CreateWindow(WindowInfo)
                     Parent = TabButton,
                 })
             end
+
+            -- Store indicator references for animation
+            local TabIndicatorRef = TabIndicator
+            local TabGlowRef = TabGlow
 
             --// Tab Container \\--
             TabContainer = New("Frame", {
@@ -8785,17 +8922,33 @@ function Library:CreateWindow(WindowInfo)
                 Library.ActiveTab:Hide()
             end
 
+            -- Animate tab button background
             TweenService:Create(TabButton, Library.FadeTweenInfo, {
                 BackgroundTransparency = 0,
             }):Play()
+
+            -- Animate label with accent color tint
             TweenService:Create(TabLabel, Library.FadeTweenInfo, {
                 TextTransparency = 0,
             }):Play()
+
+            -- Animate icon
             if TabIcon then
                 TweenService:Create(TabIcon, Library.FadeTweenInfo, {
                     ImageTransparency = 0,
                 }):Play()
             end
+
+            -- Animate indicator bar (expand from center)
+            TweenService:Create(TabIndicatorRef, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+                Size = UDim2.fromOffset(3, 24),
+            }):Play()
+
+            -- Animate glow effect
+            TweenService:Create(TabGlowRef, Library.FadeTweenInfo, {
+                ImageTransparency = 0.6,
+                Size = UDim2.fromOffset(12, 35),
+            }):Play()
 
             if Description then
                 CurrentTabInfo.Visible = true
@@ -8819,18 +8972,35 @@ function Library:CreateWindow(WindowInfo)
         end
 
         function Tab:Hide()
+            -- Animate tab button
             TweenService:Create(TabButton, Library.FadeTweenInfo, {
                 BackgroundTransparency = 1,
             }):Play()
+
+            -- Animate label
             TweenService:Create(TabLabel, Library.FadeTweenInfo, {
                 TextTransparency = 0.5,
                 TextColor3 = Library.Scheme.FontColor,
             }):Play()
+
+            -- Animate icon
             if TabIcon then
                 TweenService:Create(TabIcon, Library.FadeTweenInfo, {
                     ImageTransparency = 0.5,
                 }):Play()
             end
+
+            -- Animate indicator bar (collapse to center)
+            TweenService:Create(TabIndicatorRef, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {
+                Size = UDim2.fromOffset(3, 0),
+            }):Play()
+
+            -- Animate glow effect out
+            TweenService:Create(TabGlowRef, Library.FadeTweenInfo, {
+                ImageTransparency = 1,
+                Size = UDim2.fromOffset(10, 30),
+            }):Play()
+
             TabContainer.Visible = false
 
             if IsDefaultSearchbarSize then
@@ -9140,13 +9310,15 @@ function Library:CreateWindow(WindowInfo)
             MainFrame.Position = OriginalPos + UDim2.fromOffset(OriginalSize.X.Offset * 0.025, 30)
             MainFrame.BackgroundTransparency = 0.5
 
-            -- Animate shadow layers in
+            -- Animate shadow layers in with staggered timing
             if Library.ShadowLayers then
-                for i, layer in ipairs(Library.ShadowLayers) do
+                for i, layerData in ipairs(Library.ShadowLayers) do
+                    local layer = layerData.Layer
+                    local targetTransparency = layerData.BaseTransparency
                     layer.ImageTransparency = 1
-                    task.delay((i - 1) * 0.05, function()
+                    task.delay((i - 1) * 0.04, function()
                         TweenService:Create(layer, OpenTweenInfo, {
-                            ImageTransparency = i == 1 and 0.75 or (i == 2 and 0.85 or 0.92),
+                            ImageTransparency = targetTransparency,
                         }):Play()
                     end)
                 end
@@ -9164,12 +9336,15 @@ function Library:CreateWindow(WindowInfo)
             local OriginalPos = MainFrame.Position
             local OriginalSize = MainFrame.Size
 
-            -- Animate shadow layers out
+            -- Animate shadow layers out with staggered timing
             if Library.ShadowLayers then
-                for i, layer in ipairs(Library.ShadowLayers) do
-                    TweenService:Create(layer, CloseTweenInfo, {
-                        ImageTransparency = 1,
-                    }):Play()
+                for i, layerData in ipairs(Library.ShadowLayers) do
+                    local layer = layerData.Layer
+                    task.delay((#Library.ShadowLayers - i) * 0.03, function()
+                        TweenService:Create(layer, CloseTweenInfo, {
+                            ImageTransparency = 1,
+                        }):Play()
+                    end)
                 end
             end
 
