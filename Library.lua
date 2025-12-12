@@ -3995,6 +3995,342 @@ do
         return Spacer
     end
 
+    function Funcs:AddInfobox(Info)
+        Info = Info or {}
+
+        local Groupbox = self
+        local Container = Groupbox.Container
+
+        local Infobox = {
+            Text = Info.Text or "Info",
+            Value = Info.Default,
+            DisplayText = Info.DisplayText or (Info.Default ~= nil and tostring(Info.Default) or "---"),
+            Callback = Info.Callback,
+            Visible = Info.Visible ~= false,
+            Disabled = Info.Disabled or false,
+
+            -- Button options
+            Button = Info.Button,
+            ButtonText = Info.ButtonText or "Action",
+            ButtonFunc = Info.ButtonFunc or function() end,
+            ButtonIcon = Info.ButtonIcon,
+
+            Type = "Infobox",
+        }
+
+        local hasButton = Infobox.Button == true
+        local holderHeight = Info.Text and 42 or 26
+
+        local Holder = New("Frame", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 0, holderHeight),
+            Visible = Infobox.Visible,
+            Parent = Container,
+        })
+
+        -- Label (title)
+        local Label
+        if Info.Text then
+            Label = New("TextLabel", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 0, 14),
+                Text = Info.Text,
+                TextSize = 14,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                Parent = Holder,
+            })
+        end
+
+        -- Content container (holds infobox and optional button)
+        local ContentHolder = New("Frame", {
+            AnchorPoint = Vector2.new(0, 1),
+            BackgroundTransparency = 1,
+            Position = UDim2.fromScale(0, 1),
+            Size = UDim2.new(1, 0, 0, 26),
+            Parent = Holder,
+        })
+
+        New("UIListLayout", {
+            FillDirection = Enum.FillDirection.Horizontal,
+            HorizontalAlignment = Enum.HorizontalAlignment.Left,
+            VerticalAlignment = Enum.VerticalAlignment.Center,
+            Padding = UDim.new(0, 6),
+            Parent = ContentHolder,
+        })
+
+        -- Infobox display
+        local infoboxWidth = hasButton and 0.65 or 1
+        local InfoDisplay = New("Frame", {
+            BackgroundColor3 = "MainColor",
+            Size = UDim2.new(infoboxWidth, hasButton and -3 or 0, 1, 0),
+            Parent = ContentHolder,
+        })
+
+        New("UICorner", {
+            CornerRadius = UDim.new(0, 4),
+            Parent = InfoDisplay,
+        })
+
+        local InfoStroke = New("UIStroke", {
+            Color = "OutlineColor",
+            Parent = InfoDisplay,
+        })
+
+        New("UIPadding", {
+            PaddingLeft = UDim.new(0, 10),
+            PaddingRight = UDim.new(0, 10),
+            Parent = InfoDisplay,
+        })
+
+        local DisplayLabel = New("TextLabel", {
+            BackgroundTransparency = 1,
+            Size = UDim2.fromScale(1, 1),
+            Text = Infobox.DisplayText,
+            TextColor3 = Library.Scheme.FontColor,
+            TextSize = 13,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Parent = InfoDisplay,
+        })
+        Library.Registry[DisplayLabel] = { TextColor3 = "FontColor" }
+
+        -- Copy icon (click to copy value)
+        local CopyIcon = Library:GetCustomIcon("copy")
+        local CopyButton
+        if CopyIcon then
+            CopyButton = New("ImageButton", {
+                AnchorPoint = Vector2.new(1, 0.5),
+                BackgroundTransparency = 1,
+                Image = CopyIcon.Url,
+                ImageColor3 = Library.Scheme.FontColor,
+                ImageRectOffset = CopyIcon.ImageRectOffset,
+                ImageRectSize = CopyIcon.ImageRectSize,
+                ImageTransparency = 0.5,
+                Position = UDim2.new(1, 5, 0.5, 0),
+                Size = UDim2.fromOffset(14, 14),
+                Parent = InfoDisplay,
+            })
+            Library.Registry[CopyButton] = { ImageColor3 = "FontColor" }
+
+            CopyButton.MouseEnter:Connect(function()
+                TweenService:Create(CopyButton, Library.HoverTweenInfo, {
+                    ImageTransparency = 0,
+                    ImageColor3 = Library.Scheme.AccentColor,
+                }):Play()
+            end)
+
+            CopyButton.MouseLeave:Connect(function()
+                TweenService:Create(CopyButton, Library.HoverTweenInfo, {
+                    ImageTransparency = 0.5,
+                    ImageColor3 = Library.Scheme.FontColor,
+                }):Play()
+            end)
+
+            CopyButton.MouseButton1Click:Connect(function()
+                if Infobox.Value ~= nil then
+                    pcall(function()
+                        setclipboard(tostring(Infobox.Value))
+                    end)
+                    -- Flash effect
+                    TweenService:Create(CopyButton, Library.HoverTweenInfo, {
+                        ImageColor3 = Color3.fromRGB(80, 200, 120),
+                    }):Play()
+                    task.delay(0.3, function()
+                        TweenService:Create(CopyButton, Library.HoverTweenInfo, {
+                            ImageColor3 = Library.Scheme.AccentColor,
+                        }):Play()
+                    end)
+                end
+            end)
+        end
+
+        -- Hover effects for infobox
+        InfoDisplay.MouseEnter:Connect(function()
+            if Infobox.Disabled then return end
+            TweenService:Create(InfoStroke, Library.HoverTweenInfo, {
+                Color = Library:GetLighterColor(Library.Scheme.OutlineColor),
+            }):Play()
+            TweenService:Create(InfoDisplay, Library.HoverTweenInfo, {
+                BackgroundColor3 = Library:GetLighterColor(Library.Scheme.MainColor),
+            }):Play()
+        end)
+
+        InfoDisplay.MouseLeave:Connect(function()
+            if Infobox.Disabled then return end
+            TweenService:Create(InfoStroke, Library.HoverTweenInfo, {
+                Color = Library.Scheme.OutlineColor,
+            }):Play()
+            TweenService:Create(InfoDisplay, Library.HoverTweenInfo, {
+                BackgroundColor3 = Library.Scheme.MainColor,
+            }):Play()
+        end)
+
+        -- Optional button
+        local ActionButton, ButtonLabel, ButtonIconImage
+        if hasButton then
+            ActionButton = New("TextButton", {
+                BackgroundColor3 = "AccentColor",
+                Size = UDim2.new(0.35, -3, 1, 0),
+                Text = "",
+                Parent = ContentHolder,
+            })
+
+            New("UICorner", {
+                CornerRadius = UDim.new(0, 4),
+                Parent = ActionButton,
+            })
+
+            local ButtonStroke = New("UIStroke", {
+                Color = "AccentColor",
+                Transparency = 0.5,
+                Parent = ActionButton,
+            })
+
+            -- Button content layout
+            local ButtonContent = New("Frame", {
+                BackgroundTransparency = 1,
+                Size = UDim2.fromScale(1, 1),
+                Parent = ActionButton,
+            })
+
+            New("UIListLayout", {
+                FillDirection = Enum.FillDirection.Horizontal,
+                HorizontalAlignment = Enum.HorizontalAlignment.Center,
+                VerticalAlignment = Enum.VerticalAlignment.Center,
+                Padding = UDim.new(0, 4),
+                Parent = ButtonContent,
+            })
+
+            -- Button icon
+            if Infobox.ButtonIcon then
+                local BtnIcon = Library:GetCustomIcon(Infobox.ButtonIcon)
+                if BtnIcon then
+                    ButtonIconImage = New("ImageLabel", {
+                        BackgroundTransparency = 1,
+                        Image = BtnIcon.Url,
+                        ImageColor3 = Library.Scheme.BackgroundColor,
+                        ImageRectOffset = BtnIcon.ImageRectOffset,
+                        ImageRectSize = BtnIcon.ImageRectSize,
+                        Size = UDim2.fromOffset(12, 12),
+                        LayoutOrder = 1,
+                        Parent = ButtonContent,
+                    })
+                    Library.Registry[ButtonIconImage] = { ImageColor3 = "BackgroundColor" }
+                end
+            end
+
+            -- Button text
+            ButtonLabel = New("TextLabel", {
+                BackgroundTransparency = 1,
+                AutomaticSize = Enum.AutomaticSize.X,
+                Size = UDim2.fromOffset(0, 14),
+                Text = Infobox.ButtonText,
+                TextColor3 = Library.Scheme.BackgroundColor,
+                TextSize = 13,
+                LayoutOrder = 2,
+                Parent = ButtonContent,
+            })
+            Library.Registry[ButtonLabel] = { TextColor3 = "BackgroundColor" }
+
+            -- Button hover effects
+            ActionButton.MouseEnter:Connect(function()
+                if Infobox.Disabled then return end
+                TweenService:Create(ActionButton, Library.HoverTweenInfo, {
+                    BackgroundColor3 = Library:GetLighterColor(Library.Scheme.AccentColor),
+                }):Play()
+            end)
+
+            ActionButton.MouseLeave:Connect(function()
+                if Infobox.Disabled then return end
+                TweenService:Create(ActionButton, Library.HoverTweenInfo, {
+                    BackgroundColor3 = Library.Scheme.AccentColor,
+                }):Play()
+            end)
+
+            -- Button click
+            ActionButton.MouseButton1Click:Connect(function()
+                if Infobox.Disabled then return end
+
+                -- Click animation
+                TweenService:Create(ActionButton, TweenInfo.new(0.1, Enum.EasingStyle.Quint), {
+                    Size = UDim2.new(0.35, -5, 1, -2),
+                }):Play()
+                task.delay(0.1, function()
+                    TweenService:Create(ActionButton, Library.HoverTweenInfo, {
+                        Size = UDim2.new(0.35, -3, 1, 0),
+                    }):Play()
+                end)
+
+                Library:SafeCallback(Infobox.ButtonFunc, Infobox.Value)
+            end)
+
+            Infobox.ActionButton = ActionButton
+            Infobox.ButtonLabel = ButtonLabel
+        end
+
+        -- Functions
+        function Infobox:SetValue(NewValue, NewDisplayText)
+            Infobox.Value = NewValue
+            if NewDisplayText then
+                Infobox.DisplayText = tostring(NewDisplayText)
+            else
+                Infobox.DisplayText = NewValue ~= nil and tostring(NewValue) or "---"
+            end
+            DisplayLabel.Text = Infobox.DisplayText
+
+            if Infobox.Callback then
+                Library:SafeCallback(Infobox.Callback, Infobox.Value)
+            end
+        end
+
+        function Infobox:GetValue()
+            return Infobox.Value
+        end
+
+        function Infobox:SetDisplayText(NewText)
+            Infobox.DisplayText = tostring(NewText)
+            DisplayLabel.Text = Infobox.DisplayText
+        end
+
+        function Infobox:SetButtonText(NewText)
+            if ButtonLabel then
+                Infobox.ButtonText = NewText
+                ButtonLabel.Text = NewText
+            end
+        end
+
+        function Infobox:SetDisabled(Disabled)
+            Infobox.Disabled = Disabled
+            DisplayLabel.TextTransparency = Disabled and 0.5 or 0
+            if Label then
+                Label.TextTransparency = Disabled and 0.5 or 0
+            end
+            if ActionButton then
+                ActionButton.Active = not Disabled
+                ActionButton.BackgroundTransparency = Disabled and 0.5 or 0
+            end
+        end
+
+        function Infobox:SetVisible(Visible)
+            Infobox.Visible = Visible
+            Holder.Visible = Visible
+            Groupbox:Resize()
+        end
+
+        function Infobox:OnChanged(Func)
+            Infobox.Callback = Func
+        end
+
+        Groupbox:Resize()
+
+        Infobox.Holder = Holder
+        Infobox.DisplayLabel = DisplayLabel
+        Infobox.InfoDisplay = InfoDisplay
+        table.insert(Groupbox.Elements, Infobox)
+
+        return Infobox
+    end
+
     function Funcs:AddButton(...)
         local function GetInfo(...)
             local Info = {}
