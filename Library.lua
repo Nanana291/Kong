@@ -2471,25 +2471,45 @@ do
 
         local Picker = New("TextButton", {
             BackgroundColor3 = "MainColor",
-            BorderColor3 = "OutlineColor",
-            BorderSizePixel = 1,
-            Size = UDim2.fromOffset(18, 18),
-            Text = KeyPicker.Value,
-            TextSize = 14,
+            BorderSizePixel = 0,
+            Size = UDim2.fromOffset(0, 20),
+            AutomaticSize = Enum.AutomaticSize.X,
+            Text = KeyPicker.Value or "...",
+            TextSize = 12,
             Parent = ToggleLabel,
+        })
+
+        New("UICorner", {
+            CornerRadius = UDim.new(0, 4),
+            Parent = Picker,
+        })
+
+        local PickerStroke = New("UIStroke", {
+            Color = "OutlineColor",
+            Parent = Picker,
+        })
+
+        New("UIPadding", {
+            PaddingLeft = UDim.new(0, 8),
+            PaddingRight = UDim.new(0, 8),
+            Parent = Picker,
         })
 
         -- Hover effects for KeyPicker button
         Picker.MouseEnter:Connect(function()
             TweenService:Create(Picker, Library.HoverTweenInfo, {
                 BackgroundColor3 = Library:GetLighterColor(Library.Scheme.MainColor),
-                BorderColor3 = Library.Scheme.AccentColor,
+            }):Play()
+            TweenService:Create(PickerStroke, Library.HoverTweenInfo, {
+                Color = Library.Scheme.AccentColor,
             }):Play()
         end)
         Picker.MouseLeave:Connect(function()
             TweenService:Create(Picker, Library.HoverTweenInfo, {
                 BackgroundColor3 = Library.Scheme.MainColor,
-                BorderColor3 = Library.Scheme.OutlineColor,
+            }):Play()
+            TweenService:Create(PickerStroke, Library.HoverTweenInfo, {
+                Color = Library.Scheme.OutlineColor,
             }):Play()
         end)
 
@@ -2993,11 +3013,34 @@ do
 
         local Holder = New("TextButton", {
             BackgroundColor3 = ColorPicker.Value,
-            BorderColor3 = Library:GetDarkerColor(ColorPicker.Value),
-            BorderSizePixel = 1,
-            Size = UDim2.fromOffset(18, 18),
+            BorderSizePixel = 0,
+            Size = UDim2.fromOffset(20, 20),
             Text = "",
             Parent = ToggleLabel,
+        })
+
+        New("UICorner", {
+            CornerRadius = UDim.new(0, 4),
+            Parent = Holder,
+        })
+
+        local HolderStroke = New("UIStroke", {
+            Color = Library:GetDarkerColor(ColorPicker.Value),
+            Thickness = 1.5,
+            Parent = Holder,
+        })
+
+        -- Glow effect on hover
+        local HolderGlow = New("ImageLabel", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundTransparency = 1,
+            Image = "rbxassetid://6015897843",
+            ImageColor3 = ColorPicker.Value,
+            ImageTransparency = 1,
+            Position = UDim2.fromScale(0.5, 0.5),
+            Size = UDim2.fromOffset(30, 30),
+            ZIndex = 0,
+            Parent = Holder,
         })
 
         local HolderTransparency = New("ImageLabel", {
@@ -3008,6 +3051,29 @@ do
             TileSize = UDim2.fromOffset(9, 9),
             Parent = Holder,
         })
+        New("UICorner", {
+            CornerRadius = UDim.new(0, 4),
+            Parent = HolderTransparency,
+        })
+
+        -- Hover effects
+        Holder.MouseEnter:Connect(function()
+            TweenService:Create(HolderGlow, Library.HoverTweenInfo, {
+                ImageTransparency = 0.6,
+            }):Play()
+            TweenService:Create(Holder, Library.HoverTweenInfo, {
+                Size = UDim2.fromOffset(22, 22),
+            }):Play()
+        end)
+
+        Holder.MouseLeave:Connect(function()
+            TweenService:Create(HolderGlow, Library.HoverTweenInfo, {
+                ImageTransparency = 1,
+            }):Play()
+            TweenService:Create(Holder, Library.HoverTweenInfo, {
+                Size = UDim2.fromOffset(20, 20),
+            }):Play()
+        end)
 
         --// Color Menu \\--
         local ColorMenu = Library:AddContextMenu(
@@ -3226,7 +3292,12 @@ do
             -- Animated color transitions
             TweenService:Create(Holder, Library.HoverTweenInfo, {
                 BackgroundColor3 = ColorPicker.Value,
-                BorderColor3 = Library:GetDarkerColor(ColorPicker.Value),
+            }):Play()
+            TweenService:Create(HolderStroke, Library.HoverTweenInfo, {
+                Color = Library:GetDarkerColor(ColorPicker.Value),
+            }):Play()
+            TweenService:Create(HolderGlow, Library.HoverTweenInfo, {
+                ImageColor3 = ColorPicker.Value,
             }):Play()
             TweenService:Create(HolderTransparency, Library.HoverTweenInfo, {
                 ImageTransparency = (1 - ColorPicker.Transparency),
@@ -5768,7 +5839,7 @@ do
 
         local Holder = New("Frame", {
             BackgroundTransparency = 1,
-            Size = UDim2.new(1, 0, 0, Dropdown.Text and 39 or 21),
+            Size = UDim2.new(1, 0, 0, Dropdown.Text and 42 or 24),
             Visible = Dropdown.Visible,
             Parent = Container,
         })
@@ -5787,33 +5858,84 @@ do
             Active = not Dropdown.Disabled,
             AnchorPoint = Vector2.new(0, 1),
             BackgroundColor3 = "MainColor",
-            BorderColor3 = "OutlineColor",
-            BorderSizePixel = 1,
+            BorderSizePixel = 0,
             Position = UDim2.fromScale(0, 1),
-            Size = UDim2.new(1, 0, 0, 21),
+            Size = UDim2.new(1, 0, 0, 24),
             Text = "---",
             TextSize = 14,
             TextXAlignment = Enum.TextXAlignment.Left,
             Parent = Holder,
         })
 
-        New("UIPadding", {
-            PaddingLeft = UDim.new(0, 8),
-            PaddingRight = UDim.new(0, 4),
+        New("UICorner", {
+            CornerRadius = UDim.new(0, 4),
             Parent = Display,
         })
 
-        local ArrowImage = New("ImageLabel", {
+        local DisplayStroke = New("UIStroke", {
+            Color = "OutlineColor",
+            Parent = Display,
+        })
+
+        New("UIPadding", {
+            PaddingLeft = UDim.new(0, 10),
+            PaddingRight = UDim.new(0, 6),
+            Parent = Display,
+        })
+
+        -- Arrow container with background
+        local ArrowContainer = New("Frame", {
             AnchorPoint = Vector2.new(1, 0.5),
+            BackgroundColor3 = "OutlineColor",
+            BackgroundTransparency = 0.8,
+            Position = UDim2.fromScale(1, 0.5),
+            Size = UDim2.fromOffset(20, 16),
+            Parent = Display,
+        })
+        New("UICorner", {
+            CornerRadius = UDim.new(0, 3),
+            Parent = ArrowContainer,
+        })
+
+        local ArrowImage = New("ImageLabel", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundTransparency = 1,
             Image = ArrowIcon and ArrowIcon.Url or "",
             ImageColor3 = "FontColor",
             ImageRectOffset = ArrowIcon and ArrowIcon.ImageRectOffset or Vector2.zero,
             ImageRectSize = ArrowIcon and ArrowIcon.ImageRectSize or Vector2.zero,
             ImageTransparency = 0.5,
-            Position = UDim2.fromScale(1, 0.5),
-            Size = UDim2.fromOffset(16, 16),
-            Parent = Display,
+            Position = UDim2.fromScale(0.5, 0.5),
+            Size = UDim2.fromOffset(14, 14),
+            Parent = ArrowContainer,
         })
+
+        -- Hover effects
+        Display.MouseEnter:Connect(function()
+            if Dropdown.Disabled then return end
+            TweenService:Create(DisplayStroke, Library.HoverTweenInfo, {
+                Color = Library:GetLighterColor(Library.Scheme.OutlineColor),
+            }):Play()
+            TweenService:Create(ArrowContainer, Library.HoverTweenInfo, {
+                BackgroundTransparency = 0.6,
+            }):Play()
+            TweenService:Create(Label, Library.HoverTweenInfo, {
+                TextTransparency = 0,
+            }):Play()
+        end)
+
+        Display.MouseLeave:Connect(function()
+            if Dropdown.Disabled then return end
+            TweenService:Create(DisplayStroke, Library.HoverTweenInfo, {
+                Color = Library.Scheme.OutlineColor,
+            }):Play()
+            TweenService:Create(ArrowContainer, Library.HoverTweenInfo, {
+                BackgroundTransparency = 0.8,
+            }):Play()
+            TweenService:Create(Label, Library.HoverTweenInfo, {
+                TextTransparency = Dropdown.Disabled and 0.8 or 0,
+            }):Play()
+        end)
 
         local SearchBox
         if Info.Searchable then
@@ -5839,17 +5961,32 @@ do
                 return UDim2.fromOffset(Display.AbsoluteSize.X, 0)
             end,
             function()
-                return { 0.5, Display.AbsoluteSize.Y + 1.5 }
+                return { 0.5, Display.AbsoluteSize.Y + 2 }
             end,
             2,
             function(Active: boolean)
                 Display.TextTransparency = (Active and SearchBox) and 1 or 0
 
                 -- Animated arrow rotation and transparency
-                TweenService:Create(ArrowImage, Library.HoverTweenInfo, {
+                TweenService:Create(ArrowImage, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
                     ImageTransparency = Active and 0 or 0.5,
                     Rotation = Active and 180 or 0,
+                }):Play()
+
+                -- Arrow container accent highlight
+                TweenService:Create(ArrowContainer, Library.HoverTweenInfo, {
+                    BackgroundColor3 = Active and Library.Scheme.AccentColor or Library.Scheme.OutlineColor,
+                    BackgroundTransparency = Active and 0.3 or 0.8,
+                }):Play()
+
+                -- Arrow color change
+                TweenService:Create(ArrowImage, Library.HoverTweenInfo, {
                     ImageColor3 = Active and Library.Scheme.AccentColor or Library.Scheme.FontColor,
+                }):Play()
+
+                -- Stroke highlight
+                TweenService:Create(DisplayStroke, Library.HoverTweenInfo, {
+                    Color = Active and Library.Scheme.AccentColor or Library.Scheme.OutlineColor,
                 }):Play()
 
                 -- Animated display background
@@ -7252,22 +7389,50 @@ function Library:Notify(...)
 
     local TimerHolder = New("Frame", {
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, 7),
+        Size = UDim2.new(1, 0, 0, 10),
         Visible = (Data.Persist ~= true and typeof(Data.Time) ~= "Instance") or typeof(Data.Steps) == "number",
         Parent = Holder,
     })
     local TimerBar = New("Frame", {
         BackgroundColor3 = "BackgroundColor",
-        BorderColor3 = "OutlineColor",
-        BorderSizePixel = 1,
-        Position = UDim2.fromOffset(0, 3),
-        Size = UDim2.new(1, 0, 0, 2),
+        BorderSizePixel = 0,
+        Position = UDim2.fromOffset(0, 4),
+        Size = UDim2.new(1, 0, 0, 4),
         Parent = TimerHolder,
     })
+    New("UICorner", {
+        CornerRadius = UDim.new(0, 2),
+        Parent = TimerBar,
+    })
+    New("UIStroke", {
+        Color = "OutlineColor",
+        Transparency = 0.5,
+        Parent = TimerBar,
+    })
+
     TimerFill = New("Frame", {
         BackgroundColor3 = "AccentColor",
         Size = UDim2.fromScale(1, 1),
         Parent = TimerBar,
+    })
+    New("UICorner", {
+        CornerRadius = UDim.new(0, 2),
+        Parent = TimerFill,
+    })
+
+    -- Timer fill glow
+    local TimerGlow = New("Frame", {
+        AnchorPoint = Vector2.new(1, 0.5),
+        BackgroundColor3 = "AccentColor",
+        BackgroundTransparency = 0.5,
+        Position = UDim2.new(1, 0, 0.5, 0),
+        Size = UDim2.fromOffset(6, 8),
+        ZIndex = 2,
+        Parent = TimerFill,
+    })
+    New("UICorner", {
+        CornerRadius = UDim.new(0, 4),
+        Parent = TimerGlow,
     })
 
     if typeof(Data.Time) == "Instance" then
