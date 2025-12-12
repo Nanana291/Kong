@@ -5500,6 +5500,11 @@ do
             AllowEmpty = Info.AllowEmpty,
             EmptyReset = Info.EmptyReset,
 
+            -- AutoComplete options
+            AutoComplete = Info.AutoComplete or false,
+            CompleteOptions = Info.CompleteOptions or {},
+            MaxSuggestions = Info.MaxSuggestions or 5,
+
             Tooltip = Info.Tooltip,
             DisabledTooltip = Info.DisabledTooltip,
             TooltipTable = nil,
@@ -5599,6 +5604,235 @@ do
 
         Input.BoxStroke = BoxStroke
         Input.FocusGlow = FocusGlow
+
+        -- AutoComplete System
+        local AutoCompleteFrame, AutoCompleteList, AutoCompleteButtons
+        local AutoCompleteVisible = false
+
+        if Input.AutoComplete then
+            AutoCompleteButtons = {}
+
+            -- Container that appears above the input
+            AutoCompleteFrame = New("Frame", {
+                AnchorPoint = Vector2.new(0, 1),
+                BackgroundColor3 = "BackgroundColor",
+                Position = UDim2.new(0, 0, 1, -26),
+                Size = UDim2.new(1, 0, 0, 0),
+                Visible = false,
+                ZIndex = 15,
+                ClipsDescendants = true,
+                Parent = Holder,
+            })
+
+            New("UICorner", {
+                CornerRadius = UDim.new(0, 4),
+                Parent = AutoCompleteFrame,
+            })
+
+            New("UIStroke", {
+                Color = "OutlineColor",
+                Parent = AutoCompleteFrame,
+            })
+
+            -- Shadow under autocomplete
+            local AutoCompleteShadow = New("ImageLabel", {
+                AnchorPoint = Vector2.new(0.5, 0),
+                BackgroundTransparency = 1,
+                Image = "rbxassetid://6015897843",
+                ImageColor3 = Color3.new(0, 0, 0),
+                ImageTransparency = 0.7,
+                Position = UDim2.new(0.5, 0, 1, 0),
+                Size = UDim2.new(1, 20, 0, 15),
+                ZIndex = 14,
+                Parent = AutoCompleteFrame,
+            })
+
+            AutoCompleteList = New("ScrollingFrame", {
+                BackgroundTransparency = 1,
+                Size = UDim2.fromScale(1, 1),
+                CanvasSize = UDim2.fromScale(0, 0),
+                AutomaticCanvasSize = Enum.AutomaticSize.Y,
+                ScrollBarThickness = 2,
+                ScrollBarImageColor3 = Library.Scheme.OutlineColor,
+                Parent = AutoCompleteFrame,
+            })
+            Library.Registry[AutoCompleteList] = { ScrollBarImageColor3 = "OutlineColor" }
+
+            New("UIListLayout", {
+                Padding = UDim.new(0, 2),
+                Parent = AutoCompleteList,
+            })
+
+            New("UIPadding", {
+                PaddingBottom = UDim.new(0, 4),
+                PaddingLeft = UDim.new(0, 4),
+                PaddingRight = UDim.new(0, 4),
+                PaddingTop = UDim.new(0, 4),
+                Parent = AutoCompleteList,
+            })
+
+            Input.AutoCompleteFrame = AutoCompleteFrame
+        end
+
+        -- Function to filter and show autocomplete suggestions
+        local function UpdateAutoComplete(text)
+            if not Input.AutoComplete or not AutoCompleteFrame then return end
+
+            -- Clear existing buttons
+            for _, btn in ipairs(AutoCompleteButtons) do
+                btn:Destroy()
+            end
+            AutoCompleteButtons = {}
+
+            if text == "" or #Input.CompleteOptions == 0 then
+                AutoCompleteFrame.Visible = false
+                AutoCompleteVisible = false
+                return
+            end
+
+            -- Filter options that match the input
+            local matches = {}
+            local lowerText = text:lower()
+
+            for _, option in ipairs(Input.CompleteOptions) do
+                local optionStr = tostring(option)
+                if optionStr:lower():find(lowerText, 1, true) then
+                    table.insert(matches, optionStr)
+                    if #matches >= Input.MaxSuggestions then
+                        break
+                    end
+                end
+            end
+
+            if #matches == 0 then
+                AutoCompleteFrame.Visible = false
+                AutoCompleteVisible = false
+                return
+            end
+
+            -- Create suggestion buttons
+            for i, match in ipairs(matches) do
+                local SuggestButton = New("TextButton", {
+                    BackgroundColor3 = "MainColor",
+                    Size = UDim2.new(1, 0, 0, 24),
+                    Text = "",
+                    Parent = AutoCompleteList,
+                })
+
+                New("UICorner", {
+                    CornerRadius = UDim.new(0, 3),
+                    Parent = SuggestButton,
+                })
+
+                -- Highlight matching text
+                local MatchLabel = New("TextLabel", {
+                    BackgroundTransparency = 1,
+                    Position = UDim2.fromOffset(8, 0),
+                    Size = UDim2.new(1, -16, 1, 0),
+                    Text = match,
+                    TextColor3 = Library.Scheme.FontColor,
+                    TextSize = 13,
+                    TextTruncate = Enum.TextTruncate.AtEnd,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    Parent = SuggestButton,
+                })
+                Library.Registry[MatchLabel] = { TextColor3 = "FontColor" }
+
+                -- Hover effect
+                SuggestButton.MouseEnter:Connect(function()
+                    TweenService:Create(SuggestButton, Library.HoverTweenInfo, {
+                        BackgroundColor3 = Library.Scheme.AccentColor,
+                    }):Play()
+                    TweenService:Create(MatchLabel, Library.HoverTweenInfo, {
+                        TextColor3 = Library.Scheme.BackgroundColor,
+                    }):Play()
+                end)
+
+                SuggestButton.MouseLeave:Connect(function()
+                    TweenService:Create(SuggestButton, Library.HoverTweenInfo, {
+                        BackgroundColor3 = Library.Scheme.MainColor,
+                    }):Play()
+                    TweenService:Create(MatchLabel, Library.HoverTweenInfo, {
+                        TextColor3 = Library.Scheme.FontColor,
+                    }):Play()
+                end)
+
+                -- Click to select
+                SuggestButton.MouseButton1Click:Connect(function()
+                    Box.Text = match
+                    Input:SetValue(match)
+                    AutoCompleteFrame.Visible = false
+                    AutoCompleteVisible = false
+                    Box:ReleaseFocus()
+                end)
+
+                table.insert(AutoCompleteButtons, SuggestButton)
+            end
+
+            -- Calculate and animate frame size
+            local frameHeight = math.min(#matches * 26 + 8, Input.MaxSuggestions * 26 + 8)
+            AutoCompleteFrame.Visible = true
+            AutoCompleteVisible = true
+
+            TweenService:Create(AutoCompleteFrame, Library.HoverTweenInfo, {
+                Size = UDim2.new(1, 0, 0, frameHeight),
+            }):Play()
+        end
+
+        -- Connect text changed to autocomplete
+        if Input.AutoComplete then
+            Box:GetPropertyChangedSignal("Text"):Connect(function()
+                if Box:IsFocused() then
+                    UpdateAutoComplete(Box.Text)
+                end
+            end)
+
+            Box.Focused:Connect(function()
+                if #Box.Text > 0 then
+                    UpdateAutoComplete(Box.Text)
+                end
+            end)
+
+            Box.FocusLost:Connect(function()
+                -- Delay to allow click on suggestion
+                task.delay(0.15, function()
+                    if AutoCompleteFrame and AutoCompleteVisible then
+                        TweenService:Create(AutoCompleteFrame, Library.HoverTweenInfo, {
+                            Size = UDim2.new(1, 0, 0, 0),
+                        }):Play()
+                        task.delay(0.2, function()
+                            if AutoCompleteFrame then
+                                AutoCompleteFrame.Visible = false
+                                AutoCompleteVisible = false
+                            end
+                        end)
+                    end
+                end)
+            end)
+        end
+
+        -- Function to update autocomplete options dynamically
+        function Input:SetCompleteOptions(NewOptions)
+            Input.CompleteOptions = NewOptions or {}
+            if Box:IsFocused() and #Box.Text > 0 then
+                UpdateAutoComplete(Box.Text)
+            end
+        end
+
+        -- Function to add a single option
+        function Input:AddCompleteOption(Option)
+            table.insert(Input.CompleteOptions, Option)
+        end
+
+        -- Function to remove an option
+        function Input:RemoveCompleteOption(Option)
+            for i, opt in ipairs(Input.CompleteOptions) do
+                if tostring(opt) == tostring(Option) then
+                    table.remove(Input.CompleteOptions, i)
+                    break
+                end
+            end
+        end
 
         function Input:UpdateColors()
             if Library.Unloaded then
