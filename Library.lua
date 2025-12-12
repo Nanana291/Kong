@@ -3588,10 +3588,11 @@ do
                 AutomaticSize = Enum.AutomaticSize.X,
                 Text = Data.Suffix,
                 TextSize = Data.Size,
-                TextColor3 = "AccentColor",
+                TextColor3 = Library.Scheme.AccentColor,
                 TextXAlignment = Enum.TextXAlignment.Right,
                 Parent = Holder,
             })
+            Library.Registry[SuffixLabel] = { TextColor3 = "AccentColor" }
             Label.SuffixLabel = SuffixLabel
         end
 
@@ -3926,10 +3927,11 @@ do
                 Position = UDim2.fromScale(0.5, 0.5),
                 Size = UDim2.fromOffset(0, 14),
                 Text = "  " .. Info.Text .. "  ",
-                TextColor3 = "OutlineColor",
+                TextColor3 = Library.Scheme.OutlineColor,
                 TextSize = 12,
                 Parent = Holder,
             })
+            Library.Registry[TextLabel] = { TextColor3 = "OutlineColor" }
             Divider.TextLabel = TextLabel
         end
 
