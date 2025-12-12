@@ -4619,7 +4619,11 @@ do
 
                 PressDepth += 1
                 if PressDepth == 1 then
-                    Base._NeonOldTextColor = Base.TextColor3
+                    -- Store old color using attribute instead of custom property
+                    local oldColor = Base.TextColor3
+                    Base:SetAttribute("_NeonOldTextColor_R", oldColor.R)
+                    Base:SetAttribute("_NeonOldTextColor_G", oldColor.G)
+                    Base:SetAttribute("_NeonOldTextColor_B", oldColor.B)
                     Base.TextColor3 = NeonAccentColor
                 end
             end
@@ -4634,9 +4638,16 @@ do
                 end
 
                 PressDepth -= 1
-                if PressDepth == 0 and Base._NeonOldTextColor then
-                    Base.TextColor3 = Base._NeonOldTextColor
-                    Base._NeonOldTextColor = nil
+                if PressDepth == 0 then
+                    local r = Base:GetAttribute("_NeonOldTextColor_R")
+                    local g = Base:GetAttribute("_NeonOldTextColor_G")
+                    local b = Base:GetAttribute("_NeonOldTextColor_B")
+                    if r and g and b then
+                        Base.TextColor3 = Color3.new(r, g, b)
+                        Base:SetAttribute("_NeonOldTextColor_R", nil)
+                        Base:SetAttribute("_NeonOldTextColor_G", nil)
+                        Base:SetAttribute("_NeonOldTextColor_B", nil)
+                    end
                 end
             end
 
@@ -5608,70 +5619,95 @@ do
         -- AutoComplete System
         local AutoCompleteFrame, AutoCompleteList, AutoCompleteButtons
         local AutoCompleteVisible = false
+        local AutoCompleteShadows = {}
 
         if Input.AutoComplete then
             AutoCompleteButtons = {}
 
-            -- Container that appears above the input
+            -- Container parented to ScreenGui to avoid clipping issues
             AutoCompleteFrame = New("Frame", {
                 AnchorPoint = Vector2.new(0, 1),
-                BackgroundColor3 = "BackgroundColor",
-                Position = UDim2.new(0, 0, 1, -26),
-                Size = UDim2.new(1, 0, 0, 0),
+                BackgroundColor3 = Library.Scheme.BackgroundColor,
+                Position = UDim2.fromOffset(0, 0),
+                Size = UDim2.fromOffset(0, 0),
                 Visible = false,
-                ZIndex = 15,
+                ZIndex = 100,
                 ClipsDescendants = true,
-                Parent = Holder,
+                Parent = Library.ScreenGui,
             })
+            Library.Registry[AutoCompleteFrame] = { BackgroundColor3 = "BackgroundColor" }
 
             New("UICorner", {
-                CornerRadius = UDim.new(0, 4),
+                CornerRadius = UDim.new(0, 6),
                 Parent = AutoCompleteFrame,
             })
 
-            New("UIStroke", {
-                Color = "OutlineColor",
+            local AutoCompleteStroke = New("UIStroke", {
+                Color = Library.Scheme.AccentColor,
+                Transparency = 0.5,
+                Thickness = 1,
                 Parent = AutoCompleteFrame,
             })
+            Library.Registry[AutoCompleteStroke] = { Color = "AccentColor" }
 
-            -- Shadow under autocomplete
-            local AutoCompleteShadow = New("ImageLabel", {
-                AnchorPoint = Vector2.new(0.5, 0),
-                BackgroundTransparency = 1,
-                Image = "rbxassetid://6015897843",
-                ImageColor3 = Color3.new(0, 0, 0),
-                ImageTransparency = 0.7,
-                Position = UDim2.new(0.5, 0, 1, 0),
-                Size = UDim2.new(1, 20, 0, 15),
-                ZIndex = 14,
-                Parent = AutoCompleteFrame,
-            })
+            -- Multi-layer shadow for depth effect
+            for i = 1, 4 do
+                local shadowOffset = i * 4
+                local shadowTransparency = 0.7 + (i * 0.06)
+                local shadow = New("ImageLabel", {
+                    AnchorPoint = Vector2.new(0.5, 0.5),
+                    BackgroundTransparency = 1,
+                    Image = "rbxassetid://6015897843",
+                    ImageColor3 = Color3.new(0, 0, 0),
+                    ImageTransparency = shadowTransparency,
+                    Position = UDim2.new(0.5, 0, 0.5, i * 2),
+                    ScaleType = Enum.ScaleType.Slice,
+                    SliceCenter = Rect.new(49, 49, 450, 450),
+                    Size = UDim2.new(1, shadowOffset * 2, 1, shadowOffset * 2),
+                    ZIndex = 99,
+                    Parent = AutoCompleteFrame,
+                })
+                table.insert(AutoCompleteShadows, shadow)
+            end
 
             AutoCompleteList = New("ScrollingFrame", {
                 BackgroundTransparency = 1,
                 Size = UDim2.fromScale(1, 1),
                 CanvasSize = UDim2.fromScale(0, 0),
                 AutomaticCanvasSize = Enum.AutomaticSize.Y,
-                ScrollBarThickness = 2,
-                ScrollBarImageColor3 = Library.Scheme.OutlineColor,
+                ScrollBarThickness = 3,
+                ScrollBarImageColor3 = Library.Scheme.AccentColor,
+                ScrollBarImageTransparency = 0.5,
+                ZIndex = 101,
                 Parent = AutoCompleteFrame,
             })
-            Library.Registry[AutoCompleteList] = { ScrollBarImageColor3 = "OutlineColor" }
+            Library.Registry[AutoCompleteList] = { ScrollBarImageColor3 = "AccentColor" }
 
             New("UIListLayout", {
-                Padding = UDim.new(0, 2),
+                Padding = UDim.new(0, 3),
                 Parent = AutoCompleteList,
             })
 
             New("UIPadding", {
-                PaddingBottom = UDim.new(0, 4),
-                PaddingLeft = UDim.new(0, 4),
-                PaddingRight = UDim.new(0, 4),
-                PaddingTop = UDim.new(0, 4),
+                PaddingBottom = UDim.new(0, 6),
+                PaddingLeft = UDim.new(0, 6),
+                PaddingRight = UDim.new(0, 6),
+                PaddingTop = UDim.new(0, 6),
                 Parent = AutoCompleteList,
             })
 
             Input.AutoCompleteFrame = AutoCompleteFrame
+
+            -- Update position when box moves
+            local function UpdateAutoCompletePosition()
+                if not AutoCompleteFrame or not AutoCompleteFrame.Visible then return end
+                local absPos = Box.AbsolutePosition
+                local absSize = Box.AbsoluteSize
+                AutoCompleteFrame.Position = UDim2.fromOffset(absPos.X, absPos.Y - 4)
+            end
+
+            -- Monitor position changes
+            Box:GetPropertyChangedSignal("AbsolutePosition"):Connect(UpdateAutoCompletePosition)
         end
 
         -- Function to filter and show autocomplete suggestions
@@ -5685,8 +5721,15 @@ do
             AutoCompleteButtons = {}
 
             if text == "" or #Input.CompleteOptions == 0 then
-                AutoCompleteFrame.Visible = false
                 AutoCompleteVisible = false
+                TweenService:Create(AutoCompleteFrame, TweenInfo.new(0.15, Enum.EasingStyle.Quint), {
+                    Size = UDim2.fromOffset(Box.AbsoluteSize.X, 0),
+                }):Play()
+                task.delay(0.15, function()
+                    if not AutoCompleteVisible and AutoCompleteFrame then
+                        AutoCompleteFrame.Visible = false
+                    end
+                end)
                 return
             end
 
@@ -5705,35 +5748,60 @@ do
             end
 
             if #matches == 0 then
-                AutoCompleteFrame.Visible = false
                 AutoCompleteVisible = false
+                TweenService:Create(AutoCompleteFrame, TweenInfo.new(0.15, Enum.EasingStyle.Quint), {
+                    Size = UDim2.fromOffset(Box.AbsoluteSize.X, 0),
+                }):Play()
+                task.delay(0.15, function()
+                    if not AutoCompleteVisible and AutoCompleteFrame then
+                        AutoCompleteFrame.Visible = false
+                    end
+                end)
                 return
             end
 
             -- Create suggestion buttons
             for i, match in ipairs(matches) do
                 local SuggestButton = New("TextButton", {
-                    BackgroundColor3 = "MainColor",
-                    Size = UDim2.new(1, 0, 0, 24),
+                    BackgroundColor3 = Library.Scheme.MainColor,
+                    Size = UDim2.new(1, 0, 0, 28),
                     Text = "",
+                    AutoButtonColor = false,
+                    ZIndex = 102,
                     Parent = AutoCompleteList,
                 })
+                Library.Registry[SuggestButton] = { BackgroundColor3 = "MainColor" }
 
                 New("UICorner", {
-                    CornerRadius = UDim.new(0, 3),
+                    CornerRadius = UDim.new(0, 4),
                     Parent = SuggestButton,
                 })
+
+                -- Icon for suggestion
+                local SuggestIcon = New("ImageLabel", {
+                    AnchorPoint = Vector2.new(0, 0.5),
+                    BackgroundTransparency = 1,
+                    Image = Library:GetCustomIcon("search"),
+                    ImageColor3 = Library.Scheme.FontColor,
+                    ImageTransparency = 0.5,
+                    Position = UDim2.new(0, 8, 0.5, 0),
+                    Size = UDim2.fromOffset(14, 14),
+                    ZIndex = 103,
+                    Parent = SuggestButton,
+                })
+                Library.Registry[SuggestIcon] = { ImageColor3 = "FontColor" }
 
                 -- Highlight matching text
                 local MatchLabel = New("TextLabel", {
                     BackgroundTransparency = 1,
-                    Position = UDim2.fromOffset(8, 0),
-                    Size = UDim2.new(1, -16, 1, 0),
+                    Position = UDim2.fromOffset(28, 0),
+                    Size = UDim2.new(1, -36, 1, 0),
                     Text = match,
                     TextColor3 = Library.Scheme.FontColor,
                     TextSize = 13,
                     TextTruncate = Enum.TextTruncate.AtEnd,
                     TextXAlignment = Enum.TextXAlignment.Left,
+                    ZIndex = 103,
                     Parent = SuggestButton,
                 })
                 Library.Registry[MatchLabel] = { TextColor3 = "FontColor" }
@@ -5746,6 +5814,10 @@ do
                     TweenService:Create(MatchLabel, Library.HoverTweenInfo, {
                         TextColor3 = Library.Scheme.BackgroundColor,
                     }):Play()
+                    TweenService:Create(SuggestIcon, Library.HoverTweenInfo, {
+                        ImageColor3 = Library.Scheme.BackgroundColor,
+                        ImageTransparency = 0,
+                    }):Play()
                 end)
 
                 SuggestButton.MouseLeave:Connect(function()
@@ -5755,27 +5827,59 @@ do
                     TweenService:Create(MatchLabel, Library.HoverTweenInfo, {
                         TextColor3 = Library.Scheme.FontColor,
                     }):Play()
+                    TweenService:Create(SuggestIcon, Library.HoverTweenInfo, {
+                        ImageColor3 = Library.Scheme.FontColor,
+                        ImageTransparency = 0.5,
+                    }):Play()
                 end)
 
-                -- Click to select
+                -- Click to select (works for both PC and mobile)
                 SuggestButton.MouseButton1Click:Connect(function()
                     Box.Text = match
                     Input:SetValue(match)
-                    AutoCompleteFrame.Visible = false
                     AutoCompleteVisible = false
+                    TweenService:Create(AutoCompleteFrame, TweenInfo.new(0.15, Enum.EasingStyle.Quint), {
+                        Size = UDim2.fromOffset(Box.AbsoluteSize.X, 0),
+                    }):Play()
+                    task.delay(0.15, function()
+                        if AutoCompleteFrame then
+                            AutoCompleteFrame.Visible = false
+                        end
+                    end)
+                    Box:ReleaseFocus()
+                end)
+
+                -- Touch support for mobile
+                SuggestButton.TouchTap:Connect(function()
+                    Box.Text = match
+                    Input:SetValue(match)
+                    AutoCompleteVisible = false
+                    TweenService:Create(AutoCompleteFrame, TweenInfo.new(0.15, Enum.EasingStyle.Quint), {
+                        Size = UDim2.fromOffset(Box.AbsoluteSize.X, 0),
+                    }):Play()
+                    task.delay(0.15, function()
+                        if AutoCompleteFrame then
+                            AutoCompleteFrame.Visible = false
+                        end
+                    end)
                     Box:ReleaseFocus()
                 end)
 
                 table.insert(AutoCompleteButtons, SuggestButton)
             end
 
-            -- Calculate and animate frame size
-            local frameHeight = math.min(#matches * 26 + 8, Input.MaxSuggestions * 26 + 8)
+            -- Position and show autocomplete
+            local absPos = Box.AbsolutePosition
+            local absSize = Box.AbsoluteSize
+            local frameHeight = math.min(#matches * 31 + 12, Input.MaxSuggestions * 31 + 12)
+
+            AutoCompleteFrame.Position = UDim2.fromOffset(absPos.X, absPos.Y - 4)
+            AutoCompleteFrame.Size = UDim2.fromOffset(absSize.X, 0)
             AutoCompleteFrame.Visible = true
             AutoCompleteVisible = true
 
-            TweenService:Create(AutoCompleteFrame, Library.HoverTweenInfo, {
-                Size = UDim2.new(1, 0, 0, frameHeight),
+            TweenService:Create(AutoCompleteFrame, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+                Size = UDim2.fromOffset(absSize.X, frameHeight),
             }):Play()
         end
 
@@ -5795,15 +5899,15 @@ do
 
             Box.FocusLost:Connect(function()
                 -- Delay to allow click on suggestion
-                task.delay(0.15, function()
+                task.delay(0.2, function()
                     if AutoCompleteFrame and AutoCompleteVisible then
-                        TweenService:Create(AutoCompleteFrame, Library.HoverTweenInfo, {
-                            Size = UDim2.new(1, 0, 0, 0),
+                        AutoCompleteVisible = false
+                        TweenService:Create(AutoCompleteFrame, TweenInfo.new(0.15, Enum.EasingStyle.Quint), {
+                            Size = UDim2.fromOffset(Box.AbsoluteSize.X, 0),
                         }):Play()
-                        task.delay(0.2, function()
+                        task.delay(0.15, function()
                             if AutoCompleteFrame then
                                 AutoCompleteFrame.Visible = false
-                                AutoCompleteVisible = false
                             end
                         end)
                     end

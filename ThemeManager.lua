@@ -203,16 +203,38 @@ do
             if idx == "VideoLink" then
                 continue
             elseif idx == "FontFace" then
-                self.Library:SetFont(Enum.Font[val])
+                local success = pcall(function()
+                    self.Library:SetFont(Enum.Font[val])
+                end)
 
-                if self.Library.Options[idx] then
+                if success and self.Library.Options[idx] then
                     self.Library.Options[idx]:SetValue(val)
                 end
             else
-                self.Library.Scheme[idx] = Color3.fromHex(val)
+                -- Validate hex value before parsing
+                if typeof(val) == "string" then
+                    -- Remove # prefix if present and validate hex format
+                    local hexVal = val:gsub("^#", "")
+                    if hexVal:match("^[0-9A-Fa-f]+$") and (#hexVal == 6 or #hexVal == 3 or #hexVal == 8) then
+                        local success, color = pcall(Color3.fromHex, val)
+                        if success and color then
+                            self.Library.Scheme[idx] = color
 
-                if self.Library.Options[idx] then
-                    self.Library.Options[idx]:SetValueRGB(Color3.fromHex(val))
+                            if self.Library.Options[idx] then
+                                pcall(function()
+                                    self.Library.Options[idx]:SetValueRGB(color)
+                                end)
+                            end
+                        end
+                    end
+                elseif typeof(val) == "Color3" then
+                    self.Library.Scheme[idx] = val
+
+                    if self.Library.Options[idx] then
+                        pcall(function()
+                            self.Library.Options[idx]:SetValueRGB(val)
+                        end)
+                    end
                 end
             end
         end
