@@ -28,7 +28,7 @@ local Toggles = {}
 local Options = {}
 local Tooltips = {}
 
-local NeonAccentColor = Color3.fromHex("#c359d4")
+local NeonAccentColor = Color3.fromHex("#ede966")
 
 local BaseURL = "https://raw.githubusercontent.com/deividcomsono/Obsidian/refs/heads/main/"
 local CustomImageManager = {}
@@ -164,8 +164,11 @@ local Library = {
     Notifications = {},
 
     ToggleKeybind = Enum.KeyCode.RightControl,
-    TweenInfo = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-    NotifyTweenInfo = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+    TweenInfo = TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+    NotifyTweenInfo = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+    HoverTweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+    ToggleTweenInfo = TweenInfo.new(0.25, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out),
+    FadeTweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out),
 
     Toggled = false,
     Unloaded = false,
@@ -194,7 +197,7 @@ local Library = {
     Scheme = {
         BackgroundColor = Color3.fromRGB(15, 15, 15),
         MainColor = Color3.fromRGB(25, 25, 25),
-        AccentColor = Color3.fromRGB(125, 85, 255),
+        AccentColor = Color3.fromHex("#ede966"),
         OutlineColor = Color3.fromRGB(40, 40, 40),
         FontColor = Color3.new(1, 1, 1),
         Font = Font.fromEnum(Enum.Font.Code),
@@ -1342,6 +1345,17 @@ end
 function Library:GetDarkerColor(Color: Color3): Color3
     local H, S, V = Color:ToHSV()
     return Color3.fromHSV(H, S, V / 2)
+end
+
+function Library:GetLighterColor(Color: Color3): Color3
+    local H, S, V = Color:ToHSV()
+    return Color3.fromHSV(H, math.max(0, S - 0.1), math.min(1, V + 0.15))
+end
+
+function Library:GetAccentGlow(Color: Color3, Intensity: number?): Color3
+    Intensity = Intensity or 0.2
+    local H, S, V = Color:ToHSV()
+    return Color3.fromHSV(H, math.max(0, S - Intensity), math.min(1, V + Intensity))
 end
 
 function Library:GetKeyString(KeyCode: Enum.KeyCode)
@@ -3482,8 +3496,9 @@ do
                     return
                 end
 
-                Button.Tween = TweenService:Create(Button.Base, Library.TweenInfo, {
+                Button.Tween = TweenService:Create(Button.Base, Library.HoverTweenInfo, {
                     TextTransparency = 0,
+                    BackgroundColor3 = Library:GetLighterColor(Library.Scheme.MainColor),
                 })
                 Button.Tween:Play()
             end)
@@ -3492,8 +3507,9 @@ do
                     return
                 end
 
-                Button.Tween = TweenService:Create(Button.Base, Library.TweenInfo, {
+                Button.Tween = TweenService:Create(Button.Base, Library.HoverTweenInfo, {
                     TextTransparency = 0.4,
+                    BackgroundColor3 = Library.Scheme.MainColor,
                 })
                 Button.Tween:Play()
             end)
@@ -3780,11 +3796,15 @@ do
                 return
             end
 
-            TweenService:Create(Label, Library.TweenInfo, {
+            TweenService:Create(Label, Library.HoverTweenInfo, {
                 TextTransparency = Toggle.Value and 0 or 0.4,
             }):Play()
-            TweenService:Create(CheckImage, Library.TweenInfo, {
+            TweenService:Create(CheckImage, Library.ToggleTweenInfo, {
                 ImageTransparency = Toggle.Value and 0 or 1,
+                ImageColor3 = Toggle.Value and Library.Scheme.AccentColor or Library.Scheme.FontColor,
+            }):Play()
+            TweenService:Create(Checkbox, Library.HoverTweenInfo, {
+                BackgroundColor3 = Toggle.Value and Library:GetLighterColor(Library.Scheme.MainColor) or Library.Scheme.MainColor,
             }):Play()
 
             Checkbox.BackgroundColor3 = Library.Scheme.MainColor
@@ -4001,12 +4021,16 @@ do
                 return
             end
 
-            TweenService:Create(Label, Library.TweenInfo, {
+            TweenService:Create(Label, Library.HoverTweenInfo, {
                 TextTransparency = Toggle.Value and 0 or 0.4,
             }):Play()
-            TweenService:Create(Ball, Library.TweenInfo, {
+            TweenService:Create(Ball, Library.ToggleTweenInfo, {
                 AnchorPoint = Vector2.new(Offset, 0),
                 Position = UDim2.fromScale(Offset, 0),
+                Size = Toggle.Value and UDim2.new(1, -2, 1, -2) or UDim2.new(0.85, -2, 0.85, -2),
+            }):Play()
+            TweenService:Create(Switch, Library.HoverTweenInfo, {
+                BackgroundColor3 = Toggle.Value and Library.Scheme.AccentColor or Library.Scheme.MainColor,
             }):Play()
 
             Ball.BackgroundColor3 = Library.Scheme.FontColor
@@ -4247,6 +4271,7 @@ do
         local NeonInputTextColor = NeonAccentColor
 
         local FocusTween
+        local BackgroundTween
 
         local function SetFocusVisual(IsFocused)
             if Library.Unloaded or not Box or not Box.Parent then
@@ -4255,18 +4280,27 @@ do
 
             local TargetTextColor = IsFocused and NeonInputTextColor or Library.Scheme.FontColor
             local TargetBorderColor = IsFocused and Library.Scheme.AccentColor or Library.Scheme.OutlineColor
+            local TargetBackgroundColor = IsFocused and Library:GetLighterColor(Library.Scheme.MainColor) or Library.Scheme.MainColor
 
             if FocusTween then
                 StopTween(FocusTween)
                 FocusTween = nil
             end
+            if BackgroundTween then
+                StopTween(BackgroundTween)
+                BackgroundTween = nil
+            end
 
-            FocusTween = TweenService:Create(Box, Library.TweenInfo, {
+            FocusTween = TweenService:Create(Box, Library.HoverTweenInfo, {
                 TextColor3 = TargetTextColor,
                 BorderColor3 = TargetBorderColor,
             })
+            BackgroundTween = TweenService:Create(Box, Library.FadeTweenInfo, {
+                BackgroundColor3 = TargetBackgroundColor,
+            })
 
             FocusTween:Play()
+            BackgroundTween:Play()
         end
 
         -- Desktop + mobile both fire Focused/FocusLost on TextBox, so
@@ -4447,7 +4481,9 @@ do
             end
 
             local X = (Slider.Value - Slider.Min) / (Slider.Max - Slider.Min)
-            Fill.Size = UDim2.fromScale(X, 1)
+            TweenService:Create(Fill, Library.HoverTweenInfo, {
+                Size = UDim2.fromScale(X, 1),
+            }):Play()
         end
 
         function Slider:OnChanged(Func)
@@ -6257,11 +6293,12 @@ function Library:CreateWindow(WindowInfo)
         if typeof(SidebarHighlightCallback) == "function" then
             Library:SafeCallback(SidebarHighlightCallback, DividerLine, LayoutState.GrabberHighlighted)
         else
-            local TargetColor = LayoutState.GrabberHighlighted and GetLighterColor(Library.Scheme.OutlineColor)
+            local TargetColor = LayoutState.GrabberHighlighted and Library.Scheme.AccentColor
                 or Library.Scheme.OutlineColor
 
-            TweenService:Create(DividerLine, Library.TweenInfo, {
+            TweenService:Create(DividerLine, Library.HoverTweenInfo, {
                 BackgroundColor3 = TargetColor,
+                Size = LayoutState.GrabberHighlighted and UDim2.new(0, 4, 1, 0) or UDim2.new(0, 2, 1, 0),
             }):Play()
         end
     end
@@ -7516,12 +7553,15 @@ function Library:CreateWindow(WindowInfo)
                 return
             end
 
-            TweenService:Create(TabLabel, Library.TweenInfo, {
-                TextTransparency = Hovering and 0.25 or 0.5,
+            TweenService:Create(TabLabel, Library.HoverTweenInfo, {
+                TextTransparency = Hovering and 0.15 or 0.5,
+            }):Play()
+            TweenService:Create(TabButton, Library.HoverTweenInfo, {
+                BackgroundTransparency = Hovering and 0.85 or 1,
             }):Play()
             if TabIcon then
-                TweenService:Create(TabIcon, Library.TweenInfo, {
-                    ImageTransparency = Hovering and 0.25 or 0.5,
+                TweenService:Create(TabIcon, Library.HoverTweenInfo, {
+                    ImageTransparency = Hovering and 0.15 or 0.5,
                 }):Play()
             end
         end
@@ -7531,14 +7571,14 @@ function Library:CreateWindow(WindowInfo)
                 Library.ActiveTab:Hide()
             end
 
-            TweenService:Create(TabButton, Library.TweenInfo, {
+            TweenService:Create(TabButton, Library.FadeTweenInfo, {
                 BackgroundTransparency = 0,
             }):Play()
-            TweenService:Create(TabLabel, Library.TweenInfo, {
+            TweenService:Create(TabLabel, Library.FadeTweenInfo, {
                 TextTransparency = 0,
             }):Play()
             if TabIcon then
-                TweenService:Create(TabIcon, Library.TweenInfo, {
+                TweenService:Create(TabIcon, Library.FadeTweenInfo, {
                     ImageTransparency = 0,
                 }):Play()
             end
@@ -7565,14 +7605,15 @@ function Library:CreateWindow(WindowInfo)
         end
 
         function Tab:Hide()
-            TweenService:Create(TabButton, Library.TweenInfo, {
+            TweenService:Create(TabButton, Library.FadeTweenInfo, {
                 BackgroundTransparency = 1,
             }):Play()
-            TweenService:Create(TabLabel, Library.TweenInfo, {
+            TweenService:Create(TabLabel, Library.FadeTweenInfo, {
                 TextTransparency = 0.5,
+                TextColor3 = Library.Scheme.FontColor,
             }):Play()
             if TabIcon then
-                TweenService:Create(TabIcon, Library.TweenInfo, {
+                TweenService:Create(TabIcon, Library.FadeTweenInfo, {
                     ImageTransparency = 0.5,
                 }):Play()
             end
@@ -7766,12 +7807,15 @@ function Library:CreateWindow(WindowInfo)
                 return
             end
 
-            TweenService:Create(TabLabel, Library.TweenInfo, {
-                TextTransparency = Hovering and 0.25 or 0.5,
+            TweenService:Create(TabLabel, Library.HoverTweenInfo, {
+                TextTransparency = Hovering and 0.15 or 0.5,
+            }):Play()
+            TweenService:Create(TabButton, Library.HoverTweenInfo, {
+                BackgroundTransparency = Hovering and 0.85 or 1,
             }):Play()
             if TabIcon then
-                TweenService:Create(TabIcon, Library.TweenInfo, {
-                    ImageTransparency = Hovering and 0.25 or 0.5,
+                TweenService:Create(TabIcon, Library.HoverTweenInfo, {
+                    ImageTransparency = Hovering and 0.15 or 0.5,
                 }):Play()
             end
         end
@@ -7781,14 +7825,14 @@ function Library:CreateWindow(WindowInfo)
                 Library.ActiveTab:Hide()
             end
 
-            TweenService:Create(TabButton, Library.TweenInfo, {
+            TweenService:Create(TabButton, Library.FadeTweenInfo, {
                 BackgroundTransparency = 0,
             }):Play()
-            TweenService:Create(TabLabel, Library.TweenInfo, {
+            TweenService:Create(TabLabel, Library.FadeTweenInfo, {
                 TextTransparency = 0,
             }):Play()
             if TabIcon then
-                TweenService:Create(TabIcon, Library.TweenInfo, {
+                TweenService:Create(TabIcon, Library.FadeTweenInfo, {
                     ImageTransparency = 0,
                 }):Play()
             end
@@ -7815,14 +7859,15 @@ function Library:CreateWindow(WindowInfo)
         end
 
         function Tab:Hide()
-            TweenService:Create(TabButton, Library.TweenInfo, {
+            TweenService:Create(TabButton, Library.FadeTweenInfo, {
                 BackgroundTransparency = 1,
             }):Play()
-            TweenService:Create(TabLabel, Library.TweenInfo, {
+            TweenService:Create(TabLabel, Library.FadeTweenInfo, {
                 TextTransparency = 0.5,
+                TextColor3 = Library.Scheme.FontColor,
             }):Play()
             if TabIcon then
-                TweenService:Create(TabIcon, Library.TweenInfo, {
+                TweenService:Create(TabIcon, Library.FadeTweenInfo, {
                     ImageTransparency = 0.5,
                 }):Play()
             end

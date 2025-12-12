@@ -52,7 +52,7 @@ do
             {
                 FontColor = "ffffff",
                 MainColor = "1a1a1a",
-                AccentColor = "c359d4",
+                AccentColor = "ede966",
                 BackgroundColor = "111111",
                 OutlineColor = "292929",
             },
@@ -124,6 +124,22 @@ do
         ["Material"] = {
             18,
             { FontColor = "eeffff", MainColor = "212121", AccentColor = "82aaff", BackgroundColor = "151515", OutlineColor = "424242" },
+        },
+        ["Golden Night"] = {
+            19,
+            { FontColor = "fff8e7", MainColor = "1a1a1a", AccentColor = "ede966", BackgroundColor = "0f0f0f", OutlineColor = "2a2a2a" },
+        },
+        ["Amber"] = {
+            20,
+            { FontColor = "ffffff", MainColor = "1e1e1e", AccentColor = "ffb347", BackgroundColor = "161616", OutlineColor = "333333" },
+        },
+        ["Sunset"] = {
+            21,
+            { FontColor = "ffecd2", MainColor = "2d1f3d", AccentColor = "ff6b6b", BackgroundColor = "1a1428", OutlineColor = "3d2f4d" },
+        },
+        ["Emerald"] = {
+            22,
+            { FontColor = "e8f5e9", MainColor = "1b2a1b", AccentColor = "4caf50", BackgroundColor = "121912", OutlineColor = "2e4a2e" },
         }
     }
 
