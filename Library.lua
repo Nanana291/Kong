@@ -205,6 +205,10 @@ local Library = {
         Red = Color3.fromRGB(255, 50, 50),
         Dark = Color3.new(0, 0, 0),
         White = Color3.new(1, 1, 1),
+
+        -- Highlight/Glow effect
+        Highlight = true,
+        HighlightColor = Color3.fromHex("#ede966"),
     },
 
     Registry = {},
@@ -1719,6 +1723,134 @@ function Library:AddDraggableButton(Text: string, Func)
         })
     end
     Table:SetText(Text)
+
+    return Table
+end
+
+-- New icon button for mobile (square with Lucide icon)
+function Library:AddIconButton(IconName: string, Func, Options)
+    Options = Options or {}
+    local Table = {
+        Toggled = false,
+        Locked = false,
+    }
+
+    local Size = Options.Size or 40
+    local Icon = Library:GetCustomIcon(IconName)
+    local ToggledIcon = Options.ToggledIcon and Library:GetCustomIcon(Options.ToggledIcon) or nil
+
+    local Button = New("TextButton", {
+        BackgroundColor3 = "BackgroundColor",
+        Position = Options.Position or UDim2.fromOffset(6, 6),
+        Size = UDim2.fromOffset(Size, Size),
+        Text = "",
+        ZIndex = 10,
+        Parent = ScreenGui,
+
+        DPIExclude = {
+            Position = true,
+        },
+    })
+    New("UICorner", {
+        CornerRadius = UDim.new(0, Library.CornerRadius),
+        Parent = Button,
+    })
+
+    local Outline = Library:MakeOutline(Button, Library.CornerRadius + 1, 9)
+
+    local IconImage = New("ImageLabel", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BackgroundTransparency = 1,
+        Image = Icon and Icon.Url or "",
+        ImageColor3 = "FontColor",
+        ImageRectOffset = Icon and Icon.ImageRectOffset or Vector2.zero,
+        ImageRectSize = Icon and Icon.ImageRectSize or Vector2.zero,
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(Size * 0.5, Size * 0.5),
+        Parent = Button,
+    })
+
+    -- Hover animation
+    Button.MouseEnter:Connect(function()
+        TweenService:Create(Button, Library.HoverTweenInfo, {
+            BackgroundColor3 = Library:GetLighterColor(Library.Scheme.BackgroundColor),
+        }):Play()
+        TweenService:Create(IconImage, Library.HoverTweenInfo, {
+            ImageColor3 = Library.Scheme.AccentColor,
+            Size = UDim2.fromOffset(Size * 0.55, Size * 0.55),
+        }):Play()
+    end)
+
+    Button.MouseLeave:Connect(function()
+        TweenService:Create(Button, Library.HoverTweenInfo, {
+            BackgroundColor3 = Library.Scheme.BackgroundColor,
+        }):Play()
+        TweenService:Create(IconImage, Library.HoverTweenInfo, {
+            ImageColor3 = Table.Toggled and Library.Scheme.AccentColor or Library.Scheme.FontColor,
+            Size = UDim2.fromOffset(Size * 0.5, Size * 0.5),
+        }):Play()
+    end)
+
+    -- Click animation and callback
+    Button.MouseButton1Click:Connect(function()
+        if Table.Locked then return end
+
+        -- Click bounce effect
+        local BounceDown = TweenService:Create(Button, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Size = UDim2.fromOffset(Size * 0.9, Size * 0.9),
+        })
+        local BounceUp = TweenService:Create(Button, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Size = UDim2.fromOffset(Size, Size),
+        })
+
+        BounceDown:Play()
+        BounceDown.Completed:Connect(function()
+            BounceUp:Play()
+        end)
+
+        -- Rotate icon animation
+        TweenService:Create(IconImage, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Rotation = IconImage.Rotation == 0 and 180 or 0,
+        }):Play()
+
+        Library:SafeCallback(Func, Table)
+    end)
+
+    Library:MakeDraggable(Button, Button, true)
+
+    Table.Button = Button
+    Table.Icon = IconImage
+    Table.Outline = Outline
+
+    function Table:SetIcon(NewIconName: string)
+        local NewIcon = Library:GetCustomIcon(NewIconName)
+        if NewIcon then
+            IconImage.Image = NewIcon.Url
+            IconImage.ImageRectOffset = NewIcon.ImageRectOffset
+            IconImage.ImageRectSize = NewIcon.ImageRectSize
+        end
+    end
+
+    function Table:SetToggled(Value: boolean)
+        Table.Toggled = Value
+        TweenService:Create(IconImage, Library.HoverTweenInfo, {
+            ImageColor3 = Value and Library.Scheme.AccentColor or Library.Scheme.FontColor,
+        }):Play()
+
+        if ToggledIcon and Value then
+            Table:SetIcon(Options.ToggledIcon)
+        elseif Icon and not Value then
+            Table:SetIcon(IconName)
+        end
+    end
+
+    function Table:SetPosition(NewPos: UDim2)
+        Button.Position = NewPos
+    end
+
+    function Table:SetAnchorPoint(Point: Vector2)
+        Button.AnchorPoint = Point
+    end
 
     return Table
 end
@@ -6687,6 +6819,75 @@ function Library:CreateWindow(WindowInfo)
         end
         Library:MakeOutline(MainFrame, WindowInfo.CornerRadius, 0)
 
+        -- Highlight/Glow effect around the UI (like Canva cover shadows)
+        local HighlightGlow = New("Frame", {
+            Name = "HighlightGlow",
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundTransparency = 1,
+            Position = UDim2.fromScale(0.5, 0.5),
+            Size = UDim2.new(1, 30, 1, 30),
+            ZIndex = -1,
+            Parent = MainFrame,
+        })
+        New("UICorner", {
+            CornerRadius = UDim.new(0, WindowInfo.CornerRadius + 8),
+            Parent = HighlightGlow,
+        })
+
+        local HighlightStroke = New("UIStroke", {
+            Name = "HighlightStroke",
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+            Color = Library.Scheme.HighlightColor,
+            Thickness = 3,
+            Transparency = 0.6,
+            Parent = HighlightGlow,
+        })
+
+        -- Animated glow pulse effect
+        local HighlightPulseTween
+        local function UpdateHighlightGlow()
+            if HighlightPulseTween then
+                HighlightPulseTween:Cancel()
+            end
+
+            if Library.Scheme.Highlight then
+                HighlightGlow.Visible = true
+                HighlightStroke.Color = Library.Scheme.HighlightColor
+
+                -- Create pulsing animation
+                HighlightPulseTween = TweenService:Create(HighlightStroke, TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+                    Transparency = 0.85,
+                    Thickness = 5,
+                })
+                HighlightPulseTween:Play()
+            else
+                HighlightGlow.Visible = false
+            end
+        end
+
+        Library.HighlightGlow = HighlightGlow
+        Library.HighlightStroke = HighlightStroke
+        Library.UpdateHighlightGlow = UpdateHighlightGlow
+
+        -- Create outer shadow for depth
+        local OuterShadow = New("ImageLabel", {
+            Name = "OuterShadow",
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundTransparency = 1,
+            Image = "rbxassetid://6015897843", -- Shadow image
+            ImageColor3 = Library.Scheme.HighlightColor,
+            ImageTransparency = 0.7,
+            Position = UDim2.fromScale(0.5, 0.5),
+            ScaleType = Enum.ScaleType.Slice,
+            Size = UDim2.new(1, 50, 1, 50),
+            SliceCenter = Rect.new(49, 49, 450, 450),
+            ZIndex = -2,
+            Parent = MainFrame,
+        })
+        Library.OuterShadow = OuterShadow
+
+        UpdateHighlightGlow()
+
         if WindowInfo.BackgroundImage then
             New("ImageLabel", {
                 Image = WindowInfo.BackgroundImage,
@@ -8175,28 +8376,71 @@ function Library:CreateWindow(WindowInfo)
             Library.Toggled = not Library.Toggled
         end
 
-        if Library.Toggled then
-            -- Show animation
-            MainFrame.Visible = true
-            MainFrame.BackgroundTransparency = 1
-            MainFrame.Position = MainFrame.Position + UDim2.fromOffset(0, 20)
+        local OpenTweenInfo = TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+        local CloseTweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
 
-            local ShowTween = TweenService:Create(MainFrame, Library.FadeTweenInfo, {
+        if Library.Toggled then
+            -- Show animation with scale and fade
+            MainFrame.Visible = true
+
+            -- Store original position
+            local OriginalPos = MainFrame.Position
+            local OriginalSize = MainFrame.Size
+
+            -- Start from scaled down and below
+            MainFrame.Size = UDim2.new(OriginalSize.X.Scale * 0.95, OriginalSize.X.Offset * 0.95, OriginalSize.Y.Scale * 0.95, OriginalSize.Y.Offset * 0.95)
+            MainFrame.Position = OriginalPos + UDim2.fromOffset(OriginalSize.X.Offset * 0.025, 30)
+            MainFrame.BackgroundTransparency = 0.5
+
+            -- Animate highlight glow
+            if Library.HighlightStroke then
+                Library.HighlightStroke.Transparency = 1
+                TweenService:Create(Library.HighlightStroke, OpenTweenInfo, {
+                    Transparency = 0.6,
+                }):Play()
+            end
+            if Library.OuterShadow then
+                Library.OuterShadow.ImageTransparency = 1
+                TweenService:Create(Library.OuterShadow, OpenTweenInfo, {
+                    ImageTransparency = 0.7,
+                }):Play()
+            end
+
+            -- Animate to final state
+            local ShowTweenSize = TweenService:Create(MainFrame, OpenTweenInfo, {
+                Size = OriginalSize,
+                Position = OriginalPos,
                 BackgroundTransparency = 0,
-                Position = MainFrame.Position - UDim2.fromOffset(0, 20),
             })
-            ShowTween:Play()
+            ShowTweenSize:Play()
         else
-            -- Hide animation
-            local HideTween = TweenService:Create(MainFrame, Library.FadeTweenInfo, {
-                BackgroundTransparency = 1,
-                Position = MainFrame.Position + UDim2.fromOffset(0, 20),
+            -- Hide animation with scale and fade
+            local OriginalPos = MainFrame.Position
+            local OriginalSize = MainFrame.Size
+
+            -- Animate highlight glow out
+            if Library.HighlightStroke then
+                TweenService:Create(Library.HighlightStroke, CloseTweenInfo, {
+                    Transparency = 1,
+                }):Play()
+            end
+            if Library.OuterShadow then
+                TweenService:Create(Library.OuterShadow, CloseTweenInfo, {
+                    ImageTransparency = 1,
+                }):Play()
+            end
+
+            local HideTween = TweenService:Create(MainFrame, CloseTweenInfo, {
+                Size = UDim2.new(OriginalSize.X.Scale * 0.95, OriginalSize.X.Offset * 0.95, OriginalSize.Y.Scale * 0.95, OriginalSize.Y.Offset * 0.95),
+                Position = OriginalPos + UDim2.fromOffset(OriginalSize.X.Offset * 0.025, 20),
+                BackgroundTransparency = 0.5,
             })
             HideTween:Play()
             HideTween.Completed:Connect(function()
                 if not Library.Toggled then
                     MainFrame.Visible = false
-                    MainFrame.Position = MainFrame.Position - UDim2.fromOffset(0, 20)
+                    MainFrame.Size = OriginalSize
+                    MainFrame.Position = OriginalPos
                     MainFrame.BackgroundTransparency = 0
                 end
             end)
@@ -8245,23 +8489,48 @@ function Library:CreateWindow(WindowInfo)
     end
 
     if Library.IsMobile then
-        local ToggleButton = Library:AddDraggableButton("Toggle", function()
+        -- Toggle button with eye icon (eye/eye-off)
+        local ToggleButton = Library:AddIconButton("eye", function(self)
             Library:Toggle()
-        end)
+            self:SetToggled(Library.Toggled)
 
-        local LockButton = Library:AddDraggableButton("Lock", function(self)
+            -- Animate icon change
+            if Library.Toggled then
+                self:SetIcon("eye")
+            else
+                self:SetIcon("eye-off")
+            end
+        end, {
+            Size = 44,
+            ToggledIcon = "eye-off",
+        })
+        ToggleButton:SetToggled(Library.Toggled)
+
+        -- Lock button with lock/unlock icon
+        local LockButton = Library:AddIconButton("lock", function(self)
             Library.CantDragForced = not Library.CantDragForced
-            self:SetText(Library.CantDragForced and "Unlock" or "Lock")
-        end)
+            self:SetToggled(Library.CantDragForced)
+
+            -- Animate icon change
+            if Library.CantDragForced then
+                self:SetIcon("lock")
+            else
+                self:SetIcon("unlock")
+            end
+        end, {
+            Size = 44,
+            ToggledIcon = "unlock",
+        })
 
         if WindowInfo.MobileButtonsSide == "Right" then
-            ToggleButton.Button.Position = UDim2.new(1, -6, 0, 6)
-            ToggleButton.Button.AnchorPoint = Vector2.new(1, 0)
+            ToggleButton:SetPosition(UDim2.new(1, -6, 0, 6))
+            ToggleButton:SetAnchorPoint(Vector2.new(1, 0))
 
-            LockButton.Button.Position = UDim2.new(1, -6, 0, 46)
-            LockButton.Button.AnchorPoint = Vector2.new(1, 0)
+            LockButton:SetPosition(UDim2.new(1, -6, 0, 56))
+            LockButton:SetAnchorPoint(Vector2.new(1, 0))
         else
-            LockButton.Button.Position = UDim2.fromOffset(6, 46)
+            ToggleButton:SetPosition(UDim2.fromOffset(6, 6))
+            LockButton:SetPosition(UDim2.fromOffset(6, 56))
         end
     end
 
