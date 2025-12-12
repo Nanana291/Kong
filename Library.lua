@@ -3435,6 +3435,12 @@ do
             Data.Visible = Params.Visible or true
             Data.Color = Params.Color
             Data.Idx = typeof(Second) == "table" and First or nil
+            -- New options
+            Data.Icon = Params.Icon -- Lucide icon name
+            Data.Suffix = Params.Suffix -- Suffix text (right side)
+            Data.Animated = Params.Animated -- Pulse animation
+            Data.Badge = Params.Badge -- Badge text
+            Data.BadgeColor = Params.BadgeColor -- Badge color
         else
             Data.Text = First or ""
             Data.DoesWrap = Second or false
@@ -3451,6 +3457,11 @@ do
             DoesWrap = Data.DoesWrap,
 
             Color = Data.Color,
+            Icon = Data.Icon,
+            Suffix = Data.Suffix,
+            Animated = Data.Animated,
+            Badge = Data.Badge,
+            BadgeColor = Data.BadgeColor,
 
             Addons = Addons,
 
@@ -3458,15 +3469,112 @@ do
             Type = "Label",
         }
 
-        local TextLabel = New("TextLabel", {
+        -- Create holder frame for complex labels
+        local Holder = New("Frame", {
             BackgroundTransparency = 1,
             Size = UDim2.new(1, 0, 0, 18),
+            Parent = Container,
+        })
+
+        local TextLabel = New("TextLabel", {
+            BackgroundTransparency = 1,
+            Position = Data.Icon and UDim2.fromOffset(20, 0) or UDim2.fromOffset(0, 0),
+            Size = Data.Icon and UDim2.new(1, -20, 1, 0) or UDim2.fromScale(1, 1),
             Text = Label.Text,
             TextSize = Data.Size,
             TextWrapped = Label.DoesWrap,
             TextXAlignment = Groupbox.IsKeyTab and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left,
-            Parent = Container,
+            Parent = Holder,
         })
+
+        -- Add icon if specified
+        local IconImage
+        if Data.Icon then
+            local Icon = Library:GetCustomIcon(Data.Icon)
+            if Icon then
+                IconImage = New("ImageLabel", {
+                    BackgroundTransparency = 1,
+                    Image = Icon.Url,
+                    ImageColor3 = "AccentColor",
+                    ImageRectOffset = Icon.ImageRectOffset,
+                    ImageRectSize = Icon.ImageRectSize,
+                    Position = UDim2.fromOffset(0, 1),
+                    Size = UDim2.fromOffset(16, 16),
+                    Parent = Holder,
+                })
+                Label.IconImage = IconImage
+            end
+        end
+
+        -- Add suffix if specified
+        local SuffixLabel
+        if Data.Suffix then
+            SuffixLabel = New("TextLabel", {
+                AnchorPoint = Vector2.new(1, 0),
+                BackgroundTransparency = 1,
+                Position = UDim2.new(1, 0, 0, 0),
+                Size = UDim2.new(0, 0, 1, 0),
+                AutomaticSize = Enum.AutomaticSize.X,
+                Text = Data.Suffix,
+                TextSize = Data.Size,
+                TextColor3 = "AccentColor",
+                TextXAlignment = Enum.TextXAlignment.Right,
+                Parent = Holder,
+            })
+            Label.SuffixLabel = SuffixLabel
+        end
+
+        -- Add badge if specified
+        local BadgeFrame
+        if Data.Badge then
+            BadgeFrame = New("Frame", {
+                AnchorPoint = Vector2.new(1, 0.5),
+                BackgroundColor3 = Data.BadgeColor and Color3.fromHex(Data.BadgeColor) or Library.Scheme.AccentColor,
+                Position = UDim2.new(1, 0, 0.5, 0),
+                Size = UDim2.fromOffset(0, 16),
+                AutomaticSize = Enum.AutomaticSize.X,
+                Parent = Holder,
+            })
+            New("UICorner", {
+                CornerRadius = UDim.new(0, 8),
+                Parent = BadgeFrame,
+            })
+            New("UIPadding", {
+                PaddingLeft = UDim.new(0, 6),
+                PaddingRight = UDim.new(0, 6),
+                Parent = BadgeFrame,
+            })
+            local BadgeText = New("TextLabel", {
+                BackgroundTransparency = 1,
+                Size = UDim2.fromScale(1, 1),
+                Text = Data.Badge,
+                TextSize = 11,
+                TextColor3 = Library.Scheme.BackgroundColor,
+                Parent = BadgeFrame,
+            })
+            Label.BadgeFrame = BadgeFrame
+            Label.BadgeText = BadgeText
+        end
+
+        -- Add animated pulse effect if specified
+        local AnimatedTween
+        if Data.Animated then
+            local function StartPulse()
+                if AnimatedTween then AnimatedTween:Cancel() end
+                AnimatedTween = TweenService:Create(TextLabel, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+                    TextTransparency = 0.4,
+                })
+                AnimatedTween:Play()
+
+                if IconImage then
+                    TweenService:Create(IconImage, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+                        ImageTransparency = 0.4,
+                    }):Play()
+                end
+            end
+            StartPulse()
+            Label.AnimatedTween = AnimatedTween
+        end
 
         local function ApplyLabelColor(ColorOption)
             if ColorOption == nil then
@@ -3626,18 +3734,78 @@ do
 
         -- Subtle hover effect for labels
         local OriginalTransparency = TextLabel.TextTransparency
-        TextLabel.MouseEnter:Connect(function()
-            TweenService:Create(TextLabel, Library.HoverTweenInfo, {
-                TextTransparency = math.max(0, OriginalTransparency - 0.1),
-            }):Play()
+        Holder.MouseEnter:Connect(function()
+            if not Data.Animated then
+                TweenService:Create(TextLabel, Library.HoverTweenInfo, {
+                    TextTransparency = math.max(0, OriginalTransparency - 0.15),
+                }):Play()
+            end
+            if IconImage then
+                TweenService:Create(IconImage, Library.HoverTweenInfo, {
+                    Size = UDim2.fromOffset(18, 18),
+                    Position = UDim2.fromOffset(-1, 0),
+                }):Play()
+            end
         end)
-        TextLabel.MouseLeave:Connect(function()
-            TweenService:Create(TextLabel, Library.HoverTweenInfo, {
-                TextTransparency = OriginalTransparency,
-            }):Play()
+        Holder.MouseLeave:Connect(function()
+            if not Data.Animated then
+                TweenService:Create(TextLabel, Library.HoverTweenInfo, {
+                    TextTransparency = OriginalTransparency,
+                }):Play()
+            end
+            if IconImage then
+                TweenService:Create(IconImage, Library.HoverTweenInfo, {
+                    Size = UDim2.fromOffset(16, 16),
+                    Position = UDim2.fromOffset(0, 1),
+                }):Play()
+            end
         end)
 
-        Label.Holder = TextLabel
+        -- New functions for label management
+        function Label:SetSuffix(NewSuffix: string)
+            if SuffixLabel then
+                SuffixLabel.Text = NewSuffix
+            end
+        end
+
+        function Label:SetBadge(NewBadge: string, NewColor: string?)
+            if BadgeFrame then
+                Label.BadgeText.Text = NewBadge
+                if NewColor then
+                    BadgeFrame.BackgroundColor3 = Color3.fromHex(NewColor)
+                end
+            end
+        end
+
+        function Label:SetIcon(NewIcon: string)
+            if IconImage then
+                local Icon = Library:GetCustomIcon(NewIcon)
+                if Icon then
+                    IconImage.Image = Icon.Url
+                    IconImage.ImageRectOffset = Icon.ImageRectOffset
+                    IconImage.ImageRectSize = Icon.ImageRectSize
+                end
+            end
+        end
+
+        function Label:SetAnimated(Enabled: boolean)
+            if Enabled then
+                if not AnimatedTween then
+                    AnimatedTween = TweenService:Create(TextLabel, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+                        TextTransparency = 0.4,
+                    })
+                    AnimatedTween:Play()
+                end
+            else
+                if AnimatedTween then
+                    AnimatedTween:Cancel()
+                    AnimatedTween = nil
+                    TextLabel.TextTransparency = 0
+                end
+            end
+        end
+
+        Label.Holder = Holder
         table.insert(Groupbox.Elements, Label)
 
         if Data.Idx then
@@ -3670,6 +3838,13 @@ do
                 Info.Disabled = Params.Disabled or false
                 Info.Visible = Params.Visible or true
                 Info.Idx = typeof(Second) == "table" and First or nil
+
+                -- New options
+                Info.Icon = Params.Icon -- Lucide icon name
+                Info.IconRight = Params.IconRight -- Place icon on right side
+                Info.Variant = Params.Variant -- "Default", "Accent", "Success", "Warning", "Danger"
+                Info.Loading = Params.Loading -- Loading state
+                Info.Compact = Params.Compact -- Compact mode (icon only)
             else
                 Info.Text = First or ""
                 Info.Func = Second or function() end
@@ -3704,8 +3879,24 @@ do
             Disabled = Info.Disabled,
             Visible = Info.Visible,
 
+            -- New properties
+            Icon = Info.Icon,
+            IconRight = Info.IconRight,
+            Variant = Info.Variant or "Default",
+            Loading = Info.Loading or false,
+            Compact = Info.Compact or false,
+
             Tween = nil,
             Type = "Button",
+        }
+
+        -- Variant colors
+        local VariantColors = {
+            Default = { bg = "MainColor", text = "FontColor", hover = nil },
+            Accent = { bg = "AccentColor", text = "BackgroundColor", hover = nil },
+            Success = { bg = Color3.fromRGB(40, 167, 69), text = Color3.new(1, 1, 1), hover = Color3.fromRGB(50, 190, 85) },
+            Warning = { bg = Color3.fromRGB(255, 193, 7), text = Color3.fromRGB(20, 20, 20), hover = Color3.fromRGB(255, 210, 50) },
+            Danger = { bg = Color3.fromRGB(220, 53, 69), text = Color3.new(1, 1, 1), hover = Color3.fromRGB(240, 70, 85) },
         }
 
         local Holder = New("Frame", {
@@ -3722,17 +3913,40 @@ do
         })
 
         local function CreateButton(Button)
+            local VariantStyle = VariantColors[Button.Variant] or VariantColors.Default
+            local bgColor = VariantStyle.bg
+            local textColor = VariantStyle.text
+
+            -- Handle scheme colors vs direct colors
+            local function GetColor(colorValue)
+                if typeof(colorValue) == "string" then
+                    return Library.Scheme[colorValue] or Library.Scheme.MainColor
+                end
+                return colorValue
+            end
+
             local Base = New("TextButton", {
-                Active = not Button.Disabled,
-                BackgroundColor3 = Button.Disabled and "BackgroundColor" or "MainColor",
+                Active = not Button.Disabled and not Button.Loading,
+                BackgroundColor3 = Button.Disabled and "BackgroundColor" or (typeof(bgColor) == "string" and bgColor or bgColor),
                 ClipsDescendants = true,
-                Size = UDim2.fromScale(1, 1),
-                Text = Button.Text,
+                Size = Button.Compact and UDim2.fromOffset(24, 21) or UDim2.fromScale(1, 1),
+                Text = (Button.Icon and not Button.Compact) and "" or (Button.Compact and "" or Button.Text),
                 TextSize = 14,
-                TextTransparency = 0.4,
+                TextTransparency = Button.Disabled and 0.8 or (Button.Variant == "Default" and 0.4 or 0),
+                TextColor3 = typeof(textColor) == "string" and textColor or textColor,
                 Visible = Button.Visible,
                 Parent = Holder,
             })
+
+            -- Register color for theme support
+            if typeof(bgColor) == "string" then
+                Library.Registry[Base] = Library.Registry[Base] or {}
+                Library.Registry[Base].BackgroundColor3 = bgColor
+            end
+            if typeof(textColor) == "string" then
+                Library.Registry[Base] = Library.Registry[Base] or {}
+                Library.Registry[Base].TextColor3 = textColor
+            end
 
             New("UICorner", {
                 CornerRadius = UDim.new(0, 4),
@@ -3740,10 +3954,144 @@ do
             })
 
             local Stroke = New("UIStroke", {
-                Color = "OutlineColor",
-                Transparency = Button.Disabled and 0.5 or 0,
+                Color = Button.Variant == "Default" and "OutlineColor" or (typeof(bgColor) == "Color3" and bgColor or "AccentColor"),
+                Transparency = Button.Disabled and 0.5 or (Button.Variant == "Default" and 0 or 0.5),
                 Parent = Base,
             })
+
+            -- Add icon if specified
+            local IconImage, IconContainer
+            if Button.Icon then
+                local Icon = Library:GetCustomIcon(Button.Icon)
+                if Icon then
+                    local iconSize = 14
+                    local textPadding = Button.Compact and 0 or 4
+
+                    if not Button.Compact then
+                        -- Container for icon + text layout
+                        IconContainer = New("Frame", {
+                            BackgroundTransparency = 1,
+                            Size = UDim2.fromScale(1, 1),
+                            Parent = Base,
+                        })
+
+                        local layout = New("UIListLayout", {
+                            FillDirection = Enum.FillDirection.Horizontal,
+                            HorizontalAlignment = Enum.HorizontalAlignment.Center,
+                            VerticalAlignment = Enum.VerticalAlignment.Center,
+                            Padding = UDim.new(0, 6),
+                            Parent = IconContainer,
+                        })
+
+                        -- Create icon
+                        if not Button.IconRight then
+                            IconImage = New("ImageLabel", {
+                                BackgroundTransparency = 1,
+                                Image = Icon.Url,
+                                ImageColor3 = typeof(textColor) == "string" and textColor or textColor,
+                                ImageRectOffset = Icon.ImageRectOffset,
+                                ImageRectSize = Icon.ImageRectSize,
+                                Size = UDim2.fromOffset(iconSize, iconSize),
+                                LayoutOrder = 1,
+                                Parent = IconContainer,
+                            })
+                            if typeof(textColor) == "string" then
+                                Library.Registry[IconImage] = Library.Registry[IconImage] or {}
+                                Library.Registry[IconImage].ImageColor3 = textColor
+                            end
+                        end
+
+                        -- Create text label
+                        local TextLabel = New("TextLabel", {
+                            BackgroundTransparency = 1,
+                            AutomaticSize = Enum.AutomaticSize.X,
+                            Size = UDim2.fromOffset(0, iconSize),
+                            Text = Button.Text,
+                            TextSize = 14,
+                            TextColor3 = typeof(textColor) == "string" and textColor or textColor,
+                            TextTransparency = Button.Disabled and 0.8 or (Button.Variant == "Default" and 0.4 or 0),
+                            LayoutOrder = 2,
+                            Parent = IconContainer,
+                        })
+                        if typeof(textColor) == "string" then
+                            Library.Registry[TextLabel] = Library.Registry[TextLabel] or {}
+                            Library.Registry[TextLabel].TextColor3 = textColor
+                        end
+                        Button.TextLabel = TextLabel
+
+                        -- Create right icon if specified
+                        if Button.IconRight then
+                            IconImage = New("ImageLabel", {
+                                BackgroundTransparency = 1,
+                                Image = Icon.Url,
+                                ImageColor3 = typeof(textColor) == "string" and textColor or textColor,
+                                ImageRectOffset = Icon.ImageRectOffset,
+                                ImageRectSize = Icon.ImageRectSize,
+                                Size = UDim2.fromOffset(iconSize, iconSize),
+                                LayoutOrder = 3,
+                                Parent = IconContainer,
+                            })
+                            if typeof(textColor) == "string" then
+                                Library.Registry[IconImage] = Library.Registry[IconImage] or {}
+                                Library.Registry[IconImage].ImageColor3 = textColor
+                            end
+                        end
+                    else
+                        -- Compact mode - icon only, centered
+                        IconImage = New("ImageLabel", {
+                            AnchorPoint = Vector2.new(0.5, 0.5),
+                            BackgroundTransparency = 1,
+                            Image = Icon.Url,
+                            ImageColor3 = typeof(textColor) == "string" and textColor or textColor,
+                            ImageRectOffset = Icon.ImageRectOffset,
+                            ImageRectSize = Icon.ImageRectSize,
+                            Position = UDim2.fromScale(0.5, 0.5),
+                            Size = UDim2.fromOffset(iconSize, iconSize),
+                            Parent = Base,
+                        })
+                        if typeof(textColor) == "string" then
+                            Library.Registry[IconImage] = Library.Registry[IconImage] or {}
+                            Library.Registry[IconImage].ImageColor3 = textColor
+                        end
+                    end
+                end
+            end
+
+            -- Loading spinner
+            local LoadingSpinner
+            if Button.Loading then
+                LoadingSpinner = New("ImageLabel", {
+                    AnchorPoint = Vector2.new(0.5, 0.5),
+                    BackgroundTransparency = 1,
+                    Image = "rbxassetid://4965945816",
+                    ImageColor3 = typeof(textColor) == "string" and textColor or textColor,
+                    Position = UDim2.fromScale(0.5, 0.5),
+                    Size = UDim2.fromOffset(14, 14),
+                    Visible = true,
+                    Parent = Base,
+                })
+                if typeof(textColor) == "string" then
+                    Library.Registry[LoadingSpinner] = Library.Registry[LoadingSpinner] or {}
+                    Library.Registry[LoadingSpinner].ImageColor3 = textColor
+                end
+
+                -- Animate spinner
+                local spinTween = TweenService:Create(LoadingSpinner, TweenInfo.new(1, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1), {
+                    Rotation = 360,
+                })
+                spinTween:Play()
+                Button.SpinTween = spinTween
+
+                -- Hide text/icon while loading
+                if IconContainer then IconContainer.Visible = false end
+                if IconImage and not IconContainer then IconImage.Visible = false end
+                Base.Text = ""
+            end
+
+            Button.IconImage = IconImage
+            Button.IconContainer = IconContainer
+            Button.LoadingSpinner = LoadingSpinner
+            Button.VariantStyle = VariantStyle
 
             local PressDepth = 0
 
@@ -3796,25 +4144,81 @@ do
 
         local function InitEvents(Button)
             Button.Base.MouseEnter:Connect(function()
-                if Button.Disabled then
+                if Button.Disabled or Button.Loading then
                     return
                 end
 
-                Button.Tween = TweenService:Create(Button.Base, Library.HoverTweenInfo, {
-                    TextTransparency = 0,
-                    BackgroundColor3 = Library:GetLighterColor(Library.Scheme.MainColor),
-                })
+                local VariantStyle = Button.VariantStyle or VariantColors.Default
+                local bgColor = VariantStyle.bg
+                local hoverColor = VariantStyle.hover
+
+                -- Calculate hover color
+                local targetBgColor
+                if hoverColor then
+                    targetBgColor = hoverColor
+                elseif typeof(bgColor) == "string" then
+                    targetBgColor = Library:GetLighterColor(Library.Scheme[bgColor] or Library.Scheme.MainColor)
+                else
+                    targetBgColor = Library:GetLighterColor(bgColor)
+                end
+
+                local tweenProps = {
+                    BackgroundColor3 = targetBgColor,
+                }
+
+                -- Only animate text transparency for default variant
+                if Button.Variant == "Default" or not Button.Variant then
+                    tweenProps.TextTransparency = 0
+                    if Button.TextLabel then
+                        TweenService:Create(Button.TextLabel, Library.HoverTweenInfo, { TextTransparency = 0 }):Play()
+                    end
+                end
+
+                -- Scale up icon slightly on hover
+                if Button.IconImage then
+                    TweenService:Create(Button.IconImage, Library.HoverTweenInfo, {
+                        Size = UDim2.fromOffset(16, 16),
+                    }):Play()
+                end
+
+                Button.Tween = TweenService:Create(Button.Base, Library.HoverTweenInfo, tweenProps)
                 Button.Tween:Play()
             end)
             Button.Base.MouseLeave:Connect(function()
-                if Button.Disabled then
+                if Button.Disabled or Button.Loading then
                     return
                 end
 
-                Button.Tween = TweenService:Create(Button.Base, Library.HoverTweenInfo, {
-                    TextTransparency = 0.4,
-                    BackgroundColor3 = Library.Scheme.MainColor,
-                })
+                local VariantStyle = Button.VariantStyle or VariantColors.Default
+                local bgColor = VariantStyle.bg
+
+                local targetBgColor
+                if typeof(bgColor) == "string" then
+                    targetBgColor = Library.Scheme[bgColor] or Library.Scheme.MainColor
+                else
+                    targetBgColor = bgColor
+                end
+
+                local tweenProps = {
+                    BackgroundColor3 = targetBgColor,
+                }
+
+                -- Only animate text transparency for default variant
+                if Button.Variant == "Default" or not Button.Variant then
+                    tweenProps.TextTransparency = 0.4
+                    if Button.TextLabel then
+                        TweenService:Create(Button.TextLabel, Library.HoverTweenInfo, { TextTransparency = 0.4 }):Play()
+                    end
+                end
+
+                -- Scale icon back down
+                if Button.IconImage then
+                    TweenService:Create(Button.IconImage, Library.HoverTweenInfo, {
+                        Size = UDim2.fromOffset(14, 14),
+                    }):Play()
+                end
+
+                Button.Tween = TweenService:Create(Button.Base, Library.HoverTweenInfo, tweenProps)
                 Button.Tween:Play()
             end)
 
@@ -3976,7 +4380,79 @@ do
 
         function Button:SetText(Text: string)
             Button.Text = Text
-            Button.Base.Text = Text
+            if Button.TextLabel then
+                Button.TextLabel.Text = Text
+            else
+                Button.Base.Text = Text
+            end
+        end
+
+        function Button:SetLoading(IsLoading: boolean)
+            Button.Loading = IsLoading
+            Button.Base.Active = not Button.Disabled and not Button.Loading
+
+            if IsLoading then
+                -- Create spinner if not exists
+                if not Button.LoadingSpinner then
+                    local textColor = Button.VariantStyle and Button.VariantStyle.text or "FontColor"
+                    Button.LoadingSpinner = New("ImageLabel", {
+                        AnchorPoint = Vector2.new(0.5, 0.5),
+                        BackgroundTransparency = 1,
+                        Image = "rbxassetid://4965945816",
+                        ImageColor3 = typeof(textColor) == "string" and textColor or textColor,
+                        Position = UDim2.fromScale(0.5, 0.5),
+                        Size = UDim2.fromOffset(14, 14),
+                        Visible = true,
+                        Parent = Button.Base,
+                    })
+                    if typeof(textColor) == "string" then
+                        Library.Registry[Button.LoadingSpinner] = Library.Registry[Button.LoadingSpinner] or {}
+                        Library.Registry[Button.LoadingSpinner].ImageColor3 = textColor
+                    end
+
+                    Button.SpinTween = TweenService:Create(Button.LoadingSpinner, TweenInfo.new(1, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1), {
+                        Rotation = 360,
+                    })
+                    Button.SpinTween:Play()
+                else
+                    Button.LoadingSpinner.Visible = true
+                    if Button.SpinTween then Button.SpinTween:Play() end
+                end
+
+                -- Hide content
+                if Button.IconContainer then Button.IconContainer.Visible = false end
+                if Button.IconImage and not Button.IconContainer then Button.IconImage.Visible = false end
+                if Button.TextLabel then
+                    Button.TextLabel.Visible = false
+                else
+                    Button.Base.Text = ""
+                end
+            else
+                -- Hide spinner
+                if Button.LoadingSpinner then
+                    Button.LoadingSpinner.Visible = false
+                    if Button.SpinTween then Button.SpinTween:Cancel() end
+                end
+
+                -- Show content
+                if Button.IconContainer then Button.IconContainer.Visible = true end
+                if Button.IconImage and not Button.IconContainer then Button.IconImage.Visible = true end
+                if Button.TextLabel then
+                    Button.TextLabel.Visible = true
+                else
+                    Button.Base.Text = Button.Text
+                end
+            end
+        end
+
+        function Button:SetIcon(IconName: string)
+            local Icon = Library:GetCustomIcon(IconName)
+            if Icon and Button.IconImage then
+                Button.Icon = IconName
+                Button.IconImage.Image = Icon.Url
+                Button.IconImage.ImageRectOffset = Icon.ImageRectOffset
+                Button.IconImage.ImageRectSize = Icon.ImageRectSize
+            end
         end
 
         if typeof(Button.Tooltip) == "string" or typeof(Button.DisabledTooltip) == "string" then
@@ -4285,6 +4761,19 @@ do
             Parent = Switch,
         })
 
+        -- Glow effect for switch when enabled
+        local SwitchGlow = New("ImageLabel", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundTransparency = 1,
+            Image = "rbxassetid://6015897843",
+            ImageColor3 = "AccentColor",
+            ImageTransparency = 1,
+            Position = UDim2.fromScale(0.5, 0.5),
+            Size = UDim2.new(1, 16, 1, 16),
+            ZIndex = 0,
+            Parent = Switch,
+        })
+
         local Ball = New("Frame", {
             BackgroundColor3 = "FontColor",
             Size = UDim2.fromScale(1, 1),
@@ -4295,6 +4784,44 @@ do
             CornerRadius = UDim.new(1, 0),
             Parent = Ball,
         })
+
+        -- Ball shadow
+        local BallShadow = New("ImageLabel", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundTransparency = 1,
+            Image = "rbxassetid://6015897843",
+            ImageColor3 = Color3.new(0, 0, 0),
+            ImageTransparency = 0.8,
+            Position = UDim2.new(0.5, 0, 0.5, 2),
+            Size = UDim2.new(1, 4, 1, 4),
+            ZIndex = 0,
+            Parent = Ball,
+        })
+
+        -- Hover effect variables
+        local isHovering = false
+
+        Button.MouseEnter:Connect(function()
+            if Toggle.Disabled then return end
+            isHovering = true
+            TweenService:Create(Label, Library.HoverTweenInfo, {
+                TextTransparency = Toggle.Value and 0 or 0.2,
+            }):Play()
+            TweenService:Create(Switch, Library.HoverTweenInfo, {
+                Size = UDim2.fromOffset(34, 19),
+            }):Play()
+        end)
+
+        Button.MouseLeave:Connect(function()
+            if Toggle.Disabled then return end
+            isHovering = false
+            TweenService:Create(Label, Library.HoverTweenInfo, {
+                TextTransparency = Toggle.Value and 0 or 0.4,
+            }):Play()
+            TweenService:Create(Switch, Library.HoverTweenInfo, {
+                Size = UDim2.fromOffset(32, 18),
+            }):Play()
+        end)
 
         function Toggle:UpdateColors()
             Toggle:Display()
@@ -4316,10 +4843,16 @@ do
             Library.Registry[Switch].BackgroundColor3 = Toggle.Value and "AccentColor" or "MainColor"
             Library.Registry[SwitchStroke].Color = Toggle.Value and "AccentColor" or "OutlineColor"
 
+            -- Animate glow effect
+            TweenService:Create(SwitchGlow, Library.ToggleTweenInfo, {
+                ImageTransparency = Toggle.Value and 0.7 or 1,
+            }):Play()
+
             if Toggle.Disabled then
                 Label.TextTransparency = 0.8
                 Ball.AnchorPoint = Vector2.new(Offset, 0)
                 Ball.Position = UDim2.fromScale(Offset, 0)
+                SwitchGlow.ImageTransparency = 1
 
                 Ball.BackgroundColor3 = Library:GetDarkerColor(Library.Scheme.FontColor)
                 Library.Registry[Ball].BackgroundColor3 = function()
@@ -4465,7 +4998,7 @@ do
 
         local Holder = New("Frame", {
             BackgroundTransparency = 1,
-            Size = UDim2.new(1, 0, 0, 39),
+            Size = UDim2.new(1, 0, 0, 42),
             Visible = Input.Visible,
             Parent = Container,
         })
@@ -4483,11 +5016,11 @@ do
             AnchorPoint = Vector2.new(0, 1),
             BackgroundColor3 = "MainColor",
             BorderColor3 = "OutlineColor",
-            BorderSizePixel = 1,
+            BorderSizePixel = 0,
             ClearTextOnFocus = not Input.Disabled and Input.ClearTextOnFocus,
             PlaceholderText = Input.Placeholder,
             Position = UDim2.fromScale(0, 1),
-            Size = UDim2.new(1, 0, 0, 21),
+            Size = UDim2.new(1, 0, 0, 24),
             Text = Input.Value,
             TextEditable = not Input.Disabled,
             TextScaled = true,
@@ -4495,13 +5028,60 @@ do
             Parent = Holder,
         })
 
+        New("UICorner", {
+            CornerRadius = UDim.new(0, 4),
+            Parent = Box,
+        })
+
+        local BoxStroke = New("UIStroke", {
+            Color = "OutlineColor",
+            Parent = Box,
+        })
+
         New("UIPadding", {
-            PaddingBottom = UDim.new(0, 3),
-            PaddingLeft = UDim.new(0, 8),
-            PaddingRight = UDim.new(0, 8),
+            PaddingBottom = UDim.new(0, 4),
+            PaddingLeft = UDim.new(0, 10),
+            PaddingRight = UDim.new(0, 10),
             PaddingTop = UDim.new(0, 4),
             Parent = Box,
         })
+
+        -- Focus glow effect
+        local FocusGlow = New("ImageLabel", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundTransparency = 1,
+            Image = "rbxassetid://6015897843",
+            ImageColor3 = "AccentColor",
+            ImageTransparency = 1,
+            Position = UDim2.fromScale(0.5, 0.5),
+            Size = UDim2.new(1, 20, 1, 20),
+            ZIndex = 0,
+            Parent = Box,
+        })
+
+        -- Hover effect
+        Box.MouseEnter:Connect(function()
+            if Input.Disabled then return end
+            TweenService:Create(BoxStroke, Library.HoverTweenInfo, {
+                Color = Library:GetLighterColor(Library.Scheme.OutlineColor),
+            }):Play()
+            TweenService:Create(Label, Library.HoverTweenInfo, {
+                TextTransparency = 0,
+            }):Play()
+        end)
+
+        Box.MouseLeave:Connect(function()
+            if Input.Disabled then return end
+            TweenService:Create(BoxStroke, Library.HoverTweenInfo, {
+                Color = Library.Scheme.OutlineColor,
+            }):Play()
+            TweenService:Create(Label, Library.HoverTweenInfo, {
+                TextTransparency = Input.Disabled and 0.8 or 0,
+            }):Play()
+        end)
+
+        Input.BoxStroke = BoxStroke
+        Input.FocusGlow = FocusGlow
 
         function Input:UpdateColors()
             if Library.Unloaded then
@@ -4587,8 +5167,9 @@ do
             end
 
             local TargetTextColor = IsFocused and NeonInputTextColor or Library.Scheme.FontColor
-            local TargetBorderColor = IsFocused and Library.Scheme.AccentColor or Library.Scheme.OutlineColor
+            local TargetStrokeColor = IsFocused and Library.Scheme.AccentColor or Library.Scheme.OutlineColor
             local TargetBackgroundColor = IsFocused and Library:GetLighterColor(Library.Scheme.MainColor) or Library.Scheme.MainColor
+            local TargetGlowTransparency = IsFocused and 0.7 or 1
 
             if FocusTween then
                 StopTween(FocusTween)
@@ -4601,11 +5182,20 @@ do
 
             FocusTween = TweenService:Create(Box, Library.HoverTweenInfo, {
                 TextColor3 = TargetTextColor,
-                BorderColor3 = TargetBorderColor,
             })
             BackgroundTween = TweenService:Create(Box, Library.FadeTweenInfo, {
                 BackgroundColor3 = TargetBackgroundColor,
             })
+
+            -- Animate stroke color
+            TweenService:Create(BoxStroke, Library.HoverTweenInfo, {
+                Color = TargetStrokeColor,
+            }):Play()
+
+            -- Animate glow effect
+            TweenService:Create(FocusGlow, Library.FadeTweenInfo, {
+                ImageTransparency = TargetGlowTransparency,
+            }):Play()
 
             FocusTween:Play()
             BackgroundTween:Play()
@@ -4711,11 +5301,22 @@ do
             AnchorPoint = Vector2.new(0, 1),
             BackgroundColor3 = "MainColor",
             BorderColor3 = "OutlineColor",
-            BorderSizePixel = 1,
+            BorderSizePixel = 0,
             Position = UDim2.fromScale(0, 1),
             Size = UDim2.new(1, 0, 0, 13),
             Text = "",
+            ClipsDescendants = true,
             Parent = Holder,
+        })
+
+        New("UICorner", {
+            CornerRadius = UDim.new(0, 4),
+            Parent = Bar,
+        })
+
+        New("UIStroke", {
+            Color = "OutlineColor",
+            Parent = Bar,
         })
 
         local DisplayLabel = New("TextLabel", {
@@ -4723,7 +5324,7 @@ do
             Size = UDim2.fromScale(1, 1),
             Text = "",
             TextSize = 14,
-            ZIndex = 2,
+            ZIndex = 3,
             Parent = Bar,
         })
         New("UIStroke", {
@@ -4743,6 +5344,93 @@ do
             },
         })
 
+        New("UICorner", {
+            CornerRadius = UDim.new(0, 4),
+            Parent = Fill,
+        })
+
+        -- Fill glow effect
+        local FillGlow = New("Frame", {
+            AnchorPoint = Vector2.new(0, 0.5),
+            BackgroundColor3 = "AccentColor",
+            BackgroundTransparency = 0.5,
+            Position = UDim2.fromScale(0, 0.5),
+            Size = UDim2.new(0.5, 0, 1, 6),
+            ZIndex = 0,
+            Parent = Bar,
+
+            DPIExclude = {
+                Size = true,
+            },
+        })
+        New("UICorner", {
+            CornerRadius = UDim.new(0, 6),
+            Parent = FillGlow,
+        })
+
+        -- Slider thumb/handle
+        local Thumb = New("Frame", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundColor3 = "FontColor",
+            Position = UDim2.new(0.5, 0, 0.5, 0),
+            Size = UDim2.fromOffset(4, 17),
+            ZIndex = 2,
+            Parent = Bar,
+        })
+        New("UICorner", {
+            CornerRadius = UDim.new(0, 2),
+            Parent = Thumb,
+        })
+
+        -- Thumb shadow
+        local ThumbShadow = New("ImageLabel", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundTransparency = 1,
+            Image = "rbxassetid://6015897843",
+            ImageColor3 = Color3.new(0, 0, 0),
+            ImageTransparency = 0.85,
+            Position = UDim2.new(0.5, 0, 0.5, 1),
+            Size = UDim2.fromOffset(12, 24),
+            ZIndex = 1,
+            Parent = Thumb,
+        })
+
+        -- Hover effects
+        local isDragging = false
+
+        Bar.MouseEnter:Connect(function()
+            if Slider.Disabled then return end
+            TweenService:Create(Thumb, Library.HoverTweenInfo, {
+                Size = UDim2.fromOffset(6, 19),
+            }):Play()
+            TweenService:Create(Bar, Library.HoverTweenInfo, {
+                Size = UDim2.new(1, 0, 0, 15),
+            }):Play()
+            if SliderLabel then
+                TweenService:Create(SliderLabel, Library.HoverTweenInfo, {
+                    TextTransparency = 0,
+                }):Play()
+            end
+        end)
+
+        Bar.MouseLeave:Connect(function()
+            if Slider.Disabled or isDragging then return end
+            TweenService:Create(Thumb, Library.HoverTweenInfo, {
+                Size = UDim2.fromOffset(4, 17),
+            }):Play()
+            TweenService:Create(Bar, Library.HoverTweenInfo, {
+                Size = UDim2.new(1, 0, 0, 13),
+            }):Play()
+            if SliderLabel then
+                TweenService:Create(SliderLabel, Library.HoverTweenInfo, {
+                    TextTransparency = Slider.Disabled and 0.8 or 0,
+                }):Play()
+            end
+        end)
+
+        Slider.Thumb = Thumb
+        Slider.FillGlow = FillGlow
+
         function Slider:UpdateColors()
             if Library.Unloaded then
                 return
@@ -4755,6 +5443,10 @@ do
 
             Fill.BackgroundColor3 = Slider.Disabled and Library.Scheme.OutlineColor or Library.Scheme.AccentColor
             Library.Registry[Fill].BackgroundColor3 = Slider.Disabled and "OutlineColor" or "AccentColor"
+
+            -- Update thumb visibility
+            Thumb.BackgroundTransparency = Slider.Disabled and 0.5 or 0
+            FillGlow.BackgroundTransparency = Slider.Disabled and 0.9 or 0.5
         end
 
         function Slider:Display()
@@ -4791,6 +5483,16 @@ do
             local X = (Slider.Value - Slider.Min) / (Slider.Max - Slider.Min)
             TweenService:Create(Fill, Library.HoverTweenInfo, {
                 Size = UDim2.fromScale(X, 1),
+            }):Play()
+
+            -- Animate thumb position
+            TweenService:Create(Thumb, Library.HoverTweenInfo, {
+                Position = UDim2.new(X, 0, 0.5, 0),
+            }):Play()
+
+            -- Animate fill glow
+            TweenService:Create(FillGlow, Library.HoverTweenInfo, {
+                Size = UDim2.new(X, 0, 1, 6),
             }):Play()
         end
 
@@ -6819,72 +7521,118 @@ function Library:CreateWindow(WindowInfo)
         end
         Library:MakeOutline(MainFrame, WindowInfo.CornerRadius, 0)
 
-        -- Highlight/Glow effect around the UI (like Canva cover shadows)
-        local HighlightGlow = New("Frame", {
-            Name = "HighlightGlow",
+        -- Highlight/Glow effect - Soft diffuse shadow (like Canva cover shadows)
+        -- Using multiple layered shadows for a smooth, modern glow effect
+        local ShadowLayers = {}
+
+        -- Create container for all shadow layers
+        local ShadowContainer = New("Frame", {
+            Name = "ShadowContainer",
             AnchorPoint = Vector2.new(0.5, 0.5),
             BackgroundTransparency = 1,
             Position = UDim2.fromScale(0.5, 0.5),
-            Size = UDim2.new(1, 30, 1, 30),
-            ZIndex = -1,
+            Size = UDim2.fromScale(1, 1),
+            ZIndex = -10,
             Parent = MainFrame,
         })
-        New("UICorner", {
-            CornerRadius = UDim.new(0, WindowInfo.CornerRadius + 8),
-            Parent = HighlightGlow,
-        })
 
-        local HighlightStroke = New("UIStroke", {
-            Name = "HighlightStroke",
-            ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-            Color = Library.Scheme.HighlightColor,
-            Thickness = 3,
-            Transparency = 0.6,
-            Parent = HighlightGlow,
+        -- Layer 1: Innermost soft glow (closest to UI)
+        local ShadowLayer1 = New("ImageLabel", {
+            Name = "ShadowLayer1",
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundTransparency = 1,
+            Image = "rbxassetid://6015897843",
+            ImageColor3 = Library.Scheme.HighlightColor,
+            ImageTransparency = 0.75,
+            Position = UDim2.fromScale(0.5, 0.5),
+            ScaleType = Enum.ScaleType.Slice,
+            Size = UDim2.new(1, 24, 1, 24),
+            SliceCenter = Rect.new(49, 49, 450, 450),
+            ZIndex = -1,
+            Parent = ShadowContainer,
         })
+        table.insert(ShadowLayers, ShadowLayer1)
+
+        -- Layer 2: Medium glow
+        local ShadowLayer2 = New("ImageLabel", {
+            Name = "ShadowLayer2",
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundTransparency = 1,
+            Image = "rbxassetid://6015897843",
+            ImageColor3 = Library.Scheme.HighlightColor,
+            ImageTransparency = 0.85,
+            Position = UDim2.fromScale(0.5, 0.5),
+            ScaleType = Enum.ScaleType.Slice,
+            Size = UDim2.new(1, 45, 1, 45),
+            SliceCenter = Rect.new(49, 49, 450, 450),
+            ZIndex = -2,
+            Parent = ShadowContainer,
+        })
+        table.insert(ShadowLayers, ShadowLayer2)
+
+        -- Layer 3: Outer diffuse glow (farthest from UI)
+        local ShadowLayer3 = New("ImageLabel", {
+            Name = "ShadowLayer3",
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundTransparency = 1,
+            Image = "rbxassetid://6015897843",
+            ImageColor3 = Library.Scheme.HighlightColor,
+            ImageTransparency = 0.92,
+            Position = UDim2.fromScale(0.5, 0.5),
+            ScaleType = Enum.ScaleType.Slice,
+            Size = UDim2.new(1, 70, 1, 70),
+            SliceCenter = Rect.new(49, 49, 450, 450),
+            ZIndex = -3,
+            Parent = ShadowContainer,
+        })
+        table.insert(ShadowLayers, ShadowLayer3)
 
         -- Animated glow pulse effect
-        local HighlightPulseTween
+        local HighlightPulseTweens = {}
         local function UpdateHighlightGlow()
-            if HighlightPulseTween then
-                HighlightPulseTween:Cancel()
+            -- Cancel existing tweens
+            for _, tween in ipairs(HighlightPulseTweens) do
+                if tween then tween:Cancel() end
             end
+            HighlightPulseTweens = {}
 
             if Library.Scheme.Highlight then
-                HighlightGlow.Visible = true
-                HighlightStroke.Color = Library.Scheme.HighlightColor
+                ShadowContainer.Visible = true
 
-                -- Create pulsing animation
-                HighlightPulseTween = TweenService:Create(HighlightStroke, TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
-                    Transparency = 0.85,
-                    Thickness = 5,
+                -- Update colors for all layers
+                for _, layer in ipairs(ShadowLayers) do
+                    layer.ImageColor3 = Library.Scheme.HighlightColor
+                end
+
+                -- Create subtle breathing animation for each layer (offset timing)
+                local PulseTween1 = TweenService:Create(ShadowLayer1, TweenInfo.new(2.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+                    ImageTransparency = 0.65,
+                    Size = UDim2.new(1, 28, 1, 28),
                 })
-                HighlightPulseTween:Play()
+                local PulseTween2 = TweenService:Create(ShadowLayer2, TweenInfo.new(3, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+                    ImageTransparency = 0.78,
+                    Size = UDim2.new(1, 52, 1, 52),
+                })
+                local PulseTween3 = TweenService:Create(ShadowLayer3, TweenInfo.new(3.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+                    ImageTransparency = 0.88,
+                    Size = UDim2.new(1, 80, 1, 80),
+                })
+
+                PulseTween1:Play()
+                task.delay(0.3, function() PulseTween2:Play() end)
+                task.delay(0.6, function() PulseTween3:Play() end)
+
+                table.insert(HighlightPulseTweens, PulseTween1)
+                table.insert(HighlightPulseTweens, PulseTween2)
+                table.insert(HighlightPulseTweens, PulseTween3)
             else
-                HighlightGlow.Visible = false
+                ShadowContainer.Visible = false
             end
         end
 
-        Library.HighlightGlow = HighlightGlow
-        Library.HighlightStroke = HighlightStroke
+        Library.ShadowContainer = ShadowContainer
+        Library.ShadowLayers = ShadowLayers
         Library.UpdateHighlightGlow = UpdateHighlightGlow
-
-        -- Create outer shadow for depth
-        local OuterShadow = New("ImageLabel", {
-            Name = "OuterShadow",
-            AnchorPoint = Vector2.new(0.5, 0.5),
-            BackgroundTransparency = 1,
-            Image = "rbxassetid://6015897843", -- Shadow image
-            ImageColor3 = Library.Scheme.HighlightColor,
-            ImageTransparency = 0.7,
-            Position = UDim2.fromScale(0.5, 0.5),
-            ScaleType = Enum.ScaleType.Slice,
-            Size = UDim2.new(1, 50, 1, 50),
-            SliceCenter = Rect.new(49, 49, 450, 450),
-            ZIndex = -2,
-            Parent = MainFrame,
-        })
-        Library.OuterShadow = OuterShadow
 
         UpdateHighlightGlow()
 
@@ -8392,18 +9140,16 @@ function Library:CreateWindow(WindowInfo)
             MainFrame.Position = OriginalPos + UDim2.fromOffset(OriginalSize.X.Offset * 0.025, 30)
             MainFrame.BackgroundTransparency = 0.5
 
-            -- Animate highlight glow
-            if Library.HighlightStroke then
-                Library.HighlightStroke.Transparency = 1
-                TweenService:Create(Library.HighlightStroke, OpenTweenInfo, {
-                    Transparency = 0.6,
-                }):Play()
-            end
-            if Library.OuterShadow then
-                Library.OuterShadow.ImageTransparency = 1
-                TweenService:Create(Library.OuterShadow, OpenTweenInfo, {
-                    ImageTransparency = 0.7,
-                }):Play()
+            -- Animate shadow layers in
+            if Library.ShadowLayers then
+                for i, layer in ipairs(Library.ShadowLayers) do
+                    layer.ImageTransparency = 1
+                    task.delay((i - 1) * 0.05, function()
+                        TweenService:Create(layer, OpenTweenInfo, {
+                            ImageTransparency = i == 1 and 0.75 or (i == 2 and 0.85 or 0.92),
+                        }):Play()
+                    end)
+                end
             end
 
             -- Animate to final state
@@ -8418,16 +9164,13 @@ function Library:CreateWindow(WindowInfo)
             local OriginalPos = MainFrame.Position
             local OriginalSize = MainFrame.Size
 
-            -- Animate highlight glow out
-            if Library.HighlightStroke then
-                TweenService:Create(Library.HighlightStroke, CloseTweenInfo, {
-                    Transparency = 1,
-                }):Play()
-            end
-            if Library.OuterShadow then
-                TweenService:Create(Library.OuterShadow, CloseTweenInfo, {
-                    ImageTransparency = 1,
-                }):Play()
+            -- Animate shadow layers out
+            if Library.ShadowLayers then
+                for i, layer in ipairs(Library.ShadowLayers) do
+                    TweenService:Create(layer, CloseTweenInfo, {
+                        ImageTransparency = 1,
+                    }):Play()
+                end
             end
 
             local HideTween = TweenService:Create(MainFrame, CloseTweenInfo, {
