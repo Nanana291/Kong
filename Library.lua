@@ -1358,6 +1358,120 @@ function Library:GetAccentGlow(Color: Color3, Intensity: number?): Color3
     return Color3.fromHSV(H, math.max(0, S - Intensity), math.min(1, V + Intensity))
 end
 
+-- Create a pulse animation effect on an element
+function Library:CreatePulseEffect(Element: GuiObject, Property: string, StartValue: any, EndValue: any, Duration: number?)
+    Duration = Duration or 1
+    local PulseTweenInfo = TweenInfo.new(Duration / 2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
+    local PulseTween = TweenService:Create(Element, PulseTweenInfo, {[Property] = EndValue})
+    Element[Property] = StartValue
+    PulseTween:Play()
+    return PulseTween
+end
+
+-- Create a glow/shadow effect using UIStroke
+function Library:CreateGlowEffect(Element: GuiObject, Color: Color3?, Thickness: number?)
+    Color = Color or Library.Scheme.AccentColor
+    Thickness = Thickness or 2
+
+    local Glow = Instance.new("UIStroke")
+    Glow.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    Glow.Color = Color
+    Glow.Thickness = Thickness
+    Glow.Transparency = 0.5
+    Glow.Parent = Element
+
+    -- Animate the glow
+    local GlowTweenInfo = TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true)
+    local GlowTween = TweenService:Create(Glow, GlowTweenInfo, {Transparency = 0.8})
+    GlowTween:Play()
+
+    return Glow, GlowTween
+end
+
+-- Ripple click effect
+function Library:CreateRippleEffect(Element: GuiObject, ClickPosition: Vector2?)
+    local Ripple = Instance.new("Frame")
+    Ripple.Name = "Ripple"
+    Ripple.BackgroundColor3 = Library.Scheme.AccentColor
+    Ripple.BackgroundTransparency = 0.7
+    Ripple.BorderSizePixel = 0
+    Ripple.ZIndex = Element.ZIndex + 1
+
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = UDim.new(1, 0)
+    Corner.Parent = Ripple
+
+    -- Position at click or center
+    local ElementPos = Element.AbsolutePosition
+    local ElementSize = Element.AbsoluteSize
+    local RipplePos = ClickPosition or Vector2.new(ElementPos.X + ElementSize.X/2, ElementPos.Y + ElementSize.Y/2)
+
+    local RelativeX = (RipplePos.X - ElementPos.X) / ElementSize.X
+    local RelativeY = (RipplePos.Y - ElementPos.Y) / ElementSize.Y
+
+    Ripple.Position = UDim2.fromScale(RelativeX, RelativeY)
+    Ripple.Size = UDim2.fromOffset(0, 0)
+    Ripple.AnchorPoint = Vector2.new(0.5, 0.5)
+    Ripple.Parent = Element
+
+    -- Expand and fade
+    local MaxSize = math.max(ElementSize.X, ElementSize.Y) * 2.5
+    local RippleTween = TweenService:Create(Ripple, TweenInfo.new(0.5, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out), {
+        Size = UDim2.fromOffset(MaxSize, MaxSize),
+        BackgroundTransparency = 1,
+    })
+    RippleTween:Play()
+    RippleTween.Completed:Connect(function()
+        Ripple:Destroy()
+    end)
+
+    return Ripple
+end
+
+-- Shake effect for error feedback
+function Library:CreateShakeEffect(Element: GuiObject, Intensity: number?, Duration: number?)
+    Intensity = Intensity or 5
+    Duration = Duration or 0.3
+
+    local OriginalPosition = Element.Position
+    local StartTime = tick()
+
+    local ShakeConnection
+    ShakeConnection = RunService.RenderStepped:Connect(function()
+        local Elapsed = tick() - StartTime
+        if Elapsed >= Duration then
+            Element.Position = OriginalPosition
+            ShakeConnection:Disconnect()
+            return
+        end
+
+        local Progress = Elapsed / Duration
+        local Decay = 1 - Progress
+        local OffsetX = math.sin(Elapsed * 50) * Intensity * Decay
+        Element.Position = OriginalPosition + UDim2.fromOffset(OffsetX, 0)
+    end)
+
+    return ShakeConnection
+end
+
+-- Scale bounce effect
+function Library:CreateBounceEffect(Element: GuiObject, Scale: number?)
+    Scale = Scale or 1.1
+    local OriginalSize = Element.Size
+
+    local BounceUp = TweenService:Create(Element, TweenInfo.new(0.1, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Size = UDim2.new(OriginalSize.X.Scale * Scale, OriginalSize.X.Offset, OriginalSize.Y.Scale * Scale, OriginalSize.Y.Offset),
+    })
+    local BounceDown = TweenService:Create(Element, TweenInfo.new(0.15, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out), {
+        Size = OriginalSize,
+    })
+
+    BounceUp:Play()
+    BounceUp.Completed:Connect(function()
+        BounceDown:Play()
+    end)
+end
+
 function Library:GetKeyString(KeyCode: Enum.KeyCode)
     if KeyCode.EnumType == Enum.KeyCode and KeyCode.Value > 33 and KeyCode.Value < 127 then
         return string.char(KeyCode.Value)
@@ -2233,6 +2347,20 @@ do
             Parent = ToggleLabel,
         })
 
+        -- Hover effects for KeyPicker button
+        Picker.MouseEnter:Connect(function()
+            TweenService:Create(Picker, Library.HoverTweenInfo, {
+                BackgroundColor3 = Library:GetLighterColor(Library.Scheme.MainColor),
+                BorderColor3 = Library.Scheme.AccentColor,
+            }):Play()
+        end)
+        Picker.MouseLeave:Connect(function()
+            TweenService:Create(Picker, Library.HoverTweenInfo, {
+                BackgroundColor3 = Library.Scheme.MainColor,
+                BorderColor3 = Library.Scheme.OutlineColor,
+            }):Play()
+        end)
+
         local KeybindsToggle = { Normal = KeyPicker.Mode ~= "Toggle" }
         do
             local Holder = New("TextButton", {
@@ -2283,8 +2411,17 @@ do
             })
 
             function KeybindsToggle:Display(State)
-                Label.TextTransparency = State and 0 or 0.5
-                CheckImage.ImageTransparency = State and 0 or 1
+                TweenService:Create(Label, Library.HoverTweenInfo, {
+                    TextTransparency = State and 0 or 0.5,
+                    TextColor3 = State and Library.Scheme.AccentColor or Library.Scheme.FontColor,
+                }):Play()
+                TweenService:Create(CheckImage, Library.ToggleTweenInfo, {
+                    ImageTransparency = State and 0 or 1,
+                    ImageColor3 = State and Library.Scheme.AccentColor or Library.Scheme.FontColor,
+                }):Play()
+                TweenService:Create(Checkbox, Library.HoverTweenInfo, {
+                    BackgroundColor3 = State and Library:GetLighterColor(Library.Scheme.MainColor) or Library.Scheme.MainColor,
+                }):Play()
             end
 
             function KeybindsToggle:SetText(Text)
@@ -2954,19 +3091,35 @@ do
 
             ColorPicker.Value = Color3.fromHSV(ColorPicker.Hue, ColorPicker.Sat, ColorPicker.Vib)
 
-            Holder.BackgroundColor3 = ColorPicker.Value
-            Holder.BorderColor3 = Library:GetDarkerColor(ColorPicker.Value)
-            HolderTransparency.ImageTransparency = (1 - ColorPicker.Transparency)
+            -- Animated color transitions
+            TweenService:Create(Holder, Library.HoverTweenInfo, {
+                BackgroundColor3 = ColorPicker.Value,
+                BorderColor3 = Library:GetDarkerColor(ColorPicker.Value),
+            }):Play()
+            TweenService:Create(HolderTransparency, Library.HoverTweenInfo, {
+                ImageTransparency = (1 - ColorPicker.Transparency),
+            }):Play()
 
-            SatVipMap.BackgroundColor3 = Color3.fromHSV(ColorPicker.Hue, 1, 1)
+            TweenService:Create(SatVipMap, Library.HoverTweenInfo, {
+                BackgroundColor3 = Color3.fromHSV(ColorPicker.Hue, 1, 1),
+            }):Play()
             if TransparencyColor then
-                TransparencyColor.BackgroundColor3 = ColorPicker.Value
+                TweenService:Create(TransparencyColor, Library.HoverTweenInfo, {
+                    BackgroundColor3 = ColorPicker.Value,
+                }):Play()
             end
 
-            SatVibCursor.Position = UDim2.fromScale(ColorPicker.Sat, 1 - ColorPicker.Vib)
-            HueCursor.Position = UDim2.fromScale(0.5, ColorPicker.Hue)
+            -- Animated cursor positions
+            TweenService:Create(SatVibCursor, Library.ToggleTweenInfo, {
+                Position = UDim2.fromScale(ColorPicker.Sat, 1 - ColorPicker.Vib),
+            }):Play()
+            TweenService:Create(HueCursor, Library.ToggleTweenInfo, {
+                Position = UDim2.fromScale(0.5, ColorPicker.Hue),
+            }):Play()
             if TransparencyCursor then
-                TransparencyCursor.Position = UDim2.fromScale(0.5, ColorPicker.Transparency)
+                TweenService:Create(TransparencyCursor, Library.ToggleTweenInfo, {
+                    Position = UDim2.fromScale(0.5, ColorPicker.Transparency),
+                }):Play()
             end
 
             HueBox.Text = "#" .. ColorPicker.Value:ToHex()
@@ -3339,6 +3492,19 @@ do
             setmetatable(Label, BaseAddons)
         end
 
+        -- Subtle hover effect for labels
+        local OriginalTransparency = TextLabel.TextTransparency
+        TextLabel.MouseEnter:Connect(function()
+            TweenService:Create(TextLabel, Library.HoverTweenInfo, {
+                TextTransparency = math.max(0, OriginalTransparency - 0.1),
+            }):Play()
+        end)
+        TextLabel.MouseLeave:Connect(function()
+            TweenService:Create(TextLabel, Library.HoverTweenInfo, {
+                TextTransparency = OriginalTransparency,
+            }):Play()
+        end)
+
         Label.Holder = TextLabel
         table.insert(Groupbox.Elements, Label)
 
@@ -3427,12 +3593,18 @@ do
             local Base = New("TextButton", {
                 Active = not Button.Disabled,
                 BackgroundColor3 = Button.Disabled and "BackgroundColor" or "MainColor",
+                ClipsDescendants = true,
                 Size = UDim2.fromScale(1, 1),
                 Text = Button.Text,
                 TextSize = 14,
                 TextTransparency = 0.4,
                 Visible = Button.Visible,
                 Parent = Holder,
+            })
+
+            New("UICorner", {
+                CornerRadius = UDim.new(0, 4),
+                Parent = Base,
             })
 
             local Stroke = New("UIStroke", {
@@ -3518,6 +3690,10 @@ do
                 if Button.Disabled or Button.Locked then
                     return
                 end
+
+                -- Create ripple effect on click
+                local ClickPos = Vector2.new(Mouse.X, Mouse.Y)
+                Library:CreateRippleEffect(Button.Base, ClickPos)
 
                 if Button.DoubleClick then
                     Button.Locked = true
@@ -4726,8 +4902,19 @@ do
             2,
             function(Active: boolean)
                 Display.TextTransparency = (Active and SearchBox) and 1 or 0
-                ArrowImage.ImageTransparency = Active and 0 or 0.5
-                ArrowImage.Rotation = Active and 180 or 0
+
+                -- Animated arrow rotation and transparency
+                TweenService:Create(ArrowImage, Library.HoverTweenInfo, {
+                    ImageTransparency = Active and 0 or 0.5,
+                    Rotation = Active and 180 or 0,
+                    ImageColor3 = Active and Library.Scheme.AccentColor or Library.Scheme.FontColor,
+                }):Play()
+
+                -- Animated display background
+                TweenService:Create(Display, Library.HoverTweenInfo, {
+                    BackgroundColor3 = Active and Library:GetLighterColor(Library.Scheme.MainColor) or Library.Scheme.MainColor,
+                }):Play()
+
                 if SearchBox then
                     SearchBox.Text = ""
                     SearchBox.Visible = Active
@@ -4862,11 +5049,32 @@ do
                         Selected = Dropdown.Value == Value
                     end
 
-                    Button.BackgroundTransparency = Selected and 0 or 1
-                    Button.TextTransparency = IsDisabled and 0.8 or Selected and 0 or 0.5
+                    TweenService:Create(Button, Library.HoverTweenInfo, {
+                        BackgroundTransparency = Selected and 0 or 1,
+                        TextTransparency = IsDisabled and 0.8 or Selected and 0 or 0.5,
+                        BackgroundColor3 = Selected and Library.Scheme.AccentColor or Library.Scheme.MainColor,
+                        TextColor3 = Selected and Library.Scheme.BackgroundColor or Library.Scheme.FontColor,
+                    }):Play()
                 end
 
+                -- Hover effects for dropdown items
                 if not IsDisabled then
+                    Button.MouseEnter:Connect(function()
+                        if not Selected then
+                            TweenService:Create(Button, Library.HoverTweenInfo, {
+                                BackgroundTransparency = 0.7,
+                                TextTransparency = 0.2,
+                            }):Play()
+                        end
+                    end)
+                    Button.MouseLeave:Connect(function()
+                        if not Selected then
+                            TweenService:Create(Button, Library.HoverTweenInfo, {
+                                BackgroundTransparency = 1,
+                                TextTransparency = 0.5,
+                            }):Play()
+                        end
+                    end)
                     Button.MouseButton1Click:Connect(function()
                         local Try = not Selected
 
@@ -6140,9 +6348,29 @@ function Library:Notify(...)
     Library.Notifications[FakeBackground] = Data
 
     FakeBackground.Visible = true
-    TweenService:Create(Background, Library.NotifyTweenInfo, {
+
+    -- Initial scale effect
+    Background.Size = UDim2.fromScale(0.9, 0)
+    Holder.BackgroundTransparency = 0.3
+
+    -- Animated entry with scale and position
+    local EntryTween1 = TweenService:Create(Background, Library.NotifyTweenInfo, {
         Position = UDim2.fromOffset(-2, -2),
-    }):Play()
+        Size = UDim2.fromScale(1, 0),
+    })
+    local EntryTween2 = TweenService:Create(Holder, Library.FadeTweenInfo, {
+        BackgroundTransparency = 0,
+    })
+
+    EntryTween1:Play()
+    EntryTween2:Play()
+
+    -- Add accent glow effect to timer bar
+    if TimerFill then
+        TweenService:Create(TimerFill, TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+            BackgroundColor3 = Library:GetAccentGlow(Library.Scheme.AccentColor, 0.1),
+        }):Play()
+    end
 
     task.delay(Library.NotifyTweenInfo.Time, function()
         if Data.Persist then
@@ -7311,8 +7539,9 @@ function Library:CreateWindow(WindowInfo)
                 })
 
                 local BoxIcon = Library:GetCustomIcon(Info.IconName)
+                local BoxIconImage
                 if BoxIcon then
-                    New("ImageLabel", {
+                    BoxIconImage = New("ImageLabel", {
                         Image = BoxIcon.Url,
                         ImageColor3 = BoxIcon.Custom and "White" or "AccentColor",
                         ImageRectOffset = BoxIcon.ImageRectOffset,
@@ -7329,6 +7558,7 @@ function Library:CreateWindow(WindowInfo)
                     Size = UDim2.new(1, 0, 0, 34),
                     Text = Info.Name,
                     TextSize = 15,
+                    TextTransparency = 0.1,
                     TextXAlignment = Enum.TextXAlignment.Left,
                     Parent = GroupboxHolder,
                 })
@@ -7337,6 +7567,41 @@ function Library:CreateWindow(WindowInfo)
                     PaddingRight = UDim.new(0, 12),
                     Parent = GroupboxLabel,
                 })
+
+                -- Hover effect for groupbox header
+                local HeaderHoverRegion = New("TextButton", {
+                    BackgroundTransparency = 1,
+                    Position = UDim2.fromOffset(0, 0),
+                    Size = UDim2.new(1, 0, 0, 34),
+                    Text = "",
+                    Parent = GroupboxHolder,
+                })
+
+                HeaderHoverRegion.MouseEnter:Connect(function()
+                    TweenService:Create(GroupboxLabel, Library.HoverTweenInfo, {
+                        TextTransparency = 0,
+                        TextColor3 = Library.Scheme.AccentColor,
+                    }):Play()
+                    if BoxIconImage then
+                        TweenService:Create(BoxIconImage, Library.HoverTweenInfo, {
+                            ImageTransparency = 0,
+                            Rotation = 5,
+                        }):Play()
+                    end
+                end)
+
+                HeaderHoverRegion.MouseLeave:Connect(function()
+                    TweenService:Create(GroupboxLabel, Library.HoverTweenInfo, {
+                        TextTransparency = 0.1,
+                        TextColor3 = Library.Scheme.FontColor,
+                    }):Play()
+                    if BoxIconImage then
+                        TweenService:Create(BoxIconImage, Library.HoverTweenInfo, {
+                            ImageTransparency = 0,
+                            Rotation = 0,
+                        }):Play()
+                    end
+                end)
 
                 GroupboxContainer = New("Frame", {
                     BackgroundTransparency = 1,
@@ -7910,7 +8175,32 @@ function Library:CreateWindow(WindowInfo)
             Library.Toggled = not Library.Toggled
         end
 
-        MainFrame.Visible = Library.Toggled
+        if Library.Toggled then
+            -- Show animation
+            MainFrame.Visible = true
+            MainFrame.BackgroundTransparency = 1
+            MainFrame.Position = MainFrame.Position + UDim2.fromOffset(0, 20)
+
+            local ShowTween = TweenService:Create(MainFrame, Library.FadeTweenInfo, {
+                BackgroundTransparency = 0,
+                Position = MainFrame.Position - UDim2.fromOffset(0, 20),
+            })
+            ShowTween:Play()
+        else
+            -- Hide animation
+            local HideTween = TweenService:Create(MainFrame, Library.FadeTweenInfo, {
+                BackgroundTransparency = 1,
+                Position = MainFrame.Position + UDim2.fromOffset(0, 20),
+            })
+            HideTween:Play()
+            HideTween.Completed:Connect(function()
+                if not Library.Toggled then
+                    MainFrame.Visible = false
+                    MainFrame.Position = MainFrame.Position - UDim2.fromOffset(0, 20)
+                    MainFrame.BackgroundTransparency = 0
+                end
+            end)
+        end
 
         if WindowInfo.UnlockMouseWhileOpen then
             ModalElement.Modal = Library.Toggled
