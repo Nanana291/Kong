@@ -4466,7 +4466,7 @@ do
             end
 
             New("UICorner", {
-                CornerRadius = UDim.new(0, 4),
+                CornerRadius = UDim.new(0, 6),
                 Parent = Base,
             })
 
@@ -4474,12 +4474,50 @@ do
             local Stroke = New("UIStroke", {
                 Color = strokeColor,
                 Transparency = Button.Disabled and 0.5 or (Button.Variant == "Default" and 0 or 0.5),
+                Thickness = 1,
                 Parent = Base,
             })
             if Button.Variant == "Default" then
                 Library.Registry[Stroke] = Library.Registry[Stroke] or {}
                 Library.Registry[Stroke].Color = "OutlineColor"
             end
+
+            -- Subtle gradient overlay for depth
+            local GradientOverlay = New("Frame", {
+                BackgroundColor3 = Color3.new(1, 1, 1),
+                BackgroundTransparency = 0.95,
+                Size = UDim2.new(1, 0, 0.5, 0),
+                ZIndex = 0,
+                Parent = Base,
+            })
+            New("UICorner", {
+                CornerRadius = UDim.new(0, 6),
+                Parent = GradientOverlay,
+            })
+            New("UIGradient", {
+                Transparency = NumberSequence.new({
+                    NumberSequenceKeypoint.new(0, 0),
+                    NumberSequenceKeypoint.new(1, 1),
+                }),
+                Rotation = 90,
+                Parent = GradientOverlay,
+            })
+
+            -- Glow effect on hover (initially invisible)
+            local ButtonGlow = New("ImageLabel", {
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                BackgroundTransparency = 1,
+                Image = "rbxassetid://6015897843",
+                ImageColor3 = Button.Variant == "Default" and Library.Scheme.AccentColor or actualBgColor,
+                ImageTransparency = 1,
+                Position = UDim2.fromScale(0.5, 0.5),
+                ScaleType = Enum.ScaleType.Slice,
+                SliceCenter = Rect.new(49, 49, 450, 450),
+                Size = UDim2.new(1, 12, 1, 12),
+                ZIndex = -1,
+                Parent = Base,
+            })
+            Button.Glow = ButtonGlow
 
             -- Add icon if specified
             local IconImage, IconContainer
@@ -4709,6 +4747,21 @@ do
                     }):Play()
                 end
 
+                -- Show glow effect
+                if Button.Glow then
+                    TweenService:Create(Button.Glow, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+                        ImageTransparency = 0.85,
+                    }):Play()
+                end
+
+                -- Animate stroke
+                if Button.Stroke then
+                    TweenService:Create(Button.Stroke, Library.HoverTweenInfo, {
+                        Transparency = 0,
+                        Color = Library.Scheme.AccentColor,
+                    }):Play()
+                end
+
                 Button.Tween = TweenService:Create(Button.Base, Library.HoverTweenInfo, tweenProps)
                 Button.Tween:Play()
             end)
@@ -4743,6 +4796,22 @@ do
                 if Button.IconImage then
                     TweenService:Create(Button.IconImage, Library.HoverTweenInfo, {
                         Size = UDim2.fromOffset(14, 14),
+                    }):Play()
+                end
+
+                -- Hide glow effect
+                if Button.Glow then
+                    TweenService:Create(Button.Glow, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+                        ImageTransparency = 1,
+                    }):Play()
+                end
+
+                -- Reset stroke
+                if Button.Stroke then
+                    local strokeColor = Button.Variant == "Default" and Library.Scheme.OutlineColor or Library.Scheme.AccentColor
+                    TweenService:Create(Button.Stroke, Library.HoverTweenInfo, {
+                        Transparency = Button.Variant == "Default" and 0 or 0.5,
+                        Color = strokeColor,
                     }):Play()
                 end
 
@@ -5267,10 +5336,10 @@ do
         })
 
         local Switch = New("Frame", {
-            AnchorPoint = Vector2.new(1, 0),
+            AnchorPoint = Vector2.new(1, 0.5),
             BackgroundColor3 = "MainColor",
-            Position = UDim2.fromScale(1, 0),
-            Size = UDim2.fromOffset(32, 18),
+            Position = UDim2.new(1, 0, 0.5, 0),
+            Size = UDim2.fromOffset(36, 20),
             Parent = Button,
         })
         New("UICorner", {
@@ -5278,14 +5347,15 @@ do
             Parent = Switch,
         })
         New("UIPadding", {
-            PaddingBottom = UDim.new(0, 2),
-            PaddingLeft = UDim.new(0, 2),
-            PaddingRight = UDim.new(0, 2),
-            PaddingTop = UDim.new(0, 2),
+            PaddingBottom = UDim.new(0, 3),
+            PaddingLeft = UDim.new(0, 3),
+            PaddingRight = UDim.new(0, 3),
+            PaddingTop = UDim.new(0, 3),
             Parent = Switch,
         })
         local SwitchStroke = New("UIStroke", {
             Color = "OutlineColor",
+            Thickness = 1,
             Parent = Switch,
         })
 
@@ -5335,8 +5405,15 @@ do
             TweenService:Create(Label, Library.HoverTweenInfo, {
                 TextTransparency = Toggle.Value and 0 or 0.2,
             }):Play()
-            TweenService:Create(Switch, Library.HoverTweenInfo, {
-                Size = UDim2.fromOffset(34, 19),
+            TweenService:Create(Switch, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+                Size = UDim2.fromOffset(38, 22),
+            }):Play()
+            TweenService:Create(SwitchStroke, Library.HoverTweenInfo, {
+                Color = Library.Scheme.AccentColor,
+                Transparency = 0,
+            }):Play()
+            TweenService:Create(SwitchGlow, Library.HoverTweenInfo, {
+                ImageTransparency = Toggle.Value and 0.6 or 0.85,
             }):Play()
         end)
 
@@ -5346,8 +5423,15 @@ do
             TweenService:Create(Label, Library.HoverTweenInfo, {
                 TextTransparency = Toggle.Value and 0 or 0.4,
             }):Play()
-            TweenService:Create(Switch, Library.HoverTweenInfo, {
-                Size = UDim2.fromOffset(32, 18),
+            TweenService:Create(Switch, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+                Size = UDim2.fromOffset(36, 20),
+            }):Play()
+            TweenService:Create(SwitchStroke, Library.HoverTweenInfo, {
+                Color = Toggle.Value and Library.Scheme.AccentColor or Library.Scheme.OutlineColor,
+                Transparency = 0,
+            }):Play()
+            TweenService:Create(SwitchGlow, Library.HoverTweenInfo, {
+                ImageTransparency = Toggle.Value and 0.7 or 1,
             }):Play()
         end)
 
@@ -6223,19 +6307,20 @@ do
             BorderColor3 = "OutlineColor",
             BorderSizePixel = 0,
             Position = UDim2.fromScale(0, 1),
-            Size = UDim2.new(1, 0, 0, 13),
+            Size = UDim2.new(1, 0, 0, 14),
             Text = "",
             ClipsDescendants = true,
             Parent = Holder,
         })
 
         New("UICorner", {
-            CornerRadius = UDim.new(0, 4),
+            CornerRadius = UDim.new(0, 6),
             Parent = Bar,
         })
 
-        New("UIStroke", {
+        local BarStroke = New("UIStroke", {
             Color = "OutlineColor",
+            Thickness = 1,
             Parent = Bar,
         })
 
@@ -6288,17 +6373,52 @@ do
             Parent = FillGlow,
         })
 
-        -- Slider thumb/handle
+        -- Slider thumb/handle (circular design)
         local Thumb = New("Frame", {
             AnchorPoint = Vector2.new(0.5, 0.5),
             BackgroundColor3 = "FontColor",
             Position = UDim2.new(0.5, 0, 0.5, 0),
-            Size = UDim2.fromOffset(4, 17),
+            Size = UDim2.fromOffset(16, 16),
             ZIndex = 2,
             Parent = Bar,
         })
         New("UICorner", {
-            CornerRadius = UDim.new(0, 2),
+            CornerRadius = UDim.new(1, 0),
+            Parent = Thumb,
+        })
+        local ThumbStroke = New("UIStroke", {
+            Color = "AccentColor",
+            Thickness = 2,
+            Transparency = 0.5,
+            Parent = Thumb,
+        })
+
+        -- Thumb inner dot
+        local ThumbDot = New("Frame", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundColor3 = "AccentColor",
+            Position = UDim2.fromScale(0.5, 0.5),
+            Size = UDim2.fromOffset(6, 6),
+            ZIndex = 3,
+            Parent = Thumb,
+        })
+        New("UICorner", {
+            CornerRadius = UDim.new(1, 0),
+            Parent = ThumbDot,
+        })
+
+        -- Thumb glow
+        local ThumbGlow = New("ImageLabel", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundTransparency = 1,
+            Image = "rbxassetid://6015897843",
+            ImageColor3 = "AccentColor",
+            ImageTransparency = 1,
+            Position = UDim2.fromScale(0.5, 0.5),
+            ScaleType = Enum.ScaleType.Slice,
+            SliceCenter = Rect.new(49, 49, 450, 450),
+            Size = UDim2.fromOffset(28, 28),
+            ZIndex = 1,
             Parent = Thumb,
         })
 
@@ -6308,10 +6428,12 @@ do
             BackgroundTransparency = 1,
             Image = "rbxassetid://6015897843",
             ImageColor3 = Color3.new(0, 0, 0),
-            ImageTransparency = 0.85,
-            Position = UDim2.new(0.5, 0, 0.5, 1),
-            Size = UDim2.fromOffset(12, 24),
-            ZIndex = 1,
+            ImageTransparency = 0.8,
+            Position = UDim2.new(0.5, 0, 0.5, 2),
+            ScaleType = Enum.ScaleType.Slice,
+            SliceCenter = Rect.new(49, 49, 450, 450),
+            Size = UDim2.fromOffset(20, 20),
+            ZIndex = 0,
             Parent = Thumb,
         })
 
@@ -6320,11 +6442,20 @@ do
 
         Bar.MouseEnter:Connect(function()
             if Slider.Disabled then return end
-            TweenService:Create(Thumb, Library.HoverTweenInfo, {
-                Size = UDim2.fromOffset(6, 19),
+            TweenService:Create(Thumb, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+                Size = UDim2.fromOffset(20, 20),
             }):Play()
-            TweenService:Create(Bar, Library.HoverTweenInfo, {
-                Size = UDim2.new(1, 0, 0, 15),
+            TweenService:Create(ThumbDot, Library.HoverTweenInfo, {
+                Size = UDim2.fromOffset(8, 8),
+            }):Play()
+            TweenService:Create(ThumbGlow, Library.HoverTweenInfo, {
+                ImageTransparency = 0.7,
+            }):Play()
+            TweenService:Create(ThumbStroke, Library.HoverTweenInfo, {
+                Transparency = 0,
+            }):Play()
+            TweenService:Create(BarStroke, Library.HoverTweenInfo, {
+                Color = Library.Scheme.AccentColor,
             }):Play()
             if SliderLabel then
                 TweenService:Create(SliderLabel, Library.HoverTweenInfo, {
@@ -6335,11 +6466,20 @@ do
 
         Bar.MouseLeave:Connect(function()
             if Slider.Disabled or isDragging then return end
-            TweenService:Create(Thumb, Library.HoverTweenInfo, {
-                Size = UDim2.fromOffset(4, 17),
+            TweenService:Create(Thumb, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+                Size = UDim2.fromOffset(16, 16),
             }):Play()
-            TweenService:Create(Bar, Library.HoverTweenInfo, {
-                Size = UDim2.new(1, 0, 0, 13),
+            TweenService:Create(ThumbDot, Library.HoverTweenInfo, {
+                Size = UDim2.fromOffset(6, 6),
+            }):Play()
+            TweenService:Create(ThumbGlow, Library.HoverTweenInfo, {
+                ImageTransparency = 1,
+            }):Play()
+            TweenService:Create(ThumbStroke, Library.HoverTweenInfo, {
+                Transparency = 0.5,
+            }):Play()
+            TweenService:Create(BarStroke, Library.HoverTweenInfo, {
+                Color = Library.Scheme.OutlineColor,
             }):Play()
             if SliderLabel then
                 TweenService:Create(SliderLabel, Library.HoverTweenInfo, {
@@ -6349,7 +6489,10 @@ do
         end)
 
         Slider.Thumb = Thumb
+        Slider.ThumbGlow = ThumbGlow
+        Slider.ThumbDot = ThumbDot
         Slider.FillGlow = FillGlow
+        Slider.BarStroke = BarStroke
 
         function Slider:UpdateColors()
             if Library.Unloaded then
