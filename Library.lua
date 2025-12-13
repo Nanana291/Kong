@@ -4466,7 +4466,7 @@ do
             end
 
             New("UICorner", {
-                CornerRadius = UDim.new(0, 4),
+                CornerRadius = UDim.new(0, 6),
                 Parent = Base,
             })
 
@@ -4474,12 +4474,50 @@ do
             local Stroke = New("UIStroke", {
                 Color = strokeColor,
                 Transparency = Button.Disabled and 0.5 or (Button.Variant == "Default" and 0 or 0.5),
+                Thickness = 1,
                 Parent = Base,
             })
             if Button.Variant == "Default" then
                 Library.Registry[Stroke] = Library.Registry[Stroke] or {}
                 Library.Registry[Stroke].Color = "OutlineColor"
             end
+
+            -- Subtle gradient overlay for depth
+            local GradientOverlay = New("Frame", {
+                BackgroundColor3 = Color3.new(1, 1, 1),
+                BackgroundTransparency = 0.95,
+                Size = UDim2.new(1, 0, 0.5, 0),
+                ZIndex = 0,
+                Parent = Base,
+            })
+            New("UICorner", {
+                CornerRadius = UDim.new(0, 6),
+                Parent = GradientOverlay,
+            })
+            New("UIGradient", {
+                Transparency = NumberSequence.new({
+                    NumberSequenceKeypoint.new(0, 0),
+                    NumberSequenceKeypoint.new(1, 1),
+                }),
+                Rotation = 90,
+                Parent = GradientOverlay,
+            })
+
+            -- Glow effect on hover (initially invisible)
+            local ButtonGlow = New("ImageLabel", {
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                BackgroundTransparency = 1,
+                Image = "rbxassetid://6015897843",
+                ImageColor3 = Button.Variant == "Default" and Library.Scheme.AccentColor or actualBgColor,
+                ImageTransparency = 1,
+                Position = UDim2.fromScale(0.5, 0.5),
+                ScaleType = Enum.ScaleType.Slice,
+                SliceCenter = Rect.new(49, 49, 450, 450),
+                Size = UDim2.new(1, 12, 1, 12),
+                ZIndex = -1,
+                Parent = Base,
+            })
+            Button.Glow = ButtonGlow
 
             -- Add icon if specified
             local IconImage, IconContainer
@@ -4709,6 +4747,21 @@ do
                     }):Play()
                 end
 
+                -- Show glow effect
+                if Button.Glow then
+                    TweenService:Create(Button.Glow, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+                        ImageTransparency = 0.85,
+                    }):Play()
+                end
+
+                -- Animate stroke
+                if Button.Stroke then
+                    TweenService:Create(Button.Stroke, Library.HoverTweenInfo, {
+                        Transparency = 0,
+                        Color = Library.Scheme.AccentColor,
+                    }):Play()
+                end
+
                 Button.Tween = TweenService:Create(Button.Base, Library.HoverTweenInfo, tweenProps)
                 Button.Tween:Play()
             end)
@@ -4743,6 +4796,22 @@ do
                 if Button.IconImage then
                     TweenService:Create(Button.IconImage, Library.HoverTweenInfo, {
                         Size = UDim2.fromOffset(14, 14),
+                    }):Play()
+                end
+
+                -- Hide glow effect
+                if Button.Glow then
+                    TweenService:Create(Button.Glow, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+                        ImageTransparency = 1,
+                    }):Play()
+                end
+
+                -- Reset stroke
+                if Button.Stroke then
+                    local strokeColor = Button.Variant == "Default" and Library.Scheme.OutlineColor or Library.Scheme.AccentColor
+                    TweenService:Create(Button.Stroke, Library.HoverTweenInfo, {
+                        Transparency = Button.Variant == "Default" and 0 or 0.5,
+                        Color = strokeColor,
                     }):Play()
                 end
 
@@ -5267,10 +5336,10 @@ do
         })
 
         local Switch = New("Frame", {
-            AnchorPoint = Vector2.new(1, 0),
+            AnchorPoint = Vector2.new(1, 0.5),
             BackgroundColor3 = "MainColor",
-            Position = UDim2.fromScale(1, 0),
-            Size = UDim2.fromOffset(32, 18),
+            Position = UDim2.new(1, 0, 0.5, 0),
+            Size = UDim2.fromOffset(36, 20),
             Parent = Button,
         })
         New("UICorner", {
@@ -5278,14 +5347,15 @@ do
             Parent = Switch,
         })
         New("UIPadding", {
-            PaddingBottom = UDim.new(0, 2),
-            PaddingLeft = UDim.new(0, 2),
-            PaddingRight = UDim.new(0, 2),
-            PaddingTop = UDim.new(0, 2),
+            PaddingBottom = UDim.new(0, 3),
+            PaddingLeft = UDim.new(0, 3),
+            PaddingRight = UDim.new(0, 3),
+            PaddingTop = UDim.new(0, 3),
             Parent = Switch,
         })
         local SwitchStroke = New("UIStroke", {
             Color = "OutlineColor",
+            Thickness = 1,
             Parent = Switch,
         })
 
@@ -5335,8 +5405,15 @@ do
             TweenService:Create(Label, Library.HoverTweenInfo, {
                 TextTransparency = Toggle.Value and 0 or 0.2,
             }):Play()
-            TweenService:Create(Switch, Library.HoverTweenInfo, {
-                Size = UDim2.fromOffset(34, 19),
+            TweenService:Create(Switch, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+                Size = UDim2.fromOffset(38, 22),
+            }):Play()
+            TweenService:Create(SwitchStroke, Library.HoverTweenInfo, {
+                Color = Library.Scheme.AccentColor,
+                Transparency = 0,
+            }):Play()
+            TweenService:Create(SwitchGlow, Library.HoverTweenInfo, {
+                ImageTransparency = Toggle.Value and 0.6 or 0.85,
             }):Play()
         end)
 
@@ -5346,8 +5423,15 @@ do
             TweenService:Create(Label, Library.HoverTweenInfo, {
                 TextTransparency = Toggle.Value and 0 or 0.4,
             }):Play()
-            TweenService:Create(Switch, Library.HoverTweenInfo, {
-                Size = UDim2.fromOffset(32, 18),
+            TweenService:Create(Switch, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+                Size = UDim2.fromOffset(36, 20),
+            }):Play()
+            TweenService:Create(SwitchStroke, Library.HoverTweenInfo, {
+                Color = Toggle.Value and Library.Scheme.AccentColor or Library.Scheme.OutlineColor,
+                Transparency = 0,
+            }):Play()
+            TweenService:Create(SwitchGlow, Library.HoverTweenInfo, {
+                ImageTransparency = Toggle.Value and 0.7 or 1,
             }):Play()
         end)
 
@@ -5616,64 +5700,93 @@ do
         Input.BoxStroke = BoxStroke
         Input.FocusGlow = FocusGlow
 
-        -- AutoComplete System (Using proven ContextMenu pattern)
-        local ACMenu, ACList, ACButtons, ACSelectedIndex
+        -- AutoComplete System (Enhanced Design)
+        local ACMenu, ACList, ACButtons, ACSelectedIndex, ACStroke, ACGlow
         local ACVisible = false
 
         if Input.AutoComplete then
             ACButtons = {}
             ACSelectedIndex = 0
 
-            -- Menu frame (same pattern as ContextMenu - proven to work)
+            -- Menu frame with enhanced design
             ACMenu = New("Frame", {
                 BackgroundColor3 = "BackgroundColor",
-                BorderColor3 = "OutlineColor",
                 BorderSizePixel = 0,
                 Size = UDim2.fromOffset(200, 0),
                 Visible = false,
-                ZIndex = 15,
+                ZIndex = 50,
                 Parent = ScreenGui,
             })
 
             New("UICorner", {
-                CornerRadius = UDim.new(0, 6),
+                CornerRadius = UDim.new(0, 8),
                 Parent = ACMenu,
             })
 
-            New("UIStroke", {
-                Color = "OutlineColor",
+            ACStroke = New("UIStroke", {
+                Color = "AccentColor",
+                Transparency = 0.7,
+                Thickness = 1.5,
                 Parent = ACMenu,
             })
 
-            -- Accent bar at top
-            New("Frame", {
-                BackgroundColor3 = "AccentColor",
-                Size = UDim2.new(1, 0, 0, 2),
-                ZIndex = 16,
+            -- Soft glow behind menu
+            ACGlow = New("ImageLabel", {
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                BackgroundTransparency = 1,
+                Image = "rbxassetid://6015897843",
+                ImageColor3 = "AccentColor",
+                ImageTransparency = 0.85,
+                Position = UDim2.fromScale(0.5, 0.5),
+                ScaleType = Enum.ScaleType.Slice,
+                SliceCenter = Rect.new(49, 49, 450, 450),
+                Size = UDim2.new(1, 24, 1, 24),
+                ZIndex = 49,
                 Parent = ACMenu,
+            })
+
+            -- Gradient overlay for depth
+            local ACGradient = New("Frame", {
+                BackgroundColor3 = Color3.new(1, 1, 1),
+                BackgroundTransparency = 0.97,
+                Size = UDim2.new(1, 0, 0, 20),
+                ZIndex = 51,
+                Parent = ACMenu,
+            })
+            New("UICorner", {
+                CornerRadius = UDim.new(0, 8),
+                Parent = ACGradient,
+            })
+            New("UIGradient", {
+                Transparency = NumberSequence.new({
+                    NumberSequenceKeypoint.new(0, 0),
+                    NumberSequenceKeypoint.new(1, 1),
+                }),
+                Rotation = 90,
+                Parent = ACGradient,
             })
 
             -- List container
             ACList = New("Frame", {
                 BackgroundTransparency = 1,
-                Position = UDim2.fromOffset(0, 2),
-                Size = UDim2.new(1, 0, 1, -2),
+                Position = UDim2.fromOffset(0, 0),
+                Size = UDim2.fromScale(1, 1),
                 ClipsDescendants = true,
-                ZIndex = 16,
+                ZIndex = 52,
                 Parent = ACMenu,
             })
 
             New("UIListLayout", {
-                Padding = UDim.new(0, 2),
+                Padding = UDim.new(0, 4),
                 SortOrder = Enum.SortOrder.LayoutOrder,
                 Parent = ACList,
             })
 
             New("UIPadding", {
-                PaddingBottom = UDim.new(0, 4),
-                PaddingLeft = UDim.new(0, 4),
-                PaddingRight = UDim.new(0, 4),
-                PaddingTop = UDim.new(0, 4),
+                PaddingBottom = UDim.new(0, 6),
+                PaddingLeft = UDim.new(0, 6),
+                PaddingRight = UDim.new(0, 6),
+                PaddingTop = UDim.new(0, 6),
                 Parent = ACList,
             })
 
@@ -5685,27 +5798,66 @@ do
             if not ACMenu then return end
             ACVisible = false
             ACSelectedIndex = 0
-            ACMenu.Visible = false
+
+            -- Animate out
+            TweenService:Create(ACMenu, TweenInfo.new(0.15, Enum.EasingStyle.Quint), {
+                Size = UDim2.fromOffset(ACMenu.Size.X.Offset, 0),
+                BackgroundTransparency = 1,
+            }):Play()
+            TweenService:Create(ACStroke, TweenInfo.new(0.15), {
+                Transparency = 1,
+            }):Play()
+            TweenService:Create(ACGlow, TweenInfo.new(0.15), {
+                ImageTransparency = 1,
+            }):Play()
+
+            task.delay(0.15, function()
+                if not ACVisible and ACMenu then
+                    ACMenu.Visible = false
+                end
+            end)
         end
 
         local function ACSelect(index)
             if not ACButtons or #ACButtons == 0 then return end
             index = ((index - 1) % #ACButtons) + 1
 
-            -- Reset previous
+            -- Reset previous with animation
             if ACSelectedIndex > 0 and ACSelectedIndex <= #ACButtons then
                 local prev = ACButtons[ACSelectedIndex]
                 if prev then
-                    prev.Button.BackgroundColor3 = Library.Scheme.MainColor
-                    prev.Label.TextColor3 = Library.Scheme.FontColor
+                    TweenService:Create(prev.Button, TweenInfo.new(0.15, Enum.EasingStyle.Quint), {
+                        BackgroundColor3 = Library.Scheme.MainColor,
+                        BackgroundTransparency = 0,
+                    }):Play()
+                    TweenService:Create(prev.Label, TweenInfo.new(0.15), {
+                        TextColor3 = Library.Scheme.FontColor,
+                    }):Play()
+                    if prev.Icon then
+                        TweenService:Create(prev.Icon, TweenInfo.new(0.15), {
+                            ImageColor3 = Library.Scheme.FontColor,
+                            ImageTransparency = 0.5,
+                        }):Play()
+                    end
                 end
             end
 
             ACSelectedIndex = index
             local btn = ACButtons[index]
             if btn then
-                btn.Button.BackgroundColor3 = Library.Scheme.AccentColor
-                btn.Label.TextColor3 = Library.Scheme.BackgroundColor
+                TweenService:Create(btn.Button, TweenInfo.new(0.15, Enum.EasingStyle.Quint), {
+                    BackgroundColor3 = Library.Scheme.AccentColor,
+                    BackgroundTransparency = 0,
+                }):Play()
+                TweenService:Create(btn.Label, TweenInfo.new(0.15), {
+                    TextColor3 = Library.Scheme.BackgroundColor,
+                }):Play()
+                if btn.Icon then
+                    TweenService:Create(btn.Icon, TweenInfo.new(0.15), {
+                        ImageColor3 = Library.Scheme.BackgroundColor,
+                        ImageTransparency = 0,
+                    }):Play()
+                end
             end
         end
 
@@ -5733,45 +5885,78 @@ do
             ACButtons = {}
             ACSelectedIndex = 0
 
-            -- Create buttons
+            -- Create buttons with enhanced design
             for i, match in ipairs(matches) do
                 local btnData = { Value = match }
 
                 local Btn = New("TextButton", {
                     BackgroundColor3 = Library.Scheme.MainColor,
+                    BackgroundTransparency = 0,
                     BorderSizePixel = 0,
-                    Size = UDim2.new(1, 0, 0, 26),
+                    Size = UDim2.new(1, 0, 0, 32),
                     Text = "",
                     AutoButtonColor = false,
                     LayoutOrder = i,
-                    ZIndex = 17,
+                    ZIndex = 53,
                     Parent = ACList,
                 })
                 Library.Registry[Btn] = { BackgroundColor3 = "MainColor" }
                 btnData.Button = Btn
 
                 New("UICorner", {
-                    CornerRadius = UDim.new(0, 4),
+                    CornerRadius = UDim.new(0, 6),
                     Parent = Btn,
                 })
 
+                -- Search icon
+                local Icon = New("ImageLabel", {
+                    AnchorPoint = Vector2.new(0, 0.5),
+                    BackgroundTransparency = 1,
+                    Image = Library:GetCustomIcon("search") or "rbxassetid://3926305904",
+                    ImageColor3 = Library.Scheme.FontColor,
+                    ImageTransparency = 0.5,
+                    Position = UDim2.new(0, 10, 0.5, 0),
+                    Size = UDim2.fromOffset(16, 16),
+                    ZIndex = 54,
+                    Parent = Btn,
+                })
+                Library.Registry[Icon] = { ImageColor3 = "FontColor" }
+                btnData.Icon = Icon
+
                 local Lbl = New("TextLabel", {
                     BackgroundTransparency = 1,
-                    Position = UDim2.fromOffset(8, 0),
-                    Size = UDim2.new(1, -16, 1, 0),
+                    Position = UDim2.fromOffset(32, 0),
+                    Size = UDim2.new(1, -42, 1, 0),
                     Text = match,
                     TextColor3 = Library.Scheme.FontColor,
                     TextSize = 13,
                     TextTruncate = Enum.TextTruncate.AtEnd,
                     TextXAlignment = Enum.TextXAlignment.Left,
-                    ZIndex = 18,
+                    ZIndex = 54,
                     Parent = Btn,
                 })
                 Library.Registry[Lbl] = { TextColor3 = "FontColor" }
                 btnData.Label = Lbl
 
+                -- Hover effects
                 Btn.MouseEnter:Connect(function()
                     ACSelect(i)
+                end)
+
+                Btn.MouseLeave:Connect(function()
+                    if ACSelectedIndex == i then
+                        TweenService:Create(Btn, TweenInfo.new(0.1), {
+                            BackgroundColor3 = Library.Scheme.MainColor,
+                        }):Play()
+                        TweenService:Create(Lbl, TweenInfo.new(0.1), {
+                            TextColor3 = Library.Scheme.FontColor,
+                        }):Play()
+                        TweenService:Create(Icon, TweenInfo.new(0.1), {
+                            ImageColor3 = Library.Scheme.FontColor,
+                            ImageTransparency = 0.5,
+                        }):Play()
+                        ACSelectedIndex = 0
+                    end
                 end)
 
                 Btn.MouseButton1Click:Connect(function()
@@ -5783,21 +5968,35 @@ do
                 table.insert(ACButtons, btnData)
             end
 
-            -- Position (same as ContextMenu - NO GuiInset adjustment!)
+            -- Position and animate
             local absPos = Box.AbsolutePosition
             local absSize = Box.AbsoluteSize
-            local itemH = 26
-            local padding = 10
+            local itemH = 32
+            local padding = 12
+            local spacing = 4
             local maxItems = math.min(#matches, Input.MaxSuggestions)
-            local menuH = (itemH * maxItems) + (2 * (maxItems - 1)) + padding
+            local menuH = (itemH * maxItems) + (spacing * (maxItems - 1)) + padding
 
             ACMenu.Position = UDim2.fromOffset(
                 math.floor(absPos.X),
-                math.floor(absPos.Y + absSize.Y + 2)
+                math.floor(absPos.Y + absSize.Y + 4)
             )
-            ACMenu.Size = UDim2.fromOffset(math.floor(absSize.X), menuH)
+            ACMenu.Size = UDim2.fromOffset(math.floor(absSize.X), 0)
+            ACMenu.BackgroundTransparency = 1
             ACMenu.Visible = true
             ACVisible = true
+
+            -- Animate in with bounce
+            TweenService:Create(ACMenu, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+                Size = UDim2.fromOffset(math.floor(absSize.X), menuH),
+                BackgroundTransparency = 0,
+            }):Play()
+            TweenService:Create(ACStroke, TweenInfo.new(0.2), {
+                Transparency = 0.7,
+            }):Play()
+            TweenService:Create(ACGlow, TweenInfo.new(0.3), {
+                ImageTransparency = 0.85,
+            }):Play()
         end
 
         local function ACUpdate(text)
@@ -5834,7 +6033,7 @@ do
             end)
 
             Box.FocusLost:Connect(function()
-                task.delay(0.15, function()
+                task.delay(0.2, function()
                     if ACVisible then ACHide() end
                 end)
             end)
@@ -5863,7 +6062,7 @@ do
                     local absSize = Box.AbsoluteSize
                     ACMenu.Position = UDim2.fromOffset(
                         math.floor(absPos.X),
-                        math.floor(absPos.Y + absSize.Y + 2)
+                        math.floor(absPos.Y + absSize.Y + 4)
                     )
                 end
             end)
@@ -6108,19 +6307,20 @@ do
             BorderColor3 = "OutlineColor",
             BorderSizePixel = 0,
             Position = UDim2.fromScale(0, 1),
-            Size = UDim2.new(1, 0, 0, 13),
+            Size = UDim2.new(1, 0, 0, 14),
             Text = "",
             ClipsDescendants = true,
             Parent = Holder,
         })
 
         New("UICorner", {
-            CornerRadius = UDim.new(0, 4),
+            CornerRadius = UDim.new(0, 6),
             Parent = Bar,
         })
 
-        New("UIStroke", {
+        local BarStroke = New("UIStroke", {
             Color = "OutlineColor",
+            Thickness = 1,
             Parent = Bar,
         })
 
@@ -6173,17 +6373,52 @@ do
             Parent = FillGlow,
         })
 
-        -- Slider thumb/handle
+        -- Slider thumb/handle (circular design)
         local Thumb = New("Frame", {
             AnchorPoint = Vector2.new(0.5, 0.5),
             BackgroundColor3 = "FontColor",
             Position = UDim2.new(0.5, 0, 0.5, 0),
-            Size = UDim2.fromOffset(4, 17),
+            Size = UDim2.fromOffset(16, 16),
             ZIndex = 2,
             Parent = Bar,
         })
         New("UICorner", {
-            CornerRadius = UDim.new(0, 2),
+            CornerRadius = UDim.new(1, 0),
+            Parent = Thumb,
+        })
+        local ThumbStroke = New("UIStroke", {
+            Color = "AccentColor",
+            Thickness = 2,
+            Transparency = 0.5,
+            Parent = Thumb,
+        })
+
+        -- Thumb inner dot
+        local ThumbDot = New("Frame", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundColor3 = "AccentColor",
+            Position = UDim2.fromScale(0.5, 0.5),
+            Size = UDim2.fromOffset(6, 6),
+            ZIndex = 3,
+            Parent = Thumb,
+        })
+        New("UICorner", {
+            CornerRadius = UDim.new(1, 0),
+            Parent = ThumbDot,
+        })
+
+        -- Thumb glow
+        local ThumbGlow = New("ImageLabel", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundTransparency = 1,
+            Image = "rbxassetid://6015897843",
+            ImageColor3 = "AccentColor",
+            ImageTransparency = 1,
+            Position = UDim2.fromScale(0.5, 0.5),
+            ScaleType = Enum.ScaleType.Slice,
+            SliceCenter = Rect.new(49, 49, 450, 450),
+            Size = UDim2.fromOffset(28, 28),
+            ZIndex = 1,
             Parent = Thumb,
         })
 
@@ -6193,10 +6428,12 @@ do
             BackgroundTransparency = 1,
             Image = "rbxassetid://6015897843",
             ImageColor3 = Color3.new(0, 0, 0),
-            ImageTransparency = 0.85,
-            Position = UDim2.new(0.5, 0, 0.5, 1),
-            Size = UDim2.fromOffset(12, 24),
-            ZIndex = 1,
+            ImageTransparency = 0.8,
+            Position = UDim2.new(0.5, 0, 0.5, 2),
+            ScaleType = Enum.ScaleType.Slice,
+            SliceCenter = Rect.new(49, 49, 450, 450),
+            Size = UDim2.fromOffset(20, 20),
+            ZIndex = 0,
             Parent = Thumb,
         })
 
@@ -6205,11 +6442,20 @@ do
 
         Bar.MouseEnter:Connect(function()
             if Slider.Disabled then return end
-            TweenService:Create(Thumb, Library.HoverTweenInfo, {
-                Size = UDim2.fromOffset(6, 19),
+            TweenService:Create(Thumb, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+                Size = UDim2.fromOffset(20, 20),
             }):Play()
-            TweenService:Create(Bar, Library.HoverTweenInfo, {
-                Size = UDim2.new(1, 0, 0, 15),
+            TweenService:Create(ThumbDot, Library.HoverTweenInfo, {
+                Size = UDim2.fromOffset(8, 8),
+            }):Play()
+            TweenService:Create(ThumbGlow, Library.HoverTweenInfo, {
+                ImageTransparency = 0.7,
+            }):Play()
+            TweenService:Create(ThumbStroke, Library.HoverTweenInfo, {
+                Transparency = 0,
+            }):Play()
+            TweenService:Create(BarStroke, Library.HoverTweenInfo, {
+                Color = Library.Scheme.AccentColor,
             }):Play()
             if SliderLabel then
                 TweenService:Create(SliderLabel, Library.HoverTweenInfo, {
@@ -6220,11 +6466,20 @@ do
 
         Bar.MouseLeave:Connect(function()
             if Slider.Disabled or isDragging then return end
-            TweenService:Create(Thumb, Library.HoverTweenInfo, {
-                Size = UDim2.fromOffset(4, 17),
+            TweenService:Create(Thumb, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+                Size = UDim2.fromOffset(16, 16),
             }):Play()
-            TweenService:Create(Bar, Library.HoverTweenInfo, {
-                Size = UDim2.new(1, 0, 0, 13),
+            TweenService:Create(ThumbDot, Library.HoverTweenInfo, {
+                Size = UDim2.fromOffset(6, 6),
+            }):Play()
+            TweenService:Create(ThumbGlow, Library.HoverTweenInfo, {
+                ImageTransparency = 1,
+            }):Play()
+            TweenService:Create(ThumbStroke, Library.HoverTweenInfo, {
+                Transparency = 0.5,
+            }):Play()
+            TweenService:Create(BarStroke, Library.HoverTweenInfo, {
+                Color = Library.Scheme.OutlineColor,
             }):Play()
             if SliderLabel then
                 TweenService:Create(SliderLabel, Library.HoverTweenInfo, {
@@ -6234,7 +6489,10 @@ do
         end)
 
         Slider.Thumb = Thumb
+        Slider.ThumbGlow = ThumbGlow
+        Slider.ThumbDot = ThumbDot
         Slider.FillGlow = FillGlow
+        Slider.BarStroke = BarStroke
 
         function Slider:UpdateColors()
             if Library.Unloaded then
