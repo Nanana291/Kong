@@ -9301,25 +9301,42 @@ function Library:CreateWindow(WindowInfo)
             local TabIndicator = New("Frame", {
                 AnchorPoint = Vector2.new(0, 0.5),
                 BackgroundColor3 = "AccentColor",
-                Position = UDim2.new(0, -10, 0.5, 0),
-                Size = UDim2.fromOffset(3, 0),
+                Position = UDim2.new(0, -8, 0.5, 0),
+                Size = UDim2.fromOffset(4, 0),
                 Parent = TabButton,
             })
             New("UICorner", {
-                CornerRadius = UDim.new(0, 2),
+                CornerRadius = UDim.new(1, 0),
                 Parent = TabIndicator,
             })
 
-            -- Glow effect for active tab indicator
+            -- Purple glow effect for active tab indicator
             local TabGlow = New("ImageLabel", {
-                AnchorPoint = Vector2.new(0, 0.5),
+                AnchorPoint = Vector2.new(0.5, 0.5),
                 BackgroundTransparency = 1,
                 Image = "rbxassetid://6015897843",
                 ImageColor3 = "AccentColor",
                 ImageTransparency = 1,
-                Position = UDim2.new(0, -14, 0.5, 0),
-                Size = UDim2.fromOffset(10, 30),
-                ZIndex = 0,
+                Position = UDim2.new(0, -6, 0.5, 0),
+                ScaleType = Enum.ScaleType.Slice,
+                SliceCenter = Rect.new(49, 49, 450, 450),
+                Size = UDim2.fromOffset(20, 40),
+                ZIndex = -1,
+                Parent = TabButton,
+            })
+
+            -- Secondary outer glow for depth
+            local TabGlowOuter = New("ImageLabel", {
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                BackgroundTransparency = 1,
+                Image = "rbxassetid://6015897843",
+                ImageColor3 = "AccentColor",
+                ImageTransparency = 1,
+                Position = UDim2.new(0, -6, 0.5, 0),
+                ScaleType = Enum.ScaleType.Slice,
+                SliceCenter = Rect.new(49, 49, 450, 450),
+                Size = UDim2.fromOffset(35, 55),
+                ZIndex = -2,
                 Parent = TabButton,
             })
 
@@ -9352,6 +9369,7 @@ function Library:CreateWindow(WindowInfo)
             -- Store indicator references for animation
             TabIndicatorRef = TabIndicator
             TabGlowRef = TabGlow
+            local TabGlowOuterRef = TabGlowOuter
 
             --// Tab Container \\--
             TabContainer = New("Frame", {
@@ -9655,6 +9673,22 @@ function Library:CreateWindow(WindowInfo)
             Library:UpdateDPI(Background, {
                 Size = false,
             })
+
+            -- Purple shadow effect for groupbox
+            local GroupboxShadow = New("ImageLabel", {
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                BackgroundTransparency = 1,
+                Image = "rbxassetid://6015897843",
+                ImageColor3 = Library.Scheme.AccentColor,
+                ImageTransparency = 0.92,
+                Position = UDim2.fromScale(0.5, 0.5),
+                ScaleType = Enum.ScaleType.Slice,
+                SliceCenter = Rect.new(49, 49, 450, 450),
+                Size = UDim2.new(1, 20, 1, 20),
+                ZIndex = -1,
+                Parent = Background,
+            })
+            Library.Registry[GroupboxShadow] = { ImageColor3 = "AccentColor" }
 
             local GroupboxHolder
             local GroupboxLabel
@@ -9995,14 +10029,22 @@ function Library:CreateWindow(WindowInfo)
 
             -- Animate indicator bar (expand from center)
             TweenService:Create(TabIndicatorRef, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-                Size = UDim2.fromOffset(3, 24),
+                Size = UDim2.fromOffset(4, 28),
             }):Play()
 
-            -- Animate glow effect
-            TweenService:Create(TabGlowRef, Library.FadeTweenInfo, {
-                ImageTransparency = 0.6,
-                Size = UDim2.fromOffset(12, 35),
+            -- Animate glow effect (inner)
+            TweenService:Create(TabGlowRef, TweenInfo.new(0.3, Enum.EasingStyle.Quint), {
+                ImageTransparency = 0.5,
+                Size = UDim2.fromOffset(24, 45),
             }):Play()
+
+            -- Animate outer glow
+            if TabGlowOuterRef then
+                TweenService:Create(TabGlowOuterRef, TweenInfo.new(0.4, Enum.EasingStyle.Quint), {
+                    ImageTransparency = 0.75,
+                    Size = UDim2.fromOffset(40, 60),
+                }):Play()
+            end
 
             if Description then
                 CurrentTabInfo.Visible = true
@@ -10046,14 +10088,22 @@ function Library:CreateWindow(WindowInfo)
 
             -- Animate indicator bar (collapse to center)
             TweenService:Create(TabIndicatorRef, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {
-                Size = UDim2.fromOffset(3, 0),
+                Size = UDim2.fromOffset(4, 0),
             }):Play()
 
-            -- Animate glow effect out
-            TweenService:Create(TabGlowRef, Library.FadeTweenInfo, {
+            -- Animate glow effect out (inner)
+            TweenService:Create(TabGlowRef, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
                 ImageTransparency = 1,
-                Size = UDim2.fromOffset(10, 30),
+                Size = UDim2.fromOffset(20, 40),
             }):Play()
+
+            -- Animate outer glow out
+            if TabGlowOuterRef then
+                TweenService:Create(TabGlowOuterRef, TweenInfo.new(0.15, Enum.EasingStyle.Quint), {
+                    ImageTransparency = 1,
+                    Size = UDim2.fromOffset(35, 55),
+                }):Play()
+            end
 
             TabContainer.Visible = false
 
