@@ -28,7 +28,7 @@ local Toggles = {}
 local Options = {}
 local Tooltips = {}
 
-local NeonAccentColor = Color3.fromHex("#ede966")
+local NeonAccentColor = Color3.fromHex("#813dd4")
 
 local BaseURL = "https://raw.githubusercontent.com/deividcomsono/Obsidian/refs/heads/main/"
 local CustomImageManager = {}
@@ -195,10 +195,10 @@ local Library = {
 
     IsLightTheme = false,
     Scheme = {
-        BackgroundColor = Color3.fromRGB(15, 15, 15),
-        MainColor = Color3.fromRGB(25, 25, 25),
-        AccentColor = Color3.fromHex("#ede966"),
-        OutlineColor = Color3.fromRGB(40, 40, 40),
+        BackgroundColor = Color3.fromRGB(13, 13, 18),
+        MainColor = Color3.fromRGB(22, 22, 32),
+        AccentColor = Color3.fromHex("#813dd4"),
+        OutlineColor = Color3.fromRGB(42, 42, 55),
         FontColor = Color3.new(1, 1, 1),
         Font = Font.fromEnum(Enum.Font.Code),
 
@@ -206,9 +206,12 @@ local Library = {
         Dark = Color3.new(0, 0, 0),
         White = Color3.new(1, 1, 1),
 
+        -- Secondary accent (darker purple)
+        AccentDark = Color3.fromHex("#5a1fa3"),
+
         -- Highlight/Glow effect
         Highlight = true,
-        HighlightColor = Color3.fromHex("#ede966"),
+        HighlightColor = Color3.fromHex("#813dd4"),
     },
 
     Registry = {},
