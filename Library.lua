@@ -1676,6 +1676,19 @@ function Library:MakeOutline(Frame: GuiObject, Corner: number?, ZIndex: number?)
         Parent = Holder,
     })
 
+    -- Purple shadow effect
+    local Shadow = New("ImageLabel", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BackgroundTransparency = 1,
+        Image = "rbxassetid://6015897843",
+        ImageColor3 = "AccentColor",
+        ImageTransparency = 0.88,
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.new(1, 16, 1, 16),
+        ZIndex = (ZIndex or 1) - 1,
+        Parent = Holder,
+    })
+
     if Corner and Corner > 0 then
         New("UICorner", {
             CornerRadius = UDim.new(0, Corner + 1),
@@ -1684,6 +1697,10 @@ function Library:MakeOutline(Frame: GuiObject, Corner: number?, ZIndex: number?)
         New("UICorner", {
             CornerRadius = UDim.new(0, Corner),
             Parent = Outline,
+        })
+        New("UICorner", {
+            CornerRadius = UDim.new(0, Corner + 4),
+            Parent = Shadow,
         })
     end
 
@@ -1997,12 +2014,11 @@ function Library:AddContextMenu(
             AutomaticCanvasSize = List == 2 and Enum.AutomaticSize.Y or Enum.AutomaticSize.None,
             AutomaticSize = List == 1 and Enum.AutomaticSize.Y or Enum.AutomaticSize.None,
             BackgroundColor3 = "BackgroundColor",
-            BorderColor3 = "OutlineColor",
-            BorderSizePixel = 1,
+            BorderSizePixel = 0,
             BottomImage = "rbxasset://textures/ui/Scroll/scroll-middle.png",
             CanvasSize = UDim2.fromOffset(0, 0),
-            ScrollBarImageColor3 = "OutlineColor",
-            ScrollBarThickness = List == 2 and 2 or 0,
+            ScrollBarImageColor3 = "AccentColor",
+            ScrollBarThickness = List == 2 and 3 or 0,
             Size = typeof(Size) == "function" and Size() or Size,
             TopImage = "rbxasset://textures/ui/Scroll/scroll-middle.png",
             Visible = false,
@@ -2016,8 +2032,7 @@ function Library:AddContextMenu(
     else
         Menu = New("Frame", {
             BackgroundColor3 = "BackgroundColor",
-            BorderColor3 = "OutlineColor",
-            BorderSizePixel = 1,
+            BorderSizePixel = 0,
             Size = typeof(Size) == "function" and Size() or Size,
             Visible = false,
             ZIndex = 10,
@@ -2029,12 +2044,43 @@ function Library:AddContextMenu(
         })
     end
 
+    -- Modern rounded corners
+    New("UICorner", {
+        CornerRadius = UDim.new(0, 6),
+        Parent = Menu,
+    })
+
+    -- Stroke for clean border
+    New("UIStroke", {
+        Color = "OutlineColor",
+        Thickness = 1,
+        Parent = Menu,
+    })
+
+    -- Purple shadow effect
+    local MenuShadow = New("ImageLabel", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BackgroundTransparency = 1,
+        Image = "rbxassetid://6015897843",
+        ImageColor3 = "AccentColor",
+        ImageTransparency = 0.85,
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.new(1, 16, 1, 16),
+        ZIndex = -1,
+        Parent = Menu,
+    })
+    New("UICorner", {
+        CornerRadius = UDim.new(0, 8),
+        Parent = MenuShadow,
+    })
+
     local Table = {
         Active = false,
         Holder = Holder,
         Menu = Menu,
         List = nil,
         Signal = nil,
+        Shadow = MenuShadow,
 
         Size = Size,
     }
@@ -2148,13 +2194,51 @@ end))
 --// Tooltip \\--
 local TooltipLabel = New("TextLabel", {
     BackgroundColor3 = "BackgroundColor",
-    BorderColor3 = "OutlineColor",
-    BorderSizePixel = 1,
+    BorderSizePixel = 0,
     TextSize = 14,
     TextWrapped = true,
     Visible = false,
     ZIndex = 20,
     Parent = ScreenGui,
+})
+
+-- Rounded corners for tooltip
+New("UICorner", {
+    CornerRadius = UDim.new(0, 6),
+    Parent = TooltipLabel,
+})
+
+-- Clean stroke border
+New("UIStroke", {
+    Color = "OutlineColor",
+    Thickness = 1,
+    Parent = TooltipLabel,
+})
+
+-- Tooltip padding
+New("UIPadding", {
+    PaddingBottom = UDim.new(0, 4),
+    PaddingLeft = UDim.new(0, 8),
+    PaddingRight = UDim.new(0, 8),
+    PaddingTop = UDim.new(0, 4),
+    Parent = TooltipLabel,
+})
+
+-- Purple shadow for tooltip
+local TooltipShadow = New("ImageLabel", {
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    BackgroundTransparency = 1,
+    Image = "rbxassetid://6015897843",
+    ImageColor3 = "AccentColor",
+    ImageTransparency = 0.88,
+    Position = UDim2.fromScale(0.5, 0.5),
+    Size = UDim2.new(1, 12, 1, 12),
+    ZIndex = -1,
+    Parent = TooltipLabel,
+})
+New("UICorner", {
+    CornerRadius = UDim.new(0, 8),
+    Parent = TooltipShadow,
 })
 TooltipLabel:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
     if Library.Unloaded then
@@ -8998,6 +9082,165 @@ function Library:CreateWindow(WindowInfo)
             })
         end
 
+        --// PC Control Buttons \\--
+        if not Library.IsMobile then
+            local ControlButtonsContainer = New("Frame", {
+                AnchorPoint = Vector2.new(1, 0.5),
+                BackgroundTransparency = 1,
+                Position = UDim2.new(1, MoveIcon and -44 or -10, 0.5, 0),
+                Size = UDim2.fromOffset(90, 28),
+                Parent = TopBar,
+            })
+
+            New("UIListLayout", {
+                FillDirection = Enum.FillDirection.Horizontal,
+                HorizontalAlignment = Enum.HorizontalAlignment.Right,
+                VerticalAlignment = Enum.VerticalAlignment.Center,
+                Padding = UDim.new(0, 4),
+                Parent = ControlButtonsContainer,
+            })
+
+            -- Helper function to create control button
+            local function CreateControlButton(iconName, callback, options)
+                options = options or {}
+                local icon = Library:GetIcon(iconName)
+                if not icon then return nil end
+
+                local ButtonFrame = New("TextButton", {
+                    BackgroundColor3 = Library.Scheme.MainColor,
+                    Size = UDim2.fromOffset(26, 26),
+                    Text = "",
+                    AutoButtonColor = false,
+                    Parent = ControlButtonsContainer,
+                })
+
+                New("UICorner", {
+                    CornerRadius = UDim.new(0, 6),
+                    Parent = ButtonFrame,
+                })
+
+                local ButtonIcon = New("ImageLabel", {
+                    AnchorPoint = Vector2.new(0.5, 0.5),
+                    BackgroundTransparency = 1,
+                    Image = icon.Url,
+                    ImageColor3 = Library.Scheme.FontColor,
+                    ImageRectOffset = icon.ImageRectOffset,
+                    ImageRectSize = icon.ImageRectSize,
+                    Position = UDim2.fromScale(0.5, 0.5),
+                    Size = UDim2.fromOffset(16, 16),
+                    Parent = ButtonFrame,
+                })
+
+                Library:AddToRegistry(ButtonFrame, {
+                    BackgroundColor3 = "MainColor",
+                })
+                Library:AddToRegistry(ButtonIcon, {
+                    ImageColor3 = "FontColor",
+                })
+
+                local btn = {
+                    Frame = ButtonFrame,
+                    Icon = ButtonIcon,
+                    Toggled = false,
+                    ConfirmPending = false,
+                }
+
+                function btn:SetIcon(newIconName)
+                    local newIcon = Library:GetIcon(newIconName)
+                    if newIcon then
+                        ButtonIcon.Image = newIcon.Url
+                        ButtonIcon.ImageRectOffset = newIcon.ImageRectOffset
+                        ButtonIcon.ImageRectSize = newIcon.ImageRectSize
+                    end
+                end
+
+                function btn:SetToggled(toggled)
+                    self.Toggled = toggled
+                end
+
+                -- Hover effects
+                ButtonFrame.MouseEnter:Connect(function()
+                    TweenService:Create(ButtonFrame, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+                        BackgroundColor3 = Library.Scheme.AccentColor,
+                    }):Play()
+                    TweenService:Create(ButtonIcon, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+                        ImageColor3 = Library.Scheme.White,
+                    }):Play()
+                end)
+
+                ButtonFrame.MouseLeave:Connect(function()
+                    if not btn.ConfirmPending then
+                        TweenService:Create(ButtonFrame, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+                            BackgroundColor3 = Library.Scheme.MainColor,
+                        }):Play()
+                        TweenService:Create(ButtonIcon, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+                            ImageColor3 = Library.Scheme.FontColor,
+                        }):Play()
+                    end
+                end)
+
+                ButtonFrame.MouseButton1Click:Connect(function()
+                    callback(btn)
+                end)
+
+                return btn
+            end
+
+            -- Hide/Show button
+            local PCToggleBtn = CreateControlButton("eye", function(self)
+                Library:Toggle()
+                self:SetToggled(Library.Toggled)
+                if Library.Toggled then
+                    self:SetIcon("eye")
+                else
+                    self:SetIcon("eye-off")
+                end
+            end)
+
+            -- Lock/Unlock button
+            local PCLockBtn = CreateControlButton("unlock", function(self)
+                Library.CantDragForced = not Library.CantDragForced
+                self:SetToggled(Library.CantDragForced)
+                if Library.CantDragForced then
+                    self:SetIcon("lock")
+                else
+                    self:SetIcon("unlock")
+                end
+            end)
+
+            -- Unload button with confirmation
+            local PCUnloadBtn = CreateControlButton("power", function(self)
+                if not self.ConfirmPending then
+                    self.ConfirmPending = true
+                    self:SetIcon("alert-circle")
+                    TweenService:Create(self.Icon, TweenInfo.new(0.3, Enum.EasingStyle.Quint), {
+                        ImageColor3 = Library.Scheme.Red or Color3.fromRGB(255, 80, 80),
+                    }):Play()
+                    TweenService:Create(self.Frame, TweenInfo.new(0.3, Enum.EasingStyle.Quint), {
+                        BackgroundColor3 = Library.Scheme.Red or Color3.fromRGB(255, 80, 80),
+                    }):Play()
+
+                    -- Reset after 2 seconds if not confirmed
+                    task.delay(2, function()
+                        if self.ConfirmPending then
+                            self.ConfirmPending = false
+                            self:SetIcon("power")
+                            TweenService:Create(self.Icon, TweenInfo.new(0.3), {
+                                ImageColor3 = Library.Scheme.FontColor,
+                            }):Play()
+                            TweenService:Create(self.Frame, TweenInfo.new(0.3), {
+                                BackgroundColor3 = Library.Scheme.MainColor,
+                            }):Play()
+                        end
+                    end)
+                else
+                    -- Confirmed - unload the library
+                    self.ConfirmPending = false
+                    Library:Unload()
+                end
+            end)
+        end
+
         --// Bottom Bar \\--
         local BottomBar = New("Frame", {
             AnchorPoint = Vector2.new(0, 1),
@@ -10544,15 +10787,48 @@ function Library:CreateWindow(WindowInfo)
             ToggledIcon = "unlock",
         })
 
+        -- Unload button with power icon (closes the UI completely)
+        local UnloadButton = Library:AddIconButton("power", function(self)
+            -- Confirm unload with visual feedback
+            if not self.ConfirmPending then
+                self.ConfirmPending = true
+                self:SetIcon("alert-circle")
+                TweenService:Create(self.Icon, TweenInfo.new(0.3, Enum.EasingStyle.Quint), {
+                    ImageColor3 = Library.Scheme.Red or Color3.fromRGB(255, 80, 80),
+                }):Play()
+
+                -- Reset after 2 seconds if not confirmed
+                task.delay(2, function()
+                    if self.ConfirmPending then
+                        self.ConfirmPending = false
+                        self:SetIcon("power")
+                        TweenService:Create(self.Icon, TweenInfo.new(0.3), {
+                            ImageColor3 = Library.Scheme.FontColor,
+                        }):Play()
+                    end
+                end)
+            else
+                -- Confirmed - unload the library
+                self.ConfirmPending = false
+                Library:Unload()
+            end
+        end, {
+            Size = 44,
+        })
+
         if WindowInfo.MobileButtonsSide == "Right" then
             ToggleButton:SetPosition(UDim2.new(1, -6, 0, 6))
             ToggleButton:SetAnchorPoint(Vector2.new(1, 0))
 
             LockButton:SetPosition(UDim2.new(1, -6, 0, 56))
             LockButton:SetAnchorPoint(Vector2.new(1, 0))
+
+            UnloadButton:SetPosition(UDim2.new(1, -6, 0, 106))
+            UnloadButton:SetAnchorPoint(Vector2.new(1, 0))
         else
             ToggleButton:SetPosition(UDim2.fromOffset(6, 6))
             LockButton:SetPosition(UDim2.fromOffset(6, 56))
+            UnloadButton:SetPosition(UDim2.fromOffset(6, 106))
         end
     end
 
