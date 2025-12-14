@@ -51,12 +51,12 @@ do
             1,
             {
                 FontColor = "ffffff",
-                MainColor = "1a1a1a",
-                AccentColor = "ede966",
-                BackgroundColor = "111111",
-                OutlineColor = "292929",
+                MainColor = "161620",
+                AccentColor = "813dd4",
+                BackgroundColor = "0d0d12",
+                OutlineColor = "2a2a37",
                 Highlight = true,
-                HighlightColor = "ede966",
+                HighlightColor = "813dd4",
             },
         },
         ["BBot"] = {
