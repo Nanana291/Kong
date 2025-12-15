@@ -8179,35 +8179,72 @@ function Library:Notify(...)
     local Data = {}
     local Info = select(1, ...)
 
+    -- Parse arguments
     if typeof(Info) == "table" then
-        Data.Title = tostring(Info.Title)
-        Data.Description = tostring(Info.Description)
+        Data.Title = Info.Title and tostring(Info.Title) or nil
+        Data.Description = Info.Description and tostring(Info.Description) or nil
+        Data.SubText = Info.SubText and tostring(Info.SubText) or nil
         Data.Time = Info.Time or 5
         Data.SoundId = Info.SoundId
         Data.Steps = Info.Steps
         Data.Persist = Info.Persist
+
+        -- New options
+        Data.Type = Info.Type or "info" -- "success", "error", "warning", "info", "custom"
+        Data.Icon = Info.Icon -- custom icon name (lucide)
+        Data.Closable = Info.Closable ~= false -- default true
+        Data.Buttons = Info.Buttons or {} -- array of {Text, Callback, Variant}
+        Data.OnClick = Info.OnClick
+        Data.OnClose = Info.OnClose
+        Data.Width = Info.Width -- custom width
+        Data.Image = Info.Image -- rbxassetid or url
+        Data.Progress = Info.Progress -- {Current, Max} or just a number 0-1
+        Data.Animated = Info.Animated ~= false -- animate progress
+        Data.Color = Info.Color -- custom accent color
     else
         Data.Description = tostring(Info)
         Data.Time = select(2, ...) or 5
         Data.SoundId = select(3, ...)
+        Data.Type = "info"
+        Data.Closable = true
+        Data.Buttons = {}
     end
     Data.Destroyed = false
+
+    -- Type-based configuration
+    local TypeConfig = {
+        success = { Icon = "check-circle", Color = Color3.fromRGB(80, 200, 120) },
+        error = { Icon = "x-circle", Color = Color3.fromRGB(255, 80, 80) },
+        warning = { Icon = "alert-triangle", Color = Color3.fromRGB(255, 180, 50) },
+        info = { Icon = "info", Color = Library.Scheme.AccentColor },
+        loading = { Icon = "loader", Color = Library.Scheme.AccentColor, Spinning = true },
+        custom = { Icon = Data.Icon, Color = Data.Color or Library.Scheme.AccentColor },
+    }
+
+    local Config = TypeConfig[Data.Type] or TypeConfig.info
+    local NotifyIcon = Data.Icon or Config.Icon
+    local NotifyColor = Data.Color or Config.Color
+    local IsSpinning = Config.Spinning
 
     local DeletedInstance = false
     local DeleteConnection = nil
     if typeof(Data.Time) == "Instance" then
         DeleteConnection = Data.Time.Destroying:Connect(function()
             DeletedInstance = true
-
-            DeleteConnection:Disconnect()
-            DeleteConnection = nil
+            if DeleteConnection then
+                DeleteConnection:Disconnect()
+                DeleteConnection = nil
+            end
         end)
     end
+
+    -- Calculate width
+    local NotifyWidth = Data.Width or 280
 
     local FakeBackground = New("Frame", {
         AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundTransparency = 1,
-        Size = UDim2.fromScale(1, 0),
+        Size = UDim2.fromOffset(NotifyWidth, 0),
         Visible = false,
         Parent = NotificationArea,
 
@@ -8216,105 +8253,427 @@ function Library:Notify(...)
         },
     })
 
-    local Background = Library:MakeOutline(FakeBackground, Library.CornerRadius, 5)
-    Background.AutomaticSize = Enum.AutomaticSize.Y
-    Background.Position = Library.NotifySide:lower() == "left" and UDim2.new(-1, -6, 0, -2) or UDim2.new(1, 6, 0, -2)
-    Background.Size = UDim2.fromScale(1, 0)
-    Library:UpdateDPI(Background, {
-        Position = false,
-        Size = false,
+    -- Main container with shadow
+    local ShadowContainer = New("Frame", {
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
+        Size = UDim2.fromScale(1, 0),
+        Parent = FakeBackground,
     })
 
-    local Holder = New("Frame", {
-        BackgroundColor3 = "MainColor",
-        Position = UDim2.fromOffset(2, 2),
-        Size = UDim2.new(1, -4, 1, -4),
+    -- Purple glow shadow
+    local NotifyShadow = New("ImageLabel", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        BackgroundTransparency = 1,
+        Image = "rbxassetid://6015897843",
+        ImageColor3 = NotifyColor,
+        ImageTransparency = 0.75,
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        ScaleType = Enum.ScaleType.Slice,
+        SliceCenter = Rect.new(49, 49, 450, 450),
+        Size = UDim2.new(1, 30, 1, 30),
+        ZIndex = -1,
+        Parent = ShadowContainer,
+    })
+
+    -- Background
+    local Background = New("Frame", {
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundColor3 = Library.Scheme.BackgroundColor,
+        Position = Library.NotifySide:lower() == "left" and UDim2.new(-1, -10, 0, 0) or UDim2.new(1, 10, 0, 0),
+        Size = UDim2.fromScale(1, 0),
+        ClipsDescendants = true,
+        Parent = ShadowContainer,
+    })
+    New("UICorner", {
+        CornerRadius = UDim.new(0, 10),
+        Parent = Background,
+    })
+
+    -- Accent line on left side
+    local AccentLine = New("Frame", {
+        BackgroundColor3 = NotifyColor,
+        Size = UDim2.new(0, 4, 1, 0),
         Parent = Background,
     })
     New("UICorner", {
-        CornerRadius = UDim.new(0, Library.CornerRadius - 1),
-        Parent = Holder,
+        CornerRadius = UDim.new(0, 2),
+        Parent = AccentLine,
+    })
+
+    -- Subtle gradient overlay
+    local GradientOverlay = New("Frame", {
+        BackgroundTransparency = 1,
+        Size = UDim2.fromScale(1, 1),
+        ZIndex = 0,
+        Parent = Background,
+    })
+    New("UIGradient", {
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+            ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1)),
+        }),
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.97),
+            NumberSequenceKeypoint.new(0.5, 1),
+            NumberSequenceKeypoint.new(1, 0.98),
+        }),
+        Rotation = 90,
+        Parent = GradientOverlay,
+    })
+
+    -- Content holder
+    local ContentHolder = New("Frame", {
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(8, 0),
+        Size = UDim2.new(1, -16, 0, 0),
+        Parent = Background,
     })
     New("UIListLayout", {
-        Padding = UDim.new(0, 4),
-        Parent = Holder,
+        Padding = UDim.new(0, 8),
+        Parent = ContentHolder,
     })
     New("UIPadding", {
-        PaddingBottom = UDim.new(0, 8),
-        PaddingLeft = UDim.new(0, 8),
-        PaddingRight = UDim.new(0, 8),
-        PaddingTop = UDim.new(0, 8),
-        Parent = Holder,
+        PaddingBottom = UDim.new(0, 12),
+        PaddingTop = UDim.new(0, 12),
+        Parent = ContentHolder,
+    })
+
+    -- Header row (icon + title + close button)
+    local HeaderRow = New("Frame", {
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 0, 0),
+        Parent = ContentHolder,
+    })
+    New("UIListLayout", {
+        FillDirection = Enum.FillDirection.Horizontal,
+        VerticalAlignment = Enum.VerticalAlignment.Center,
+        Padding = UDim.new(0, 8),
+        Parent = HeaderRow,
+    })
+
+    -- Icon
+    local IconContainer = New("Frame", {
+        BackgroundColor3 = NotifyColor,
+        BackgroundTransparency = 0.85,
+        Size = UDim2.fromOffset(32, 32),
+        Parent = HeaderRow,
+    })
+    New("UICorner", {
+        CornerRadius = UDim.new(0, 8),
+        Parent = IconContainer,
+    })
+
+    local IconData = Library:GetIcon(NotifyIcon or "info")
+    local IconImage
+    if IconData then
+        IconImage = New("ImageLabel", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundTransparency = 1,
+            Image = IconData.Url,
+            ImageColor3 = NotifyColor,
+            ImageRectOffset = IconData.ImageRectOffset,
+            ImageRectSize = IconData.ImageRectSize,
+            Position = UDim2.fromScale(0.5, 0.5),
+            Size = UDim2.fromOffset(20, 20),
+            Parent = IconContainer,
+        })
+
+        -- Spinning animation for loading type
+        if IsSpinning then
+            task.spawn(function()
+                while not Data.Destroyed and IconImage and IconImage.Parent do
+                    IconImage.Rotation = IconImage.Rotation + 5
+                    task.wait(0.016)
+                end
+            end)
+        end
+    end
+
+    -- Title/Text container
+    local TextContainer = New("Frame", {
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, -80, 0, 0),
+        Parent = HeaderRow,
+    })
+    New("UIListLayout", {
+        Padding = UDim.new(0, 2),
+        Parent = TextContainer,
     })
 
     local Title
     local Desc
-    local TitleX = 0
-    local DescX = 0
-
-    local TimerFill
+    local SubTextLabel
 
     if Data.Title then
         Title = New("TextLabel", {
+            AutomaticSize = Enum.AutomaticSize.Y,
             BackgroundTransparency = 1,
+            Size = UDim2.fromScale(1, 0),
             Text = Data.Title,
+            TextColor3 = Library.Scheme.FontColor,
+            FontFace = Library.Scheme.Font,
             TextSize = 15,
             TextXAlignment = Enum.TextXAlignment.Left,
             TextWrapped = true,
-            Parent = Holder,
-
-            DPIExclude = {
-                Size = true,
-            },
+            Parent = TextContainer,
         })
     end
 
     if Data.Description then
         Desc = New("TextLabel", {
+            AutomaticSize = Enum.AutomaticSize.Y,
             BackgroundTransparency = 1,
+            Size = UDim2.fromScale(1, 0),
             Text = Data.Description,
-            TextSize = 14,
+            TextColor3 = Library.Scheme.FontColor,
+            FontFace = Library.Scheme.Font,
+            TextSize = 13,
+            TextTransparency = 0.3,
             TextXAlignment = Enum.TextXAlignment.Left,
             TextWrapped = true,
-            Parent = Holder,
-
-            DPIExclude = {
-                Size = true,
-            },
+            Parent = TextContainer,
         })
     end
 
+    if Data.SubText then
+        SubTextLabel = New("TextLabel", {
+            AutomaticSize = Enum.AutomaticSize.Y,
+            BackgroundTransparency = 1,
+            Size = UDim2.fromScale(1, 0),
+            Text = Data.SubText,
+            TextColor3 = NotifyColor,
+            FontFace = Library.Scheme.Font,
+            TextSize = 11,
+            TextTransparency = 0.2,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextWrapped = true,
+            Parent = TextContainer,
+        })
+    end
+
+    -- Close button
+    local CloseButton
+    if Data.Closable then
+        CloseButton = New("TextButton", {
+            AnchorPoint = Vector2.new(1, 0),
+            BackgroundColor3 = Library.Scheme.MainColor,
+            BackgroundTransparency = 0.5,
+            Position = UDim2.new(1, -8, 0, 8),
+            Size = UDim2.fromOffset(24, 24),
+            Text = "",
+            Parent = Background,
+        })
+        New("UICorner", {
+            CornerRadius = UDim.new(0, 6),
+            Parent = CloseButton,
+        })
+
+        local CloseIcon = Library:GetIcon("x")
+        if CloseIcon then
+            New("ImageLabel", {
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                BackgroundTransparency = 1,
+                Image = CloseIcon.Url,
+                ImageColor3 = Library.Scheme.FontColor,
+                ImageRectOffset = CloseIcon.ImageRectOffset,
+                ImageRectSize = CloseIcon.ImageRectSize,
+                ImageTransparency = 0.5,
+                Position = UDim2.fromScale(0.5, 0.5),
+                Size = UDim2.fromOffset(14, 14),
+                Parent = CloseButton,
+            })
+        end
+
+        CloseButton.MouseEnter:Connect(function()
+            TweenService:Create(CloseButton, Library.HoverTweenInfo, {
+                BackgroundTransparency = 0,
+                BackgroundColor3 = Library.Scheme.Red or Color3.fromRGB(255, 80, 80),
+            }):Play()
+        end)
+        CloseButton.MouseLeave:Connect(function()
+            TweenService:Create(CloseButton, Library.HoverTweenInfo, {
+                BackgroundTransparency = 0.5,
+                BackgroundColor3 = Library.Scheme.MainColor,
+            }):Play()
+        end)
+        CloseButton.MouseButton1Click:Connect(function()
+            if Data.OnClose then
+                pcall(Data.OnClose)
+            end
+            Data:Destroy()
+        end)
+    end
+
+    -- Image display
+    if Data.Image then
+        local ImageHolder = New("Frame", {
+            BackgroundColor3 = Library.Scheme.MainColor,
+            Size = UDim2.new(1, 0, 0, 100),
+            Parent = ContentHolder,
+        })
+        New("UICorner", {
+            CornerRadius = UDim.new(0, 8),
+            Parent = ImageHolder,
+        })
+
+        New("ImageLabel", {
+            BackgroundTransparency = 1,
+            Image = typeof(Data.Image) == "number" and ("rbxassetid://" .. Data.Image) or Data.Image,
+            ScaleType = Enum.ScaleType.Fit,
+            Size = UDim2.fromScale(1, 1),
+            Parent = ImageHolder,
+        })
+    end
+
+    -- Progress bar
+    local ProgressBar
+    local ProgressFill
+    local ProgressGlow
+    if Data.Progress or (Data.Time and not Data.Persist and typeof(Data.Time) ~= "Instance") then
+        local ProgressHolder = New("Frame", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 0, 6),
+            Parent = ContentHolder,
+        })
+
+        ProgressBar = New("Frame", {
+            BackgroundColor3 = Library.Scheme.MainColor,
+            Size = UDim2.fromScale(1, 1),
+            Parent = ProgressHolder,
+        })
+        New("UICorner", {
+            CornerRadius = UDim.new(1, 0),
+            Parent = ProgressBar,
+        })
+
+        ProgressFill = New("Frame", {
+            BackgroundColor3 = NotifyColor,
+            Size = UDim2.fromScale(Data.Progress and (typeof(Data.Progress) == "table" and Data.Progress.Current / Data.Progress.Max or Data.Progress) or 1, 1),
+            Parent = ProgressBar,
+        })
+        New("UICorner", {
+            CornerRadius = UDim.new(1, 0),
+            Parent = ProgressFill,
+        })
+
+        -- Glow effect on progress
+        ProgressGlow = New("Frame", {
+            AnchorPoint = Vector2.new(1, 0.5),
+            BackgroundColor3 = NotifyColor,
+            BackgroundTransparency = 0.3,
+            Position = UDim2.new(1, 0, 0.5, 0),
+            Size = UDim2.fromOffset(10, 10),
+            ZIndex = 2,
+            Parent = ProgressFill,
+        })
+        New("UICorner", {
+            CornerRadius = UDim.new(1, 0),
+            Parent = ProgressGlow,
+        })
+    end
+
+    -- Action buttons
+    if #Data.Buttons > 0 then
+        local ButtonsRow = New("Frame", {
+            AutomaticSize = Enum.AutomaticSize.Y,
+            BackgroundTransparency = 1,
+            Size = UDim2.fromScale(1, 0),
+            Parent = ContentHolder,
+        })
+        New("UIListLayout", {
+            FillDirection = Enum.FillDirection.Horizontal,
+            HorizontalAlignment = Enum.HorizontalAlignment.Right,
+            Padding = UDim.new(0, 8),
+            Parent = ButtonsRow,
+        })
+
+        for _, ButtonInfo in ipairs(Data.Buttons) do
+            local BtnText = ButtonInfo.Text or ButtonInfo[1] or "Button"
+            local BtnCallback = ButtonInfo.Callback or ButtonInfo[2]
+            local BtnVariant = ButtonInfo.Variant or ButtonInfo[3] or "default" -- "default", "primary", "danger"
+
+            local BtnColors = {
+                default = { Bg = Library.Scheme.MainColor, Hover = Library.Scheme.OutlineColor },
+                primary = { Bg = NotifyColor, Hover = Library:GetLighterColor(NotifyColor) },
+                danger = { Bg = Library.Scheme.Red or Color3.fromRGB(255, 80, 80), Hover = Color3.fromRGB(255, 100, 100) },
+            }
+            local BtnColor = BtnColors[BtnVariant] or BtnColors.default
+
+            local ActionBtn = New("TextButton", {
+                AutomaticSize = Enum.AutomaticSize.X,
+                BackgroundColor3 = BtnColor.Bg,
+                Size = UDim2.fromOffset(0, 28),
+                Text = "",
+                Parent = ButtonsRow,
+            })
+            New("UICorner", {
+                CornerRadius = UDim.new(0, 6),
+                Parent = ActionBtn,
+            })
+            New("UIPadding", {
+                PaddingLeft = UDim.new(0, 12),
+                PaddingRight = UDim.new(0, 12),
+                Parent = ActionBtn,
+            })
+
+            local BtnLabel = New("TextLabel", {
+                AutomaticSize = Enum.AutomaticSize.X,
+                BackgroundTransparency = 1,
+                Size = UDim2.fromScale(0, 1),
+                Text = BtnText,
+                TextColor3 = BtnVariant == "default" and Library.Scheme.FontColor or Color3.new(1, 1, 1),
+                FontFace = Library.Scheme.Font,
+                TextSize = 13,
+                Parent = ActionBtn,
+            })
+
+            ActionBtn.MouseEnter:Connect(function()
+                TweenService:Create(ActionBtn, Library.HoverTweenInfo, {
+                    BackgroundColor3 = BtnColor.Hover,
+                }):Play()
+            end)
+            ActionBtn.MouseLeave:Connect(function()
+                TweenService:Create(ActionBtn, Library.HoverTweenInfo, {
+                    BackgroundColor3 = BtnColor.Bg,
+                }):Play()
+            end)
+            ActionBtn.MouseButton1Click:Connect(function()
+                if BtnCallback then
+                    pcall(BtnCallback, Data)
+                end
+            end)
+        end
+    end
+
+    -- Click handler for entire notification
+    if Data.OnClick then
+        local ClickDetector = New("TextButton", {
+            BackgroundTransparency = 1,
+            Size = UDim2.fromScale(1, 1),
+            Text = "",
+            ZIndex = 0,
+            Parent = Background,
+        })
+        ClickDetector.MouseButton1Click:Connect(function()
+            if Data.OnClick then
+                pcall(Data.OnClick, Data)
+            end
+        end)
+    end
+
+    -- Data methods
     function Data:Resize()
-        if Title then
-            local X, Y = Library:GetTextBounds(
-                Title.Text,
-                Title.FontFace,
-                Title.TextSize,
-                NotificationArea.AbsoluteSize.X - (24 * Library.DPIScale)
-            )
-            Title.Size = UDim2.fromOffset(math.ceil(X), Y)
-            TitleX = X
-        end
-
-        if Desc then
-            local X, Y = Library:GetTextBounds(
-                Desc.Text,
-                Desc.FontFace,
-                Desc.TextSize,
-                NotificationArea.AbsoluteSize.X - (24 * Library.DPIScale)
-            )
-            Desc.Size = UDim2.fromOffset(math.ceil(X), Y)
-            DescX = X
-        end
-
-        FakeBackground.Size = UDim2.fromOffset((TitleX > DescX and TitleX or DescX) + (24 * Library.DPIScale), 0)
+        -- Auto-sized, no manual resize needed
     end
 
     function Data:ChangeTitle(NewText)
         if Title then
             Data.Title = tostring(NewText)
             Title.Text = Data.Title
-            Data:Resize()
         end
     end
 
@@ -8322,14 +8681,70 @@ function Library:Notify(...)
         if Desc then
             Data.Description = tostring(NewText)
             Desc.Text = Data.Description
-            Data:Resize()
+        end
+    end
+
+    function Data:ChangeSubText(NewText)
+        if SubTextLabel then
+            Data.SubText = tostring(NewText)
+            SubTextLabel.Text = Data.SubText
+        end
+    end
+
+    function Data:SetProgress(Value, Max)
+        if ProgressFill then
+            local Progress = Max and (Value / Max) or Value
+            Progress = math.clamp(Progress, 0, 1)
+            if Data.Animated then
+                TweenService:Create(ProgressFill, TweenInfo.new(0.3, Enum.EasingStyle.Quint), {
+                    Size = UDim2.fromScale(Progress, 1),
+                }):Play()
+            else
+                ProgressFill.Size = UDim2.fromScale(Progress, 1)
+            end
         end
     end
 
     function Data:ChangeStep(NewStep)
-        if TimerFill and Data.Steps then
+        if ProgressFill and Data.Steps then
             NewStep = math.clamp(NewStep or 0, 0, Data.Steps)
-            TimerFill.Size = UDim2.fromScale(NewStep / Data.Steps, 1)
+            Data:SetProgress(NewStep, Data.Steps)
+        end
+    end
+
+    function Data:SetType(NewType)
+        local NewConfig = TypeConfig[NewType] or TypeConfig.info
+        local NewColor = NewConfig.Color
+
+        -- Update colors
+        TweenService:Create(AccentLine, Library.HoverTweenInfo, { BackgroundColor3 = NewColor }):Play()
+        TweenService:Create(IconContainer, Library.HoverTweenInfo, { BackgroundColor3 = NewColor }):Play()
+        TweenService:Create(NotifyShadow, Library.HoverTweenInfo, { ImageColor3 = NewColor }):Play()
+        if IconImage then
+            TweenService:Create(IconImage, Library.HoverTweenInfo, { ImageColor3 = NewColor }):Play()
+        end
+        if ProgressFill then
+            TweenService:Create(ProgressFill, Library.HoverTweenInfo, { BackgroundColor3 = NewColor }):Play()
+        end
+        if ProgressGlow then
+            TweenService:Create(ProgressGlow, Library.HoverTweenInfo, { BackgroundColor3 = NewColor }):Play()
+        end
+
+        -- Update icon
+        local NewIconData = Library:GetIcon(NewConfig.Icon)
+        if NewIconData and IconImage then
+            IconImage.Image = NewIconData.Url
+            IconImage.ImageRectOffset = NewIconData.ImageRectOffset
+            IconImage.ImageRectSize = NewIconData.ImageRectSize
+        end
+    end
+
+    function Data:SetIcon(NewIconName)
+        local NewIconData = Library:GetIcon(NewIconName)
+        if NewIconData and IconImage then
+            IconImage.Image = NewIconData.Url
+            IconImage.ImageRectOffset = NewIconData.ImageRectOffset
+            IconImage.ImageRectSize = NewIconData.ImageRectSize
         end
     end
 
@@ -8339,76 +8754,28 @@ function Library:Notify(...)
         if typeof(Data.Time) == "Instance" then
             pcall(Data.Time.Destroy, Data.Time)
         end
-        
+
         if DeleteConnection then
             DeleteConnection:Disconnect()
         end
 
-        TweenService
-            :Create(Background, Library.NotifyTweenInfo, {
-                Position = Library.NotifySide:lower() == "left" and UDim2.new(-1, -6, 0, -2) or UDim2.new(1, 6, 0, -2),
-            })
-            :Play()
-        
-        task.delay(Library.NotifyTweenInfo.Time, function()
+        -- Exit animation
+        local ExitPos = Library.NotifySide:lower() == "left" and UDim2.new(-1, -10, 0, 0) or UDim2.new(1, 10, 0, 0)
+
+        TweenService:Create(Background, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+            Position = ExitPos,
+        }):Play()
+        TweenService:Create(NotifyShadow, TweenInfo.new(0.3, Enum.EasingStyle.Quint), {
+            ImageTransparency = 1,
+        }):Play()
+
+        task.delay(0.4, function()
             Library.Notifications[FakeBackground] = nil
             FakeBackground:Destroy()
         end)
     end
 
-    Data:Resize()
-
-    local TimerHolder = New("Frame", {
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, 10),
-        Visible = (Data.Persist ~= true and typeof(Data.Time) ~= "Instance") or typeof(Data.Steps) == "number",
-        Parent = Holder,
-    })
-    local TimerBar = New("Frame", {
-        BackgroundColor3 = "BackgroundColor",
-        BorderSizePixel = 0,
-        Position = UDim2.fromOffset(0, 4),
-        Size = UDim2.new(1, 0, 0, 4),
-        Parent = TimerHolder,
-    })
-    New("UICorner", {
-        CornerRadius = UDim.new(0, 2),
-        Parent = TimerBar,
-    })
-    New("UIStroke", {
-        Color = "OutlineColor",
-        Transparency = 0.5,
-        Parent = TimerBar,
-    })
-
-    TimerFill = New("Frame", {
-        BackgroundColor3 = "AccentColor",
-        Size = UDim2.fromScale(1, 1),
-        Parent = TimerBar,
-    })
-    New("UICorner", {
-        CornerRadius = UDim.new(0, 2),
-        Parent = TimerFill,
-    })
-
-    -- Timer fill glow
-    local TimerGlow = New("Frame", {
-        AnchorPoint = Vector2.new(1, 0.5),
-        BackgroundColor3 = "AccentColor",
-        BackgroundTransparency = 0.5,
-        Position = UDim2.new(1, 0, 0.5, 0),
-        Size = UDim2.fromOffset(6, 8),
-        ZIndex = 2,
-        Parent = TimerFill,
-    })
-    New("UICorner", {
-        CornerRadius = UDim.new(0, 4),
-        Parent = TimerGlow,
-    })
-
-    if typeof(Data.Time) == "Instance" then
-        TimerFill.Size = UDim2.fromScale(0, 1)
-    end
+    -- Sound effect
     if Data.SoundId then
         local SoundId = Data.SoundId
         if typeof(SoundId) == "number" then
@@ -8427,30 +8794,19 @@ function Library:Notify(...)
 
     FakeBackground.Visible = true
 
-    -- Initial scale effect
-    Background.Size = UDim2.fromScale(0.9, 0)
-    Holder.BackgroundTransparency = 0.3
+    -- Entry animation
+    Background.Position = Library.NotifySide:lower() == "left" and UDim2.new(-1, -10, 0, 0) or UDim2.new(1, 10, 0, 0)
+    NotifyShadow.ImageTransparency = 1
 
-    -- Animated entry with scale and position
-    local EntryTween1 = TweenService:Create(Background, Library.NotifyTweenInfo, {
-        Position = UDim2.fromOffset(-2, -2),
-        Size = UDim2.fromScale(1, 0),
-    })
-    local EntryTween2 = TweenService:Create(Holder, Library.FadeTweenInfo, {
-        BackgroundTransparency = 0,
-    })
+    TweenService:Create(Background, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Position = UDim2.fromOffset(0, 0),
+    }):Play()
+    TweenService:Create(NotifyShadow, TweenInfo.new(0.6, Enum.EasingStyle.Quint), {
+        ImageTransparency = 0.75,
+    }):Play()
 
-    EntryTween1:Play()
-    EntryTween2:Play()
-
-    -- Add accent glow effect to timer bar
-    if TimerFill then
-        TweenService:Create(TimerFill, TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
-            BackgroundColor3 = Library:GetAccentGlow(Library.Scheme.AccentColor, 0.1),
-        }):Play()
-    end
-
-    task.delay(Library.NotifyTweenInfo.Time, function()
+    -- Auto-destroy timer
+    task.delay(0.5, function()
         if Data.Persist then
             return
         elseif typeof(Data.Time) == "Instance" then
@@ -8458,11 +8814,12 @@ function Library:Notify(...)
                 task.wait()
             until DeletedInstance or Data.Destroyed
         else
-            TweenService
-                :Create(TimerFill, TweenInfo.new(Data.Time, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {
+            -- Animate progress bar countdown
+            if ProgressFill and not Data.Progress then
+                TweenService:Create(ProgressFill, TweenInfo.new(Data.Time, Enum.EasingStyle.Linear), {
                     Size = UDim2.fromScale(0, 1),
-                })
-                :Play()
+                }):Play()
+            end
             task.wait(Data.Time)
         end
 
