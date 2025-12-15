@@ -2057,30 +2057,12 @@ function Library:AddContextMenu(
         Parent = Menu,
     })
 
-    -- Purple shadow effect
-    local MenuShadow = New("ImageLabel", {
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        BackgroundTransparency = 1,
-        Image = "rbxassetid://6015897843",
-        ImageColor3 = "AccentColor",
-        ImageTransparency = 0.85,
-        Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.new(1, 16, 1, 16),
-        ZIndex = -1,
-        Parent = Menu,
-    })
-    New("UICorner", {
-        CornerRadius = UDim.new(0, 8),
-        Parent = MenuShadow,
-    })
-
     local Table = {
         Active = false,
         Holder = Holder,
         Menu = Menu,
         List = nil,
         Signal = nil,
-        Shadow = MenuShadow,
 
         Size = Size,
     }
