@@ -514,7 +514,8 @@ local function Trim(Text: string)
     return Text:match("^%s*(.-)%s*$")
 end
 local function Round(Value, Rounding)
-    assert(Rounding >= 0, "Invalid rounding number.")
+    Rounding = Rounding or 0
+    assert(type(Rounding) == "number" and Rounding >= 0, "Invalid rounding number.")
 
     if Rounding == 0 then
         return math.floor(Value)
@@ -6335,7 +6336,7 @@ do
             Prefix = Info.Prefix,
             Suffix = Info.Suffix,
             Compact = Info.Compact,
-            Rounding = Info.Rounding,
+            Rounding = Info.Rounding or 0,
 
             Tooltip = Info.Tooltip,
             DisabledTooltip = Info.DisabledTooltip,
