@@ -6696,35 +6696,58 @@ do
             Slider:Display()
         end
 
+        local IsDraggingSlider = false
+
         Bar.InputBegan:Connect(function(Input: InputObject)
             if not IsClickInput(Input) or Slider.Disabled then
                 return
             end
 
+            IsDraggingSlider = true
+
             for _, Side in pairs(Library.ActiveTab.Sides) do
                 Side.ScrollingEnabled = false
             end
-
-            while IsDragInput(Input) do
-                local Location = Mouse.X
-                local Scale = math.clamp((Location - Bar.AbsolutePosition.X) / Bar.AbsoluteSize.X, 0, 1)
-
-                local OldValue = Slider.Value
-                Slider.Value = Round(Slider.Min + ((Slider.Max - Slider.Min) * Scale), Slider.Rounding)
-
-                Slider:Display()
-                if Slider.Value ~= OldValue then
-                    Library:SafeCallback(Slider.Callback, Slider.Value)
-                    Library:SafeCallback(Slider.Changed, Slider.Value)
-                end
-
-                RunService.RenderStepped:Wait()
-            end
-
-            for _, Side in pairs(Library.ActiveTab.Sides) do
-                Side.ScrollingEnabled = true
-            end
         end)
+
+        Library:GiveSignal(UserInputService.InputChanged:Connect(function(Input: InputObject)
+            if not IsDraggingSlider or Slider.Disabled or not Bar.Visible then
+                return
+            end
+
+            if not IsMouseInput(Input) then
+                return
+            end
+
+            local Location = Mouse.X
+            local BarPos = Bar.AbsolutePosition.X
+            local BarSize = Bar.AbsoluteSize.X
+
+            if BarSize == 0 then
+                return
+            end
+
+            local Scale = math.clamp((Location - BarPos) / BarSize, 0, 1)
+
+            local OldValue = Slider.Value
+            Slider.Value = Round(Slider.Min + ((Slider.Max - Slider.Min) * Scale), Slider.Rounding)
+
+            Slider:Display()
+            if Slider.Value ~= OldValue then
+                Library:SafeCallback(Slider.Callback, Slider.Value)
+                Library:SafeCallback(Slider.Changed, Slider.Value)
+            end
+        end))
+
+        Library:GiveSignal(UserInputService.InputEnded:Connect(function(Input: InputObject)
+            if IsMouseInput(Input) then
+                IsDraggingSlider = false
+
+                for _, Side in pairs(Library.ActiveTab.Sides) do
+                    Side.ScrollingEnabled = true
+                end
+            end
+        end))
 
         if typeof(Slider.Tooltip) == "string" or typeof(Slider.DisabledTooltip) == "string" then
             Slider.TooltipTable = Library:AddTooltip(Slider.Tooltip, Slider.DisabledTooltip, Bar)
