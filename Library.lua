@@ -514,14 +514,28 @@ local function Trim(Text: string)
     return Text:match("^%s*(.-)%s*$")
 end
 local function Round(Value, Rounding)
-    Rounding = Rounding or 0
-    assert(type(Rounding) == "number" and Rounding >= 0, "Invalid rounding number.")
+    -- Ensure Value is a number
+    Value = tonumber(Value)
+    if not Value then
+        return 0
+    end
+
+    -- Ensure Rounding is a valid number and convert if necessary
+    Rounding = tonumber(Rounding) or 0
+
+    -- Ensure Rounding is non-negative and an integer
+    if Rounding < 0 then
+        Rounding = 0
+    end
+    Rounding = math.floor(Rounding)
 
     if Rounding == 0 then
         return math.floor(Value)
     end
 
-    return tonumber(string.format("%." .. Rounding .. "f", Value))
+    -- Safely format with validated inputs
+    local formatted = string.format("%." .. Rounding .. "f", Value)
+    return tonumber(formatted) or Value
 end
 
 local function GetPlayers(ExcludeLocalPlayer: boolean?)
