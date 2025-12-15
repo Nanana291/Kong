@@ -6595,20 +6595,11 @@ do
                 DisplayLabel.Text = tostring(CustomDisplayText)
             else
                 if Info.Compact then
-                    DisplayLabel.Text =
-                        string.format("%s: %s%s%s", Slider.Text, Slider.Prefix, Slider.Value, Slider.Suffix)
+                    DisplayLabel.Text = Slider.Text .. ": " .. Slider.Prefix .. tostring(Slider.Value) .. Slider.Suffix
                 elseif Info.HideMax then
-                    DisplayLabel.Text = string.format("%s%s%s", Slider.Prefix, Slider.Value, Slider.Suffix)
+                    DisplayLabel.Text = Slider.Prefix .. tostring(Slider.Value) .. Slider.Suffix
                 else
-                    DisplayLabel.Text = string.format(
-                        "%s%s%s/%s%s%s",
-                        Slider.Prefix,
-                        Slider.Value,
-                        Slider.Suffix,
-                        Slider.Prefix,
-                        Slider.Max,
-                        Slider.Suffix
-                    )
+                    DisplayLabel.Text = Slider.Prefix .. tostring(Slider.Value) .. Slider.Suffix .. "/" .. Slider.Prefix .. tostring(Slider.Max) .. Slider.Suffix
                 end
             end
 
