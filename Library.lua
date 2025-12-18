@@ -3958,6 +3958,259 @@ do
         return Label
     end
 
+    function Funcs:AddParagraph(Info)
+        Info = Info or {}
+
+        local Groupbox = self
+        local Container = Groupbox.Container
+
+        -- Variant colors for different styles
+        local Variants = {
+            default = {
+                Background = Color3.fromRGB(30, 30, 35),
+                Border = Color3.fromRGB(50, 50, 60),
+                IconBg = Color3.fromRGB(40, 40, 50),
+                Accent = Library.Scheme.AccentColor,
+            },
+            info = {
+                Background = Color3.fromRGB(20, 35, 55),
+                Border = Color3.fromRGB(40, 80, 140),
+                IconBg = Color3.fromRGB(30, 60, 100),
+                Accent = Color3.fromRGB(80, 160, 255),
+            },
+            success = {
+                Background = Color3.fromRGB(20, 45, 30),
+                Border = Color3.fromRGB(40, 120, 60),
+                IconBg = Color3.fromRGB(30, 80, 45),
+                Accent = Color3.fromRGB(80, 200, 120),
+            },
+            warning = {
+                Background = Color3.fromRGB(50, 40, 20),
+                Border = Color3.fromRGB(140, 110, 40),
+                IconBg = Color3.fromRGB(90, 70, 30),
+                Accent = Color3.fromRGB(255, 200, 80),
+            },
+            error = {
+                Background = Color3.fromRGB(50, 25, 25),
+                Border = Color3.fromRGB(140, 50, 50),
+                IconBg = Color3.fromRGB(90, 35, 35),
+                Accent = Color3.fromRGB(255, 100, 100),
+            },
+        }
+
+        local VariantIcons = {
+            info = "info",
+            success = "check-circle",
+            warning = "alert-triangle",
+            error = "x-circle",
+        }
+
+        local VariantName = Info.Variant or "default"
+        local Colors = Variants[VariantName] or Variants.default
+
+        -- Override accent with custom color if provided
+        if Info.Color then
+            if typeof(Info.Color) == "Color3" then
+                Colors.Accent = Info.Color
+            elseif typeof(Info.Color) == "string" then
+                local success, color = pcall(Color3.fromHex, Info.Color)
+                if success then Colors.Accent = color end
+            end
+        end
+
+        local Paragraph = {
+            Title = Info.Title,
+            Content = Info.Content or "",
+            Visible = Info.Visible ~= false,
+            Type = "Paragraph",
+        }
+
+        -- Calculate content height
+        local TitleHeight = Info.Title and 20 or 0
+        local ContentHeight = 20
+        local Padding = 24 -- Top + bottom padding
+
+        -- Main holder
+        local Holder = New("Frame", {
+            BackgroundColor3 = Colors.Background,
+            Size = UDim2.new(1, 0, 0, TitleHeight + ContentHeight + Padding),
+            Visible = Paragraph.Visible,
+            Parent = Container,
+        })
+
+        New("UICorner", {
+            CornerRadius = UDim.new(0, 8),
+            Parent = Holder,
+        })
+
+        New("UIStroke", {
+            Color = Colors.Border,
+            Thickness = 1,
+            Transparency = 0.5,
+            Parent = Holder,
+        })
+
+        New("UIPadding", {
+            PaddingTop = UDim.new(0, 10),
+            PaddingBottom = UDim.new(0, 10),
+            PaddingLeft = UDim.new(0, 12),
+            PaddingRight = UDim.new(0, 12),
+            Parent = Holder,
+        })
+
+        -- Left accent bar
+        local AccentBar = New("Frame", {
+            BackgroundColor3 = Colors.Accent,
+            Position = UDim2.fromOffset(-12, -10),
+            Size = UDim2.new(0, 3, 1, 20),
+            Parent = Holder,
+        })
+
+        New("UICorner", {
+            CornerRadius = UDim.new(0, 2),
+            Parent = AccentBar,
+        })
+
+        -- Content layout
+        local ContentFrame = New("Frame", {
+            BackgroundTransparency = 1,
+            Size = UDim2.fromScale(1, 1),
+            Parent = Holder,
+        })
+
+        New("UIListLayout", {
+            FillDirection = Enum.FillDirection.Vertical,
+            Padding = UDim.new(0, 6),
+            Parent = ContentFrame,
+        })
+
+        -- Icon selection
+        local IconName = Info.Icon or VariantIcons[VariantName]
+        local HasIcon = IconName ~= nil
+        local IconOffset = HasIcon and 28 or 0
+
+        -- Title row with icon
+        local TitleRow
+        if Info.Title or HasIcon then
+            TitleRow = New("Frame", {
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 0, 20),
+                Parent = ContentFrame,
+            })
+
+            if HasIcon then
+                local IconContainer = New("Frame", {
+                    BackgroundColor3 = Colors.IconBg,
+                    Size = UDim2.fromOffset(22, 22),
+                    Position = UDim2.fromOffset(0, -1),
+                    Parent = TitleRow,
+                })
+
+                New("UICorner", {
+                    CornerRadius = UDim.new(0, 6),
+                    Parent = IconContainer,
+                })
+
+                local Icon = Library:GetCustomIcon(IconName)
+                if Icon then
+                    New("ImageLabel", {
+                        AnchorPoint = Vector2.new(0.5, 0.5),
+                        BackgroundTransparency = 1,
+                        Image = Icon.Url,
+                        ImageColor3 = Colors.Accent,
+                        ImageRectOffset = Icon.ImageRectOffset,
+                        ImageRectSize = Icon.ImageRectSize,
+                        Position = UDim2.fromScale(0.5, 0.5),
+                        Size = UDim2.fromOffset(14, 14),
+                        Parent = IconContainer,
+                    })
+                end
+            end
+
+            if Info.Title then
+                local TitleLabel = New("TextLabel", {
+                    BackgroundTransparency = 1,
+                    Position = UDim2.fromOffset(IconOffset, 0),
+                    Size = UDim2.new(1, -IconOffset, 1, 0),
+                    Font = Enum.Font.GothamBold,
+                    Text = Info.Title,
+                    TextColor3 = Colors.Accent,
+                    TextSize = 14,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    Parent = TitleRow,
+                })
+                Paragraph.TitleLabel = TitleLabel
+            end
+        end
+
+        -- Content text
+        local ContentLabel = New("TextLabel", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 0, 20),
+            Font = Enum.Font.Gotham,
+            RichText = true,
+            Text = Paragraph.Content,
+            TextColor3 = Library.Scheme.FontColor,
+            TextSize = 13,
+            TextTransparency = 0.1,
+            TextWrapped = true,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextYAlignment = Enum.TextYAlignment.Top,
+            Parent = ContentFrame,
+        })
+        Paragraph.ContentLabel = ContentLabel
+
+        -- Auto-size content based on text
+        local function UpdateSize()
+            local TextBounds = Library:GetTextBounds(
+                Paragraph.Content,
+                ContentLabel.FontFace,
+                ContentLabel.TextSize,
+                Holder.AbsoluteSize.X - 24
+            )
+            local NewContentHeight = math.max(20, TextBounds.Y + 4)
+            ContentLabel.Size = UDim2.new(1, 0, 0, NewContentHeight)
+            Holder.Size = UDim2.new(1, 0, 0, TitleHeight + NewContentHeight + Padding)
+            Groupbox:Resize()
+        end
+
+        task.defer(UpdateSize)
+
+        Holder:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+            UpdateSize()
+        end)
+
+        -- Methods
+        function Paragraph:SetVisible(Visible: boolean)
+            Paragraph.Visible = Visible
+            Holder.Visible = Visible
+            Groupbox:Resize()
+        end
+
+        function Paragraph:SetTitle(NewTitle: string)
+            Paragraph.Title = NewTitle
+            if Paragraph.TitleLabel then
+                Paragraph.TitleLabel.Text = NewTitle
+            end
+        end
+
+        function Paragraph:SetContent(NewContent: string)
+            Paragraph.Content = NewContent
+            ContentLabel.Text = NewContent
+            UpdateSize()
+        end
+
+        function Paragraph:Destroy()
+            Holder:Destroy()
+            Groupbox:Resize()
+        end
+
+        Paragraph.Holder = Holder
+        table.insert(Groupbox.Elements, Paragraph)
+
+        return Paragraph
+    end
+
     function Funcs:AddDivider(Info)
         Info = Info or {}
 
@@ -8184,13 +8437,13 @@ function Library:Notify(...)
     end
     Data.Destroyed = false
 
-    -- Type configuration
+    -- Type configuration with refined colors
     local TypeConfig = {
-        success = { Icon = "check", Color = Color3.fromRGB(45, 180, 90) },
-        error = { Icon = "x", Color = Color3.fromRGB(220, 60, 60) },
-        warning = { Icon = "alert-triangle", Color = Color3.fromRGB(220, 160, 40) },
+        success = { Icon = "check", Color = Color3.fromRGB(34, 197, 94) },
+        error = { Icon = "x", Color = Color3.fromRGB(239, 68, 68) },
+        warning = { Icon = "alert-triangle", Color = Color3.fromRGB(234, 179, 8) },
         info = { Icon = "info", Color = Library.Scheme.AccentColor },
-        loading = { Icon = "loader", Color = Library.Scheme.AccentColor, Spinning = true },
+        loading = { Icon = "loader-2", Color = Library.Scheme.AccentColor, Spinning = true },
         custom = { Icon = Data.Icon, Color = Data.Color or Library.Scheme.AccentColor },
     }
 
@@ -8211,7 +8464,7 @@ function Library:Notify(...)
         end)
     end
 
-    local NotifyWidth = Data.Width or 300
+    local NotifyWidth = Data.Width or 320
 
     -- Main container
     local FakeBackground = New("Frame", {
@@ -8223,32 +8476,48 @@ function Library:Notify(...)
         DPIExclude = { Size = true },
     })
 
-    -- Dark background
+    -- Main background with glassmorphism effect
     local Background = New("Frame", {
         AutomaticSize = Enum.AutomaticSize.Y,
-        BackgroundColor3 = Color3.fromRGB(18, 18, 22),
-        Position = Library.NotifySide:lower() == "left" and UDim2.new(-1, -10, 0, 0) or UDim2.new(1, 10, 0, 0),
+        BackgroundColor3 = Color3.fromRGB(12, 12, 15),
+        BackgroundTransparency = 0.05,
+        Position = Library.NotifySide:lower() == "left" and UDim2.new(-1.2, 0, 0, 0) or UDim2.new(1.2, 0, 0, 0),
         Size = UDim2.fromScale(1, 0),
         ClipsDescendants = true,
         Parent = FakeBackground,
     })
     New("UICorner", {
-        CornerRadius = UDim.new(0, 6),
+        CornerRadius = UDim.new(0, 8),
         Parent = Background,
     })
 
-    -- Thin border
-    New("UIStroke", {
-        Color = Color3.fromRGB(35, 35, 42),
+    -- Border with accent tint
+    local BorderStroke = New("UIStroke", {
+        Color = Color3.fromRGB(38, 38, 45),
         Thickness = 1,
+        Transparency = 0.2,
         Parent = Background,
     })
 
-    -- Accent indicator (top line)
-    local AccentLine = New("Frame", {
+    -- Left accent bar
+    local AccentBar = New("Frame", {
         BackgroundColor3 = NotifyColor,
-        Size = UDim2.new(1, 0, 0, 2),
         BorderSizePixel = 0,
+        Position = UDim2.fromOffset(0, 0),
+        Size = UDim2.new(0, 3, 1, 0),
+        Parent = Background,
+    })
+    New("UICorner", {
+        CornerRadius = UDim.new(0, 8),
+        Parent = AccentBar,
+    })
+
+    -- Content wrapper
+    local ContentWrapper = New("Frame", {
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(3, 0),
+        Size = UDim2.new(1, -3, 0, 0),
         Parent = Background,
     })
 
@@ -8256,54 +8525,68 @@ function Library:Notify(...)
     local ContentHolder = New("Frame", {
         AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(0, 2),
         Size = UDim2.new(1, 0, 0, 0),
-        Parent = Background,
+        Parent = ContentWrapper,
     })
     New("UIPadding", {
-        PaddingBottom = UDim.new(0, 12),
-        PaddingLeft = UDim.new(0, 12),
-        PaddingRight = UDim.new(0, 12),
-        PaddingTop = UDim.new(0, 10),
+        PaddingBottom = UDim.new(0, 14),
+        PaddingLeft = UDim.new(0, 14),
+        PaddingRight = UDim.new(0, 14),
+        PaddingTop = UDim.new(0, 14),
         Parent = ContentHolder,
     })
     New("UIListLayout", {
-        Padding = UDim.new(0, 8),
+        Padding = UDim.new(0, 10),
+        SortOrder = Enum.SortOrder.LayoutOrder,
         Parent = ContentHolder,
     })
 
-    -- Header (icon + text + close)
+    -- Header row (icon + text)
     local HeaderRow = New("Frame", {
         AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 0, 0),
+        LayoutOrder = 1,
         Parent = ContentHolder,
     })
     New("UIListLayout", {
         FillDirection = Enum.FillDirection.Horizontal,
         VerticalAlignment = Enum.VerticalAlignment.Top,
-        Padding = UDim.new(0, 10),
+        Padding = UDim.new(0, 12),
         Parent = HeaderRow,
     })
 
-    -- Icon
+    -- Icon container with background
+    local IconContainer = New("Frame", {
+        BackgroundColor3 = NotifyColor,
+        BackgroundTransparency = 0.9,
+        Size = UDim2.fromOffset(36, 36),
+        Parent = HeaderRow,
+    })
+    New("UICorner", {
+        CornerRadius = UDim.new(0, 8),
+        Parent = IconContainer,
+    })
+
     local IconData = Library:GetIcon(NotifyIcon or "info")
     local IconImage
     if IconData then
         IconImage = New("ImageLabel", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
             BackgroundTransparency = 1,
             Image = IconData.Url,
             ImageColor3 = NotifyColor,
             ImageRectOffset = IconData.ImageRectOffset,
             ImageRectSize = IconData.ImageRectSize,
-            Size = UDim2.fromOffset(18, 18),
-            Parent = HeaderRow,
+            Position = UDim2.fromScale(0.5, 0.5),
+            Size = UDim2.fromOffset(20, 20),
+            Parent = IconContainer,
         })
 
         if IsSpinning then
             task.spawn(function()
                 while not Data.Destroyed and IconImage and IconImage.Parent do
-                    IconImage.Rotation = IconImage.Rotation + 6
+                    IconImage.Rotation = IconImage.Rotation + 8
                     task.wait(0.016)
                 end
             end)
@@ -8314,7 +8597,7 @@ function Library:Notify(...)
     local TextContainer = New("Frame", {
         AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, Data.Closable and -52 or -28, 0, 0),
+        Size = UDim2.new(1, Data.Closable and -72 or -48, 0, 0),
         Parent = HeaderRow,
     })
     New("UIListLayout", {
@@ -8330,9 +8613,9 @@ function Library:Notify(...)
             BackgroundTransparency = 1,
             Size = UDim2.fromScale(1, 0),
             Text = Data.Title,
-            TextColor3 = Color3.fromRGB(240, 240, 245),
-            FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold),
-            TextSize = 13,
+            TextColor3 = Color3.fromRGB(250, 250, 252),
+            FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold),
+            TextSize = 14,
             TextXAlignment = Enum.TextXAlignment.Left,
             TextWrapped = true,
             Parent = TextContainer,
@@ -8345,11 +8628,12 @@ function Library:Notify(...)
             BackgroundTransparency = 1,
             Size = UDim2.fromScale(1, 0),
             Text = Data.Description,
-            TextColor3 = Color3.fromRGB(160, 160, 170),
+            TextColor3 = Color3.fromRGB(148, 148, 158),
             FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Regular),
             TextSize = 12,
             TextXAlignment = Enum.TextXAlignment.Left,
             TextWrapped = true,
+            RichText = true,
             Parent = TextContainer,
         })
     end
@@ -8361,7 +8645,7 @@ function Library:Notify(...)
             Size = UDim2.fromScale(1, 0),
             Text = Data.SubText,
             TextColor3 = NotifyColor,
-            FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Regular),
+            FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium),
             TextSize = 11,
             TextXAlignment = Enum.TextXAlignment.Left,
             TextWrapped = true,
@@ -8374,41 +8658,43 @@ function Library:Notify(...)
     if Data.Closable then
         CloseButton = New("TextButton", {
             AnchorPoint = Vector2.new(1, 0),
+            BackgroundColor3 = Color3.fromRGB(255, 255, 255),
             BackgroundTransparency = 1,
-            Position = UDim2.new(1, -10, 0, 10),
-            Size = UDim2.fromOffset(16, 16),
+            Position = UDim2.new(1, -12, 0, 12),
+            Size = UDim2.fromOffset(20, 20),
             Text = "",
             Parent = Background,
+        })
+        New("UICorner", {
+            CornerRadius = UDim.new(0, 4),
+            Parent = CloseButton,
         })
 
         local CloseIcon = Library:GetIcon("x")
         local CloseIconImage
         if CloseIcon then
             CloseIconImage = New("ImageLabel", {
+                AnchorPoint = Vector2.new(0.5, 0.5),
                 BackgroundTransparency = 1,
                 Image = CloseIcon.Url,
-                ImageColor3 = Color3.fromRGB(100, 100, 110),
+                ImageColor3 = Color3.fromRGB(90, 90, 100),
                 ImageRectOffset = CloseIcon.ImageRectOffset,
                 ImageRectSize = CloseIcon.ImageRectSize,
-                Size = UDim2.fromScale(1, 1),
+                Position = UDim2.fromScale(0.5, 0.5),
+                Size = UDim2.fromOffset(14, 14),
                 Parent = CloseButton,
             })
+
+            CloseButton.MouseEnter:Connect(function()
+                TweenService:Create(CloseButton, TweenInfo.new(0.2), { BackgroundTransparency = 0.9 }):Play()
+                TweenService:Create(CloseIconImage, TweenInfo.new(0.2), { ImageColor3 = Color3.fromRGB(255, 255, 255) }):Play()
+            end)
+            CloseButton.MouseLeave:Connect(function()
+                TweenService:Create(CloseButton, TweenInfo.new(0.2), { BackgroundTransparency = 1 }):Play()
+                TweenService:Create(CloseIconImage, TweenInfo.new(0.2), { ImageColor3 = Color3.fromRGB(90, 90, 100) }):Play()
+            end)
         end
 
-        CloseButton.MouseEnter:Connect(function()
-            if CloseIconImage then
-                TweenService:Create(CloseIconImage, TweenInfo.new(0.15), {
-                    ImageColor3 = Color3.fromRGB(220, 220, 225),
-                }):Play()
-            end
-        end)
-        CloseButton.MouseLeave:Connect(function()
-            if CloseIconImage then
-                TweenService:Create(CloseIconImage, TweenInfo.new(0.15), {
-                    ImageColor3 = Color3.fromRGB(100, 100, 110),
-                }):Play()
-            end
-        end)
         CloseButton.MouseButton1Click:Connect(function()
             if Data.OnClose then pcall(Data.OnClose) end
             Data:Destroy()
@@ -8418,11 +8704,12 @@ function Library:Notify(...)
     -- Image
     if Data.Image then
         local ImageHolder = New("Frame", {
-            BackgroundColor3 = Color3.fromRGB(25, 25, 30),
-            Size = UDim2.new(1, 0, 0, 80),
+            BackgroundColor3 = Color3.fromRGB(20, 20, 25),
+            Size = UDim2.new(1, 0, 0, 100),
+            LayoutOrder = 2,
             Parent = ContentHolder,
         })
-        New("UICorner", { CornerRadius = UDim.new(0, 4), Parent = ImageHolder })
+        New("UICorner", { CornerRadius = UDim.new(0, 6), Parent = ImageHolder })
         New("ImageLabel", {
             BackgroundTransparency = 1,
             Image = typeof(Data.Image) == "number" and ("rbxassetid://" .. Data.Image) or Data.Image,
@@ -8432,28 +8719,52 @@ function Library:Notify(...)
         })
     end
 
-    -- Progress bar
-    local ProgressFill
-    if Data.Progress or (Data.Time and not Data.Persist and typeof(Data.Time) ~= "Instance") then
+    -- Progress bar (improved)
+    local ProgressFill, ProgressBar
+    local showProgress = Data.Progress or (Data.Time and not Data.Persist and typeof(Data.Time) ~= "Instance")
+
+    if showProgress then
         local ProgressHolder = New("Frame", {
             BackgroundTransparency = 1,
-            Size = UDim2.new(1, 0, 0, 3),
+            Size = UDim2.new(1, 0, 0, 4),
+            LayoutOrder = 3,
             Parent = ContentHolder,
         })
 
-        local ProgressBar = New("Frame", {
-            BackgroundColor3 = Color3.fromRGB(30, 30, 36),
+        ProgressBar = New("Frame", {
+            BackgroundColor3 = Color3.fromRGB(30, 30, 38),
             Size = UDim2.fromScale(1, 1),
             Parent = ProgressHolder,
         })
         New("UICorner", { CornerRadius = UDim.new(1, 0), Parent = ProgressBar })
 
+        local initialProgress = 1
+        if Data.Progress then
+            if typeof(Data.Progress) == "table" then
+                initialProgress = Data.Progress.Current / Data.Progress.Max
+            else
+                initialProgress = Data.Progress
+            end
+        end
+
         ProgressFill = New("Frame", {
             BackgroundColor3 = NotifyColor,
-            Size = UDim2.fromScale(Data.Progress and (typeof(Data.Progress) == "table" and Data.Progress.Current / Data.Progress.Max or Data.Progress) or 1, 1),
+            Size = UDim2.fromScale(initialProgress, 1),
             Parent = ProgressBar,
         })
         New("UICorner", { CornerRadius = UDim.new(1, 0), Parent = ProgressFill })
+
+        -- Glow on progress tip
+        local ProgressGlow = New("Frame", {
+            AnchorPoint = Vector2.new(1, 0.5),
+            BackgroundColor3 = NotifyColor,
+            BackgroundTransparency = 0.5,
+            Position = UDim2.new(1, 0, 0.5, 0),
+            Size = UDim2.fromOffset(8, 8),
+            ZIndex = 2,
+            Parent = ProgressFill,
+        })
+        New("UICorner", { CornerRadius = UDim.new(1, 0), Parent = ProgressGlow })
     end
 
     -- Action buttons
@@ -8462,12 +8773,13 @@ function Library:Notify(...)
             AutomaticSize = Enum.AutomaticSize.Y,
             BackgroundTransparency = 1,
             Size = UDim2.fromScale(1, 0),
+            LayoutOrder = 4,
             Parent = ContentHolder,
         })
         New("UIListLayout", {
             FillDirection = Enum.FillDirection.Horizontal,
             HorizontalAlignment = Enum.HorizontalAlignment.Right,
-            Padding = UDim.new(0, 6),
+            Padding = UDim.new(0, 8),
             Parent = ButtonsRow,
         })
 
@@ -8477,21 +8789,23 @@ function Library:Notify(...)
             local BtnVariant = ButtonInfo.Variant or ButtonInfo[3] or "default"
 
             local BtnColors = {
-                default = { Bg = Color3.fromRGB(35, 35, 42), Hover = Color3.fromRGB(50, 50, 60), Text = Color3.fromRGB(200, 200, 205) },
+                default = { Bg = Color3.fromRGB(40, 40, 48), Hover = Color3.fromRGB(55, 55, 65), Text = Color3.fromRGB(220, 220, 225) },
                 primary = { Bg = NotifyColor, Hover = Library:GetLighterColor(NotifyColor), Text = Color3.new(1, 1, 1) },
-                danger = { Bg = Color3.fromRGB(180, 50, 50), Hover = Color3.fromRGB(200, 70, 70), Text = Color3.new(1, 1, 1) },
+                danger = { Bg = Color3.fromRGB(220, 50, 50), Hover = Color3.fromRGB(240, 70, 70), Text = Color3.new(1, 1, 1) },
+                ghost = { Bg = Color3.fromRGB(0, 0, 0), BgTransparency = 1, Hover = Color3.fromRGB(50, 50, 58), HoverTransparency = 0.5, Text = Color3.fromRGB(180, 180, 190) },
             }
             local BtnColor = BtnColors[BtnVariant] or BtnColors.default
 
             local ActionBtn = New("TextButton", {
                 AutomaticSize = Enum.AutomaticSize.X,
                 BackgroundColor3 = BtnColor.Bg,
-                Size = UDim2.fromOffset(0, 26),
+                BackgroundTransparency = BtnColor.BgTransparency or 0,
+                Size = UDim2.fromOffset(0, 30),
                 Text = "",
                 Parent = ButtonsRow,
             })
-            New("UICorner", { CornerRadius = UDim.new(0, 4), Parent = ActionBtn })
-            New("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), Parent = ActionBtn })
+            New("UICorner", { CornerRadius = UDim.new(0, 6), Parent = ActionBtn })
+            New("UIPadding", { PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 14), Parent = ActionBtn })
 
             New("TextLabel", {
                 AutomaticSize = Enum.AutomaticSize.X,
@@ -8499,16 +8813,22 @@ function Library:Notify(...)
                 Size = UDim2.fromScale(0, 1),
                 Text = BtnText,
                 TextColor3 = BtnColor.Text,
-                FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium),
-                TextSize = 11,
+                FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold),
+                TextSize = 12,
                 Parent = ActionBtn,
             })
 
             ActionBtn.MouseEnter:Connect(function()
-                TweenService:Create(ActionBtn, TweenInfo.new(0.15), { BackgroundColor3 = BtnColor.Hover }):Play()
+                TweenService:Create(ActionBtn, TweenInfo.new(0.15), {
+                    BackgroundColor3 = BtnColor.Hover,
+                    BackgroundTransparency = BtnColor.HoverTransparency or 0
+                }):Play()
             end)
             ActionBtn.MouseLeave:Connect(function()
-                TweenService:Create(ActionBtn, TweenInfo.new(0.15), { BackgroundColor3 = BtnColor.Bg }):Play()
+                TweenService:Create(ActionBtn, TweenInfo.new(0.15), {
+                    BackgroundColor3 = BtnColor.Bg,
+                    BackgroundTransparency = BtnColor.BgTransparency or 0
+                }):Play()
             end)
             ActionBtn.MouseButton1Click:Connect(function()
                 if BtnCallback then pcall(BtnCallback, Data) end
@@ -8549,7 +8869,7 @@ function Library:Notify(...)
         if ProgressFill then
             local Progress = math.clamp(Max and (Value / Max) or Value, 0, 1)
             if Data.Animated then
-                TweenService:Create(ProgressFill, TweenInfo.new(0.25, Enum.EasingStyle.Quint), { Size = UDim2.fromScale(Progress, 1) }):Play()
+                TweenService:Create(ProgressFill, TweenInfo.new(0.3, Enum.EasingStyle.Quint), { Size = UDim2.fromScale(Progress, 1) }):Play()
             else
                 ProgressFill.Size = UDim2.fromScale(Progress, 1)
             end
@@ -8565,9 +8885,15 @@ function Library:Notify(...)
     function Data:SetType(NewType)
         local NewConfig = TypeConfig[NewType] or TypeConfig.info
         local NewColor = NewConfig.Color
-        TweenService:Create(AccentLine, TweenInfo.new(0.2), { BackgroundColor3 = NewColor }):Play()
-        if IconImage then TweenService:Create(IconImage, TweenInfo.new(0.2), { ImageColor3 = NewColor }):Play() end
-        if ProgressFill then TweenService:Create(ProgressFill, TweenInfo.new(0.2), { BackgroundColor3 = NewColor }):Play() end
+
+        TweenService:Create(AccentBar, TweenInfo.new(0.3), { BackgroundColor3 = NewColor }):Play()
+        TweenService:Create(IconContainer, TweenInfo.new(0.3), { BackgroundColor3 = NewColor }):Play()
+        if IconImage then
+            TweenService:Create(IconImage, TweenInfo.new(0.3), { ImageColor3 = NewColor }):Play()
+        end
+        if ProgressFill then
+            TweenService:Create(ProgressFill, TweenInfo.new(0.3), { BackgroundColor3 = NewColor }):Play()
+        end
 
         local NewIconData = Library:GetIcon(NewConfig.Icon)
         if NewIconData and IconImage then
@@ -8587,17 +8913,24 @@ function Library:Notify(...)
     end
 
     function Data:Destroy()
+        if Data.Destroyed then return end
         Data.Destroyed = true
+
         if typeof(Data.Time) == "Instance" then pcall(Data.Time.Destroy, Data.Time) end
         if DeleteConnection then DeleteConnection:Disconnect() end
 
-        local ExitPos = Library.NotifySide:lower() == "left" and UDim2.new(-1, -10, 0, 0) or UDim2.new(1, 10, 0, 0)
-        TweenService:Create(Background, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.In), { Position = ExitPos }):Play()
-        TweenService:Create(Background, TweenInfo.new(0.2), { BackgroundTransparency = 0.5 }):Play()
+        local ExitPos = Library.NotifySide:lower() == "left" and UDim2.new(-1.2, 0, 0, 0) or UDim2.new(1.2, 0, 0, 0)
 
-        task.delay(0.3, function()
+        TweenService:Create(Background, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+            Position = ExitPos
+        }):Play()
+        TweenService:Create(Background, TweenInfo.new(0.3), { BackgroundTransparency = 0.8 }):Play()
+
+        task.delay(0.4, function()
             Library.Notifications[FakeBackground] = nil
-            FakeBackground:Destroy()
+            if FakeBackground and FakeBackground.Parent then
+                FakeBackground:Destroy()
+            end
         end)
     end
 
@@ -8611,24 +8944,35 @@ function Library:Notify(...)
     FakeBackground.Visible = true
 
     -- Entry animation
-    Background.Position = Library.NotifySide:lower() == "left" and UDim2.new(-1, -10, 0, 0) or UDim2.new(1, 10, 0, 0)
-    Background.BackgroundTransparency = 0.3
+    TweenService:Create(Background, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Position = UDim2.fromOffset(0, 0)
+    }):Play()
+    TweenService:Create(Background, TweenInfo.new(0.3), { BackgroundTransparency = 0.05 }):Play()
 
-    TweenService:Create(Background, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Position = UDim2.fromOffset(0, 0) }):Play()
-    TweenService:Create(Background, TweenInfo.new(0.2), { BackgroundTransparency = 0 }):Play()
+    -- Auto-destroy with progress animation
+    task.spawn(function()
+        task.wait(0.5) -- Wait for entry animation
 
-    -- Auto-destroy
-    task.delay(0.35, function()
         if Data.Persist then return end
+
         if typeof(Data.Time) == "Instance" then
             repeat task.wait() until DeletedInstance or Data.Destroyed
-        else
-            if ProgressFill and not Data.Progress then
-                TweenService:Create(ProgressFill, TweenInfo.new(Data.Time, Enum.EasingStyle.Linear), { Size = UDim2.fromScale(0, 1) }):Play()
+        elseif Data.Time and not Data.Progress then
+            -- Animate progress bar countdown
+            if ProgressFill then
+                local countdownTween = TweenService:Create(ProgressFill, TweenInfo.new(Data.Time, Enum.EasingStyle.Linear), {
+                    Size = UDim2.fromScale(0, 1)
+                })
+                countdownTween:Play()
             end
             task.wait(Data.Time)
+        elseif Data.Time then
+            task.wait(Data.Time)
         end
-        if not Data.Destroyed then Data:Destroy() end
+
+        if not Data.Destroyed then
+            Data:Destroy()
+        end
     end)
 
     return Data

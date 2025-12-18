@@ -65,6 +65,23 @@ MainLeftGroupbox:AddLabel({
 
 MainLeftGroupbox:AddSpacer(10)
 
+-- Paragraph Examples
+MainLeftGroupbox:AddParagraph({
+    Title = "Getting Started",
+    Content = "Kong UI Library provides a modern and customizable interface for your Roblox scripts. Use the tabs above to explore all available elements.",
+    Variant = "info",
+})
+
+MainLeftGroupbox:AddSpacer(8)
+
+MainLeftGroupbox:AddParagraph({
+    Title = "Important Notice",
+    Content = "Always make sure to save your configuration before closing the window to preserve your settings.",
+    Variant = "warning",
+})
+
+MainLeftGroupbox:AddSpacer(8)
+
 MainLeftGroupbox:AddButton({
     Text = "Visit GitHub",
     Callback = function()
@@ -130,6 +147,7 @@ MainRightGroupbox:AddButton({
 --// Elements Tab Content
 local ToggleGroup = ElementsTab:AddLeftGroupbox("Toggles")
 local SliderGroup = ElementsTab:AddLeftGroupbox("Sliders")
+local ParagraphGroup = ElementsTab:AddLeftGroupbox("Paragraphs")
 local InputGroup = ElementsTab:AddRightGroupbox("Inputs")
 local DropdownGroup = ElementsTab:AddRightGroupbox("Dropdowns")
 
@@ -204,6 +222,53 @@ SliderGroup:AddSlider("CompactSlider", {
     Callback = function(Value)
         print("Compact slider:", Value)
     end,
+})
+
+-- Paragraph Examples (All Variants)
+ParagraphGroup:AddParagraph({
+    Title = "Default Style",
+    Content = "This is a default paragraph with accent color styling.",
+    Variant = "default",
+})
+
+ParagraphGroup:AddSpacer(6)
+
+ParagraphGroup:AddParagraph({
+    Title = "Information",
+    Content = "Use the info variant for helpful tips and guidance.",
+    Variant = "info",
+})
+
+ParagraphGroup:AddSpacer(6)
+
+ParagraphGroup:AddParagraph({
+    Title = "Success Message",
+    Content = "The success variant indicates completed actions.",
+    Variant = "success",
+})
+
+ParagraphGroup:AddSpacer(6)
+
+ParagraphGroup:AddParagraph({
+    Title = "Warning Notice",
+    Content = "Warnings help users avoid potential issues.",
+    Variant = "warning",
+})
+
+ParagraphGroup:AddSpacer(6)
+
+ParagraphGroup:AddParagraph({
+    Title = "Error Alert",
+    Content = "Error paragraphs highlight critical problems.",
+    Variant = "error",
+})
+
+ParagraphGroup:AddSpacer(6)
+
+ParagraphGroup:AddParagraph({
+    Content = "Paragraphs can also work without a title, just with content.",
+    Variant = "info",
+    Icon = "message-circle",
 })
 
 -- Input Examples
