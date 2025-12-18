@@ -4072,7 +4072,7 @@ do
             Position = Data.Icon and UDim2.fromOffset(28, 0) or UDim2.fromOffset(0, 0),
             Size = Data.Icon and UDim2.new(1, -28, 0, 0) or UDim2.fromScale(1, 1),
             Text = Paragraph.Text,
-            TextColor3 = Data.Color or Color3.fromRGB(180, 180, 190),
+            TextColor3 = Color3.fromRGB(180, 180, 190),
             FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Regular),
             TextSize = Data.Size,
             TextWrapped = true,
@@ -8565,19 +8565,19 @@ function Library:Notify(...)
     local ContentHolder = New("Frame", {
         AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(0, 2),
+        Position = UDim2.fromOffset(0, 3),
         Size = UDim2.new(1, 0, 0, 0),
         Parent = Background,
     })
     New("UIPadding", {
-        PaddingBottom = UDim.new(0, 12),
-        PaddingLeft = UDim.new(0, 12),
-        PaddingRight = UDim.new(0, 12),
-        PaddingTop = UDim.new(0, 10),
+        PaddingBottom = UDim.new(0, 14),
+        PaddingLeft = UDim.new(0, 14),
+        PaddingRight = UDim.new(0, 14),
+        PaddingTop = UDim.new(0, 12),
         Parent = ContentHolder,
     })
     New("UIListLayout", {
-        Padding = UDim.new(0, 8),
+        Padding = UDim.new(0, 10),
         Parent = ContentHolder,
     })
 
@@ -8639,9 +8639,9 @@ function Library:Notify(...)
             BackgroundTransparency = 1,
             Size = UDim2.fromScale(1, 0),
             Text = Data.Title,
-            TextColor3 = Color3.fromRGB(240, 240, 245),
-            FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold),
-            TextSize = 13,
+            TextColor3 = Color3.fromRGB(250, 250, 252),
+            FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold),
+            TextSize = 14,
             TextXAlignment = Enum.TextXAlignment.Left,
             TextWrapped = true,
             Parent = TextContainer,
@@ -8654,7 +8654,7 @@ function Library:Notify(...)
             BackgroundTransparency = 1,
             Size = UDim2.fromScale(1, 0),
             Text = Data.Description,
-            TextColor3 = Color3.fromRGB(160, 160, 170),
+            TextColor3 = Color3.fromRGB(180, 180, 195),
             FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Regular),
             TextSize = 12,
             TextXAlignment = Enum.TextXAlignment.Left,
@@ -8670,7 +8670,7 @@ function Library:Notify(...)
             Size = UDim2.fromScale(1, 0),
             Text = Data.SubText,
             TextColor3 = NotifyColor,
-            FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Regular),
+            FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold),
             TextSize = 11,
             TextXAlignment = Enum.TextXAlignment.Left,
             TextWrapped = true,
@@ -8932,10 +8932,16 @@ function Library:Notify(...)
         if DeleteConnection then DeleteConnection:Disconnect() end
 
         local ExitPos = Library.NotifySide:lower() == "left" and UDim2.new(-1, -10, 0, 0) or UDim2.new(1, 10, 0, 0)
-        TweenService:Create(Background, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.In), { Position = ExitPos }):Play()
-        TweenService:Create(Background, TweenInfo.new(0.2), { BackgroundTransparency = 0.5 }):Play()
 
-        task.delay(0.3, function()
+        -- Smooth exit animation
+        TweenService:Create(Background, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.In), { Position = ExitPos }):Play()
+        TweenService:Create(Background, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { BackgroundTransparency = 0.6 }):Play()
+
+        -- Fade out shadow and glow
+        TweenService:Create(NotifyShadow, TweenInfo.new(0.25), { ImageTransparency = 1 }):Play()
+        TweenService:Create(NotifyGlow, TweenInfo.new(0.25), { ImageTransparency = 1 }):Play()
+
+        task.delay(0.35, function()
             Library.Notifications[FakeBackground] = nil
             FakeBackground:Destroy()
         end)
@@ -8952,13 +8958,23 @@ function Library:Notify(...)
 
     -- Entry animation
     Background.Position = Library.NotifySide:lower() == "left" and UDim2.new(-1, -10, 0, 0) or UDim2.new(1, 10, 0, 0)
-    Background.BackgroundTransparency = 0.3
+    Background.BackgroundTransparency = 0.4
 
-    TweenService:Create(Background, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Position = UDim2.fromOffset(0, 0) }):Play()
-    TweenService:Create(Background, TweenInfo.new(0.2), { BackgroundTransparency = 0 }):Play()
+    -- Smooth entry with bounce effect
+    local EntryTween = TweenService:Create(Background, TweenInfo.new(0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Position = UDim2.fromOffset(0, 0) })
+    EntryTween:Play()
+
+    -- Fade in transparency
+    TweenService:Create(Background, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 0 }):Play()
+
+    -- Fade in shadow
+    TweenService:Create(NotifyShadow, TweenInfo.new(0.3), { ImageTransparency = 0.4 }):Play()
+
+    -- Fade in glow
+    TweenService:Create(NotifyGlow, TweenInfo.new(0.3), { ImageTransparency = 0.85 }):Play()
 
     -- Auto-destroy
-    task.delay(0.35, function()
+    task.delay(0.4, function()
         if Data.Persist then return end
         if typeof(Data.Time) == "Instance" then
             repeat task.wait() until DeletedInstance or Data.Destroyed
