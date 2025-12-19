@@ -10504,6 +10504,24 @@ function Library:CreateWindow(WindowInfo)
                     })
                 end
 
+                -- Gradient background for header
+                local HeaderGradient = New("Frame", {
+                    BackgroundColor3 = Library.Scheme.MainColor,
+                    BackgroundTransparency = 0.8,
+                    Position = UDim2.fromOffset(0, 0),
+                    Size = UDim2.new(1, 0, 0, 34),
+                    ZIndex = 0,
+                    Parent = GroupboxHolder,
+                })
+                New("UIGradient", {
+                    Color = ColorSequence.new({
+                        ColorSequenceKeypoint.new(0, Library.Scheme.MainColor),
+                        ColorSequenceKeypoint.new(1, Color3.fromRGB(15, 15, 25)),
+                    }),
+                    Rotation = 90,
+                    Parent = HeaderGradient,
+                })
+
                 GroupboxLabel = New("TextLabel", {
                     BackgroundTransparency = 1,
                     Position = UDim2.fromOffset(BoxIcon and 24 or 0, 0),
@@ -10512,6 +10530,9 @@ function Library:CreateWindow(WindowInfo)
                     TextSize = 15,
                     TextTransparency = 0.1,
                     TextXAlignment = Enum.TextXAlignment.Left,
+                    TextColor3 = Color3.fromRGB(240, 245, 255),
+                    FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold),
+                    ZIndex = 1,
                     Parent = GroupboxHolder,
                 })
                 New("UIPadding", {
@@ -10555,6 +10576,103 @@ function Library:CreateWindow(WindowInfo)
                     end
                 end)
 
+                -- Collapse/Expand button
+                local IsCollapsed = false
+                local CollapseButton = New("TextButton", {
+                    AnchorPoint = Vector2.new(1, 0),
+                    BackgroundTransparency = 1,
+                    Position = UDim2.new(1, -10, 0, 8),
+                    Size = UDim2.fromOffset(20, 20),
+                    Text = "",
+                    ZIndex = 5,
+                    Parent = GroupboxHolder,
+                })
+
+                local ArrowIcon = Library:GetCustomIcon("chevron-down")
+                local CollapseArrow
+                if ArrowIcon then
+                    CollapseArrow = New("ImageLabel", {
+                        BackgroundTransparency = 1,
+                        Image = ArrowIcon.Url,
+                        ImageColor3 = Library.Scheme.AccentColor,
+                        ImageRectOffset = ArrowIcon.ImageRectOffset,
+                        ImageRectSize = ArrowIcon.ImageRectSize,
+                        Size = UDim2.fromScale(1, 1),
+                        Parent = CollapseButton,
+                    })
+                end
+
+                -- Collapse/Expand functionality
+                local function ToggleGroupbox()
+                    IsCollapsed = not IsCollapsed
+
+                    if IsCollapsed then
+                        -- Collapse animation
+                        TweenService:Create(GroupboxContainer, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), {
+                            Size = UDim2.new(1, 0, 0, 0),
+                        }):Play()
+
+                        TweenService:Create(GroupboxContainer, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), {
+                            BackgroundTransparency = 1,
+                        }):Play()
+
+                        if CollapseArrow then
+                            TweenService:Create(CollapseArrow, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), {
+                                Rotation = 180,
+                            }):Play()
+                        end
+
+                        GroupboxList.Padding = UDim.new(0, 0)
+                        task.wait(0.3)
+                        GroupboxContainer.Visible = false
+                    else
+                        -- Expand animation
+                        GroupboxContainer.Visible = true
+                        GroupboxList.Padding = UDim.new(0, 8)
+
+                        TweenService:Create(GroupboxContainer, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), {
+                            Size = UDim2.new(1, 0, 1, -35),
+                        }):Play()
+
+                        TweenService:Create(GroupboxContainer, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), {
+                            BackgroundTransparency = 0,
+                        }):Play()
+
+                        if CollapseArrow then
+                            TweenService:Create(CollapseArrow, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), {
+                                Rotation = 0,
+                            }):Play()
+                        end
+                    end
+                end
+
+                CollapseButton.MouseButton1Click:Connect(function()
+                    ToggleGroupbox()
+                end)
+
+                -- Hover effect for collapse button
+                CollapseButton.MouseEnter:Connect(function()
+                    if CollapseArrow then
+                        TweenService:Create(CollapseArrow, Library.HoverTweenInfo, {
+                            ImageColor3 = Library:GetLighterColor(Library.Scheme.AccentColor),
+                            ImageTransparency = 0,
+                        }):Play()
+                    end
+                end)
+
+                CollapseButton.MouseLeave:Connect(function()
+                    if CollapseArrow then
+                        TweenService:Create(CollapseArrow, Library.HoverTweenInfo, {
+                            ImageColor3 = Library.Scheme.AccentColor,
+                            ImageTransparency = 0.3,
+                        }):Play()
+                    end
+                end)
+
+                if CollapseArrow then
+                    CollapseArrow.ImageTransparency = 0.3
+                end
+
                 GroupboxContainer = New("Frame", {
                     BackgroundTransparency = 1,
                     Position = UDim2.fromOffset(0, 35),
@@ -10563,14 +10681,14 @@ function Library:CreateWindow(WindowInfo)
                 })
 
                 GroupboxList = New("UIListLayout", {
-                    Padding = UDim.new(0, 8),
+                    Padding = UDim.new(0, 10),
                     Parent = GroupboxContainer,
                 })
                 New("UIPadding", {
-                    PaddingBottom = UDim.new(0, 7),
-                    PaddingLeft = UDim.new(0, 7),
-                    PaddingRight = UDim.new(0, 7),
-                    PaddingTop = UDim.new(0, 7),
+                    PaddingBottom = UDim.new(0, 10),
+                    PaddingLeft = UDim.new(0, 10),
+                    PaddingRight = UDim.new(0, 10),
+                    PaddingTop = UDim.new(0, 10),
                     Parent = GroupboxContainer,
                 })
             end
@@ -10586,7 +10704,30 @@ function Library:CreateWindow(WindowInfo)
             }
 
             function Groupbox:Resize()
-                Background.Size = UDim2.new(1, 0, 0, GroupboxList.AbsoluteContentSize.Y + 53 * Library.DPIScale)
+                if not IsCollapsed then
+                    Background.Size = UDim2.new(1, 0, 0, GroupboxList.AbsoluteContentSize.Y + 53 * Library.DPIScale)
+                end
+            end
+
+            -- Add collapse/expand methods to Groupbox
+            function Groupbox:Collapse()
+                if not IsCollapsed then
+                    ToggleGroupbox()
+                end
+            end
+
+            function Groupbox:Expand()
+                if IsCollapsed then
+                    ToggleGroupbox()
+                end
+            end
+
+            function Groupbox:Toggle()
+                ToggleGroupbox()
+            end
+
+            function Groupbox:IsCollapsed()
+                return IsCollapsed
             end
 
             setmetatable(Groupbox, BaseGroupbox)
