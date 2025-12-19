@@ -26,6 +26,7 @@ local Labels = {}
 local Buttons = {}
 local Toggles = {}
 local Options = {}
+local Paragraphs = {}
 local Tooltips = {}
 
 local NeonAccentColor = Color3.fromHex("#813dd4")
@@ -3971,6 +3972,225 @@ do
         end
 
         return Label
+    end
+
+    function Funcs:AddParagraph(...)
+        local Data = {}
+        local First = select(1, ...)
+        local Second = select(2, ...)
+
+        if typeof(First) == "table" then
+            Data.Text = First.Text or ""
+            Data.Size = First.Size or 12
+            Data.Color = First.Color
+            Data.Icon = First.Icon
+            Data.Visible = First.Visible ~= false
+            Data.MaxWidth = First.MaxWidth
+            Data.Padding = First.Padding or 10
+            Data.LineHeight = First.LineHeight or 1.3
+            Data.Idx = Second
+        else
+            Data.Text = First or ""
+            Data.Size = Second or 12
+            Data.Visible = true
+            Data.Padding = 10
+            Data.LineHeight = 1.3
+            Data.Idx = select(3, ...)
+        end
+
+        local Groupbox = self
+        local Container = Groupbox.Container
+
+        local Paragraph = {
+            Text = Data.Text,
+            Size = Data.Size,
+            Color = Data.Color,
+            Icon = Data.Icon,
+            Visible = Data.Visible,
+            Type = "Paragraph",
+        }
+
+        -- Calculate height based on text
+        local function CalculateHeight(Text, FontSize, MaxWidth)
+            local _, Height = Library:GetTextBounds(Text or "", Font.new("rbxasset://fonts/families/GothamSSm.json"), FontSize, MaxWidth or 250)
+            return math.max(Height + Data.Padding * 2, 40)
+        end
+
+        local Holder = New("Frame", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 0, CalculateHeight(Data.Text, Data.Size, Data.MaxWidth)),
+            Visible = Paragraph.Visible,
+            Parent = Container,
+        })
+
+        -- Background box
+        local ParagraphBox = New("Frame", {
+            BackgroundColor3 = Color3.fromRGB(25, 25, 30),
+            Size = UDim2.fromScale(1, 1),
+            Parent = Holder,
+        })
+        New("UICorner", { CornerRadius = UDim.new(0, 6), Parent = ParagraphBox })
+        New("UIStroke", { Color = Color3.fromRGB(40, 40, 50), Thickness = 1, Parent = ParagraphBox })
+
+        -- Content frame with padding
+        local ContentFrame = New("Frame", {
+            BackgroundTransparency = 1,
+            Size = UDim2.fromScale(1, 1),
+            Parent = ParagraphBox,
+        })
+        New("UIPadding", {
+            PaddingLeft = UDim.new(0, Data.Padding),
+            PaddingRight = UDim.new(0, Data.Padding),
+            PaddingTop = UDim.new(0, Data.Padding),
+            PaddingBottom = UDim.new(0, Data.Padding),
+            Parent = ContentFrame,
+        })
+
+        -- Icon (optional)
+        local IconImage
+        if Data.Icon then
+            local Icon = Library:GetCustomIcon(Data.Icon)
+            if Icon then
+                IconImage = New("ImageLabel", {
+                    BackgroundTransparency = 1,
+                    Image = Icon.Url,
+                    ImageColor3 = Library.Scheme.AccentColor,
+                    ImageRectOffset = Icon.ImageRectOffset,
+                    ImageRectSize = Icon.ImageRectSize,
+                    Position = UDim2.fromOffset(0, 0),
+                    Size = UDim2.fromOffset(20, 20),
+                    Parent = ContentFrame,
+                })
+                Paragraph.IconImage = IconImage
+            end
+        end
+
+        -- Text label with word wrapping
+        local TextLabel = New("TextLabel", {
+            AutomaticSize = Enum.AutomaticSize.Y,
+            BackgroundTransparency = 1,
+            Position = Data.Icon and UDim2.fromOffset(28, 0) or UDim2.fromOffset(0, 0),
+            Size = Data.Icon and UDim2.new(1, -28, 0, 0) or UDim2.fromScale(1, 1),
+            Text = Paragraph.Text,
+            TextColor3 = Color3.fromRGB(180, 180, 190),
+            FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Regular),
+            TextSize = Data.Size,
+            TextWrapped = true,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextYAlignment = Enum.TextYAlignment.Top,
+            Parent = ContentFrame,
+        })
+        Paragraph.TextLabel = TextLabel
+
+        -- Apply color if specified
+        local function ApplyParagraphColor(ColorOption)
+            if ColorOption == nil then
+                return
+            end
+
+            if typeof(ColorOption) == "Color3" then
+                TextLabel.TextColor3 = ColorOption
+                return
+            end
+
+            if typeof(ColorOption) ~= "string" then
+                return
+            end
+
+            local Key = Trim(ColorOption):lower()
+            if Library.Scheme[ColorOption] then
+                TextLabel.TextColor3 = Library.Scheme[ColorOption]
+            else
+                local SchemeMap = {
+                    accent = "AccentColor", accentcolor = "AccentColor",
+                    background = "BackgroundColor", backgroundcolor = "BackgroundColor",
+                    main = "MainColor", maincolor = "MainColor",
+                    outline = "OutlineColor", outlinecolor = "OutlineColor",
+                    font = "FontColor", fontcolor = "FontColor",
+                    red = "Red", dark = "Dark", white = "White",
+                }
+                if SchemeMap[Key] and Library.Scheme[SchemeMap[Key]] then
+                    TextLabel.TextColor3 = Library.Scheme[SchemeMap[Key]]
+                end
+            end
+        end
+
+        ApplyParagraphColor(Data.Color)
+
+        -- Methods
+        function Paragraph:SetVisible(Visible: boolean)
+            Paragraph.Visible = Visible
+            Holder.Visible = Visible
+            Groupbox:Resize()
+        end
+
+        function Paragraph:SetText(NewText: string)
+            Paragraph.Text = NewText
+            TextLabel.Text = NewText
+            local _, Height = Library:GetTextBounds(NewText, TextLabel.FontFace, TextLabel.TextSize, TextLabel.AbsoluteSize.X)
+            Holder.Size = UDim2.new(1, 0, 0, math.max(Height + Data.Padding * 2 + (Data.Icon and 20 or 0), 40))
+            Groupbox:Resize()
+        end
+
+        function Paragraph:SetColor(NewColor)
+            ApplyParagraphColor(NewColor)
+        end
+
+        function Paragraph:SetSize(NewSize: number)
+            Data.Size = NewSize
+            TextLabel.TextSize = NewSize
+            local _, Height = Library:GetTextBounds(Paragraph.Text, TextLabel.FontFace, NewSize, TextLabel.AbsoluteSize.X)
+            Holder.Size = UDim2.new(1, 0, 0, math.max(Height + Data.Padding * 2 + (Data.Icon and 20 or 0), 40))
+            Groupbox:Resize()
+        end
+
+        function Paragraph:SetIcon(NewIcon: string)
+            if NewIcon then
+                local Icon = Library:GetCustomIcon(NewIcon)
+                if Icon then
+                    if not IconImage then
+                        IconImage = New("ImageLabel", {
+                            BackgroundTransparency = 1,
+                            Image = Icon.Url,
+                            ImageColor3 = Library.Scheme.AccentColor,
+                            ImageRectOffset = Icon.ImageRectOffset,
+                            ImageRectSize = Icon.ImageRectSize,
+                            Size = UDim2.fromOffset(20, 20),
+                            Parent = ContentFrame,
+                        })
+                        TextLabel.Position = UDim2.fromOffset(28, 0)
+                        TextLabel.Size = UDim2.new(1, -28, 0, 0)
+                    else
+                        IconImage.Image = Icon.Url
+                        IconImage.ImageRectOffset = Icon.ImageRectOffset
+                        IconImage.ImageRectSize = Icon.ImageRectSize
+                    end
+                end
+            end
+        end
+
+        -- Handle text wrapping and dynamic height
+        local AbsoluteSize = TextLabel.AbsoluteSize
+        TextLabel:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+            if TextLabel.AbsoluteSize ~= AbsoluteSize then
+                local _, Height = Library:GetTextBounds(Paragraph.Text, TextLabel.FontFace, TextLabel.TextSize, TextLabel.AbsoluteSize.X)
+                Holder.Size = UDim2.new(1, 0, 0, math.max(Height + Data.Padding * 2 + (Data.Icon and 20 or 0), 40))
+                AbsoluteSize = TextLabel.AbsoluteSize
+                Groupbox:Resize()
+            end
+        end)
+
+        Paragraph.Holder = Holder
+        table.insert(Groupbox.Elements, Paragraph)
+
+        if Data.Idx then
+            Paragraphs[Data.Idx] = Paragraph
+        else
+            table.insert(Paragraphs, Paragraph)
+        end
+
+        Groupbox:Resize()
+        return Paragraph
     end
 
     function Funcs:AddDivider(Info)
@@ -8249,7 +8469,7 @@ function Library:Notify(...)
         end)
     end
 
-    local NotifyWidth = Data.Width or 300
+    local NotifyWidth = Data.Width or 340
 
     -- Main container
     local FakeBackground = New("Frame", {
@@ -8261,52 +8481,103 @@ function Library:Notify(...)
         DPIExclude = { Size = true },
     })
 
-    -- Dark background
+    -- Shadow effect
+    local NotifyShadow = New("ImageLabel", {
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
+        Image = "rbxasset://textures/ui/common/shadows/shadow_down_16.png",
+        ImageTransparency = 0.4,
+        Size = UDim2.new(1, 32, 0, 0),
+        Position = UDim2.fromOffset(-16, -8),
+        ScaleType = Enum.ScaleType.Slice,
+        SliceScale = 0.08,
+        Parent = FakeBackground,
+    })
+
+    -- Dark background with enhanced styling
     local Background = New("Frame", {
         AutomaticSize = Enum.AutomaticSize.Y,
-        BackgroundColor3 = Color3.fromRGB(18, 18, 22),
+        BackgroundColor3 = Color3.fromRGB(20, 20, 25),
         Position = Library.NotifySide:lower() == "left" and UDim2.new(-1, -10, 0, 0) or UDim2.new(1, 10, 0, 0),
         Size = UDim2.fromScale(1, 0),
         ClipsDescendants = true,
         Parent = FakeBackground,
     })
     New("UICorner", {
-        CornerRadius = UDim.new(0, 6),
+        CornerRadius = UDim.new(0, 8),
         Parent = Background,
     })
 
-    -- Thin border
+    -- Gradient overlay for depth
+    local GradientOverlay = New("Frame", {
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundColor3 = Color3.fromRGB(25, 25, 32),
+        BorderSizePixel = 0,
+        Size = UDim2.fromScale(1, 0),
+        Parent = Background,
+    })
+    New("UIGradient", {
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(28, 28, 35)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(18, 18, 23)),
+        }),
+        Rotation = 90,
+        Parent = GradientOverlay,
+    })
+    GradientOverlay.ZIndex = 0
+
+    -- Enhanced border
     New("UIStroke", {
-        Color = Color3.fromRGB(35, 35, 42),
-        Thickness = 1,
+        Color = Color3.fromRGB(50, 50, 65),
+        Thickness = 1.5,
         Parent = Background,
     })
 
-    -- Accent indicator (top line)
+    -- Glow effect
+    local NotifyGlow = New("ImageLabel", {
+        AutomaticSize = Enum.AutomaticSize.Y,
+        BackgroundTransparency = 1,
+        Image = "rbxasset://textures/ui/common/gradient_main.png",
+        ImageColor3 = NotifyColor,
+        ImageTransparency = 0.85,
+        Size = UDim2.new(1, 20, 0, 0),
+        Position = UDim2.fromOffset(-10, -10),
+        ScaleType = Enum.ScaleType.Slice,
+        SliceScale = 0.5,
+        ZIndex = -1,
+        Parent = Background,
+    })
+
+    -- Accent indicator line (enhanced)
     local AccentLine = New("Frame", {
         BackgroundColor3 = NotifyColor,
-        Size = UDim2.new(1, 0, 0, 2),
+        Size = UDim2.new(1, 0, 0, 3),
         BorderSizePixel = 0,
         Parent = Background,
+        ZIndex = 1,
+    })
+    New("UICorner", {
+        CornerRadius = UDim.new(1, 0),
+        Parent = AccentLine,
     })
 
     -- Content container
     local ContentHolder = New("Frame", {
         AutomaticSize = Enum.AutomaticSize.Y,
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(0, 2),
+        Position = UDim2.fromOffset(0, 3),
         Size = UDim2.new(1, 0, 0, 0),
         Parent = Background,
     })
     New("UIPadding", {
-        PaddingBottom = UDim.new(0, 12),
-        PaddingLeft = UDim.new(0, 12),
-        PaddingRight = UDim.new(0, 12),
-        PaddingTop = UDim.new(0, 10),
+        PaddingBottom = UDim.new(0, 14),
+        PaddingLeft = UDim.new(0, 14),
+        PaddingRight = UDim.new(0, 14),
+        PaddingTop = UDim.new(0, 12),
         Parent = ContentHolder,
     })
     New("UIListLayout", {
-        Padding = UDim.new(0, 8),
+        Padding = UDim.new(0, 10),
         Parent = ContentHolder,
     })
 
@@ -8368,9 +8639,9 @@ function Library:Notify(...)
             BackgroundTransparency = 1,
             Size = UDim2.fromScale(1, 0),
             Text = Data.Title,
-            TextColor3 = Color3.fromRGB(240, 240, 245),
-            FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold),
-            TextSize = 13,
+            TextColor3 = Color3.fromRGB(250, 250, 252),
+            FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold),
+            TextSize = 14,
             TextXAlignment = Enum.TextXAlignment.Left,
             TextWrapped = true,
             Parent = TextContainer,
@@ -8383,7 +8654,7 @@ function Library:Notify(...)
             BackgroundTransparency = 1,
             Size = UDim2.fromScale(1, 0),
             Text = Data.Description,
-            TextColor3 = Color3.fromRGB(160, 160, 170),
+            TextColor3 = Color3.fromRGB(180, 180, 195),
             FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Regular),
             TextSize = 12,
             TextXAlignment = Enum.TextXAlignment.Left,
@@ -8399,7 +8670,7 @@ function Library:Notify(...)
             Size = UDim2.fromScale(1, 0),
             Text = Data.SubText,
             TextColor3 = NotifyColor,
-            FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Regular),
+            FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold),
             TextSize = 11,
             TextXAlignment = Enum.TextXAlignment.Left,
             TextWrapped = true,
@@ -8480,21 +8751,35 @@ function Library:Notify(...)
         })
 
         local ProgressBar = New("Frame", {
-            BackgroundColor3 = Color3.fromRGB(30, 30, 36),
+            BackgroundColor3 = Color3.fromRGB(28, 28, 35),
             Size = UDim2.fromScale(1, 1),
             Parent = ProgressHolder,
         })
         New("UICorner", { CornerRadius = UDim.new(1, 0), Parent = ProgressBar })
 
+        -- Calculate initial progress
+        local InitialProgress = 1
+        if Data.Progress then
+            InitialProgress = typeof(Data.Progress) == "table" and (Data.Progress.Current / Data.Progress.Max) or Data.Progress
+        end
+
         ProgressFill = New("Frame", {
             BackgroundColor3 = NotifyColor,
-            Size = UDim2.fromScale(Data.Progress and (typeof(Data.Progress) == "table" and Data.Progress.Current / Data.Progress.Max or Data.Progress) or 1, 1),
+            Size = UDim2.fromScale(InitialProgress, 1),
             Parent = ProgressBar,
         })
         New("UICorner", { CornerRadius = UDim.new(1, 0), Parent = ProgressFill })
+
+        -- Add subtle glow to progress bar
+        New("UIStroke", {
+            Color = NotifyColor,
+            Thickness = 0.5,
+            Transparency = 0.5,
+            Parent = ProgressFill,
+        })
     end
 
-    -- Action buttons
+    -- Action buttons (improved styling)
     if #Data.Buttons > 0 then
         local ButtonsRow = New("Frame", {
             AutomaticSize = Enum.AutomaticSize.Y,
@@ -8505,7 +8790,7 @@ function Library:Notify(...)
         New("UIListLayout", {
             FillDirection = Enum.FillDirection.Horizontal,
             HorizontalAlignment = Enum.HorizontalAlignment.Right,
-            Padding = UDim.new(0, 6),
+            Padding = UDim.new(0, 8),
             Parent = ButtonsRow,
         })
 
@@ -8515,38 +8800,55 @@ function Library:Notify(...)
             local BtnVariant = ButtonInfo.Variant or ButtonInfo[3] or "default"
 
             local BtnColors = {
-                default = { Bg = Color3.fromRGB(35, 35, 42), Hover = Color3.fromRGB(50, 50, 60), Text = Color3.fromRGB(200, 200, 205) },
-                primary = { Bg = NotifyColor, Hover = Library:GetLighterColor(NotifyColor), Text = Color3.new(1, 1, 1) },
-                danger = { Bg = Color3.fromRGB(180, 50, 50), Hover = Color3.fromRGB(200, 70, 70), Text = Color3.new(1, 1, 1) },
+                default = { Bg = Color3.fromRGB(40, 40, 50), Hover = Color3.fromRGB(60, 60, 75), Border = Color3.fromRGB(60, 60, 75), Text = Color3.fromRGB(210, 210, 220) },
+                primary = { Bg = NotifyColor, Hover = Library:GetLighterColor(NotifyColor), Border = Library:GetLighterColor(NotifyColor), Text = Color3.new(1, 1, 1) },
+                danger = { Bg = Color3.fromRGB(200, 60, 60), Hover = Color3.fromRGB(220, 80, 80), Border = Color3.fromRGB(220, 80, 80), Text = Color3.new(1, 1, 1) },
             }
             local BtnColor = BtnColors[BtnVariant] or BtnColors.default
 
             local ActionBtn = New("TextButton", {
                 AutomaticSize = Enum.AutomaticSize.X,
                 BackgroundColor3 = BtnColor.Bg,
-                Size = UDim2.fromOffset(0, 26),
+                Size = UDim2.fromOffset(0, 28),
                 Text = "",
                 Parent = ButtonsRow,
             })
-            New("UICorner", { CornerRadius = UDim.new(0, 4), Parent = ActionBtn })
-            New("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), Parent = ActionBtn })
+            New("UICorner", { CornerRadius = UDim.new(0, 6), Parent = ActionBtn })
+            New("UIStroke", { Color = BtnColor.Border, Thickness = 1.5, Transparency = 0.3, Parent = ActionBtn })
+            New("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12), Parent = ActionBtn })
 
-            New("TextLabel", {
+            -- Button glow effect
+            New("ImageLabel", {
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                BackgroundTransparency = 1,
+                Image = "rbxasset://textures/ui/common/gradient_main.png",
+                ImageColor3 = BtnColor.Bg,
+                ImageTransparency = 0.95,
+                Position = UDim2.fromScale(0.5, 0.5),
+                Size = UDim2.fromScale(1.2, 1.3),
+                ZIndex = 0,
+                Parent = ActionBtn,
+            })
+
+            local BtnLabel = New("TextLabel", {
                 AutomaticSize = Enum.AutomaticSize.X,
                 BackgroundTransparency = 1,
                 Size = UDim2.fromScale(0, 1),
                 Text = BtnText,
                 TextColor3 = BtnColor.Text,
-                FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium),
+                FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold),
                 TextSize = 11,
+                ZIndex = 1,
                 Parent = ActionBtn,
             })
 
             ActionBtn.MouseEnter:Connect(function()
-                TweenService:Create(ActionBtn, TweenInfo.new(0.15), { BackgroundColor3 = BtnColor.Hover }):Play()
+                TweenService:Create(ActionBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quad), { BackgroundColor3 = BtnColor.Hover }):Play()
+                TweenService:Create(BtnLabel, TweenInfo.new(0.2), { TextTransparency = 0 }):Play()
             end)
             ActionBtn.MouseLeave:Connect(function()
-                TweenService:Create(ActionBtn, TweenInfo.new(0.15), { BackgroundColor3 = BtnColor.Bg }):Play()
+                TweenService:Create(ActionBtn, TweenInfo.new(0.2, Enum.EasingStyle.Quad), { BackgroundColor3 = BtnColor.Bg }):Play()
+                TweenService:Create(BtnLabel, TweenInfo.new(0.2), { TextTransparency = 0 }):Play()
             end)
             ActionBtn.MouseButton1Click:Connect(function()
                 if BtnCallback then pcall(BtnCallback, Data) end
@@ -8630,10 +8932,16 @@ function Library:Notify(...)
         if DeleteConnection then DeleteConnection:Disconnect() end
 
         local ExitPos = Library.NotifySide:lower() == "left" and UDim2.new(-1, -10, 0, 0) or UDim2.new(1, 10, 0, 0)
-        TweenService:Create(Background, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.In), { Position = ExitPos }):Play()
-        TweenService:Create(Background, TweenInfo.new(0.2), { BackgroundTransparency = 0.5 }):Play()
 
-        task.delay(0.3, function()
+        -- Smooth exit animation
+        TweenService:Create(Background, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.In), { Position = ExitPos }):Play()
+        TweenService:Create(Background, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { BackgroundTransparency = 0.6 }):Play()
+
+        -- Fade out shadow and glow
+        TweenService:Create(NotifyShadow, TweenInfo.new(0.25), { ImageTransparency = 1 }):Play()
+        TweenService:Create(NotifyGlow, TweenInfo.new(0.25), { ImageTransparency = 1 }):Play()
+
+        task.delay(0.35, function()
             Library.Notifications[FakeBackground] = nil
             FakeBackground:Destroy()
         end)
@@ -8650,13 +8958,23 @@ function Library:Notify(...)
 
     -- Entry animation
     Background.Position = Library.NotifySide:lower() == "left" and UDim2.new(-1, -10, 0, 0) or UDim2.new(1, 10, 0, 0)
-    Background.BackgroundTransparency = 0.3
+    Background.BackgroundTransparency = 0.4
 
-    TweenService:Create(Background, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Position = UDim2.fromOffset(0, 0) }):Play()
-    TweenService:Create(Background, TweenInfo.new(0.2), { BackgroundTransparency = 0 }):Play()
+    -- Smooth entry with bounce effect
+    local EntryTween = TweenService:Create(Background, TweenInfo.new(0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Position = UDim2.fromOffset(0, 0) })
+    EntryTween:Play()
+
+    -- Fade in transparency
+    TweenService:Create(Background, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 0 }):Play()
+
+    -- Fade in shadow
+    TweenService:Create(NotifyShadow, TweenInfo.new(0.3), { ImageTransparency = 0.4 }):Play()
+
+    -- Fade in glow
+    TweenService:Create(NotifyGlow, TweenInfo.new(0.3), { ImageTransparency = 0.85 }):Play()
 
     -- Auto-destroy
-    task.delay(0.35, function()
+    task.delay(0.4, function()
         if Data.Persist then return end
         if typeof(Data.Time) == "Instance" then
             repeat task.wait() until DeletedInstance or Data.Destroyed
