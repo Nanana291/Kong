@@ -7098,17 +7098,23 @@ do
             Parent = Display,
         })
 
-        -- Arrow container with background
+        -- Arrow container with enhanced background
         local ArrowContainer = New("Frame", {
             AnchorPoint = Vector2.new(1, 0.5),
-            BackgroundColor3 = "OutlineColor",
-            BackgroundTransparency = 0.8,
+            BackgroundColor3 = Library.Scheme.MainColor,
+            BackgroundTransparency = 0.5,
             Position = UDim2.fromScale(1, 0.5),
-            Size = UDim2.fromOffset(20, 16),
+            Size = UDim2.fromOffset(22, 18),
             Parent = Display,
         })
         New("UICorner", {
-            CornerRadius = UDim.new(0, 3),
+            CornerRadius = UDim.new(0, 6),
+            Parent = ArrowContainer,
+        })
+        New("UIStroke", {
+            Color = Library.Scheme.OutlineColor,
+            Thickness = 1,
+            Transparency = 0.3,
             Parent = ArrowContainer,
         })
 
