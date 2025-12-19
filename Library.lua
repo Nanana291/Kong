@@ -165,11 +165,11 @@ local Library = {
     Notifications = {},
 
     ToggleKeybind = Enum.KeyCode.RightControl,
-    TweenInfo = TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-    NotifyTweenInfo = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-    HoverTweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
-    ToggleTweenInfo = TweenInfo.new(0.25, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out),
-    FadeTweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out),
+    TweenInfo = TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+    NotifyTweenInfo = TweenInfo.new(0.4, Enum.EasingStyle.Cubic, Enum.EasingDirection.Out),
+    HoverTweenInfo = TweenInfo.new(0.22, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+    ToggleTweenInfo = TweenInfo.new(0.28, Enum.EasingStyle.Cubic, Enum.EasingDirection.Out),
+    FadeTweenInfo = TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
 
     Toggled = false,
     Unloaded = false,
@@ -192,27 +192,40 @@ local Library = {
 
     MinSize = Vector2.new(480, 360),
     DPIScale = 1,
-    CornerRadius = 4,
+    CornerRadius = 12,
 
     IsLightTheme = false,
     Scheme = {
-        BackgroundColor = Color3.fromRGB(13, 13, 18),
-        MainColor = Color3.fromRGB(22, 22, 32),
-        AccentColor = Color3.fromHex("#813dd4"),
-        OutlineColor = Color3.fromRGB(42, 42, 55),
-        FontColor = Color3.new(1, 1, 1),
+        -- Premium dark mode palette with better contrast
+        BackgroundColor = Color3.fromRGB(12, 12, 20),        -- Deep navy-black
+        MainColor = Color3.fromRGB(20, 20, 35),              -- Slightly lighter navy
+        AccentColor = Color3.fromHex("#A855F7"),             -- Modern vibrant purple
+        OutlineColor = Color3.fromRGB(45, 45, 70),           -- Refined border color
+        FontColor = Color3.new(1, 1, 1),                     -- Pure white
         Font = Font.fromEnum(Enum.Font.Code),
 
-        Red = Color3.fromRGB(255, 50, 50),
-        Dark = Color3.new(0, 0, 0),
-        White = Color3.new(1, 1, 1),
+        -- Enhanced color palette
+        Red = Color3.fromRGB(239, 68, 68),                   -- Modern red
+        Dark = Color3.new(0, 0, 0),                          -- Pure black
+        White = Color3.new(1, 1, 1),                         -- Pure white
 
-        -- Secondary accent (darker purple)
-        AccentDark = Color3.fromHex("#5a1fa3"),
+        -- Enhanced secondary colors
+        AccentDark = Color3.fromHex("#7C3AED"),              -- Darker vibrant purple
+        AccentLight = Color3.fromHex("#D8B4FE"),             -- Light purple
 
-        -- Highlight/Glow effect
+        -- Highlight/Glow effect (enhanced)
         Highlight = true,
-        HighlightColor = Color3.fromHex("#813dd4"),
+        HighlightColor = Color3.fromHex("#A855F7"),
+
+        -- New premium colors for enhanced UI
+        SuccessColor = Color3.fromRGB(34, 197, 94),          -- Modern green
+        WarningColor = Color3.fromRGB(251, 191, 36),         -- Modern amber
+        InfoColor = Color3.fromRGB(59, 130, 246),            -- Modern blue
+        ErrorColor = Color3.fromRGB(239, 68, 68),            -- Modern red
+
+        -- Glow colors
+        GlowColor = Color3.fromHex("#A855F7"),
+        GlowIntensity = 0.8,
     },
 
     Registry = {},
@@ -295,7 +308,7 @@ local Templates = {
         Resizable = true,
         SearchbarSize = UDim2.fromScale(1, 1),
         GlobalSearch = false,
-        CornerRadius = 4,
+        CornerRadius = 12,
         NotifySide = "Right",
         ShowCustomCursor = true,
         Font = Enum.Font.Code,
@@ -2062,7 +2075,7 @@ function Library:AddContextMenu(
 
     -- Modern rounded corners
     New("UICorner", {
-        CornerRadius = UDim.new(0, 6),
+        CornerRadius = UDim.new(0, 10),
         Parent = Menu,
     })
 
@@ -2202,7 +2215,7 @@ local TooltipLabel = New("TextLabel", {
 
 -- Rounded corners for tooltip
 New("UICorner", {
-    CornerRadius = UDim.new(0, 6),
+    CornerRadius = UDim.new(0, 10),
     Parent = TooltipLabel,
 })
 
@@ -2565,7 +2578,7 @@ do
         })
 
         New("UICorner", {
-            CornerRadius = UDim.new(0, 4),
+            CornerRadius = UDim.new(0, 8),
             Parent = Picker,
         })
 
@@ -3105,7 +3118,7 @@ do
         })
 
         New("UICorner", {
-            CornerRadius = UDim.new(0, 4),
+            CornerRadius = UDim.new(0, 8),
             Parent = Holder,
         })
 
@@ -3137,7 +3150,7 @@ do
             Parent = Holder,
         })
         New("UICorner", {
-            CornerRadius = UDim.new(0, 4),
+            CornerRadius = UDim.new(0, 8),
             Parent = HolderTransparency,
         })
 
@@ -4029,7 +4042,7 @@ do
             Size = UDim2.fromScale(1, 1),
             Parent = Holder,
         })
-        New("UICorner", { CornerRadius = UDim.new(0, 6), Parent = ParagraphBox })
+        New("UICorner", { CornerRadius = UDim.new(0, 10), Parent = ParagraphBox })
         New("UIStroke", { Color = Color3.fromRGB(40, 40, 50), Thickness = 1, Parent = ParagraphBox })
 
         -- Content frame with padding
@@ -4371,7 +4384,7 @@ do
         })
 
         New("UICorner", {
-            CornerRadius = UDim.new(0, 4),
+            CornerRadius = UDim.new(0, 8),
             Parent = InfoDisplay,
         })
 
@@ -4480,7 +4493,7 @@ do
             })
 
             New("UICorner", {
-                CornerRadius = UDim.new(0, 4),
+                CornerRadius = UDim.new(0, 8),
                 Parent = ActionButton,
             })
 
@@ -4708,13 +4721,13 @@ do
             Type = "Button",
         }
 
-        -- Variant colors
+        -- Variant colors (updated with modern palette)
         local VariantColors = {
-            Default = { bg = "MainColor", text = "FontColor", hover = nil },
-            Accent = { bg = "AccentColor", text = "BackgroundColor", hover = nil },
-            Success = { bg = Color3.fromRGB(40, 167, 69), text = Color3.new(1, 1, 1), hover = Color3.fromRGB(50, 190, 85) },
-            Warning = { bg = Color3.fromRGB(255, 193, 7), text = Color3.fromRGB(20, 20, 20), hover = Color3.fromRGB(255, 210, 50) },
-            Danger = { bg = Color3.fromRGB(220, 53, 69), text = Color3.new(1, 1, 1), hover = Color3.fromRGB(240, 70, 85) },
+            Default = { bg = "MainColor", text = "FontColor", hover = nil, glow = 0.4 },
+            Accent = { bg = "AccentColor", text = "White", hover = "AccentLight", glow = 0.6 },
+            Success = { bg = "SuccessColor", text = "White", hover = Color3.fromRGB(22, 163, 74), glow = 0.5 },
+            Warning = { bg = "WarningColor", text = Color3.fromRGB(30, 30, 30), hover = Color3.fromRGB(217, 119, 6), glow = 0.4 },
+            Danger = { bg = "ErrorColor", text = "White", hover = Color3.fromRGB(220, 38, 38), glow = 0.5 },
         }
 
         local Holder = New("Frame", {
@@ -4770,7 +4783,7 @@ do
             end
 
             New("UICorner", {
-                CornerRadius = UDim.new(0, 6),
+                CornerRadius = UDim.new(0, 10),
                 Parent = Base,
             })
 
@@ -4795,7 +4808,7 @@ do
                 Parent = Base,
             })
             New("UICorner", {
-                CornerRadius = UDim.new(0, 6),
+                CornerRadius = UDim.new(0, 10),
                 Parent = GradientOverlay,
             })
             New("UIGradient", {
@@ -5950,7 +5963,7 @@ do
         })
 
         New("UICorner", {
-            CornerRadius = UDim.new(0, 4),
+            CornerRadius = UDim.new(0, 8),
             Parent = Box,
         })
 
@@ -6208,7 +6221,7 @@ do
                 btnData.Button = Btn
 
                 New("UICorner", {
-                    CornerRadius = UDim.new(0, 6),
+                    CornerRadius = UDim.new(0, 10),
                     Parent = Btn,
                 })
 
@@ -6618,7 +6631,7 @@ do
         })
 
         New("UICorner", {
-            CornerRadius = UDim.new(0, 6),
+            CornerRadius = UDim.new(0, 10),
             Parent = Bar,
         })
 
@@ -6654,7 +6667,7 @@ do
         })
 
         New("UICorner", {
-            CornerRadius = UDim.new(0, 4),
+            CornerRadius = UDim.new(0, 8),
             Parent = Fill,
         })
 
@@ -6673,7 +6686,7 @@ do
             },
         })
         New("UICorner", {
-            CornerRadius = UDim.new(0, 6),
+            CornerRadius = UDim.new(0, 10),
             Parent = FillGlow,
         })
 
@@ -7070,7 +7083,7 @@ do
         })
 
         New("UICorner", {
-            CornerRadius = UDim.new(0, 4),
+            CornerRadius = UDim.new(0, 8),
             Parent = Display,
         })
 
@@ -8731,7 +8744,7 @@ function Library:Notify(...)
             Size = UDim2.new(1, 0, 0, 80),
             Parent = ContentHolder,
         })
-        New("UICorner", { CornerRadius = UDim.new(0, 4), Parent = ImageHolder })
+        New("UICorner", { CornerRadius = UDim.new(0, 8), Parent = ImageHolder })
         New("ImageLabel", {
             BackgroundTransparency = 1,
             Image = typeof(Data.Image) == "number" and ("rbxassetid://" .. Data.Image) or Data.Image,
@@ -8813,7 +8826,7 @@ function Library:Notify(...)
                 Text = "",
                 Parent = ButtonsRow,
             })
-            New("UICorner", { CornerRadius = UDim.new(0, 6), Parent = ActionBtn })
+            New("UICorner", { CornerRadius = UDim.new(0, 10), Parent = ActionBtn })
             New("UIStroke", { Color = BtnColor.Border, Thickness = 1.5, Transparency = 0.3, Parent = ActionBtn })
             New("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12), Parent = ActionBtn })
 
@@ -9631,7 +9644,7 @@ function Library:CreateWindow(WindowInfo)
                 })
 
                 New("UICorner", {
-                    CornerRadius = UDim.new(0, 6),
+                    CornerRadius = UDim.new(0, 10),
                     Parent = ButtonFrame,
                 })
 
