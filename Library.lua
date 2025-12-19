@@ -196,36 +196,40 @@ local Library = {
 
     IsLightTheme = false,
     Scheme = {
-        -- Premium dark mode palette with better contrast
-        BackgroundColor = Color3.fromRGB(12, 12, 20),        -- Deep navy-black
-        MainColor = Color3.fromRGB(20, 20, 35),              -- Slightly lighter navy
-        AccentColor = Color3.fromHex("#A855F7"),             -- Modern vibrant purple
-        OutlineColor = Color3.fromRGB(45, 45, 70),           -- Refined border color
+        -- Ultra-premium dark mode palette with enhanced vibrancy
+        BackgroundColor = Color3.fromRGB(10, 10, 18),        -- Ultra-deep navy-black
+        MainColor = Color3.fromRGB(18, 18, 32),              -- Deep navy with hints of purple
+        AccentColor = Color3.fromHex("#B966FF"),             -- Ultra vibrant purple
+        OutlineColor = Color3.fromRGB(50, 35, 80),           -- Purple-tinted borders
         FontColor = Color3.new(1, 1, 1),                     -- Pure white
         Font = Font.fromEnum(Enum.Font.Code),
 
-        -- Enhanced color palette
-        Red = Color3.fromRGB(239, 68, 68),                   -- Modern red
+        -- Ultra-enhanced color palette with better vibrancy
+        Red = Color3.fromRGB(255, 71, 87),                   -- Vibrant red
         Dark = Color3.new(0, 0, 0),                          -- Pure black
         White = Color3.new(1, 1, 1),                         -- Pure white
 
-        -- Enhanced secondary colors
-        AccentDark = Color3.fromHex("#7C3AED"),              -- Darker vibrant purple
-        AccentLight = Color3.fromHex("#D8B4FE"),             -- Light purple
+        -- Premium secondary colors with more saturation
+        AccentDark = Color3.fromHex("#8B5CF6"),              -- Rich dark purple
+        AccentLight = Color3.fromHex("#E9D5FF"),             -- Premium light purple
 
-        -- Highlight/Glow effect (enhanced)
+        -- Highlight/Glow effect (enhanced intensity)
         Highlight = true,
-        HighlightColor = Color3.fromHex("#A855F7"),
+        HighlightColor = Color3.fromHex("#B966FF"),
 
-        -- New premium colors for enhanced UI
-        SuccessColor = Color3.fromRGB(34, 197, 94),          -- Modern green
-        WarningColor = Color3.fromRGB(251, 191, 36),         -- Modern amber
-        InfoColor = Color3.fromRGB(59, 130, 246),            -- Modern blue
-        ErrorColor = Color3.fromRGB(239, 68, 68),            -- Modern red
+        -- Premium colors for enhanced UI with better saturation
+        SuccessColor = Color3.fromRGB(52, 211, 153),         -- Premium emerald
+        WarningColor = Color3.fromRGB(251, 146, 60),         -- Premium orange
+        InfoColor = Color3.fromRGB(96, 165, 250),            -- Premium sky blue
+        ErrorColor = Color3.fromRGB(255, 71, 87),            -- Premium red
 
-        -- Glow colors
-        GlowColor = Color3.fromHex("#A855F7"),
-        GlowIntensity = 0.8,
+        -- Enhanced glow colors
+        GlowColor = Color3.fromHex("#B966FF"),
+        GlowIntensity = 1,
+
+        -- New premium tint colors
+        PurpleTint = Color3.fromHex("#7C3AED"),
+        BlueAccent = Color3.fromHex("#60A5FA"),
     },
 
     Registry = {},
@@ -3304,7 +3308,7 @@ do
         New("UIListLayout", {
             FillDirection = Enum.FillDirection.Horizontal,
             HorizontalFlex = Enum.UIFlexAlignment.Fill,
-            Padding = UDim.new(0, 8),
+            Padding = UDim.new(0, 10),
             Parent = InfoHolder,
         })
 
@@ -8196,7 +8200,7 @@ do
             })
 
             DepboxList = New("UIListLayout", {
-                Padding = UDim.new(0, 8),
+                Padding = UDim.new(0, 10),
                 Parent = DepboxContainer,
             })
         end
@@ -8313,7 +8317,7 @@ do
             })
 
             DepGroupboxList = New("UIListLayout", {
-                Padding = UDim.new(0, 8),
+                Padding = UDim.new(0, 10),
                 Parent = DepGroupboxContainer,
             })
             New("UIPadding", {
@@ -8809,7 +8813,7 @@ function Library:Notify(...)
         New("UIListLayout", {
             FillDirection = Enum.FillDirection.Horizontal,
             HorizontalAlignment = Enum.HorizontalAlignment.Right,
-            Padding = UDim.new(0, 8),
+            Padding = UDim.new(0, 10),
             Parent = ButtonsRow,
         })
 
@@ -9508,7 +9512,7 @@ function Library:CreateWindow(WindowInfo)
             FillDirection = Enum.FillDirection.Horizontal,
             HorizontalAlignment = Enum.HorizontalAlignment.Left,
             VerticalAlignment = Enum.VerticalAlignment.Center,
-            Padding = UDim.new(0, 8),
+            Padding = UDim.new(0, 10),
             Parent = RightWrapper,
         })
 
@@ -10824,7 +10828,7 @@ function Library:CreateWindow(WindowInfo)
                     Parent = TabboxHolder,
                 })
                 local List = New("UIListLayout", {
-                    Padding = UDim.new(0, 8),
+                    Padding = UDim.new(0, 10),
                     Parent = Container,
                 })
                 New("UIPadding", {
@@ -11133,7 +11137,7 @@ function Library:CreateWindow(WindowInfo)
             })
             New("UIListLayout", {
                 HorizontalAlignment = Enum.HorizontalAlignment.Center,
-                Padding = UDim.new(0, 8),
+                Padding = UDim.new(0, 10),
                 VerticalAlignment = Enum.VerticalAlignment.Center,
                 Parent = TabContainer,
             })
