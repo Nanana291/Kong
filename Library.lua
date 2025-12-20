@@ -5477,6 +5477,48 @@ do
             Parent = Checkbox,
         })
 
+        -- Checkbox glow effect
+        local CheckboxGlow = New("ImageLabel", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundTransparency = 1,
+            Image = "rbxassetid://6015897843",
+            ImageColor3 = "AccentColor",
+            ImageTransparency = 1,
+            Position = UDim2.fromScale(0.5, 0.5),
+            Size = UDim2.new(1, 12, 1, 12),
+            ZIndex = 0,
+            Parent = Checkbox,
+        })
+
+        -- Hover effects
+        Button.MouseEnter:Connect(function()
+            if Toggle.Disabled then return end
+            TweenService:Create(Checkbox, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+                Size = UDim2.fromScale(1.15, 1.15),
+            }):Play()
+            TweenService:Create(CheckboxStroke, Library.HoverTweenInfo, {
+                Color = Library.Scheme.AccentColor,
+                Transparency = 0,
+            }):Play()
+            TweenService:Create(CheckboxGlow, Library.HoverTweenInfo, {
+                ImageTransparency = Toggle.Value and 0.6 or 0.85,
+            }):Play()
+        end)
+
+        Button.MouseLeave:Connect(function()
+            if Toggle.Disabled then return end
+            TweenService:Create(Checkbox, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+                Size = UDim2.fromScale(1, 1),
+            }):Play()
+            TweenService:Create(CheckboxStroke, Library.HoverTweenInfo, {
+                Color = Toggle.Value and Library.Scheme.AccentColor or Library.Scheme.OutlineColor,
+                Transparency = 0,
+            }):Play()
+            TweenService:Create(CheckboxGlow, Library.HoverTweenInfo, {
+                ImageTransparency = Toggle.Value and 0.7 or 1,
+            }):Play()
+        end)
+
         function Toggle:UpdateColors()
             Toggle:Display()
         end
@@ -5491,6 +5533,7 @@ do
             if Toggle.Disabled then
                 Label.TextTransparency = 0.8
                 CheckImage.ImageTransparency = Toggle.Value and 0.8 or 1
+                CheckboxGlow.ImageTransparency = 1
 
                 Checkbox.BackgroundColor3 = Library.Scheme.BackgroundColor
                 Library.Registry[Checkbox].BackgroundColor3 = "BackgroundColor"
@@ -5507,6 +5550,12 @@ do
             }):Play()
             TweenService:Create(Checkbox, Library.HoverTweenInfo, {
                 BackgroundColor3 = Toggle.Value and Library:GetLighterColor(Library.Scheme.MainColor) or Library.Scheme.MainColor,
+            }):Play()
+            TweenService:Create(CheckboxStroke, Library.HoverTweenInfo, {
+                Color = Toggle.Value and Library.Scheme.AccentColor or Library.Scheme.OutlineColor,
+            }):Play()
+            TweenService:Create(CheckboxGlow, Library.ToggleTweenInfo, {
+                ImageTransparency = Toggle.Value and 0.7 or 1,
             }):Play()
 
             Checkbox.BackgroundColor3 = Library.Scheme.MainColor
