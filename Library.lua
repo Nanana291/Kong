@@ -10606,47 +10606,89 @@ function Library:CreateWindow(WindowInfo)
                     })
                 end
 
-                -- Collapse/Expand functionality
+                -- Collapse/Expand functionality with improved animation
                 local function ToggleGroupbox()
                     IsCollapsed = not IsCollapsed
 
                     if IsCollapsed then
-                        -- Collapse animation
-                        TweenService:Create(GroupboxContainer, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), {
+                        -- Collapse animation - shrink entire groupbox
+                        local collapseTweenDuration = 0.35
+
+                        -- Collapse the container smoothly
+                        TweenService:Create(GroupboxContainer, TweenInfo.new(collapseTweenDuration, Enum.EasingStyle.Cubic, Enum.EasingDirection.InOut), {
                             Size = UDim2.new(1, 0, 0, 0),
                         }):Play()
 
-                        TweenService:Create(GroupboxContainer, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), {
+                        -- Fade out container
+                        TweenService:Create(GroupboxContainer, TweenInfo.new(collapseTweenDuration * 0.7, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), {
                             BackgroundTransparency = 1,
                         }):Play()
 
+                        -- Animate arrow rotation
                         if CollapseArrow then
-                            TweenService:Create(CollapseArrow, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), {
+                            TweenService:Create(CollapseArrow, TweenInfo.new(collapseTweenDuration, Enum.EasingStyle.Cubic, Enum.EasingDirection.InOut), {
                                 Rotation = 180,
                             }):Play()
                         end
 
+                        -- Update arrow color
+                        if CollapseArrow then
+                            TweenService:Create(CollapseArrow, TweenInfo.new(collapseTweenDuration * 0.5), {
+                                ImageTransparency = 0.5,
+                            }):Play()
+                        end
+
+                        -- Disable list padding during collapse
                         GroupboxList.Padding = UDim.new(0, 0)
-                        task.wait(0.3)
+
+                        task.wait(collapseTweenDuration)
+
+                        -- Hide the container
                         GroupboxContainer.Visible = false
+
+                        -- Reduce background size to header only
+                        TweenService:Create(Background, TweenInfo.new(0.2, Enum.EasingStyle.Cubic, Enum.EasingDirection.InOut), {
+                            Size = UDim2.new(1, 0, 0, 36 * Library.DPIScale),
+                        }):Play()
+
                     else
                         -- Expand animation
-                        GroupboxContainer.Visible = true
-                        GroupboxList.Padding = UDim.new(0, 8)
+                        local expandTweenDuration = 0.35
 
-                        TweenService:Create(GroupboxContainer, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), {
+                        -- Show the container
+                        GroupboxContainer.Visible = true
+                        GroupboxList.Padding = UDim.new(0, 10)
+
+                        -- Re-expand background first
+                        TweenService:Create(Background, TweenInfo.new(0.2, Enum.EasingStyle.Cubic, Enum.EasingDirection.InOut), {
+                            Size = UDim2.new(1, 0, 0, GroupboxList.AbsoluteContentSize.Y + 56 * Library.DPIScale),
+                        }):Play()
+
+                        task.wait(0.1)
+
+                        -- Expand the container
+                        TweenService:Create(GroupboxContainer, TweenInfo.new(expandTweenDuration, Enum.EasingStyle.Cubic, Enum.EasingDirection.InOut), {
                             Size = UDim2.new(1, 0, 1, -35),
                         }):Play()
 
-                        TweenService:Create(GroupboxContainer, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), {
+                        -- Fade in container
+                        TweenService:Create(GroupboxContainer, TweenInfo.new(expandTweenDuration * 0.7, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), {
                             BackgroundTransparency = 0,
                         }):Play()
 
+                        -- Rotate arrow back
                         if CollapseArrow then
-                            TweenService:Create(CollapseArrow, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut), {
+                            TweenService:Create(CollapseArrow, TweenInfo.new(expandTweenDuration, Enum.EasingStyle.Cubic, Enum.EasingDirection.InOut), {
                                 Rotation = 0,
                             }):Play()
+
+                            TweenService:Create(CollapseArrow, TweenInfo.new(expandTweenDuration * 0.5), {
+                                ImageTransparency = 0.3,
+                            }):Play()
                         end
+
+                        task.wait(0.2)
+                        Groupbox:Resize()
                     end
                 end
 
