@@ -10736,7 +10736,7 @@ function Library:CreateWindow(WindowInfo)
                         -- Hide the container
                         GroupboxContainer.Visible = false
 
-                        -- Reduce background size to header only
+                        -- Reduce background size to header only with maintained color
                         TweenService:Create(Background, TweenInfo.new(0.2, Enum.EasingStyle.Cubic, Enum.EasingDirection.InOut), {
                             Size = UDim2.new(1, 0, 0, 36 * Library.DPIScale),
                         }):Play()
@@ -10747,9 +10747,10 @@ function Library:CreateWindow(WindowInfo)
 
                         -- Show the container
                         GroupboxContainer.Visible = true
+                        GroupboxContainer.BackgroundTransparency = 0
                         GroupboxList.Padding = UDim.new(0, 10)
 
-                        -- Re-expand background first
+                        -- Re-expand background first with maintained color
                         TweenService:Create(Background, TweenInfo.new(0.2, Enum.EasingStyle.Cubic, Enum.EasingDirection.InOut), {
                             Size = UDim2.new(1, 0, 0, GroupboxList.AbsoluteContentSize.Y + 56 * Library.DPIScale),
                         }):Play()
@@ -11675,6 +11676,496 @@ function Library:CreateWindow(WindowInfo)
     Library:GiveSignal(UserInputService.WindowFocusReleased:Connect(function()
         Library.IsRobloxFocused = false
     end))
+
+    --// Changelog System \\--
+    local ChangelogEnabled = false
+    local ChangelogData = {}
+    local ChangelogDialog = nil
+    local ChangelogIcon = nil
+
+    function Window:SetChangelog(Enabled)
+        ChangelogEnabled = Enabled == true
+
+        if ChangelogEnabled and not ChangelogIcon then
+            -- Create changelog icon in bottom-left corner
+            ChangelogIcon = New("TextButton", {
+                AnchorPoint = Vector2.new(0, 1),
+                BackgroundColor3 = Library.Scheme.MainColor,
+                BackgroundTransparency = 0,
+                Position = UDim2.new(0, 12, 1, -12),
+                Size = UDim2.fromOffset(40, 40),
+                Text = "",
+                ZIndex = 15,
+                Parent = ScreenGui,
+            })
+            New("UICorner", {
+                CornerRadius = UDim.new(0, 10),
+                Parent = ChangelogIcon,
+            })
+            local IconStroke = New("UIStroke", {
+                Color = Library.Scheme.AccentColor,
+                Thickness = 1.5,
+                Transparency = 0.5,
+                Parent = ChangelogIcon,
+            })
+
+            -- Changelog icon (history/file-text)
+            local IconData = Library:GetIcon("history")
+            local IconImage
+            if IconData then
+                IconImage = New("ImageLabel", {
+                    BackgroundTransparency = 1,
+                    Image = IconData.Url,
+                    ImageColor3 = Library.Scheme.AccentColor,
+                    ImageRectOffset = IconData.ImageRectOffset,
+                    ImageRectSize = IconData.ImageRectSize,
+                    Size = UDim2.fromScale(0.55, 0.55),
+                    AnchorPoint = Vector2.new(0.5, 0.5),
+                    Position = UDim2.fromScale(0.5, 0.5),
+                    Parent = ChangelogIcon,
+                })
+            end
+
+            -- Glow effect
+            local IconGlow = New("ImageLabel", {
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                BackgroundTransparency = 1,
+                Image = "rbxassetid://6015897843",
+                ImageColor3 = Library.Scheme.AccentColor,
+                ImageTransparency = 1,
+                Position = UDim2.fromScale(0.5, 0.5),
+                Size = UDim2.fromOffset(50, 50),
+                ZIndex = 0,
+                Parent = ChangelogIcon,
+            })
+
+            -- Hover effects
+            ChangelogIcon.MouseEnter:Connect(function()
+                TweenService:Create(ChangelogIcon, Library.HoverTweenInfo, {
+                    BackgroundColor3 = Library:GetLighterColor(Library.Scheme.MainColor),
+                    Size = UDim2.fromOffset(44, 44),
+                }):Play()
+                TweenService:Create(IconStroke, Library.HoverTweenInfo, {
+                    Transparency = 0,
+                }):Play()
+                TweenService:Create(IconGlow, Library.HoverTweenInfo, {
+                    ImageTransparency = 0.65,
+                }):Play()
+            end)
+
+            ChangelogIcon.MouseLeave:Connect(function()
+                TweenService:Create(ChangelogIcon, Library.HoverTweenInfo, {
+                    BackgroundColor3 = Library.Scheme.MainColor,
+                    Size = UDim2.fromOffset(40, 40),
+                }):Play()
+                TweenService:Create(IconStroke, Library.HoverTweenInfo, {
+                    Transparency = 0.5,
+                }):Play()
+                TweenService:Create(IconGlow, Library.HoverTweenInfo, {
+                    ImageTransparency = 1,
+                }):Play()
+            end)
+
+            -- Click to open changelog
+            ChangelogIcon.MouseButton1Click:Connect(function()
+                Window:OpenChangelog()
+            end)
+        elseif not ChangelogEnabled and ChangelogIcon then
+            ChangelogIcon:Destroy()
+            ChangelogIcon = nil
+        end
+    end
+
+    function Window:AddChangelog(Info)
+        if not Info.Version then return end
+
+        Info.NewContent = Info.NewContent or ""
+        Info.Description = Info.Description or ""
+        Info.BugFixes = Info.BugFixes or ""
+        Info.Icon = Info.Icon or "package"
+
+        table.insert(ChangelogData, Info)
+    end
+
+    function Window:OpenChangelog()
+        if #ChangelogData == 0 then return end
+
+        -- Close existing dialog
+        if ChangelogDialog then
+            ChangelogDialog:Destroy()
+            ChangelogDialog = nil
+        end
+
+        -- Create dialog background blur
+        local DialogBg = New("Frame", {
+            BackgroundColor3 = Color3.new(0, 0, 0),
+            BackgroundTransparency = 0.5,
+            Size = UDim2.fromScale(1, 1),
+            ZIndex = 99,
+            Parent = ScreenGui,
+        })
+
+        local ClickToClose = New("TextButton", {
+            BackgroundTransparency = 1,
+            Size = UDim2.fromScale(1, 1),
+            Text = "",
+            ZIndex = 99,
+            Parent = DialogBg,
+        })
+
+        -- Main dialog
+        local Dialog = New("Frame", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundColor3 = Library.Scheme.BackgroundColor,
+            Position = UDim2.fromScale(0.5, 0.5),
+            Size = UDim2.fromOffset(550, 600),
+            ZIndex = 100,
+            Parent = DialogBg,
+        })
+        New("UICorner", {
+            CornerRadius = UDim.new(0, 14),
+            Parent = Dialog,
+        })
+        New("UIStroke", {
+            Color = Library.Scheme.OutlineColor,
+            Thickness = 2,
+            Parent = Dialog,
+        })
+
+        -- Dialog glow
+        local DialogGlow = New("ImageLabel", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundTransparency = 1,
+            Image = "rbxassetid://6015897843",
+            ImageColor3 = Library.Scheme.AccentColor,
+            ImageTransparency = 0.88,
+            Position = UDim2.fromScale(0.5, 0.5),
+            Size = UDim2.new(1, 30, 1, 30),
+            ZIndex = -1,
+            Parent = Dialog,
+        })
+
+        -- Header with gradient
+        local Header = New("Frame", {
+            BackgroundColor3 = Library.Scheme.MainColor,
+            Position = UDim2.fromOffset(0, 0),
+            Size = UDim2.fromOffset(550, 60),
+            ZIndex = 101,
+            Parent = Dialog,
+        })
+        New("UICorner", {
+            CornerRadius = UDim.new(0, 14),
+            Parent = Header,
+        })
+        local HeaderGradient = New("UIGradient", {
+            Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Library:GetLighterColor(Library.Scheme.MainColor)),
+                ColorSequenceKeypoint.new(1, Library.Scheme.MainColor),
+            }),
+            Rotation = 90,
+            Parent = Header,
+        })
+
+        local Title = New("TextLabel", {
+            BackgroundTransparency = 1,
+            Position = UDim2.fromOffset(16, 8),
+            Size = UDim2.new(1, -80, 0, 24),
+            Text = "Changelog",
+            TextColor3 = Library.Scheme.FontColor,
+            TextSize = 18,
+            FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold),
+            TextXAlignment = Enum.TextXAlignment.Left,
+            ZIndex = 102,
+            Parent = Header,
+        })
+
+        -- Close button
+        local CloseBtn = New("TextButton", {
+            AnchorPoint = Vector2.new(1, 0),
+            BackgroundTransparency = 1,
+            Position = UDim2.new(1, -12, 0, 12),
+            Size = UDim2.fromOffset(24, 24),
+            Text = "",
+            ZIndex = 102,
+            Parent = Header,
+        })
+        local CloseIcon = Library:GetIcon("x")
+        if CloseIcon then
+            New("ImageLabel", {
+                BackgroundTransparency = 1,
+                Image = CloseIcon.Url,
+                ImageColor3 = Library.Scheme.FontColor,
+                ImageRectOffset = CloseIcon.ImageRectOffset,
+                ImageRectSize = CloseIcon.ImageRectSize,
+                Size = UDim2.fromScale(1, 1),
+                Parent = CloseBtn,
+            })
+        end
+
+        -- Version dropdown
+        local DropdownFrame = New("Frame", {
+            BackgroundTransparency = 1,
+            Position = UDim2.fromOffset(16, 70),
+            Size = UDim2.new(1, -32, 0, 30),
+            ZIndex = 101,
+            Parent = Dialog,
+        })
+
+        local VersionLabel = New("TextLabel", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(0, 80, 1, 0),
+            Text = "Version:",
+            TextColor3 = Library.Scheme.FontColor,
+            TextSize = 12,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            ZIndex = 101,
+            Parent = DropdownFrame,
+        })
+
+        local DropdownButton = New("TextButton", {
+            BackgroundColor3 = Library.Scheme.MainColor,
+            Position = UDim2.fromOffset(80, 0),
+            Size = UDim2.new(1, -80, 1, 0),
+            Text = ChangelogData[1].Version,
+            TextColor3 = Library.Scheme.FontColor,
+            TextSize = 12,
+            ZIndex = 101,
+            Parent = DropdownFrame,
+        })
+        New("UICorner", {
+            CornerRadius = UDim.new(0, 8),
+            Parent = DropdownButton,
+        })
+        New("UIStroke", {
+            Color = Library.Scheme.OutlineColor,
+            Thickness = 1,
+            Parent = DropdownButton,
+        })
+        New("UIPadding", {
+            PaddingLeft = UDim.new(0, 10),
+            PaddingRight = UDim.new(0, 10),
+            Parent = DropdownButton,
+        })
+
+        -- Content area with scroll
+        local ContentFrame = New("ScrollingFrame", {
+            AutomaticCanvasSize = Enum.AutomaticSize.Y,
+            BackgroundTransparency = 1,
+            CanvasSize = UDim2.fromScale(0, 0),
+            Position = UDim2.fromOffset(16, 110),
+            ScrollBarThickness = 4,
+            Size = UDim2.new(1, -32, 1, -130),
+            ZIndex = 101,
+            Parent = Dialog,
+        })
+        New("UIListLayout", {
+            Padding = UDim.new(0, 12),
+            Parent = ContentFrame,
+        })
+
+        local CurrentVersion = ChangelogData[1]
+
+        local function UpdateContent()
+            for _, child in pairs(ContentFrame:GetChildren()) do
+                if child:IsA("GuiObject") then
+                    child:Destroy()
+                end
+            end
+
+            -- Icon
+            if CurrentVersion.Icon then
+                local IconData = Library:GetIcon(CurrentVersion.Icon)
+                if IconData then
+                    New("ImageLabel", {
+                        BackgroundTransparency = 1,
+                        Image = IconData.Url,
+                        ImageColor3 = Library.Scheme.AccentColor,
+                        ImageRectOffset = IconData.ImageRectOffset,
+                        ImageRectSize = IconData.ImageRectSize,
+                        Size = UDim2.fromOffset(24, 24),
+                        Parent = ContentFrame,
+                    })
+                end
+            end
+
+            -- Description
+            if CurrentVersion.Description ~= "" then
+                New("TextLabel", {
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    BackgroundTransparency = 1,
+                    Size = UDim2.new(1, 0, 0, 0),
+                    Text = CurrentVersion.Description,
+                    TextColor3 = Library.Scheme.FontColor,
+                    TextSize = 12,
+                    TextWrapped = true,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    Parent = ContentFrame,
+                })
+            end
+
+            -- New Content section
+            if CurrentVersion.NewContent ~= "" then
+                local NewLabel = New("TextLabel", {
+                    BackgroundTransparency = 1,
+                    Size = UDim2.new(1, 0, 0, 14),
+                    Text = "✨ New Features:",
+                    TextColor3 = Library.Scheme.AccentColor,
+                    TextSize = 13,
+                    FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold),
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    Parent = ContentFrame,
+                })
+
+                New("TextLabel", {
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    BackgroundTransparency = 1,
+                    Size = UDim2.new(1, 0, 0, 0),
+                    Text = CurrentVersion.NewContent,
+                    TextColor3 = Library.Scheme.FontColor,
+                    TextSize = 11,
+                    TextWrapped = true,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    Parent = ContentFrame,
+                })
+            end
+
+            -- Bug Fixes section
+            if CurrentVersion.BugFixes ~= "" then
+                local BugLabel = New("TextLabel", {
+                    BackgroundTransparency = 1,
+                    Size = UDim2.new(1, 0, 0, 14),
+                    Text = "🐛 Bug Fixes:",
+                    TextColor3 = Color3.fromRGB(52, 211, 153),
+                    TextSize = 13,
+                    FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold),
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    Parent = ContentFrame,
+                })
+
+                New("TextLabel", {
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    BackgroundTransparency = 1,
+                    Size = UDim2.new(1, 0, 0, 0),
+                    Text = CurrentVersion.BugFixes,
+                    TextColor3 = Library.Scheme.FontColor,
+                    TextSize = 11,
+                    TextWrapped = true,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    Parent = ContentFrame,
+                })
+            end
+        end
+
+        UpdateContent()
+
+        -- Dropdown functionality
+        local DropdownOpen = false
+        local DropdownMenu = nil
+
+        local function CloseDropdown()
+            if DropdownMenu then
+                DropdownMenu:Destroy()
+                DropdownMenu = nil
+                DropdownOpen = false
+            end
+        end
+
+        DropdownButton.MouseButton1Click:Connect(function()
+            if DropdownOpen then
+                CloseDropdown()
+                return
+            end
+
+            DropdownOpen = true
+            DropdownMenu = New("Frame", {
+                BackgroundColor3 = Library.Scheme.MainColor,
+                BorderSizePixel = 0,
+                Position = UDim2.fromOffset(80, 30),
+                Size = UDim2.new(1, -80, 0, math.min(#ChangelogData * 28, 150)),
+                ZIndex = 102,
+                Parent = DropdownFrame,
+            })
+            New("UICorner", {
+                CornerRadius = UDim.new(0, 8),
+                Parent = DropdownMenu,
+            })
+            New("UIStroke", {
+                Color = Library.Scheme.OutlineColor,
+                Thickness = 1,
+                Parent = DropdownMenu,
+            })
+
+            local MenuScroll = New("ScrollingFrame", {
+                AutomaticCanvasSize = Enum.AutomaticSize.Y,
+                BackgroundTransparency = 1,
+                CanvasSize = UDim2.fromScale(0, 0),
+                ScrollBarThickness = 2,
+                Size = UDim2.fromScale(1, 1),
+                Parent = DropdownMenu,
+            })
+            New("UIListLayout", {
+                Padding = UDim.new(0, 4),
+                Parent = MenuScroll,
+            })
+
+            for i, changelog in ipairs(ChangelogData) do
+                local Item = New("TextButton", {
+                    BackgroundColor3 = Library.Scheme.MainColor,
+                    BackgroundTransparency = 1,
+                    Size = UDim2.new(1, 0, 0, 24),
+                    Text = changelog.Version,
+                    TextColor3 = Library.Scheme.FontColor,
+                    TextSize = 11,
+                    Parent = MenuScroll,
+                })
+
+                Item.MouseEnter:Connect(function()
+                    TweenService:Create(Item, Library.HoverTweenInfo, {
+                        BackgroundColor3 = Library:GetLighterColor(Library.Scheme.MainColor),
+                        BackgroundTransparency = 0,
+                    }):Play()
+                end)
+
+                Item.MouseLeave:Connect(function()
+                    TweenService:Create(Item, Library.HoverTweenInfo, {
+                        BackgroundTransparency = 1,
+                    }):Play()
+                end)
+
+                Item.MouseButton1Click:Connect(function()
+                    CurrentVersion = changelog
+                    DropdownButton.Text = changelog.Version
+                    UpdateContent()
+                    CloseDropdown()
+                end)
+            end
+        end)
+
+        -- Close button functionality
+        CloseBtn.MouseButton1Click:Connect(function()
+            TweenService:Create(Dialog, TweenInfo.new(0.25, Enum.EasingStyle.Quint), {
+                Size = UDim2.fromOffset(400, 200),
+            }):Play()
+            TweenService:Create(DialogBg, TweenInfo.new(0.25), {
+                BackgroundTransparency = 1,
+            }):Play()
+
+            task.wait(0.25)
+            DialogBg:Destroy()
+        end)
+
+        ClickToClose.MouseButton1Click:Connect(function()
+            DialogBg:Destroy()
+        end)
+
+        -- Initial animation
+        Dialog.Size = UDim2.fromOffset(400, 200)
+        TweenService:Create(Dialog, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Size = UDim2.fromOffset(550, 600),
+        }):Play()
+
+        ChangelogDialog = DialogBg
+    end
 
     return Window
 end
