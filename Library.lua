@@ -6761,8 +6761,7 @@ do
         -- Hover effects
         local isDragging = false
 
-        Bar.MouseEnter:Connect(function()
-            if Slider.Disabled then return end
+        local function EnterHoverState()
             TweenService:Create(Thumb, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
                 Size = UDim2.fromOffset(20, 20),
             }):Play()
@@ -6783,10 +6782,9 @@ do
                     TextTransparency = 0,
                 }):Play()
             end
-        end)
+        end
 
-        Bar.MouseLeave:Connect(function()
-            if Slider.Disabled or isDragging then return end
+        local function ExitHoverState()
             TweenService:Create(Thumb, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
                 Size = UDim2.fromOffset(16, 16),
             }):Play()
@@ -6807,6 +6805,43 @@ do
                     TextTransparency = Slider.Disabled and 0.8 or 0,
                 }):Play()
             end
+        end
+
+        local function EnterDragState()
+            -- Enhanced drag visual feedback
+            TweenService:Create(Thumb, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+                Size = UDim2.fromOffset(24, 24),
+            }):Play()
+            TweenService:Create(ThumbDot, TweenInfo.new(0.15), {
+                Size = UDim2.fromOffset(10, 10),
+            }):Play()
+            TweenService:Create(ThumbGlow, TweenInfo.new(0.15), {
+                ImageTransparency = 0.5,
+                Size = UDim2.fromOffset(40, 40),
+            }):Play()
+            TweenService:Create(ThumbStroke, TweenInfo.new(0.15), {
+                Thickness = 3,
+            }):Play()
+            TweenService:Create(FillGlow, TweenInfo.new(0.1), {
+                BackgroundTransparency = 0.3,
+            }):Play()
+        end
+
+        local function ExitDragState()
+            -- Return to hover state
+            if Bar:FindFirstChild("UIInspectable") == nil or Mouse:FindFirstChild("TargetBound") == nil then
+                ExitHoverState()
+            end
+        end
+
+        Bar.MouseEnter:Connect(function()
+            if Slider.Disabled then return end
+            EnterHoverState()
+        end)
+
+        Bar.MouseLeave:Connect(function()
+            if Slider.Disabled or isDragging then return end
+            ExitHoverState()
         end)
 
         Slider.Thumb = Thumb
@@ -6954,7 +6989,9 @@ do
                 return
             end
 
+            isDragging = true
             IsDraggingSlider = true
+            EnterDragState()
 
             for _, Side in pairs(Library.ActiveTab.Sides) do
                 Side.ScrollingEnabled = false
@@ -6992,6 +7029,10 @@ do
 
         Library:GiveSignal(UserInputService.InputEnded:Connect(function(Input: InputObject)
             if IsMouseInput(Input) then
+                if isDragging then
+                    isDragging = false
+                    ExitDragState()
+                end
                 IsDraggingSlider = false
 
                 for _, Side in pairs(Library.ActiveTab.Sides) do
