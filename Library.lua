@@ -10507,16 +10507,16 @@ function Library:CreateWindow(WindowInfo)
                     Parent = GroupboxLabel,
                 })
 
-                -- Description label (dark gray)
+                -- Description label (subtle gray with better contrast)
                 if Info.Description then
                     GroupboxDescription = New("TextLabel", {
                         BackgroundTransparency = 1,
                         Position = UDim2.fromOffset(BoxIcon and 24 or 0, 18),
                         Size = UDim2.new(1, -30, 0, 16),
                         Text = Info.Description,
-                        TextSize = 13,
-                        TextTransparency = 0.5,
-                        TextColor3 = Color3.fromRGB(150, 150, 150),
+                        TextSize = 12,
+                        TextTransparency = 0.4,
+                        TextColor3 = Color3.fromRGB(160, 160, 170),
                         TextXAlignment = Enum.TextXAlignment.Left,
                         Parent = GroupboxHolder,
                     })
@@ -10527,17 +10527,19 @@ function Library:CreateWindow(WindowInfo)
                     })
                 end
 
-                -- Collapse/Expand arrow
-                CollapseArrow = New("TextLabel", {
+                -- Collapse/Expand arrow (modern chevron icon)
+                local ChevronIcon = Library:GetCustomIcon("chevron-down")
+                CollapseArrow = New("ImageLabel", {
                     BackgroundTransparency = 1,
-                    Position = UDim2.new(1, -30, 0, 0),
-                    Size = UDim2.new(0, 30, 0, headerHeight),
-                    Text = "▼",
-                    TextSize = 12,
-                    TextTransparency = 0.3,
+                    Position = UDim2.new(1, -28, 0, (headerHeight / 2) - 8),
+                    Size = UDim2.fromOffset(16, 16),
+                    Image = ChevronIcon and ChevronIcon.Url or "",
+                    ImageRectOffset = ChevronIcon and ChevronIcon.ImageRectOffset or Vector2.zero,
+                    ImageRectSize = ChevronIcon and ChevronIcon.ImageRectSize or Vector2.zero,
+                    ImageTransparency = 0.3,
                     Parent = GroupboxHolder,
                 })
-                Library.Registry[CollapseArrow] = { TextColor3 = "FontColor" }
+                Library.Registry[CollapseArrow] = { ImageColor3 = "FontColor" }
 
                 -- Hover effect for groupbox header
                 local HeaderHoverRegion = New("TextButton", {
@@ -10554,8 +10556,8 @@ function Library:CreateWindow(WindowInfo)
                         TextColor3 = Library.Scheme.AccentColor,
                     }):Play()
                     TweenService:Create(CollapseArrow, Library.HoverTweenInfo, {
-                        TextTransparency = 0,
-                        TextColor3 = Library.Scheme.AccentColor,
+                        ImageTransparency = 0,
+                        ImageColor3 = Library.Scheme.AccentColor,
                     }):Play()
                     if BoxIconImage then
                         TweenService:Create(BoxIconImage, Library.HoverTweenInfo, {
@@ -10571,8 +10573,8 @@ function Library:CreateWindow(WindowInfo)
                         TextColor3 = Library.Scheme.FontColor,
                     }):Play()
                     TweenService:Create(CollapseArrow, Library.HoverTweenInfo, {
-                        TextTransparency = 0.3,
-                        TextColor3 = Library.Scheme.FontColor,
+                        ImageTransparency = 0.3,
+                        ImageColor3 = Library.Scheme.FontColor,
                     }):Play()
                     if BoxIconImage then
                         TweenService:Create(BoxIconImage, Library.HoverTweenInfo, {
@@ -10586,22 +10588,39 @@ function Library:CreateWindow(WindowInfo)
                 HeaderHoverRegion.MouseButton1Click:Connect(function()
                     isCollapsed = not isCollapsed
 
-                    -- Animate arrow rotation
-                    TweenService:Create(CollapseArrow, Library.HoverTweenInfo, {
-                        Rotation = isCollapsed and -90 or 0,
+                    -- Smooth chevron rotation with spring-like effect
+                    local rotationTween = TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+                    TweenService:Create(CollapseArrow, rotationTween, {
+                        Rotation = isCollapsed and 90 or 0,
                     }):Play()
 
-                    -- Animate container visibility
+                    -- Animate container visibility with smooth transitions
+                    local sizeTween = TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
                     if isCollapsed then
-                        GroupboxContainer.Visible = false
-                        TweenService:Create(Background, Library.HoverTweenInfo, {
+                        -- Fade out content first, then hide
+                        local fadeOut = TweenService:Create(GroupboxContainer, TweenInfo.new(0.15), {
+                            BackgroundTransparency = 1,
+                        })
+                        fadeOut.Completed:Connect(function()
+                            GroupboxContainer.Visible = false
+                        end)
+                        fadeOut:Play()
+
+                        TweenService:Create(Background, sizeTween, {
                             Size = UDim2.new(1, 0, 0, headerHeight + 4),
                         }):Play()
                     else
+                        -- Show content, then fade in
                         GroupboxContainer.Visible = true
+                        GroupboxContainer.BackgroundTransparency = 1
+
                         local targetHeight = GroupboxList.AbsoluteContentSize.Y + headerHeight + 19
-                        TweenService:Create(Background, Library.HoverTweenInfo, {
+                        TweenService:Create(Background, sizeTween, {
                             Size = UDim2.new(1, 0, 0, targetHeight * Library.DPIScale),
+                        }):Play()
+
+                        TweenService:Create(GroupboxContainer, TweenInfo.new(0.2), {
+                            BackgroundTransparency = 1,
                         }):Play()
                     end
                 end)
