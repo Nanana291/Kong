@@ -10535,7 +10535,6 @@ function Library:CreateWindow(WindowInfo)
                     Text = "▼",
                     TextSize = 12,
                     TextTransparency = 0.3,
-                    TextColor3 = "FontColor",
                     Parent = GroupboxHolder,
                 })
                 Library.Registry[CollapseArrow] = { TextColor3 = "FontColor" }
