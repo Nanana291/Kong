@@ -10452,9 +10452,14 @@ function Library:CreateWindow(WindowInfo)
 
             local GroupboxHolder
             local GroupboxLabel
+            local GroupboxDescription
+            local CollapseArrow
 
             local GroupboxContainer
             local GroupboxList
+
+            local isCollapsed = false
+            local headerHeight = Info.Description and 50 or 34
 
             do
                 GroupboxHolder = New("Frame", {
@@ -10468,7 +10473,7 @@ function Library:CreateWindow(WindowInfo)
                     Parent = GroupboxHolder,
                 })
                 Library:MakeLine(GroupboxHolder, {
-                    Position = UDim2.fromOffset(0, 34),
+                    Position = UDim2.fromOffset(0, headerHeight),
                     Size = UDim2.new(1, 0, 0, 1),
                 })
 
@@ -10489,7 +10494,7 @@ function Library:CreateWindow(WindowInfo)
                 GroupboxLabel = New("TextLabel", {
                     BackgroundTransparency = 1,
                     Position = UDim2.fromOffset(BoxIcon and 24 or 0, 0),
-                    Size = UDim2.new(1, 0, 0, 34),
+                    Size = UDim2.new(1, Info.Description and -30 or 0, 0, Info.Description and 18 or 34),
                     Text = Info.Name,
                     TextSize = 15,
                     TextTransparency = 0.1,
@@ -10502,17 +10507,54 @@ function Library:CreateWindow(WindowInfo)
                     Parent = GroupboxLabel,
                 })
 
+                -- Description label (dark gray)
+                if Info.Description then
+                    GroupboxDescription = New("TextLabel", {
+                        BackgroundTransparency = 1,
+                        Position = UDim2.fromOffset(BoxIcon and 24 or 0, 18),
+                        Size = UDim2.new(1, -30, 0, 16),
+                        Text = Info.Description,
+                        TextSize = 13,
+                        TextTransparency = 0.5,
+                        TextColor3 = Color3.fromRGB(150, 150, 150),
+                        TextXAlignment = Enum.TextXAlignment.Left,
+                        Parent = GroupboxHolder,
+                    })
+                    New("UIPadding", {
+                        PaddingLeft = UDim.new(0, 12),
+                        PaddingRight = UDim.new(0, 12),
+                        Parent = GroupboxDescription,
+                    })
+                end
+
+                -- Collapse/Expand arrow
+                CollapseArrow = New("TextLabel", {
+                    BackgroundTransparency = 1,
+                    Position = UDim2.new(1, -30, 0, 0),
+                    Size = UDim2.new(0, 30, 0, headerHeight),
+                    Text = "▼",
+                    TextSize = 12,
+                    TextTransparency = 0.3,
+                    TextColor3 = "FontColor",
+                    Parent = GroupboxHolder,
+                })
+                Library.Registry[CollapseArrow] = { TextColor3 = "FontColor" }
+
                 -- Hover effect for groupbox header
                 local HeaderHoverRegion = New("TextButton", {
                     BackgroundTransparency = 1,
                     Position = UDim2.fromOffset(0, 0),
-                    Size = UDim2.new(1, 0, 0, 34),
+                    Size = UDim2.new(1, 0, 0, headerHeight),
                     Text = "",
                     Parent = GroupboxHolder,
                 })
 
                 HeaderHoverRegion.MouseEnter:Connect(function()
                     TweenService:Create(GroupboxLabel, Library.HoverTweenInfo, {
+                        TextTransparency = 0,
+                        TextColor3 = Library.Scheme.AccentColor,
+                    }):Play()
+                    TweenService:Create(CollapseArrow, Library.HoverTweenInfo, {
                         TextTransparency = 0,
                         TextColor3 = Library.Scheme.AccentColor,
                     }):Play()
@@ -10529,6 +10571,10 @@ function Library:CreateWindow(WindowInfo)
                         TextTransparency = 0.1,
                         TextColor3 = Library.Scheme.FontColor,
                     }):Play()
+                    TweenService:Create(CollapseArrow, Library.HoverTweenInfo, {
+                        TextTransparency = 0.3,
+                        TextColor3 = Library.Scheme.FontColor,
+                    }):Play()
                     if BoxIconImage then
                         TweenService:Create(BoxIconImage, Library.HoverTweenInfo, {
                             ImageTransparency = 0,
@@ -10537,10 +10583,34 @@ function Library:CreateWindow(WindowInfo)
                     end
                 end)
 
+                -- Click to collapse/expand
+                HeaderHoverRegion.MouseButton1Click:Connect(function()
+                    isCollapsed = not isCollapsed
+
+                    -- Animate arrow rotation
+                    TweenService:Create(CollapseArrow, Library.HoverTweenInfo, {
+                        Rotation = isCollapsed and -90 or 0,
+                    }):Play()
+
+                    -- Animate container visibility
+                    if isCollapsed then
+                        GroupboxContainer.Visible = false
+                        TweenService:Create(Background, Library.HoverTweenInfo, {
+                            Size = UDim2.new(1, 0, 0, headerHeight + 4),
+                        }):Play()
+                    else
+                        GroupboxContainer.Visible = true
+                        local targetHeight = GroupboxList.AbsoluteContentSize.Y + headerHeight + 19
+                        TweenService:Create(Background, Library.HoverTweenInfo, {
+                            Size = UDim2.new(1, 0, 0, targetHeight * Library.DPIScale),
+                        }):Play()
+                    end
+                end)
+
                 GroupboxContainer = New("Frame", {
                     BackgroundTransparency = 1,
-                    Position = UDim2.fromOffset(0, 35),
-                    Size = UDim2.new(1, 0, 1, -35),
+                    Position = UDim2.fromOffset(0, headerHeight + 1),
+                    Size = UDim2.new(1, 0, 1, -(headerHeight + 1)),
                     Parent = GroupboxHolder,
                 })
 
@@ -10561,6 +10631,8 @@ function Library:CreateWindow(WindowInfo)
                 BoxHolder = BoxHolder,
                 Holder = Background,
                 Container = GroupboxContainer,
+                HeaderHeight = headerHeight,
+                IsCollapsed = isCollapsed,
 
                 Tab = Tab,
                 DependencyBoxes = {},
@@ -10568,7 +10640,10 @@ function Library:CreateWindow(WindowInfo)
             }
 
             function Groupbox:Resize()
-                Background.Size = UDim2.new(1, 0, 0, GroupboxList.AbsoluteContentSize.Y + 53 * Library.DPIScale)
+                if not isCollapsed then
+                    local contentHeight = GroupboxList.AbsoluteContentSize.Y + headerHeight + 19
+                    Background.Size = UDim2.new(1, 0, 0, contentHeight * Library.DPIScale)
+                end
             end
 
             setmetatable(Groupbox, BaseGroupbox)
@@ -10579,12 +10654,12 @@ function Library:CreateWindow(WindowInfo)
             return Groupbox
         end
 
-        function Tab:AddLeftGroupbox(Name, IconName)
-            return Tab:AddGroupbox({ Side = 1, Name = Name, IconName = IconName })
+        function Tab:AddLeftGroupbox(Name, IconName, Description)
+            return Tab:AddGroupbox({ Side = 1, Name = Name, IconName = IconName, Description = Description })
         end
 
-        function Tab:AddRightGroupbox(Name, IconName)
-            return Tab:AddGroupbox({ Side = 2, Name = Name, IconName = IconName })
+        function Tab:AddRightGroupbox(Name, IconName, Description)
+            return Tab:AddGroupbox({ Side = 2, Name = Name, IconName = IconName, Description = Description })
         end
 
         function Tab:AddTabbox(Info)
