@@ -217,7 +217,8 @@ local Library = {
 
     Registry = {},
     DPIRegistry = {},
-    
+    BulletElements = {}, -- Track elements with bullet points for theme updates
+
     ImageManager = CustomImageManager,
 }
 
@@ -1409,6 +1410,43 @@ function Library:CreateGlowEffect(Element: GuiObject, Color: Color3?, Thickness:
     GlowTween:Play()
 
     return Glow, GlowTween
+end
+
+-- Stylize bullet points with accent color (neon purple effect)
+function Library:StylizeBullets(Text: string): string
+    if not Text or Text == "" then
+        return Text
+    end
+
+    -- Convert bullet points (•) to rich text with accent color
+    local AccentColor = Library.Scheme.AccentColor
+    local ColorHex = string.format("#%02X%02X%02X",
+        math.floor(AccentColor.R * 255),
+        math.floor(AccentColor.G * 255),
+        math.floor(AccentColor.B * 255)
+    )
+
+    -- Replace • with colored version and add subtle glow effect
+    local StylizedText = Text:gsub("•", string.format('<font color="%s"><b>•</b></font>', ColorHex))
+
+    return StylizedText
+end
+
+-- Update bullet colors when theme changes
+function Library:UpdateBulletColors()
+    if Library.Unloaded then
+        return
+    end
+
+    -- This will be called when theme colors change
+    for Element, _ in pairs(Library.BulletElements or {}) do
+        if Element and Element.Parent then
+            local OriginalText = Element:GetAttribute("OriginalText")
+            if OriginalText then
+                Element.Text = Library:StylizeBullets(OriginalText)
+            end
+        end
+    end
 end
 
 -- Ripple click effect
@@ -3636,12 +3674,19 @@ do
             BackgroundTransparency = 1,
             Position = Data.Icon and UDim2.fromOffset(20, 0) or UDim2.fromOffset(0, 0),
             Size = Data.Icon and UDim2.new(1, -20, 1, 0) or UDim2.fromScale(1, 1),
-            Text = Label.Text,
+            Text = Library:StylizeBullets(Label.Text),
+            RichText = true,
             TextSize = Data.Size,
             TextWrapped = Label.DoesWrap,
             TextXAlignment = Groupbox.IsKeyTab and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left,
             Parent = Holder,
         })
+
+        -- Track for theme updates
+        if Label.Text:find("•") then
+            TextLabel:SetAttribute("OriginalText", Label.Text)
+            Library.BulletElements[TextLabel] = true
+        end
 
         -- Add icon if specified
         local IconImage
@@ -4071,7 +4116,8 @@ do
             BackgroundTransparency = 1,
             Position = Data.Icon and UDim2.fromOffset(28, 0) or UDim2.fromOffset(0, 0),
             Size = Data.Icon and UDim2.new(1, -28, 0, 0) or UDim2.fromScale(1, 1),
-            Text = Paragraph.Text,
+            Text = Library:StylizeBullets(Paragraph.Text),
+            RichText = true,
             TextColor3 = Color3.fromRGB(180, 180, 190),
             FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Regular),
             TextSize = Data.Size,
@@ -4081,6 +4127,12 @@ do
             Parent = ContentFrame,
         })
         Paragraph.TextLabel = TextLabel
+
+        -- Track for theme updates
+        if Paragraph.Text:find("•") then
+            TextLabel:SetAttribute("OriginalText", Paragraph.Text)
+            Library.BulletElements[TextLabel] = true
+        end
 
         -- Apply color if specified
         local function ApplyParagraphColor(ColorOption)
@@ -9259,6 +9311,123 @@ function Library:CreateWindow(WindowInfo)
             CornerRadius = UDim.new(0, WindowInfo.CornerRadius - 1),
             Parent = MainFrame,
         })
+
+        -- Modern blur effect with dark purple fog/mist
+        local BackgroundBlur = New("Frame", {
+            Name = "BlurBackground",
+            BackgroundTransparency = 0.15,
+            BackgroundColor3 = Color3.fromRGB(15, 10, 20),
+            BorderSizePixel = 0,
+            Position = UDim2.fromOffset(0, 0),
+            Size = UDim2.fromScale(1, 1),
+            ZIndex = -20,
+            Parent = MainFrame,
+        })
+        New("UICorner", {
+            CornerRadius = UDim.new(0, WindowInfo.CornerRadius - 1),
+            Parent = BackgroundBlur,
+        })
+
+        -- Gradient fog overlay (dark purple mist effect)
+        local FogGradient = New("Frame", {
+            Name = "FogGradient",
+            BackgroundTransparency = 1,
+            Size = UDim2.fromScale(1, 1),
+            ZIndex = -19,
+            Parent = BackgroundBlur,
+        })
+        New("UICorner", {
+            CornerRadius = UDim.new(0, WindowInfo.CornerRadius - 1),
+            Parent = FogGradient,
+        })
+
+        local FogGradientUI = New("UIGradient", {
+            Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.fromRGB(30, 20, 45)),
+                ColorSequenceKeypoint.new(0.5, Color3.fromRGB(20, 15, 30)),
+                ColorSequenceKeypoint.new(1, Color3.fromRGB(25, 18, 38)),
+            }),
+            Rotation = 45,
+            Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0.3),
+                NumberSequenceKeypoint.new(0.5, 0.5),
+                NumberSequenceKeypoint.new(1, 0.3),
+            }),
+            Parent = FogGradient,
+        })
+
+        -- Animated mist particles (subtle purple glow orbs)
+        local MistParticles = {}
+        for i = 1, 6 do
+            local particle = New("Frame", {
+                Name = "MistParticle" .. i,
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                BackgroundColor3 = Library.Scheme.AccentColor,
+                BackgroundTransparency = 0.85,
+                BorderSizePixel = 0,
+                Position = UDim2.fromScale(math.random(), math.random()),
+                Size = UDim2.fromOffset(math.random(40, 80), math.random(40, 80)),
+                ZIndex = -18,
+                Parent = BackgroundBlur,
+            })
+            New("UICorner", {
+                CornerRadius = UDim.new(1, 0),
+                Parent = particle,
+            })
+
+            -- Add subtle glow to each particle
+            local particleGlow = New("ImageLabel", {
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                BackgroundTransparency = 1,
+                Image = "rbxassetid://6015897843",
+                ImageColor3 = Library.Scheme.AccentColor,
+                ImageTransparency = 0.7,
+                Position = UDim2.fromScale(0.5, 0.5),
+                ScaleType = Enum.ScaleType.Slice,
+                SliceCenter = Rect.new(49, 49, 450, 450),
+                Size = UDim2.fromOffset(120, 120),
+                ZIndex = -19,
+                Parent = particle,
+            })
+
+            table.insert(MistParticles, particle)
+
+            -- Animate particles (floating effect)
+            local duration = math.random(15, 25)
+            local targetPos = UDim2.fromScale(math.random(), math.random())
+
+            local moveTween = TweenService:Create(particle,
+                TweenInfo.new(duration, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+                { Position = targetPos }
+            )
+            moveTween:Play()
+
+            -- Pulse transparency
+            local pulseTween = TweenService:Create(particle,
+                TweenInfo.new(math.random(3, 6), Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+                { BackgroundTransparency = math.random(92, 96) / 100 }
+            )
+            pulseTween:Play()
+        end
+
+        -- Subtle vignette effect
+        local Vignette = New("ImageLabel", {
+            Name = "Vignette",
+            BackgroundTransparency = 1,
+            Image = "rbxassetid://6015897843",
+            ImageColor3 = Color3.fromRGB(10, 5, 15),
+            ImageTransparency = 0.6,
+            ScaleType = Enum.ScaleType.Slice,
+            SliceCenter = Rect.new(49, 49, 450, 450),
+            Size = UDim2.fromScale(1, 1),
+            ZIndex = -17,
+            Parent = BackgroundBlur,
+        })
+        New("UICorner", {
+            CornerRadius = UDim.new(0, WindowInfo.CornerRadius - 1),
+            Parent = Vignette,
+        })
+
         local InitialSidebarWidth = GetSidebarWidth()
         LayoutRefs.DividerLine = Library:MakeLine(MainFrame, {
             Position = UDim2.new(0, InitialSidebarWidth, 0, 0),
@@ -10452,9 +10621,14 @@ function Library:CreateWindow(WindowInfo)
 
             local GroupboxHolder
             local GroupboxLabel
+            local GroupboxDescription
+            local CollapseArrow
 
             local GroupboxContainer
             local GroupboxList
+
+            local isCollapsed = false
+            local headerHeight = Info.Description and 50 or 34
 
             do
                 GroupboxHolder = New("Frame", {
@@ -10468,7 +10642,7 @@ function Library:CreateWindow(WindowInfo)
                     Parent = GroupboxHolder,
                 })
                 Library:MakeLine(GroupboxHolder, {
-                    Position = UDim2.fromOffset(0, 34),
+                    Position = UDim2.fromOffset(0, headerHeight),
                     Size = UDim2.new(1, 0, 0, 1),
                 })
 
@@ -10489,7 +10663,7 @@ function Library:CreateWindow(WindowInfo)
                 GroupboxLabel = New("TextLabel", {
                     BackgroundTransparency = 1,
                     Position = UDim2.fromOffset(BoxIcon and 24 or 0, 0),
-                    Size = UDim2.new(1, 0, 0, 34),
+                    Size = UDim2.new(1, Info.Description and -30 or 0, 0, Info.Description and 18 or 34),
                     Text = Info.Name,
                     TextSize = 15,
                     TextTransparency = 0.1,
@@ -10502,11 +10676,52 @@ function Library:CreateWindow(WindowInfo)
                     Parent = GroupboxLabel,
                 })
 
+                -- Description label (subtle gray with better contrast)
+                if Info.Description then
+                    GroupboxDescription = New("TextLabel", {
+                        BackgroundTransparency = 1,
+                        Position = UDim2.fromOffset(BoxIcon and 24 or 0, 18),
+                        Size = UDim2.new(1, -30, 0, 16),
+                        Text = Library:StylizeBullets(Info.Description),
+                        RichText = true,
+                        TextSize = 12,
+                        TextTransparency = 0.4,
+                        TextColor3 = Color3.fromRGB(160, 160, 170),
+                        TextXAlignment = Enum.TextXAlignment.Left,
+                        Parent = GroupboxHolder,
+                    })
+                    New("UIPadding", {
+                        PaddingLeft = UDim.new(0, 12),
+                        PaddingRight = UDim.new(0, 12),
+                        Parent = GroupboxDescription,
+                    })
+
+                    -- Track for theme updates
+                    if Info.Description:find("•") then
+                        GroupboxDescription:SetAttribute("OriginalText", Info.Description)
+                        Library.BulletElements[GroupboxDescription] = true
+                    end
+                end
+
+                -- Collapse/Expand arrow (modern chevron icon)
+                local ChevronIcon = Library:GetCustomIcon("chevron-down")
+                CollapseArrow = New("ImageLabel", {
+                    BackgroundTransparency = 1,
+                    Position = UDim2.new(1, -28, 0, (headerHeight / 2) - 8),
+                    Size = UDim2.fromOffset(16, 16),
+                    Image = ChevronIcon and ChevronIcon.Url or "",
+                    ImageRectOffset = ChevronIcon and ChevronIcon.ImageRectOffset or Vector2.zero,
+                    ImageRectSize = ChevronIcon and ChevronIcon.ImageRectSize or Vector2.zero,
+                    ImageTransparency = 0.3,
+                    Parent = GroupboxHolder,
+                })
+                Library.Registry[CollapseArrow] = { ImageColor3 = "FontColor" }
+
                 -- Hover effect for groupbox header
                 local HeaderHoverRegion = New("TextButton", {
                     BackgroundTransparency = 1,
                     Position = UDim2.fromOffset(0, 0),
-                    Size = UDim2.new(1, 0, 0, 34),
+                    Size = UDim2.new(1, 0, 0, headerHeight),
                     Text = "",
                     Parent = GroupboxHolder,
                 })
@@ -10515,6 +10730,10 @@ function Library:CreateWindow(WindowInfo)
                     TweenService:Create(GroupboxLabel, Library.HoverTweenInfo, {
                         TextTransparency = 0,
                         TextColor3 = Library.Scheme.AccentColor,
+                    }):Play()
+                    TweenService:Create(CollapseArrow, Library.HoverTweenInfo, {
+                        ImageTransparency = 0,
+                        ImageColor3 = Library.Scheme.AccentColor,
                     }):Play()
                     if BoxIconImage then
                         TweenService:Create(BoxIconImage, Library.HoverTweenInfo, {
@@ -10529,6 +10748,10 @@ function Library:CreateWindow(WindowInfo)
                         TextTransparency = 0.1,
                         TextColor3 = Library.Scheme.FontColor,
                     }):Play()
+                    TweenService:Create(CollapseArrow, Library.HoverTweenInfo, {
+                        ImageTransparency = 0.3,
+                        ImageColor3 = Library.Scheme.FontColor,
+                    }):Play()
                     if BoxIconImage then
                         TweenService:Create(BoxIconImage, Library.HoverTweenInfo, {
                             ImageTransparency = 0,
@@ -10537,10 +10760,51 @@ function Library:CreateWindow(WindowInfo)
                     end
                 end)
 
+                -- Click to collapse/expand
+                HeaderHoverRegion.MouseButton1Click:Connect(function()
+                    isCollapsed = not isCollapsed
+
+                    -- Smooth chevron rotation with spring-like effect
+                    local rotationTween = TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+                    TweenService:Create(CollapseArrow, rotationTween, {
+                        Rotation = isCollapsed and 90 or 0,
+                    }):Play()
+
+                    -- Animate container visibility with smooth transitions
+                    local sizeTween = TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+                    if isCollapsed then
+                        -- Fade out content first, then hide
+                        local fadeOut = TweenService:Create(GroupboxContainer, TweenInfo.new(0.15), {
+                            BackgroundTransparency = 1,
+                        })
+                        fadeOut.Completed:Connect(function()
+                            GroupboxContainer.Visible = false
+                        end)
+                        fadeOut:Play()
+
+                        TweenService:Create(Background, sizeTween, {
+                            Size = UDim2.new(1, 0, 0, headerHeight + 4),
+                        }):Play()
+                    else
+                        -- Show content, then fade in
+                        GroupboxContainer.Visible = true
+                        GroupboxContainer.BackgroundTransparency = 1
+
+                        local targetHeight = GroupboxList.AbsoluteContentSize.Y + headerHeight + 19
+                        TweenService:Create(Background, sizeTween, {
+                            Size = UDim2.new(1, 0, 0, targetHeight * Library.DPIScale),
+                        }):Play()
+
+                        TweenService:Create(GroupboxContainer, TweenInfo.new(0.2), {
+                            BackgroundTransparency = 1,
+                        }):Play()
+                    end
+                end)
+
                 GroupboxContainer = New("Frame", {
                     BackgroundTransparency = 1,
-                    Position = UDim2.fromOffset(0, 35),
-                    Size = UDim2.new(1, 0, 1, -35),
+                    Position = UDim2.fromOffset(0, headerHeight + 1),
+                    Size = UDim2.new(1, 0, 1, -(headerHeight + 1)),
                     Parent = GroupboxHolder,
                 })
 
@@ -10561,6 +10825,8 @@ function Library:CreateWindow(WindowInfo)
                 BoxHolder = BoxHolder,
                 Holder = Background,
                 Container = GroupboxContainer,
+                HeaderHeight = headerHeight,
+                IsCollapsed = isCollapsed,
 
                 Tab = Tab,
                 DependencyBoxes = {},
@@ -10568,7 +10834,10 @@ function Library:CreateWindow(WindowInfo)
             }
 
             function Groupbox:Resize()
-                Background.Size = UDim2.new(1, 0, 0, GroupboxList.AbsoluteContentSize.Y + 53 * Library.DPIScale)
+                if not isCollapsed then
+                    local contentHeight = GroupboxList.AbsoluteContentSize.Y + headerHeight + 19
+                    Background.Size = UDim2.new(1, 0, 0, contentHeight * Library.DPIScale)
+                end
             end
 
             setmetatable(Groupbox, BaseGroupbox)
@@ -10579,12 +10848,12 @@ function Library:CreateWindow(WindowInfo)
             return Groupbox
         end
 
-        function Tab:AddLeftGroupbox(Name, IconName)
-            return Tab:AddGroupbox({ Side = 1, Name = Name, IconName = IconName })
+        function Tab:AddLeftGroupbox(Name, IconName, Description)
+            return Tab:AddGroupbox({ Side = 1, Name = Name, IconName = IconName, Description = Description })
         end
 
-        function Tab:AddRightGroupbox(Name, IconName)
-            return Tab:AddGroupbox({ Side = 2, Name = Name, IconName = IconName })
+        function Tab:AddRightGroupbox(Name, IconName, Description)
+            return Tab:AddGroupbox({ Side = 2, Name = Name, IconName = IconName, Description = Description })
         end
 
         function Tab:AddTabbox(Info)
