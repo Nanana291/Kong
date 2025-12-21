@@ -1051,6 +1051,14 @@ function Library:UpdateColorsUsingRegistry()
             end
         end
     end
+
+    -- Update fog gradient when theme colors change
+    if Library.FogGradientUI and Library.UpdateFogGradient then
+        Library.FogGradientUI.Color = Library.UpdateFogGradient()
+    end
+
+    -- Update bullet colors when theme changes
+    Library:UpdateBulletColors()
 end
 
 function Library:UpdateDPI(Instance, Properties)
@@ -9312,11 +9320,11 @@ function Library:CreateWindow(WindowInfo)
             Parent = MainFrame,
         })
 
-        -- Modern blur effect with dark purple fog/mist
+        -- Modern blur effect with dark purple fog/mist (uses theme colors)
         local BackgroundBlur = New("Frame", {
             Name = "BlurBackground",
-            BackgroundTransparency = 0.15,
-            BackgroundColor3 = Color3.fromRGB(15, 10, 20),
+            BackgroundTransparency = 0.12,
+            BackgroundColor3 = "BackgroundColor",
             BorderSizePixel = 0,
             Position = UDim2.fromOffset(0, 0),
             Size = UDim2.fromScale(1, 1),
@@ -9328,10 +9336,11 @@ function Library:CreateWindow(WindowInfo)
             Parent = BackgroundBlur,
         })
 
-        -- Gradient fog overlay (dark purple mist effect)
+        -- Gradient fog overlay (combines theme background + accent for mist)
         local FogGradient = New("Frame", {
             Name = "FogGradient",
-            BackgroundTransparency = 1,
+            BackgroundColor3 = "AccentColor",
+            BackgroundTransparency = 0.92,
             Size = UDim2.fromScale(1, 1),
             ZIndex = -19,
             Parent = BackgroundBlur,
@@ -9341,12 +9350,33 @@ function Library:CreateWindow(WindowInfo)
             Parent = FogGradient,
         })
 
+        -- Dynamic gradient that blends with theme colors
+        local function UpdateFogGradient()
+            local bgColor = Library.Scheme.BackgroundColor
+            local accentColor = Library.Scheme.AccentColor
+
+            -- Mix colors for fog effect
+            local function MixColors(c1, c2, amount)
+                return Color3.new(
+                    c1.R * (1 - amount) + c2.R * amount,
+                    c1.G * (1 - amount) + c2.G * amount,
+                    c1.B * (1 - amount) + c2.B * amount
+                )
+            end
+
+            local fogColor1 = MixColors(bgColor, accentColor, 0.15)
+            local fogColor2 = MixColors(bgColor, accentColor, 0.08)
+            local fogColor3 = MixColors(bgColor, accentColor, 0.12)
+
+            return ColorSequence.new({
+                ColorSequenceKeypoint.new(0, fogColor1),
+                ColorSequenceKeypoint.new(0.5, fogColor2),
+                ColorSequenceKeypoint.new(1, fogColor3),
+            })
+        end
+
         local FogGradientUI = New("UIGradient", {
-            Color = ColorSequence.new({
-                ColorSequenceKeypoint.new(0, Color3.fromRGB(30, 20, 45)),
-                ColorSequenceKeypoint.new(0.5, Color3.fromRGB(20, 15, 30)),
-                ColorSequenceKeypoint.new(1, Color3.fromRGB(25, 18, 38)),
-            }),
+            Color = UpdateFogGradient(),
             Rotation = 45,
             Transparency = NumberSequence.new({
                 NumberSequenceKeypoint.new(0, 0.3),
@@ -9355,6 +9385,10 @@ function Library:CreateWindow(WindowInfo)
             }),
             Parent = FogGradient,
         })
+
+        -- Store reference for theme updates
+        Library.FogGradientUI = FogGradientUI
+        Library.UpdateFogGradient = UpdateFogGradient
 
         -- Animated mist particles (subtle purple glow orbs)
         local MistParticles = {}
