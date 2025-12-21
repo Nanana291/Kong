@@ -9311,6 +9311,123 @@ function Library:CreateWindow(WindowInfo)
             CornerRadius = UDim.new(0, WindowInfo.CornerRadius - 1),
             Parent = MainFrame,
         })
+
+        -- Modern blur effect with dark purple fog/mist
+        local BackgroundBlur = New("Frame", {
+            Name = "BlurBackground",
+            BackgroundTransparency = 0.15,
+            BackgroundColor3 = Color3.fromRGB(15, 10, 20),
+            BorderSizePixel = 0,
+            Position = UDim2.fromOffset(0, 0),
+            Size = UDim2.fromScale(1, 1),
+            ZIndex = -20,
+            Parent = MainFrame,
+        })
+        New("UICorner", {
+            CornerRadius = UDim.new(0, WindowInfo.CornerRadius - 1),
+            Parent = BackgroundBlur,
+        })
+
+        -- Gradient fog overlay (dark purple mist effect)
+        local FogGradient = New("Frame", {
+            Name = "FogGradient",
+            BackgroundTransparency = 1,
+            Size = UDim2.fromScale(1, 1),
+            ZIndex = -19,
+            Parent = BackgroundBlur,
+        })
+        New("UICorner", {
+            CornerRadius = UDim.new(0, WindowInfo.CornerRadius - 1),
+            Parent = FogGradient,
+        })
+
+        local FogGradientUI = New("UIGradient", {
+            Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.fromRGB(30, 20, 45)),
+                ColorSequenceKeypoint.new(0.5, Color3.fromRGB(20, 15, 30)),
+                ColorSequenceKeypoint.new(1, Color3.fromRGB(25, 18, 38)),
+            }),
+            Rotation = 45,
+            Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0.3),
+                NumberSequenceKeypoint.new(0.5, 0.5),
+                NumberSequenceKeypoint.new(1, 0.3),
+            }),
+            Parent = FogGradient,
+        })
+
+        -- Animated mist particles (subtle purple glow orbs)
+        local MistParticles = {}
+        for i = 1, 6 do
+            local particle = New("Frame", {
+                Name = "MistParticle" .. i,
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                BackgroundColor3 = Library.Scheme.AccentColor,
+                BackgroundTransparency = 0.85,
+                BorderSizePixel = 0,
+                Position = UDim2.fromScale(math.random(), math.random()),
+                Size = UDim2.fromOffset(math.random(40, 80), math.random(40, 80)),
+                ZIndex = -18,
+                Parent = BackgroundBlur,
+            })
+            New("UICorner", {
+                CornerRadius = UDim.new(1, 0),
+                Parent = particle,
+            })
+
+            -- Add subtle glow to each particle
+            local particleGlow = New("ImageLabel", {
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                BackgroundTransparency = 1,
+                Image = "rbxassetid://6015897843",
+                ImageColor3 = Library.Scheme.AccentColor,
+                ImageTransparency = 0.7,
+                Position = UDim2.fromScale(0.5, 0.5),
+                ScaleType = Enum.ScaleType.Slice,
+                SliceCenter = Rect.new(49, 49, 450, 450),
+                Size = UDim2.fromOffset(120, 120),
+                ZIndex = -19,
+                Parent = particle,
+            })
+
+            table.insert(MistParticles, particle)
+
+            -- Animate particles (floating effect)
+            local duration = math.random(15, 25)
+            local targetPos = UDim2.fromScale(math.random(), math.random())
+
+            local moveTween = TweenService:Create(particle,
+                TweenInfo.new(duration, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+                { Position = targetPos }
+            )
+            moveTween:Play()
+
+            -- Pulse transparency
+            local pulseTween = TweenService:Create(particle,
+                TweenInfo.new(math.random(3, 6), Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+                { BackgroundTransparency = math.random(92, 96) / 100 }
+            )
+            pulseTween:Play()
+        end
+
+        -- Subtle vignette effect
+        local Vignette = New("ImageLabel", {
+            Name = "Vignette",
+            BackgroundTransparency = 1,
+            Image = "rbxassetid://6015897843",
+            ImageColor3 = Color3.fromRGB(10, 5, 15),
+            ImageTransparency = 0.6,
+            ScaleType = Enum.ScaleType.Slice,
+            SliceCenter = Rect.new(49, 49, 450, 450),
+            Size = UDim2.fromScale(1, 1),
+            ZIndex = -17,
+            Parent = BackgroundBlur,
+        })
+        New("UICorner", {
+            CornerRadius = UDim.new(0, WindowInfo.CornerRadius - 1),
+            Parent = Vignette,
+        })
+
         local InitialSidebarWidth = GetSidebarWidth()
         LayoutRefs.DividerLine = Library:MakeLine(MainFrame, {
             Position = UDim2.new(0, InitialSidebarWidth, 0, 0),
