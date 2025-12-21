@@ -217,7 +217,8 @@ local Library = {
 
     Registry = {},
     DPIRegistry = {},
-    
+    BulletElements = {}, -- Track elements with bullet points for theme updates
+
     ImageManager = CustomImageManager,
 }
 
@@ -1409,6 +1410,43 @@ function Library:CreateGlowEffect(Element: GuiObject, Color: Color3?, Thickness:
     GlowTween:Play()
 
     return Glow, GlowTween
+end
+
+-- Stylize bullet points with accent color (neon purple effect)
+function Library:StylizeBullets(Text: string): string
+    if not Text or Text == "" then
+        return Text
+    end
+
+    -- Convert bullet points (•) to rich text with accent color
+    local AccentColor = Library.Scheme.AccentColor
+    local ColorHex = string.format("#%02X%02X%02X",
+        math.floor(AccentColor.R * 255),
+        math.floor(AccentColor.G * 255),
+        math.floor(AccentColor.B * 255)
+    )
+
+    -- Replace • with colored version and add subtle glow effect
+    local StylizedText = Text:gsub("•", string.format('<font color="%s"><b>•</b></font>', ColorHex))
+
+    return StylizedText
+end
+
+-- Update bullet colors when theme changes
+function Library:UpdateBulletColors()
+    if Library.Unloaded then
+        return
+    end
+
+    -- This will be called when theme colors change
+    for Element, _ in pairs(Library.BulletElements or {}) do
+        if Element and Element.Parent then
+            local OriginalText = Element:GetAttribute("OriginalText")
+            if OriginalText then
+                Element.Text = Library:StylizeBullets(OriginalText)
+            end
+        end
+    end
 end
 
 -- Ripple click effect
@@ -3636,12 +3674,19 @@ do
             BackgroundTransparency = 1,
             Position = Data.Icon and UDim2.fromOffset(20, 0) or UDim2.fromOffset(0, 0),
             Size = Data.Icon and UDim2.new(1, -20, 1, 0) or UDim2.fromScale(1, 1),
-            Text = Label.Text,
+            Text = Library:StylizeBullets(Label.Text),
+            RichText = true,
             TextSize = Data.Size,
             TextWrapped = Label.DoesWrap,
             TextXAlignment = Groupbox.IsKeyTab and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left,
             Parent = Holder,
         })
+
+        -- Track for theme updates
+        if Label.Text:find("•") then
+            TextLabel:SetAttribute("OriginalText", Label.Text)
+            Library.BulletElements[TextLabel] = true
+        end
 
         -- Add icon if specified
         local IconImage
@@ -4071,7 +4116,8 @@ do
             BackgroundTransparency = 1,
             Position = Data.Icon and UDim2.fromOffset(28, 0) or UDim2.fromOffset(0, 0),
             Size = Data.Icon and UDim2.new(1, -28, 0, 0) or UDim2.fromScale(1, 1),
-            Text = Paragraph.Text,
+            Text = Library:StylizeBullets(Paragraph.Text),
+            RichText = true,
             TextColor3 = Color3.fromRGB(180, 180, 190),
             FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Regular),
             TextSize = Data.Size,
@@ -4081,6 +4127,12 @@ do
             Parent = ContentFrame,
         })
         Paragraph.TextLabel = TextLabel
+
+        -- Track for theme updates
+        if Paragraph.Text:find("•") then
+            TextLabel:SetAttribute("OriginalText", Paragraph.Text)
+            Library.BulletElements[TextLabel] = true
+        end
 
         -- Apply color if specified
         local function ApplyParagraphColor(ColorOption)
@@ -10513,7 +10565,8 @@ function Library:CreateWindow(WindowInfo)
                         BackgroundTransparency = 1,
                         Position = UDim2.fromOffset(BoxIcon and 24 or 0, 18),
                         Size = UDim2.new(1, -30, 0, 16),
-                        Text = Info.Description,
+                        Text = Library:StylizeBullets(Info.Description),
+                        RichText = true,
                         TextSize = 12,
                         TextTransparency = 0.4,
                         TextColor3 = Color3.fromRGB(160, 160, 170),
@@ -10525,6 +10578,12 @@ function Library:CreateWindow(WindowInfo)
                         PaddingRight = UDim.new(0, 12),
                         Parent = GroupboxDescription,
                     })
+
+                    -- Track for theme updates
+                    if Info.Description:find("•") then
+                        GroupboxDescription:SetAttribute("OriginalText", Info.Description)
+                        Library.BulletElements[GroupboxDescription] = true
+                    end
                 end
 
                 -- Collapse/Expand arrow (modern chevron icon)
