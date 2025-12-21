@@ -6949,7 +6949,8 @@ do
                 return
             end
 
-            if not IsMouseInput(Input) then
+            -- Allow mouse movement and touch input while dragging
+            if Input.UserInputType ~= Enum.UserInputType.MouseMovement and Input.UserInputType ~= Enum.UserInputType.Touch then
                 return
             end
 
