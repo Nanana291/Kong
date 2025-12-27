@@ -5073,10 +5073,70 @@ do
         end
 
         local function InitEvents(Button)
+            -- State tracking for proper cleanup
+            local hoverState = {
+                isHovering = false,
+                tweens = {},
+            }
+
+            -- Clean up function to cancel all active tweens
+            local function CleanupTweens()
+                for _, tween in pairs(hoverState.tweens) do
+                    if tween then
+                        tween:Cancel()
+                    end
+                end
+                hoverState.tweens = {}
+            end
+
+            -- Reset button to default state
+            local function ResetButtonState()
+                CleanupTweens()
+
+                local VariantStyle = Button.VariantStyle or VariantColors.Default
+                local bgColor = VariantStyle.bg
+                local textColor = VariantStyle.text
+
+                -- Get actual colors
+                local targetBgColor = typeof(bgColor) == "string" and (Library.Scheme[bgColor] or Library.Scheme.MainColor) or bgColor
+                local targetTextColor = typeof(textColor) == "string" and (Library.Scheme[textColor] or Library.Scheme.FontColor) or textColor
+
+                -- Reset background
+                Button.Base.BackgroundColor3 = Button.Disabled and Library.Scheme.BackgroundColor or targetBgColor
+
+                -- Reset text transparency
+                if Button.Variant == "Default" or not Button.Variant then
+                    Button.Base.TextTransparency = Button.Disabled and 0.8 or 0.4
+                    if Button.TextLabel then
+                        Button.TextLabel.TextTransparency = Button.Disabled and 0.8 or 0.4
+                    end
+                end
+
+                -- Reset icon size
+                if Button.IconImage then
+                    Button.IconImage.Size = UDim2.fromOffset(14, 14)
+                end
+
+                -- Reset glow
+                if Button.Glow then
+                    Button.Glow.ImageTransparency = 1
+                end
+
+                -- Reset stroke
+                if Button.Stroke then
+                    local strokeColor = Button.Variant == "Default" and Library.Scheme.OutlineColor or (typeof(bgColor) == "Color3" and bgColor or Library.Scheme.AccentColor)
+                    Button.Stroke.Transparency = Button.Disabled and 0.5 or (Button.Variant == "Default" and 0 or 0.5)
+                    Button.Stroke.Color = strokeColor
+                end
+            end
+
             Button.Base.MouseEnter:Connect(function()
                 if Button.Disabled or Button.Loading then
                     return
                 end
+
+                hoverState.isHovering = true
+                CleanupTweens()
 
                 local VariantStyle = Button.VariantStyle or VariantColors.Default
                 local bgColor = VariantStyle.bg
@@ -5092,95 +5152,84 @@ do
                     targetBgColor = Library:GetLighterColor(bgColor)
                 end
 
-                local tweenProps = {
+                -- Background color tween
+                local bgTween = TweenService:Create(Button.Base, Library.HoverTweenInfo, {
                     BackgroundColor3 = targetBgColor,
-                }
+                })
+                bgTween:Play()
+                table.insert(hoverState.tweens, bgTween)
 
-                -- Only animate text transparency for default variant
+                -- Text transparency (only for default variant)
                 if Button.Variant == "Default" or not Button.Variant then
-                    tweenProps.TextTransparency = 0
+                    local textTween = TweenService:Create(Button.Base, Library.HoverTweenInfo, {
+                        TextTransparency = 0,
+                    })
+                    textTween:Play()
+                    table.insert(hoverState.tweens, textTween)
+
                     if Button.TextLabel then
-                        TweenService:Create(Button.TextLabel, Library.HoverTweenInfo, { TextTransparency = 0 }):Play()
+                        local labelTween = TweenService:Create(Button.TextLabel, Library.HoverTweenInfo, {
+                            TextTransparency = 0,
+                        })
+                        labelTween:Play()
+                        table.insert(hoverState.tweens, labelTween)
                     end
                 end
 
-                -- Scale up icon slightly on hover
+                -- Icon scale animation with spring effect
                 if Button.IconImage then
-                    TweenService:Create(Button.IconImage, Library.HoverTweenInfo, {
-                        Size = UDim2.fromOffset(16, 16),
-                    }):Play()
+                    local iconTween = TweenService:Create(Button.IconImage,
+                        TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                        { Size = UDim2.fromOffset(16, 16) }
+                    )
+                    iconTween:Play()
+                    table.insert(hoverState.tweens, iconTween)
                 end
 
-                -- Show glow effect
+                -- Glow effect
                 if Button.Glow then
-                    TweenService:Create(Button.Glow, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
-                        ImageTransparency = 0.85,
-                    }):Play()
+                    local glowTween = TweenService:Create(Button.Glow,
+                        TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+                        { ImageTransparency = 0.85 }
+                    )
+                    glowTween:Play()
+                    table.insert(hoverState.tweens, glowTween)
                 end
 
-                -- Animate stroke
+                -- Stroke animation
                 if Button.Stroke then
-                    TweenService:Create(Button.Stroke, Library.HoverTweenInfo, {
+                    local strokeTween = TweenService:Create(Button.Stroke, Library.HoverTweenInfo, {
                         Transparency = 0,
                         Color = Library.Scheme.AccentColor,
-                    }):Play()
+                    })
+                    strokeTween:Play()
+                    table.insert(hoverState.tweens, strokeTween)
                 end
-
-                Button.Tween = TweenService:Create(Button.Base, Library.HoverTweenInfo, tweenProps)
-                Button.Tween:Play()
             end)
+
             Button.Base.MouseLeave:Connect(function()
-                if Button.Disabled or Button.Loading then
+                hoverState.isHovering = false
+
+                -- Small delay to ensure we're truly leaving (prevents flicker)
+                task.wait(0.05)
+                if hoverState.isHovering then
                     return
                 end
 
-                local VariantStyle = Button.VariantStyle or VariantColors.Default
-                local bgColor = VariantStyle.bg
+                ResetButtonState()
+            end)
 
-                local targetBgColor
-                if typeof(bgColor) == "string" then
-                    targetBgColor = Library.Scheme[bgColor] or Library.Scheme.MainColor
-                else
-                    targetBgColor = bgColor
+            -- Also reset on InputEnded to ensure state is correct
+            Button.Base.InputEnded:Connect(function(Input)
+                if not IsMouseInput(Input) then
+                    return
                 end
 
-                local tweenProps = {
-                    BackgroundColor3 = targetBgColor,
-                }
-
-                -- Only animate text transparency for default variant
-                if Button.Variant == "Default" or not Button.Variant then
-                    tweenProps.TextTransparency = 0.4
-                    if Button.TextLabel then
-                        TweenService:Create(Button.TextLabel, Library.HoverTweenInfo, { TextTransparency = 0.4 }):Play()
-                    end
+                -- If not hovering anymore, ensure clean state
+                task.wait(0.05)
+                if not hoverState.isHovering then
+                    ResetButtonState()
                 end
-
-                -- Scale icon back down
-                if Button.IconImage then
-                    TweenService:Create(Button.IconImage, Library.HoverTweenInfo, {
-                        Size = UDim2.fromOffset(14, 14),
-                    }):Play()
-                end
-
-                -- Hide glow effect
-                if Button.Glow then
-                    TweenService:Create(Button.Glow, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
-                        ImageTransparency = 1,
-                    }):Play()
-                end
-
-                -- Reset stroke
-                if Button.Stroke then
-                    local strokeColor = Button.Variant == "Default" and Library.Scheme.OutlineColor or Library.Scheme.AccentColor
-                    TweenService:Create(Button.Stroke, Library.HoverTweenInfo, {
-                        Transparency = Button.Variant == "Default" and 0 or 0.5,
-                        Color = strokeColor,
-                    }):Play()
-                end
-
-                Button.Tween = TweenService:Create(Button.Base, Library.HoverTweenInfo, tweenProps)
-                Button.Tween:Play()
             end)
 
             Button.Base.MouseButton1Click:Connect(function()
