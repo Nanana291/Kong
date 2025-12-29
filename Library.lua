@@ -7167,6 +7167,34 @@ do
             end
 
             IsDraggingSlider = true
+            isDragging = true
+
+            -- Grab effect: Scale up thumb dramatically
+            TweenService:Create(Thumb,
+                TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                { Size = UDim2.fromOffset(24, 24) }
+            ):Play()
+
+            -- Enlarge dot for emphasis
+            TweenService:Create(ThumbDot,
+                TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                { Size = UDim2.fromOffset(10, 10) }
+            ):Play()
+
+            -- Brighten glow significantly
+            TweenService:Create(ThumbGlow,
+                TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+                {
+                    ImageTransparency = 0.5,
+                    Size = UDim2.fromOffset(36, 36)
+                }
+            ):Play()
+
+            -- Pulse the fill for feedback
+            TweenService:Create(FillGlow,
+                TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                { BackgroundTransparency = 0.3 }
+            ):Play()
 
             for _, Side in pairs(Library.ActiveTab.Sides) do
                 Side.ScrollingEnabled = false
@@ -7197,7 +7225,22 @@ do
             Slider.Value = Round(Slider.Min + ((Slider.Max - Slider.Min) * Scale), Slider.Rounding)
 
             Slider:Display()
+
+            -- Value change feedback
             if Slider.Value ~= OldValue then
+                -- Subtle pulse on value change
+                local pulseTween = TweenService:Create(ThumbDot,
+                    TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                    { Size = UDim2.fromOffset(11, 11) }
+                )
+                pulseTween:Play()
+                pulseTween.Completed:Connect(function()
+                    TweenService:Create(ThumbDot,
+                        TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+                        { Size = UDim2.fromOffset(10, 10) }
+                    ):Play()
+                end)
+
                 Library:SafeCallback(Slider.Callback, Slider.Value)
                 Library:SafeCallback(Slider.Changed, Slider.Value)
             end
@@ -7206,6 +7249,31 @@ do
         Library:GiveSignal(UserInputService.InputEnded:Connect(function(Input: InputObject)
             if IsMouseInput(Input) then
                 IsDraggingSlider = false
+                isDragging = false
+
+                -- Release animation: Return to normal size
+                TweenService:Create(Thumb,
+                    TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                    { Size = UDim2.fromOffset(16, 16) }
+                ):Play()
+
+                TweenService:Create(ThumbDot,
+                    TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                    { Size = UDim2.fromOffset(6, 6) }
+                ):Play()
+
+                TweenService:Create(ThumbGlow,
+                    TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+                    {
+                        ImageTransparency = 1,
+                        Size = UDim2.fromOffset(28, 28)
+                    }
+                ):Play()
+
+                TweenService:Create(FillGlow,
+                    TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                    { BackgroundTransparency = 0.5 }
+                ):Play()
 
                 for _, Side in pairs(Library.ActiveTab.Sides) do
                     Side.ScrollingEnabled = true
