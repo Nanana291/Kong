@@ -5663,6 +5663,12 @@ do
                 return
             end
 
+            -- Safety check: ensure elements exist
+            if not Switch or not Ball or not SwitchGlow then
+                Toggle:SetValue(not Toggle.Value)
+                return
+            end
+
             -- Click feedback: Punch animation on switch
             local punchTween = TweenService:Create(Switch,
                 TweenInfo.new(0.1, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
@@ -5670,52 +5676,61 @@ do
             )
             punchTween:Play()
             punchTween.Completed:Connect(function()
-                TweenService:Create(Switch,
-                    TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-                    { Size = isHovering and UDim2.fromOffset(38, 22) or UDim2.fromOffset(36, 20) }
-                ):Play()
+                if Switch and Switch.Parent then
+                    TweenService:Create(Switch,
+                        TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                        { Size = UDim2.fromOffset(36, 20) }
+                    ):Play()
+                end
             end)
 
             -- Ripple effect on switch background
-            local ripple = New("Frame", {
-                AnchorPoint = Vector2.new(0.5, 0.5),
-                BackgroundColor3 = Library.Scheme.AccentColor,
-                BackgroundTransparency = 0.5,
-                Position = UDim2.fromScale(0.5, 0.5),
-                Size = UDim2.fromOffset(0, 0),
-                ZIndex = 0,
-                Parent = Switch,
-            })
-            New("UICorner", { CornerRadius = UDim.new(1, 0), Parent = ripple })
+            if Switch and Switch.Parent then
+                local ripple = New("Frame", {
+                    AnchorPoint = Vector2.new(0.5, 0.5),
+                    BackgroundColor3 = Library.Scheme.AccentColor,
+                    BackgroundTransparency = 0.5,
+                    Position = UDim2.fromScale(0.5, 0.5),
+                    Size = UDim2.fromOffset(0, 0),
+                    ZIndex = 0,
+                    Parent = Switch,
+                })
+                New("UICorner", { CornerRadius = UDim.new(1, 0), Parent = ripple })
 
-            local rippleTween = TweenService:Create(ripple,
-                TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
-                {
-                    Size = UDim2.fromOffset(40, 40),
-                    BackgroundTransparency = 1,
-                }
-            )
-            rippleTween:Play()
-            rippleTween.Completed:Connect(function()
-                ripple:Destroy()
-            end)
+                local rippleTween = TweenService:Create(ripple,
+                    TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+                    {
+                        Size = UDim2.fromOffset(40, 40),
+                        BackgroundTransparency = 1,
+                    }
+                )
+                rippleTween:Play()
+                rippleTween.Completed:Connect(function()
+                    if ripple and ripple.Parent then
+                        ripple:Destroy()
+                    end
+                end)
+            end
 
             -- Ball punch animation
-            local ballPunch = TweenService:Create(Ball,
-                TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-                { Size = UDim2.new(1.15, 0, 1.15, 0) }
-            )
-            ballPunch:Play()
-            ballPunch.Completed:Connect(function()
-                TweenService:Create(Ball,
-                    TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-                    { Size = UDim2.fromScale(1, 1) }
-                ):Play()
-            end)
+            if Ball and Ball.Parent then
+                local ballPunch = TweenService:Create(Ball,
+                    TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                    { Size = UDim2.new(1.15, 0, 1.15, 0) }
+                )
+                ballPunch:Play()
+                ballPunch.Completed:Connect(function()
+                    if Ball and Ball.Parent then
+                        TweenService:Create(Ball,
+                            TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                            { Size = UDim2.fromScale(1, 1) }
+                        ):Play()
+                    end
+                end)
+            end
 
             -- Celebration animation when toggling ON
-            if not Toggle.Value then
-                -- About to turn on - add extra flair
+            if not Toggle.Value and SwitchGlow and SwitchGlow.Parent then
                 local celebrationGlow = TweenService:Create(SwitchGlow,
                     TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
                     { ImageTransparency = 0.4 }
@@ -6021,6 +6036,12 @@ do
                 return
             end
 
+            -- Safety check: ensure elements exist
+            if not Switch or not Ball or not SwitchGlow then
+                Toggle:SetValue(not Toggle.Value)
+                return
+            end
+
             -- Click feedback: Punch animation on switch
             local punchTween = TweenService:Create(Switch,
                 TweenInfo.new(0.1, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
@@ -6028,52 +6049,61 @@ do
             )
             punchTween:Play()
             punchTween.Completed:Connect(function()
-                TweenService:Create(Switch,
-                    TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-                    { Size = isHovering and UDim2.fromOffset(38, 22) or UDim2.fromOffset(36, 20) }
-                ):Play()
+                if Switch and Switch.Parent then
+                    TweenService:Create(Switch,
+                        TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                        { Size = UDim2.fromOffset(36, 20) }
+                    ):Play()
+                end
             end)
 
             -- Ripple effect on switch background
-            local ripple = New("Frame", {
-                AnchorPoint = Vector2.new(0.5, 0.5),
-                BackgroundColor3 = Library.Scheme.AccentColor,
-                BackgroundTransparency = 0.5,
-                Position = UDim2.fromScale(0.5, 0.5),
-                Size = UDim2.fromOffset(0, 0),
-                ZIndex = 0,
-                Parent = Switch,
-            })
-            New("UICorner", { CornerRadius = UDim.new(1, 0), Parent = ripple })
+            if Switch and Switch.Parent then
+                local ripple = New("Frame", {
+                    AnchorPoint = Vector2.new(0.5, 0.5),
+                    BackgroundColor3 = Library.Scheme.AccentColor,
+                    BackgroundTransparency = 0.5,
+                    Position = UDim2.fromScale(0.5, 0.5),
+                    Size = UDim2.fromOffset(0, 0),
+                    ZIndex = 0,
+                    Parent = Switch,
+                })
+                New("UICorner", { CornerRadius = UDim.new(1, 0), Parent = ripple })
 
-            local rippleTween = TweenService:Create(ripple,
-                TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
-                {
-                    Size = UDim2.fromOffset(40, 40),
-                    BackgroundTransparency = 1,
-                }
-            )
-            rippleTween:Play()
-            rippleTween.Completed:Connect(function()
-                ripple:Destroy()
-            end)
+                local rippleTween = TweenService:Create(ripple,
+                    TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+                    {
+                        Size = UDim2.fromOffset(40, 40),
+                        BackgroundTransparency = 1,
+                    }
+                )
+                rippleTween:Play()
+                rippleTween.Completed:Connect(function()
+                    if ripple and ripple.Parent then
+                        ripple:Destroy()
+                    end
+                end)
+            end
 
             -- Ball punch animation
-            local ballPunch = TweenService:Create(Ball,
-                TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-                { Size = UDim2.new(1.15, 0, 1.15, 0) }
-            )
-            ballPunch:Play()
-            ballPunch.Completed:Connect(function()
-                TweenService:Create(Ball,
-                    TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-                    { Size = UDim2.fromScale(1, 1) }
-                ):Play()
-            end)
+            if Ball and Ball.Parent then
+                local ballPunch = TweenService:Create(Ball,
+                    TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                    { Size = UDim2.new(1.15, 0, 1.15, 0) }
+                )
+                ballPunch:Play()
+                ballPunch.Completed:Connect(function()
+                    if Ball and Ball.Parent then
+                        TweenService:Create(Ball,
+                            TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                            { Size = UDim2.fromScale(1, 1) }
+                        ):Play()
+                    end
+                end)
+            end
 
             -- Celebration animation when toggling ON
-            if not Toggle.Value then
-                -- About to turn on - add extra flair
+            if not Toggle.Value and SwitchGlow and SwitchGlow.Parent then
                 local celebrationGlow = TweenService:Create(SwitchGlow,
                     TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
                     { ImageTransparency = 0.4 }
