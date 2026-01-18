@@ -2457,7 +2457,7 @@ local Library do
                     Instances:Create("UIScale", {
                         Parent = Items["MainFrame"].Instance,
                         Name = "\0",
-                        Scale = 0.699999988079071
+                        Scale = 0.55
                     })                    
                 end
 
@@ -3803,9 +3803,11 @@ local Library do
 
                 if Page.Active then
                     Items["Inactive"]:Tween(nil, {BackgroundTransparency = 0.25})
-                    Items["SelectedIndicator"]:Tween(nil, {BackgroundTransparency = 0})
-                    Items["Text"]:Tween(nil, {TextColor3 = Library.Theme.Accent})
-                    Items["Icon"]:Tween(nil, {ImageColor3 = Library.Theme.Accent})
+                    Items["SelectedIndicator"]:Tween(TweenInfo.new(0.6, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {BackgroundTransparency = 0, Size = UDim2New(0, 4, 0, 18)})
+
+                    Items["Text"]:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {TextColor3 = Library.Theme.Accent, Position = UDim2New(0, 49, 0.5, 0)})
+                    Items["Icon"]:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {ImageColor3 = Library.Theme.Accent, Position = UDim2New(0, 20, 0.5, 0)})
+
                     Items["Page"]:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 0)})
 
                     for Index, Value in Page.Sections do 
@@ -3815,9 +3817,11 @@ local Library do
                     end
                 else
                     Items["Inactive"]:Tween(nil, {BackgroundTransparency = 1})
-                    Items["SelectedIndicator"]:Tween(nil, {BackgroundTransparency = 1})
-                    Items["Text"]:Tween(nil, {TextColor3 = Library.Theme.Text})
-                    Items["Icon"]:Tween(nil, {ImageColor3 = FromRGB(255, 255, 255)})
+                    Items["SelectedIndicator"]:Tween(TweenInfo.new(0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {BackgroundTransparency = 1, Size = UDim2New(0, 4, 0, 0)})
+
+                    Items["Text"]:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {TextColor3 = Library.Theme.Text, Position = UDim2New(0, 45, 0.5, 0)})
+                    Items["Icon"]:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {ImageColor3 = FromRGB(255, 255, 255), Position = UDim2New(0, 16, 0.5, 0)})
+
                     Items["Page"]:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 60)})
                 end
 
