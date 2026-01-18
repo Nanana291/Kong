@@ -7932,10 +7932,25 @@ local Library do
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })
 
+                Items["Header"] = Instances:Create("TextLabel", {
+                    Parent = Items["Discord"].Instance,
+                    Name = "\0",
+                    Text = "You've been invited to join",
+                    FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal),
+                    TextColor3 = FromRGB(181, 186, 193),
+                    TextSize = 12,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    Size = UDim2New(1, 0, 0, 15),
+                    Position = UDim2New(0, 2, 0, 0),
+                    BackgroundTransparency = 1,
+                    ZIndex = 2
+                })
+
                 Items["Card"] = Instances:Create("Frame", {
                     Parent = Items["Discord"].Instance,
                     Name = "\0",
-                    Size = UDim2New(1, 0, 1, 0),
+                    Size = UDim2New(1, 0, 0, 90),
+                    Position = UDim2New(0, 0, 0, 20),
                     BackgroundColor3 = FromRGB(43, 45, 49),
                     BorderSizePixel = 0,
                     ZIndex = 2
@@ -7949,7 +7964,8 @@ local Library do
                     Parent = Items["Card"].Instance,
                     Name = "\0",
                     Size = UDim2New(0, 50, 0, 50),
-                    Position = UDim2New(0, 12, 0, 12),
+                    AnchorPoint = Vector2New(0, 0.5),
+                    Position = UDim2New(0, 15, 0.5, 0),
                     BackgroundColor3 = FromRGB(49, 51, 56),
                     ZIndex = 3,
                     BorderSizePixel = 0,
@@ -7978,10 +7994,10 @@ local Library do
                     FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal),
                     TextColor3 = FromRGB(255, 255, 255),
                     Text = Discord.Name,
-                    TextSize = 16,
+                    TextSize = 15,
                     TextXAlignment = Enum.TextXAlignment.Left,
-                    Size = UDim2New(1, -140, 0, 20),
-                    Position = UDim2New(0, 74, 0, 12),
+                    Size = UDim2New(1, -165, 0, 20),
+                    Position = UDim2New(0, 78, 0, 20),
                     BackgroundTransparency = 1,
                     TextTruncate = Enum.TextTruncate.AtEnd,
                     ZIndex = 3
@@ -7990,22 +8006,25 @@ local Library do
                 Items["InfoContainer"] = Instances:Create("Frame", {
                     Parent = Items["Card"].Instance,
                     BackgroundTransparency = 1,
-                    Position = UDim2New(0, 74, 0, 35),
-                    Size = UDim2New(1, -80, 0, 40),
+                    Position = UDim2New(0, 78, 0, 43),
+                    Size = UDim2New(1, -165, 0, 16),
                     ZIndex = 3
                 })
 
                 Instances:Create("UIListLayout", {
                     Parent = Items["InfoContainer"].Instance,
-                    FillDirection = Enum.FillDirection.Vertical,
-                    Padding = UDimNew(0, 2),
-                    SortOrder = Enum.SortOrder.LayoutOrder
+                    FillDirection = Enum.FillDirection.Horizontal,
+                    Padding = UDimNew(0, 12),
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    VerticalAlignment = Enum.VerticalAlignment.Center
                 })
 
+                -- Online Container
                 Items["OnlineContainer"] = Instances:Create("Frame", {
                     Parent = Items["InfoContainer"].Instance,
                     BackgroundTransparency = 1,
-                    Size = UDim2New(1, 0, 0, 16),
+                    AutomaticSize = Enum.AutomaticSize.X,
+                    Size = UDim2New(0, 0, 1, 0),
                     LayoutOrder = 1
                 })
 
@@ -8018,6 +8037,23 @@ local Library do
                 })
                 Instances:Create("UICorner", {Parent = Items["OnlineDot"].Instance, CornerRadius = UDimNew(1, 0)})
 
+                -- Pulse Effect for Online Dot
+                local Pulse = Instances:Create("Frame", {
+                    Parent = Items["OnlineDot"].Instance,
+                    Name = "Pulse",
+                    Size = UDim2New(1, 0, 1, 0),
+                    BackgroundColor3 = FromRGB(35, 165, 89),
+                    BackgroundTransparency = 0.6,
+                    ZIndex = 2
+                })
+                Instances:Create("UICorner", {Parent = Pulse.Instance, CornerRadius = UDimNew(1, 0)})
+
+                Library:Thread(function()
+                    local TweenInfoPulse = TweenInfo.new(1.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, -1)
+                    local TweenPulse = TweenService:Create(Pulse.Instance, TweenInfoPulse, {Size = UDim2New(2, 0, 2, 0), BackgroundTransparency = 1})
+                    TweenPulse:Play()
+                end)
+
                 Items["OnlineText"] = Instances:Create("TextLabel", {
                     Parent = Items["OnlineContainer"].Instance,
                     FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal),
@@ -8025,16 +8061,19 @@ local Library do
                     Text = "Loading...",
                     TextSize = 12,
                     TextXAlignment = Enum.TextXAlignment.Left,
-                    Size = UDim2New(1, -12, 1, 0),
+                    AutomaticSize = Enum.AutomaticSize.X,
+                    Size = UDim2New(0, 0, 1, 0),
                     Position = UDim2New(0, 14, 0, 0),
                     BackgroundTransparency = 1,
                     ZIndex = 3
                 })
 
+                -- Total Container
                 Items["TotalContainer"] = Instances:Create("Frame", {
                     Parent = Items["InfoContainer"].Instance,
                     BackgroundTransparency = 1,
-                    Size = UDim2New(1, 0, 0, 16),
+                    AutomaticSize = Enum.AutomaticSize.X,
+                    Size = UDim2New(0, 0, 1, 0),
                     LayoutOrder = 2
                 })
 
@@ -8054,7 +8093,8 @@ local Library do
                     Text = "Loading...",
                     TextSize = 12,
                     TextXAlignment = Enum.TextXAlignment.Left,
-                    Size = UDim2New(1, -12, 1, 0),
+                    AutomaticSize = Enum.AutomaticSize.X,
+                    Size = UDim2New(0, 0, 1, 0),
                     Position = UDim2New(0, 14, 0, 0),
                     BackgroundTransparency = 1,
                     ZIndex = 3
@@ -8064,18 +8104,19 @@ local Library do
                     Parent = Items["Card"].Instance,
                     Name = "\0",
                     Text = "Join",
-                    FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal),
+                    FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal),
                     TextColor3 = FromRGB(255, 255, 255),
                     BackgroundColor3 = FromRGB(36, 128, 70),
-                    Size = UDim2New(0, 60, 0, 32),
-                    Position = UDim2New(1, -72, 0.5, -16),
+                    Size = UDim2New(0, 75, 0, 35),
+                    AnchorPoint = Vector2New(1, 0.5),
+                    Position = UDim2New(1, -20, 0.5, 0),
                     AutoButtonColor = true,
                     TextSize = 14,
                     ZIndex = 3
                 })
                 Instances:Create("UICorner", {
                     Parent = Items["JoinButton"].Instance,
-                    CornerRadius = UDimNew(0, 3)
+                    CornerRadius = UDimNew(0, 4)
                 })
 
                 Items["JoinButton"]:OnHover(function()
@@ -8096,8 +8137,11 @@ local Library do
                     })
 
                     if response.StatusCode == 200 then
-                        local data = HttpService:JSONDecode(response.Body)
-                        if data then
+                        local Success, data = pcall(function()
+                            return HttpService:JSONDecode(response.Body)
+                        end)
+
+                        if Success and data then
                             local online = data.approximate_presence_count
                             local total = data.approximate_member_count
                             local name = data.guild.name
