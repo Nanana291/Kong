@@ -6137,7 +6137,8 @@ local Library do
                     
                     RenderStepped = RunService.RenderStepped:Connect(function()
                         Items["OptionHolder"].Instance.Position = UDim2New(0, Items["RealDropdown"].Instance.AbsolutePosition.X, 0, Items["RealDropdown"].Instance.AbsolutePosition.Y + Items["RealDropdown"].Instance.AbsoluteSize.Y + 5)
-                        Items["OptionHolder"].Instance.Size = UDim2New(0, Items["RealDropdown"].Instance.AbsoluteSize.X * 1.7, 0, Dropdown.OptionHolderSize)
+                        Items["OptionHolder"].Instance.Position = UDim2New(0, Items["RealDropdown"].Instance.AbsolutePosition.X, 0, Items["RealDropdown"].Instance.AbsolutePosition.Y + Items["RealDropdown"].Instance.AbsoluteSize.Y + 5)
+                        Items["OptionHolder"].Instance.Size = UDim2New(0, Items["RealDropdown"].Instance.AbsoluteSize.X, 0, Dropdown.OptionHolderSize)
                     end)
 
                     for Index, Value in Library.OpenFrames do 
@@ -6312,6 +6313,12 @@ local Library do
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })  OptionText:AddToTheme({TextColor3 = "Text"})
                 
+                local TextService = game:GetService("TextService")
+                local TextSize = TextService:GetTextSize(Option, 14, Library.Font, Vector2New(99999, 99999))
+                if TextSize.X > Dropdown.MaxOptionWidth then
+                    Dropdown.MaxOptionWidth = TextSize.X
+                end
+
                 local OptionData = {
                     Button = OptionButton,
                     Name = Option,
@@ -6504,6 +6511,7 @@ local Library do
                 Callback = Data.Callback or Data.callback or function() end,
                 Size = Data.Size or Data.size or 125,
                 OptionHolderSize = Data.OptionHolderSize or Data.optionholder or 125,
+                MaxOptionWidth = 0,
 
                 Value = { },
                 Options = { },
@@ -6706,8 +6714,12 @@ local Library do
             local RenderStepped
 
             function Dropdown:SetOpen(Bool)
-                if Debounce then return end
+                if Debounce then
+                    return
+                end
+
                 Dropdown.IsOpen = Bool
+
                 Debounce = true
 
                 if Dropdown.IsOpen then
@@ -6728,7 +6740,16 @@ local Library do
 
                     RenderStepped = RunService.RenderStepped:Connect(function()
                         Items["OptionHolder"].Instance.Position = UDim2New(0, Items["RealDropdown"].Instance.AbsolutePosition.X, 0, Items["RealDropdown"].Instance.AbsolutePosition.Y + Items["RealDropdown"].Instance.AbsoluteSize.Y + 5)
-                        Items["OptionHolder"].Instance.Size = UDim2New(0, Items["RealDropdown"].Instance.AbsoluteSize.X, 0, Dropdown.OptionHolderSize)
+
+                        local ContentHeight = (#Dropdown.OptionsWithIndexes * 24) + 12
+                        local MaxHeight = Dropdown.OptionHolderSize
+                        local Height = math.min(ContentHeight, MaxHeight)
+
+                        local BaseWidth = Items["RealDropdown"].Instance.AbsoluteSize.X * 2
+                        local ContentWidth = Dropdown.MaxOptionWidth + 80
+                        local Width = math.max(BaseWidth, ContentWidth)
+
+                        Items["OptionHolder"].Instance.Size = UDim2New(0, Width, 0, Height)
                     end)
 
                     for Index, Value in Library.OpenFrames do
@@ -6899,6 +6920,12 @@ local Library do
                     TextSize = 14,
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })  OptionText:AddToTheme({TextColor3 = "Text"})
+
+                local TextService = game:GetService("TextService")
+                local TextSize = TextService:GetTextSize(Option, 14, Library.Font, Vector2New(99999, 99999))
+                if TextSize.X > Dropdown.MaxOptionWidth then
+                    Dropdown.MaxOptionWidth = TextSize.X
+                end
 
                 local PriorityBox = Instances:Create("TextBox", {
                     Parent = OptionButton.Instance,
