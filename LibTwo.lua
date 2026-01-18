@@ -5901,6 +5901,7 @@ local Library do
                 Size = Data.Size or Data.size or 125,
                 OptionHolderSize = Data.OptionHolderSize or Data.optionholder or 125,
                 Multi = Data.Multi or Data.multi or false,
+                MaxOptionWidth = 0,
 
                 Value = { },
                 Options = { },
@@ -6935,8 +6936,8 @@ local Library do
                     PlaceholderColor3 = FromRGB(180, 180, 180),
                     BackgroundTransparency = 1,
                     BorderSizePixel = 0,
-                    Size = UDim2New(0, 30, 1, 0),
-                    Position = UDim2New(1, -5, 0, 0),
+                    Size = UDim2New(0, 40, 1, 0),
+                    Position = UDim2New(1, -10, 0, 0),
                     AnchorPoint = Vector2New(1, 0),
                     ZIndex = 4,
                     TextSize = 13,
