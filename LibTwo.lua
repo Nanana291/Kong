@@ -3597,26 +3597,138 @@ local Library do
             return setmetatable(Window, Library)
         end
 
-        Library.Category = function(self, Name)
-            local Items = { } do 
-                Items["Category"] = Instances:Create("TextLabel", {
-                    Parent = self.Items["LeftTabs"].Instance,
-                    Name = "\0",
-                    FontFace = Library.Font,
-                    TextColor3 = FromRGB(240, 240, 240),
-                    TextTransparency = 0.4000000059604645,
-                    Text = Name,
-                    AutomaticSize = Enum.AutomaticSize.X,
-                    Size = UDim2New(1, 0, 0, 15),
-                    BorderSizePixel = 0,
-                    BackgroundTransparency = 1,
-                    TextXAlignment = Enum.TextXAlignment.Left,
-                    BorderColor3 = FromRGB(0, 0, 0),
-                    ZIndex = 2,
-                    TextSize = 14,
-                    BackgroundColor3 = FromRGB(255, 255, 255)
-                })  Items["Category"]:AddToTheme({TextColor3 = "Text"})
-            end                
+        Library.Category = function(self, Name, Collapsible)
+            if not Collapsible then
+                local Items = { } do
+                    Items["Category"] = Instances:Create("TextLabel", {
+                        Parent = self.Items["LeftTabs"].Instance,
+                        Name = "\0",
+                        FontFace = Library.Font,
+                        TextColor3 = FromRGB(240, 240, 240),
+                        TextTransparency = 0.4000000059604645,
+                        Text = Name,
+                        AutomaticSize = Enum.AutomaticSize.X,
+                        Size = UDim2New(1, 0, 0, 15),
+                        BorderSizePixel = 0,
+                        BackgroundTransparency = 1,
+                        TextXAlignment = Enum.TextXAlignment.Left,
+                        BorderColor3 = FromRGB(0, 0, 0),
+                        ZIndex = 2,
+                        TextSize = 14,
+                        BackgroundColor3 = FromRGB(255, 255, 255)
+                    })  Items["Category"]:AddToTheme({TextColor3 = "Text"})
+                end
+            else
+                local Category = {
+                    Window = self,
+                    Items = { },
+                    IsOpen = true
+                }
+
+                local Items = { } do
+                    Items["Container"] = Instances:Create("Frame", {
+                        Parent = self.Items["LeftTabs"].Instance,
+                        Name = "\0",
+                        BackgroundTransparency = 1,
+                        Size = UDim2New(1, 0, 0, 0),
+                        AutomaticSize = Enum.AutomaticSize.Y,
+                        BorderColor3 = FromRGB(0, 0, 0),
+                        BorderSizePixel = 0,
+                        BackgroundColor3 = FromRGB(255, 255, 255)
+                    })
+
+                    Instances:Create("UIListLayout", {
+                        Parent = Items["Container"].Instance,
+                        Name = "\0",
+                        SortOrder = Enum.SortOrder.LayoutOrder,
+                        Padding = UDimNew(0, 5)
+                    })
+
+                    Items["Header"] = Instances:Create("TextButton", {
+                        Parent = Items["Container"].Instance,
+                        Name = "\0",
+                        FontFace = Library.Font,
+                        TextColor3 = FromRGB(240, 240, 240),
+                        TextTransparency = 0.4000000059604645,
+                        Text = Name,
+                        Size = UDim2New(1, 0, 0, 15),
+                        BorderSizePixel = 0,
+                        BackgroundTransparency = 1,
+                        TextXAlignment = Enum.TextXAlignment.Left,
+                        BorderColor3 = FromRGB(0, 0, 0),
+                        ZIndex = 2,
+                        TextSize = 14,
+                        BackgroundColor3 = FromRGB(255, 255, 255),
+                        AutoButtonColor = false
+                    }) Items["Header"]:AddToTheme({TextColor3 = "Text"})
+
+                    Items["Arrow"] = Instances:Create("ImageLabel", {
+                        Parent = Items["Header"].Instance,
+                        Name = "\0",
+                        ImageColor3 = FromRGB(141, 141, 150),
+                        BorderColor3 = FromRGB(0, 0, 0),
+                        Size = UDim2New(0, 12, 0, 12),
+                        AnchorPoint = Vector2New(1, 0.5),
+                        Image = "rbxassetid://123317177279443",
+                        BackgroundTransparency = 1,
+                        Position = UDim2New(1, 0, 0.5, 0),
+                        ZIndex = 2,
+                        BorderSizePixel = 0,
+                        Rotation = 180,
+                        BackgroundColor3 = FromRGB(255, 255, 255)
+                    })
+
+                    Items["Content"] = Instances:Create("Frame", {
+                        Parent = Items["Container"].Instance,
+                        Name = "\0",
+                        BackgroundTransparency = 1,
+                        Size = UDim2New(1, 0, 0, 0),
+                        AutomaticSize = Enum.AutomaticSize.Y,
+                        BorderColor3 = FromRGB(0, 0, 0),
+                        BorderSizePixel = 0,
+                        ClipsDescendants = true,
+                        BackgroundColor3 = FromRGB(255, 255, 255)
+                    })
+
+                    Instances:Create("UIListLayout", {
+                        Parent = Items["Content"].Instance,
+                        Name = "\0",
+                        SortOrder = Enum.SortOrder.LayoutOrder,
+                        Padding = UDimNew(0, 12)
+                    })
+
+                    Instances:Create("UIPadding", {
+                        Parent = Items["Content"].Instance,
+                        Name = "\0",
+                        PaddingLeft = UDimNew(0, 10),
+                        PaddingTop = UDimNew(0, 5)
+                    })
+                end
+
+                function Category:SetOpen(Bool)
+                    Category.IsOpen = Bool
+                    if Category.IsOpen then
+                         Items["Content"].Instance.Visible = true
+                         Items["Arrow"]:Tween(nil, {Rotation = 180})
+                    else
+                         Items["Content"].Instance.Visible = false
+                         Items["Arrow"]:Tween(nil, {Rotation = 0})
+                    end
+                end
+
+                Items["Header"]:Connect("MouseButton1Down", function()
+                    Category:SetOpen(not Category.IsOpen)
+                end)
+
+                function Category:Page(Data)
+                    local Page = self.Window:Page(Data)
+                    Page.Items["Inactive"].Instance.Parent = Items["Content"].Instance
+                    Page.Items["Inactive"].Instance.Size = UDim2New(1, 0, 0, 40)
+                    return Page
+                end
+
+                return Category
+            end
         end
 
         Library.Page = function(self, Data)
