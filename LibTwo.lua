@@ -6313,8 +6313,7 @@ local Library do
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })  OptionText:AddToTheme({TextColor3 = "Text"})
                 
-                local TextService = game:GetService("TextService")
-                local TextSize = TextService:GetTextSize(Option, 14, Library.Font, Vector2New(99999, 99999))
+                local TextSize = OptionText.Instance.TextBounds
                 if TextSize.X > Dropdown.MaxOptionWidth then
                     Dropdown.MaxOptionWidth = TextSize.X
                 end
@@ -6921,8 +6920,7 @@ local Library do
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })  OptionText:AddToTheme({TextColor3 = "Text"})
 
-                local TextService = game:GetService("TextService")
-                local TextSize = TextService:GetTextSize(Option, 14, Library.Font, Vector2New(99999, 99999))
+                local TextSize = OptionText.Instance.TextBounds
                 if TextSize.X > Dropdown.MaxOptionWidth then
                     Dropdown.MaxOptionWidth = TextSize.X
                 end
