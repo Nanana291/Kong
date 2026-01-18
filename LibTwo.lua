@@ -7936,7 +7936,7 @@ local Library do
                     Parent = Items["Discord"].Instance,
                     Name = "\0",
                     Size = UDim2New(1, 0, 1, 0),
-                    BackgroundColor3 = FromRGB(47, 49, 54),
+                    BackgroundColor3 = FromRGB(43, 45, 49),
                     BorderSizePixel = 0,
                     ZIndex = 2
                 })
@@ -7945,13 +7945,15 @@ local Library do
                     CornerRadius = UDimNew(0, 4)
                 })
 
-                Items["Icon"] = Instances:Create("Frame", {
+                Items["Icon"] = Instances:Create("ImageLabel", {
                     Parent = Items["Card"].Instance,
                     Name = "\0",
                     Size = UDim2New(0, 50, 0, 50),
                     Position = UDim2New(0, 12, 0, 12),
-                    BackgroundColor3 = FromRGB(54, 57, 63),
-                    ZIndex = 3
+                    BackgroundColor3 = FromRGB(49, 51, 56),
+                    ZIndex = 3,
+                    BorderSizePixel = 0,
+                    Image = ""
                 })
                 Instances:Create("UICorner", {
                     Parent = Items["Icon"].Instance,
@@ -8010,7 +8012,7 @@ local Library do
                 Items["OnlineDot"] = Instances:Create("Frame", {
                     Parent = Items["OnlineContainer"].Instance,
                     Size = UDim2New(0, 8, 0, 8),
-                    BackgroundColor3 = FromRGB(59, 165, 92),
+                    BackgroundColor3 = FromRGB(35, 165, 89),
                     Position = UDim2New(0, 0, 0.5, -4),
                     ZIndex = 3
                 })
@@ -8019,7 +8021,7 @@ local Library do
                 Items["OnlineText"] = Instances:Create("TextLabel", {
                     Parent = Items["OnlineContainer"].Instance,
                     FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal),
-                    TextColor3 = FromRGB(185, 187, 190),
+                    TextColor3 = FromRGB(181, 186, 193),
                     Text = "Loading...",
                     TextSize = 12,
                     TextXAlignment = Enum.TextXAlignment.Left,
@@ -8039,7 +8041,7 @@ local Library do
                 Items["TotalDot"] = Instances:Create("Frame", {
                     Parent = Items["TotalContainer"].Instance,
                     Size = UDim2New(0, 8, 0, 8),
-                    BackgroundColor3 = FromRGB(116, 127, 141),
+                    BackgroundColor3 = FromRGB(128, 132, 142),
                     Position = UDim2New(0, 0, 0.5, -4),
                     ZIndex = 3
                 })
@@ -8048,7 +8050,7 @@ local Library do
                 Items["TotalText"] = Instances:Create("TextLabel", {
                     Parent = Items["TotalContainer"].Instance,
                     FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal),
-                    TextColor3 = FromRGB(185, 187, 190),
+                    TextColor3 = FromRGB(181, 186, 193),
                     Text = "Loading...",
                     TextSize = 12,
                     TextXAlignment = Enum.TextXAlignment.Left,
@@ -8064,7 +8066,7 @@ local Library do
                     Text = "Join",
                     FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal),
                     TextColor3 = FromRGB(255, 255, 255),
-                    BackgroundColor3 = FromRGB(59, 165, 92),
+                    BackgroundColor3 = FromRGB(36, 128, 70),
                     Size = UDim2New(0, 60, 0, 32),
                     Position = UDim2New(1, -72, 0.5, -16),
                     AutoButtonColor = true,
@@ -8077,11 +8079,11 @@ local Library do
                 })
 
                 Items["JoinButton"]:OnHover(function()
-                    Items["JoinButton"]:Tween(TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = FromRGB(45, 125, 70)})
+                    Items["JoinButton"]:Tween(TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = FromRGB(31, 111, 61)})
                 end)
 
                 Items["JoinButton"]:OnHoverLeave(function()
-                     Items["JoinButton"]:Tween(TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = FromRGB(59, 165, 92)})
+                     Items["JoinButton"]:Tween(TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = FromRGB(36, 128, 70)})
                 end)
             end
 
@@ -8101,7 +8103,16 @@ local Library do
                             local name = data.guild.name
 
                             Items["Title"].Instance.Text = name or Discord.Name
-                            Items["IconText"].Instance.Text = string.sub(name or Discord.Name, 1, 1)
+
+                            if data.guild.icon then
+                                local iconUrl = "https://cdn.discordapp.com/icons/" .. data.guild.id .. "/" .. data.guild.icon .. ".png"
+                                Items["Icon"].Instance.Image = iconUrl
+                                Items["IconText"].Instance.Visible = false
+                            else
+                                Items["IconText"].Instance.Text = string.sub(name or Discord.Name, 1, 1)
+                                Items["IconText"].Instance.Visible = true
+                            end
+
                             Items["OnlineText"].Instance.Text = online .. " Online"
                             Items["TotalText"].Instance.Text = total .. " Members"
                         end
@@ -8127,6 +8138,97 @@ local Library do
 
             Discord.Section.Elements[#Discord.Section.Elements+1] = Discord
             return Discord
+        end
+
+        Library.Sections.Divider = function(self, Data)
+            Data = Data or {}
+
+            local Divider = {
+                Window = self.Window,
+                Page = self.Page,
+                Section = self,
+
+                Title = Data.Title or Data.title or nil
+            }
+
+            local Items = {} do
+                Items["Divider"] = Instances:Create("Frame", {
+                    Parent = Divider.Section.Items["Content"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, 0, 0, 20),
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    ZIndex = 2,
+                    BorderSizePixel = 0,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })
+
+                if Divider.Title then
+                    Items["Title"] = Instances:Create("TextLabel", {
+                        Parent = Items["Divider"].Instance,
+                        Name = "\0",
+                        FontFace = Library.Font,
+                        TextColor3 = FromRGB(240, 240, 240),
+                        Text = Divider.Title,
+                        AutomaticSize = Enum.AutomaticSize.X,
+                        Size = UDim2New(0, 0, 0, 15),
+                        AnchorPoint = Vector2New(0.5, 0.5),
+                        BorderSizePixel = 0,
+                        BackgroundTransparency = 1,
+                        Position = UDim2New(0.5, 0, 0.5, 0),
+                        BorderColor3 = FromRGB(0, 0, 0),
+                        ZIndex = 2,
+                        TextSize = 13,
+                        BackgroundColor3 = FromRGB(255, 255, 255)
+                    })  Items["Title"]:AddToTheme({TextColor3 = "Text"})
+
+                    Items["LeftLine"] = Instances:Create("Frame", {
+                        Parent = Items["Divider"].Instance,
+                        Name = "\0",
+                        AnchorPoint = Vector2New(0, 0.5),
+                        Position = UDim2New(0, 20, 0.5, 0),
+                        Size = UDim2New(0.5, -20 - (Items["Title"].Instance.TextBounds.X / 2) - 10, 0, 1),
+                        BorderColor3 = FromRGB(0, 0, 0),
+                        ZIndex = 2,
+                        BorderSizePixel = 0,
+                        BackgroundColor3 = FromRGB(45, 45, 48)
+                    })  Items["LeftLine"]:AddToTheme({BackgroundColor3 = "Outline"})
+
+                    Items["RightLine"] = Instances:Create("Frame", {
+                        Parent = Items["Divider"].Instance,
+                        Name = "\0",
+                        AnchorPoint = Vector2New(1, 0.5),
+                        Position = UDim2New(1, -20, 0.5, 0),
+                        Size = UDim2New(0.5, -20 - (Items["Title"].Instance.TextBounds.X / 2) - 10, 0, 1),
+                        BorderColor3 = FromRGB(0, 0, 0),
+                        ZIndex = 2,
+                        BorderSizePixel = 0,
+                        BackgroundColor3 = FromRGB(45, 45, 48)
+                    })  Items["RightLine"]:AddToTheme({BackgroundColor3 = "Outline"})
+
+                    -- Update lines when text size changes (e.g. font loading)
+                    Library:Connect(Items["Title"].Instance:GetPropertyChangedSignal("TextBounds"), function()
+                        local HalfText = Items["Title"].Instance.TextBounds.X / 2
+                        Items["LeftLine"].Instance.Size = UDim2New(0.5, -30 - HalfText, 0, 1)
+                        Items["RightLine"].Instance.Size = UDim2New(0.5, -30 - HalfText, 0, 1)
+                    end)
+                else
+                    Items["Line"] = Instances:Create("Frame", {
+                        Parent = Items["Divider"].Instance,
+                        Name = "\0",
+                        AnchorPoint = Vector2New(0.5, 0.5),
+                        Position = UDim2New(0.5, 0, 0.5, 0),
+                        Size = UDim2New(1, -40, 0, 1),
+                        BorderColor3 = FromRGB(0, 0, 0),
+                        ZIndex = 2,
+                        BorderSizePixel = 0,
+                        BackgroundColor3 = FromRGB(45, 45, 48)
+                    })  Items["Line"]:AddToTheme({BackgroundColor3 = "Outline"})
+                end
+            end
+
+            Divider.Section.Elements[#Divider.Section.Elements+1] = Divider
+            return Divider
         end
 
     Library.CreateSettingsPage = function(self, Window, KeybindList)
