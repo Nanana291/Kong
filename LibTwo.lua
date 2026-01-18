@@ -6491,7 +6491,7 @@ local Library do
                 Page = self.Page,
                 Section = self,
 
-                Name = Data.Name or Data.name or "Paragraph",
+                Name = Data.Name or Data.name or Data.Title or Data.title or "Paragraph",
                 Text = Data.Text or Data.text or "",
                 Icon = Data.Icon or Data.icon or nil,
             }
@@ -6549,7 +6549,8 @@ local Library do
                         ImageRectOffset = ParagraphIcon and ParagraphIcon.ImageRectOffset or Vector2New(0, 0),
                         ImageRectSize = ParagraphIcon and ParagraphIcon.ImageRectSize or Vector2New(0, 0),
                         BorderSizePixel = 0,
-                        BackgroundColor3 = FromRGB(255, 255, 255)
+                        BackgroundColor3 = FromRGB(255, 255, 255),
+                        LayoutOrder = 1
                     })
 
                     Instances:Create("UIGradient", {
@@ -6569,7 +6570,8 @@ local Library do
                     BackgroundTransparency = 1,
                     Size = UDim2New(1, Paragraph.Icon and -30 or 0, 0, 0),
                     AutomaticSize = Enum.AutomaticSize.Y,
-                    BorderSizePixel = 0
+                    BorderSizePixel = 0,
+                    LayoutOrder = 2
                 })
 
                 Instances:Create("UIListLayout", {
@@ -6595,14 +6597,15 @@ local Library do
                     BorderColor3 = FromRGB(0, 0, 0),
                     ZIndex = 2,
                     TextSize = 14,
-                    BackgroundColor3 = FromRGB(255, 255, 255)
+                    BackgroundColor3 = FromRGB(255, 255, 255),
+                    LayoutOrder = 1
                 })  Items["Title"]:AddToTheme({TextColor3 = "Text"})
 
                 Items["Text"] = Instances:Create("TextLabel", {
                     Parent = Items["TextContent"].Instance,
                     Name = "\0",
                     FontFace = Library.Font,
-                    TextColor3 = FromRGB(74, 72, 72), -- #4a4848
+                    TextColor3 = FromRGB(160, 160, 160),
                     Text = Paragraph.Text,
                     RichText = true,
                     AutomaticSize = Enum.AutomaticSize.Y,
@@ -6614,7 +6617,8 @@ local Library do
                     BorderColor3 = FromRGB(0, 0, 0),
                     ZIndex = 2,
                     TextSize = 13,
-                    BackgroundColor3 = FromRGB(255, 255, 255)
+                    BackgroundColor3 = FromRGB(255, 255, 255),
+                    LayoutOrder = 2
                 })
             end
 
@@ -7285,40 +7289,107 @@ local Library do
         end
 
         Library.Sections.Listbox = function(self, Data)
-            -- basically just dropdowns so i jsut copied dropdowns
-            Data = Data or { }
+            Data = Data or {}
 
-            local Dropdown = {
+            local Listbox = {
                 Window = self.Window,
                 Page = self.Page,
                 Section = self,
 
+                Name = Data.Name or Data.name or Data.Title or Data.title or "Listbox",
                 Flag = Data.Flag or Data.flag or Library:NextFlag(),
-                Items = Data.Items or Data.items or { "One", "Two", "Three" },
+                Items = Data.Items or Data.items or {},
                 Default = Data.Default or Data.default or nil,
                 Callback = Data.Callback or Data.callback or function() end,
-                Size = Data.Size or Data.size or 125,
+                Size = Data.Size or Data.size or 200, -- Height of the scroll area
                 Multi = Data.Multi or Data.multi or false,
 
-                Value = { },
-                Options = { },
+                Value = {},
+                Options = {},
                 IsOpen = false
             }
 
-            local Items = { } do 
+            local Items = {} do
                 Items["Listbox"] = Instances:Create("Frame", {
-                    Parent = Dropdown.Section.Items["Content"].Instance,
+                    Parent = Listbox.Section.Items["Content"].Instance,
                     Name = "\0",
                     BackgroundTransparency = 1,
-                    Size = UDim2New(1, 0, 0, Dropdown.Size),
+                    Size = UDim2New(1, 0, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y, -- Auto height based on content
                     BorderColor3 = FromRGB(0, 0, 0),
                     ZIndex = 2,
                     BorderSizePixel = 0,
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })
-                
-                Items["Search"] = Instances:Create("TextBox", {
+
+                -- Header
+                Items["Header"] = Instances:Create("TextButton", {
                     Parent = Items["Listbox"].Instance,
+                    Name = "\0",
+                    FontFace = Library.Font,
+                    TextColor3 = FromRGB(0, 0, 0),
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    Text = "",
+                    AutoButtonColor = false,
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, 0, 0, 25),
+                    BorderSizePixel = 0,
+                    ZIndex = 2,
+                    TextSize = 14,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })
+
+                Items["Title"] = Instances:Create("TextLabel", {
+                    Parent = Items["Header"].Instance,
+                    Name = "\0",
+                    FontFace = Library.Font,
+                    TextColor3 = FromRGB(240, 240, 240),
+                    TextTransparency = 0.3,
+                    Text = Listbox.Name,
+                    AutomaticSize = Enum.AutomaticSize.X,
+                    Size = UDim2New(0, 0, 0, 15),
+                    AnchorPoint = Vector2New(0, 0.5),
+                    BorderSizePixel = 0,
+                    BackgroundTransparency = 1,
+                    Position = UDim2New(0, 30, 0.5, 0),
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    ZIndex = 2,
+                    TextSize = 14,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })  Items["Title"]:AddToTheme({TextColor3 = "Text"})
+
+                Items["ArrowIcon"] = Instances:Create("ImageLabel", {
+                    Parent = Items["Header"].Instance,
+                    Name = "\0",
+                    ImageColor3 = FromRGB(141, 141, 150),
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    Size = UDim2New(0, 16, 0, 8),
+                    AnchorPoint = Vector2New(1, 0.5),
+                    Image = "rbxassetid://123317177279443", -- Same arrow as dropdown
+                    BackgroundTransparency = 1,
+                    Position = UDim2New(1, -5, 0.5, 0),
+                    ZIndex = 2,
+                    BorderSizePixel = 0,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })
+
+                -- Content Frame (Collapsible)
+                Items["ContentFrame"] = Instances:Create("Frame", {
+                    Parent = Items["Listbox"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, 0, 0, 0), -- Start height 0
+                    Position = UDim2New(0, 0, 0, 25),
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    ClipsDescendants = true,
+                    ZIndex = 2,
+                    BorderSizePixel = 0,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })
+
+                -- Search Bar
+                Items["Search"] = Instances:Create("TextBox", {
+                    Parent = Items["ContentFrame"].Instance,
                     Name = "\0",
                     FontFace = Library.Font,
                     CursorPosition = -1,
@@ -7334,7 +7405,7 @@ local Library do
                     TextSize = 14,
                     BackgroundColor3 = FromRGB(27, 26, 29)
                 })  Items["Search"]:AddToTheme({TextColor3 = "Text", BackgroundColor3 = "Element"})
-                
+
                 Instances:Create("UICorner", {
                     Parent = Items["Search"].Instance,
                     Name = "\0",
@@ -7348,18 +7419,25 @@ local Library do
                     PaddingLeft = UDimNew(0, 8)
                 })
 
+                -- Scroll Holder
                 Items["Background"] = Instances:Create("Frame", {
-                    Parent = Items["Listbox"].Instance,
+                    Parent = Items["ContentFrame"].Instance,
                     Name = "\0",
                     Active = true,
-                    Size = UDim2New(1, 0, 1, -30),
+                    Size = UDim2New(1, 0, 1, -35), -- Minus search height + margin
                     BorderColor3 = FromRGB(0, 0, 0),
-                    Position = UDim2New(0, 0, 0, 30),
+                    Position = UDim2New(0, 0, 0, 35),
                     BackgroundColor3 = FromRGB(27, 26, 29),
                     ZIndex = 2,
                     BorderSizePixel = 0,
                 })  Items["Background"]:AddToTheme({BackgroundColor3 = "Element"})
-                
+
+                Instances:Create("UICorner", {
+                    Parent = Items["Background"].Instance,
+                    Name = "\0",
+                    CornerRadius = UDimNew(0, 6)
+                })
+
                 Items["Holder"] = Instances:Create("ScrollingFrame", {
                     Parent = Items["Background"].Instance,
                     Name = "\0",
@@ -7375,14 +7453,8 @@ local Library do
                     BackgroundTransparency = 1,
                     BorderSizePixel = 0,
                     CanvasSize = UDim2New(0, 0, 0, 0)
-                })  Items["Holder"]:AddToTheme({ScrollBarImageColor3 = "Accent"})
-                
-                Instances:Create("UICorner", {
-                    Parent = Items["Background"].Instance,
-                    Name = "\0",
-                    CornerRadius = UDimNew(0, 6)
-                })
-                
+                }) Items["Holder"]:AddToTheme({ScrollBarImageColor3 = "Accent"})
+
                 Instances:Create("UIListLayout", {
                     Parent = Items["Holder"].Instance,
                     Name = "\0",
@@ -7397,63 +7469,53 @@ local Library do
                     PaddingBottom = UDimNew(0, 8),
                     PaddingRight = UDimNew(0, 12),
                     PaddingLeft = UDimNew(0, 8)
-                })      
-                
-                Items["_"] = Instances:Create("Frame", {
-                    Parent = Items["Listbox"].Instance,
-                    Name = "\0",
-                    Size = UDim2New(1, 0, 0, 10),
-                    Position = UDim2New(0, 0, 0, 25),
-                    BorderColor3 = FromRGB(0, 0, 0),
-                    ZIndex = 2,
-                    BorderSizePixel = 0,
-                    BackgroundColor3 = FromRGB(27, 26, 29)
-                })  Items["_"]:AddToTheme({BackgroundColor3 = "Element"})
-
-                Instances:Create("Frame", {
-                    Parent = Items["_"].Instance,
-                    Name = "\0",
-                    Size = UDim2New(1, 0, 0, 1),
-                    Position = UDim2New(0, 0, 1, -3),
-                    AnchorPoint = Vector2New(0, 1),
-                    BorderColor3 = FromRGB(0, 0, 0),
-                    ZIndex = 2,
-                    BorderSizePixel = 0,
-                    BackgroundColor3 = FromRGB(27, 26, 29),
-                }):AddToTheme({BackgroundColor3 = "Outline"})
+                })
             end
 
-            function Dropdown:Get()
-                return Dropdown.Value
-            end
+            function Listbox:SetOpen(Bool)
+                Listbox.IsOpen = Bool
 
-            function Dropdown:SetVisibility(Bool)
-                Items["Listbox"].Instance.Visible = Bool
-            end
-
-            function Dropdown:RefreshPosition(Bool)
-                if Bool then
-                    Items["Background"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 30)})
-                    Items["Search"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 0)})
-                    Items["_"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 25)})
+                if Listbox.IsOpen then
+                    Items["ContentFrame"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2New(1, 0, 0, Listbox.Size + 35)})
+                    Items["ArrowIcon"]:Tween(nil, {Rotation = 180, ImageColor3 = FromRGB(255, 255, 255)})
                 else
-                    Items["Background"].Instance.Position = UDim2New(0, 30, 0, 30)
-                    Items["Search"].Instance.Position = UDim2New(0, 30, 0, 0)
-                    Items["_"].Instance.Position = UDim2New(0, 30, 0, 25)
+                    Items["ContentFrame"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2New(1, 0, 0, 0)})
+                    Items["ArrowIcon"]:Tween(nil, {Rotation = 0, ImageColor3 = FromRGB(141, 141, 150)})
                 end
             end
 
-            function Dropdown:Set(Option)
-                if Dropdown.Multi then 
+            Items["Header"]:Connect("MouseButton1Down", function()
+                Listbox:SetOpen(not Listbox.IsOpen)
+            end)
+
+            function Listbox:Get()
+                return Listbox.Value
+            end
+
+            function Listbox:SetVisibility(Bool)
+                Items["Listbox"].Instance.Visible = Bool
+            end
+
+            -- Header animation like Dropdown? Maybe just text color/position
+            function Listbox:RefreshPosition(Bool)
+                if Bool then
+                    Items["Title"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0.5, 0)})
+                else
+                    Items["Title"].Instance.Position = UDim2New(0, 30, 0.5, 0)
+                end
+            end
+
+            function Listbox:Set(Option)
+                if Listbox.Multi then
                     if type(Option) ~= "table" then 
                         return
                     end
 
-                    Dropdown.Value = Option
-                    Library.Flags[Dropdown.Flag] = Option
+                    Listbox.Value = Option
+                    Library.Flags[Listbox.Flag] = Option
 
                     for Index, Value in Option do
-                        local OptionData = Dropdown.Options[Value]
+                        local OptionData = Listbox.Options[Value]
                          
                         if not OptionData then
                             continue
@@ -7463,16 +7525,16 @@ local Library do
                         OptionData:Toggle("Active")
                     end
                 else
-                    if not Dropdown.Options[Option] then
+                    if not Listbox.Options[Option] then
                         return
                     end
 
-                    local OptionData = Dropdown.Options[Option]
+                    local OptionData = Listbox.Options[Option]
 
-                    Dropdown.Value = Option
-                    Library.Flags[Dropdown.Flag] = Option
+                    Listbox.Value = Option
+                    Library.Flags[Listbox.Flag] = Option
 
-                    for Index, Value in Dropdown.Options do
+                    for Index, Value in Listbox.Options do
                         if Value ~= OptionData then
                             Value.Selected = false 
                             Value:Toggle("Inactive")
@@ -7483,12 +7545,12 @@ local Library do
                     end
                 end
 
-                if Dropdown.Callback then   
-                    Library:SafeCall(Dropdown.Callback, Dropdown.Value)
+                if Listbox.Callback then
+                    Library:SafeCall(Listbox.Callback, Listbox.Value)
                 end
             end
 
-            function Dropdown:Add(Option)
+            function Listbox:Add(Option)
                 local OptionButton = Instances:Create("TextButton", {
                     Parent = Items["Holder"].Instance,
                     Name = "\0",
@@ -7516,7 +7578,7 @@ local Library do
                     Size = UDim2New(0, 6, 0, 6),
                     BorderSizePixel = 0,
                     BackgroundColor3 = FromRGB(255, 255, 255)
-                })  --OptionAccent:AddToTheme({BackgroundColor3 = "Accent"})
+                })
                 
                 Instances:Create("UIGradient", {
                     Parent = OptionAccent.Instance,
@@ -7598,43 +7660,43 @@ local Library do
                 function OptionData:Set()
                     OptionData.Selected = not OptionData.Selected
 
-                    if Dropdown.Multi then 
-                        local Index = TableFind(Dropdown.Value, OptionData.Name)
+                    if Listbox.Multi then
+                        local Index = TableFind(Listbox.Value, OptionData.Name)
 
                         if Index then 
-                            TableRemove(Dropdown.Value, Index)
+                            TableRemove(Listbox.Value, Index)
                         else
-                            TableInsert(Dropdown.Value, OptionData.Name)
+                            TableInsert(Listbox.Value, OptionData.Name)
                         end
 
                         OptionData:Toggle(Index and "Inactive" or "Active")
 
-                        Library.Flags[Dropdown.Flag] = Dropdown.Value
+                        Library.Flags[Listbox.Flag] = Listbox.Value
                     else
                         if OptionData.Selected then 
-                            Dropdown.Value = OptionData.Name
-                            Library.Flags[Dropdown.Flag] = OptionData.Name
+                            Listbox.Value = OptionData.Name
+                            Library.Flags[Listbox.Flag] = OptionData.Name
 
                             OptionData.Selected = true
                             OptionData:Toggle("Active")
 
-                            for Index, Value in Dropdown.Options do 
+                            for Index, Value in Listbox.Options do
                                 if Value ~= OptionData and not Value.IsSearching then
                                     Value.Selected = false 
                                     Value:Toggle("Inactive")
                                 end
                             end
                         else
-                            Dropdown.Value = nil
-                            Library.Flags[Dropdown.Flag] = nil
+                            Listbox.Value = nil
+                            Library.Flags[Listbox.Flag] = nil
 
                             OptionData.Selected = false
                             OptionData:Toggle("Inactive")
                         end
                     end
 
-                    if Dropdown.Callback then
-                        Library:SafeCall(Dropdown.Callback, Dropdown.Value)
+                    if Listbox.Callback then
+                        Library:SafeCall(Listbox.Callback, Listbox.Value)
                     end
                 end
 
@@ -7642,30 +7704,30 @@ local Library do
                     OptionData:Set()
                 end)
 
-                Dropdown.Options[OptionData.Name] = OptionData
+                Listbox.Options[OptionData.Name] = OptionData
                 return OptionData
             end
 
-            function Dropdown:Remove(Option)
-                if Dropdown.Options[Option] then
-                    Dropdown.Options[Option].Button:Clean()
-                    Dropdown.Options[Option] = nil
+            function Listbox:Remove(Option)
+                if Listbox.Options[Option] then
+                    Listbox.Options[Option].Button:Clean()
+                    Listbox.Options[Option] = nil
                 end
             end
 
-            function Dropdown:Refresh(List)
-                for Index, Value in Dropdown.Options do 
-                    Dropdown:Remove(Value.Name)
+            function Listbox:Refresh(List)
+                for Index, Value in Listbox.Options do
+                    Listbox:Remove(Value.Name)
                 end
 
                 for Index, Value in List do 
-                    Dropdown:Add(Value)
+                    Listbox:Add(Value)
                 end
             end
 
             Library:Connect(Items["Search"].Instance:GetPropertyChangedSignal("Text"), function()
                 Library:Thread(function()
-                    for Index, Value in Dropdown.Options do
+                    for Index, Value in Listbox.Options do
                         local InputText = Items["Search"].Instance.Text
                         if InputText ~= "" then
                             if StringFind(StringLower(Value.Name), Library:EscapePattern(StringLower(InputText))) then
@@ -7684,20 +7746,20 @@ local Library do
             end)
 
 
-            for Index, Value in Dropdown.Items do 
-                Dropdown:Add(Value)
+            for Index, Value in Listbox.Items do
+                Listbox:Add(Value)
             end
 
-            if Dropdown.Default then 
-                Dropdown:Set(Dropdown.Default)
+            if Listbox.Default then
+                Listbox:Set(Listbox.Default)
             end
 
-            Library.SetFlags[Dropdown.Flag] = function(Value)
-                Dropdown:Set(Value)
+            Library.SetFlags[Listbox.Flag] = function(Value)
+                Listbox:Set(Value)
             end
 
-            Dropdown.Section.Elements[#Dropdown.Section.Elements+1] = Dropdown
-            return Dropdown
+            Listbox.Section.Elements[#Listbox.Section.Elements+1] = Listbox
+            return Listbox
         end
     end
 
