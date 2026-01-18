@@ -3663,6 +3663,24 @@ local Library do
                     Name = "\0",
                     Transparency = NumSequence{NumSequenceKeypoint(0, 0.41874998807907104), NumSequenceKeypoint(0.445, 0.78125), NumSequenceKeypoint(0.751, 0.9375), NumSequenceKeypoint(1, 1)}
                 })
+
+                Items["SelectedIndicator"] = Instances:Create("Frame", {
+                    Parent = Items["Inactive"].Instance,
+                    Name = "\0",
+                    Size = UDim2New(0, 4, 0, 18),
+                    Position = UDim2New(0, 0, 0.5, 0),
+                    AnchorPoint = Vector2New(0, 0.5),
+                    BackgroundColor3 = FromRGB(255, 255, 255),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    ZIndex = 3
+                })  Items["SelectedIndicator"]:AddToTheme({BackgroundColor3 = "Accent"})
+
+                Instances:Create("UICorner", {
+                    Parent = Items["SelectedIndicator"].Instance,
+                    Name = "\0",
+                    CornerRadius = UDimNew(0, 2)
+                })
                 
                 local PageIcon = Library:GetCustomIcon(Page.Icon)
                 Items["Icon"] = Instances:Create("ImageLabel", {
@@ -3785,6 +3803,9 @@ local Library do
 
                 if Page.Active then
                     Items["Inactive"]:Tween(nil, {BackgroundTransparency = 0.25})
+                    Items["SelectedIndicator"]:Tween(nil, {BackgroundTransparency = 0})
+                    Items["Text"]:Tween(nil, {TextColor3 = Library.Theme.Accent})
+                    Items["Icon"]:Tween(nil, {ImageColor3 = Library.Theme.Accent})
                     Items["Page"]:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 0)})
 
                     for Index, Value in Page.Sections do 
@@ -3794,6 +3815,9 @@ local Library do
                     end
                 else
                     Items["Inactive"]:Tween(nil, {BackgroundTransparency = 1})
+                    Items["SelectedIndicator"]:Tween(nil, {BackgroundTransparency = 1})
+                    Items["Text"]:Tween(nil, {TextColor3 = Library.Theme.Text})
+                    Items["Icon"]:Tween(nil, {ImageColor3 = FromRGB(255, 255, 255)})
                     Items["Page"]:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 60)})
                 end
 
@@ -6522,7 +6546,7 @@ local Library do
                     Parent = Items["Container"].Instance,
                     Name = "\0",
                     FillDirection = Enum.FillDirection.Horizontal,
-                    VerticalAlignment = Enum.VerticalAlignment.Top,
+                    VerticalAlignment = Enum.VerticalAlignment.Center,
                     Padding = UDimNew(0, 10),
                     SortOrder = Enum.SortOrder.LayoutOrder
                 })
@@ -6543,7 +6567,7 @@ local Library do
                         Name = "\0",
                         ImageColor3 = FromRGB(255, 255, 255),
                         BorderColor3 = FromRGB(0, 0, 0),
-                        Size = UDim2New(0, 20, 0, 20),
+                        Size = UDim2New(0, 18, 0, 18),
                         BackgroundTransparency = 1,
                         Image = ParagraphIcon and ParagraphIcon.Url or "",
                         ImageRectOffset = ParagraphIcon and ParagraphIcon.ImageRectOffset or Vector2New(0, 0),
