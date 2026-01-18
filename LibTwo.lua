@@ -344,7 +344,7 @@ local Library do
 
     local Themes = {
         ["Preset"] = {
-            ["AccentGradient"] = FromRGB(0, 195, 255),   -- Slightly deeper blue accent
+            ["AccentGradient"] = FromRGB(109, 43, 139),  -- Darker purple
             ["Background 2"] = FromRGB(10, 10, 12),      -- Very dark gray
             ["Background"] = FromRGB(12, 12, 14),        -- Main near-black background
             ["Text"] = FromRGB(235, 235, 235),           -- Slightly dimmed light text
@@ -352,7 +352,7 @@ local Library do
             ["Section Top"] = FromRGB(28, 27, 31),       -- Dark section header
             ["Section Background"] = FromRGB(10, 10, 12),-- Deep black section background
             ["Section Background 2"] = FromRGB(14, 14, 16),-- Alternate section, minimal difference
-            ["Accent"] = FromRGB(0, 116, 224),           -- Darker blue accent for consistency
+            ["Accent"] = FromRGB(151, 69, 186),          -- Purple (#9745ba)
             ["Element"] = FromRGB(16, 16, 18)            -- Deep gray for UI elements
         }
     }
@@ -6481,6 +6481,166 @@ local Library do
 
             Label.Section.Elements[#Label.Section.Elements+1] = Label
             return Label
+        end
+
+        Library.Sections.Paragraph = function(self, Data)
+            Data = Data or {}
+
+            local Paragraph = {
+                Window = self.Window,
+                Page = self.Page,
+                Section = self,
+
+                Name = Data.Name or Data.name or "Paragraph",
+                Text = Data.Text or Data.text or "",
+                Icon = Data.Icon or Data.icon or nil,
+            }
+
+            local Items = {} do
+                Items["Paragraph"] = Instances:Create("Frame", {
+                    Parent = Paragraph.Section.Items["Content"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, 0, 0, 0), -- AutomaticSize handles height
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    BorderSizePixel = 0,
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })
+
+                -- Layout container for Icon + Content
+                Items["Container"] = Instances:Create("Frame", {
+                    Parent = Items["Paragraph"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, 0, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    BorderSizePixel = 0
+                })
+
+                Instances:Create("UIListLayout", {
+                    Parent = Items["Container"].Instance,
+                    Name = "\0",
+                    FillDirection = Enum.FillDirection.Horizontal,
+                    VerticalAlignment = Enum.VerticalAlignment.Top,
+                    Padding = UDimNew(0, 10),
+                    SortOrder = Enum.SortOrder.LayoutOrder
+                })
+
+                Instances:Create("UIPadding", {
+                    Parent = Items["Container"].Instance,
+                    Name = "\0",
+                    PaddingLeft = UDimNew(0, 5),
+                    PaddingRight = UDimNew(0, 5),
+                    PaddingTop = UDimNew(0, 5),
+                    PaddingBottom = UDimNew(0, 5)
+                })
+
+                if Paragraph.Icon then
+                    local ParagraphIcon = Library:GetCustomIcon(Paragraph.Icon)
+                    Items["Icon"] = Instances:Create("ImageLabel", {
+                        Parent = Items["Container"].Instance,
+                        Name = "\0",
+                        ImageColor3 = FromRGB(255, 255, 255),
+                        BorderColor3 = FromRGB(0, 0, 0),
+                        Size = UDim2New(0, 20, 0, 20),
+                        BackgroundTransparency = 1,
+                        Image = ParagraphIcon and ParagraphIcon.Url or "",
+                        ImageRectOffset = ParagraphIcon and ParagraphIcon.ImageRectOffset or Vector2New(0, 0),
+                        ImageRectSize = ParagraphIcon and ParagraphIcon.ImageRectSize or Vector2New(0, 0),
+                        BorderSizePixel = 0,
+                        BackgroundColor3 = FromRGB(255, 255, 255)
+                    })
+
+                    Instances:Create("UIGradient", {
+                        Parent = Items["Icon"].Instance,
+                        Name = "\0",
+                        Rotation = -115,
+                        Color = RGBSequence{RGBSequenceKeypoint(0, FromRGB(255, 255, 255)), RGBSequenceKeypoint(1, FromRGB(143, 143, 143))}
+                    }):AddToTheme({Color = function()
+                        return RGBSequence{RGBSequenceKeypoint(0, Library.Theme.Accent), RGBSequenceKeypoint(1, Library.Theme.AccentGradient)}
+                    end})
+                end
+
+                -- Text container (Title + Text)
+                Items["TextContent"] = Instances:Create("Frame", {
+                    Parent = Items["Container"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, Paragraph.Icon and -30 or 0, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    BorderSizePixel = 0
+                })
+
+                Instances:Create("UIListLayout", {
+                    Parent = Items["TextContent"].Instance,
+                    Name = "\0",
+                    FillDirection = Enum.FillDirection.Vertical,
+                    Padding = UDimNew(0, 2),
+                    SortOrder = Enum.SortOrder.LayoutOrder
+                })
+
+                Items["Title"] = Instances:Create("TextLabel", {
+                    Parent = Items["TextContent"].Instance,
+                    Name = "\0",
+                    FontFace = Library.Font,
+                    TextColor3 = FromRGB(240, 240, 240),
+                    Text = Paragraph.Name,
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    Size = UDim2New(1, 0, 0, 15),
+                    BorderSizePixel = 0,
+                    BackgroundTransparency = 1,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    TextWrapped = true,
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    ZIndex = 2,
+                    TextSize = 14,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })  Items["Title"]:AddToTheme({TextColor3 = "Text"})
+
+                Items["Text"] = Instances:Create("TextLabel", {
+                    Parent = Items["TextContent"].Instance,
+                    Name = "\0",
+                    FontFace = Library.Font,
+                    TextColor3 = FromRGB(74, 72, 72), -- #4a4848
+                    Text = Paragraph.Text,
+                    RichText = true,
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    Size = UDim2New(1, 0, 0, 14),
+                    BorderSizePixel = 0,
+                    BackgroundTransparency = 1,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    TextWrapped = true,
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    ZIndex = 2,
+                    TextSize = 13,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })
+            end
+
+            function Paragraph:SetTitle(NewTitle)
+                Items["Title"].Instance.Text = tostring(NewTitle)
+            end
+
+            function Paragraph:SetText(NewText)
+                Items["Text"].Instance.Text = tostring(NewText)
+            end
+
+            function Paragraph:SetVisibility(Bool)
+                Items["Paragraph"].Instance.Visible = Bool
+            end
+
+            function Paragraph:RefreshPosition(Bool)
+                -- Paragraph likely doesn't need indentation animation like Label/Toggle, but consistent API helps
+                if Bool then
+                    Items["Container"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 5)})
+                else
+                    Items["Container"].Instance.Position = UDim2New(0, 0, 0, 5) -- Default offset
+                end
+            end
+
+            Paragraph.Section.Elements[#Paragraph.Section.Elements+1] = Paragraph
+            return Paragraph
         end
 
         Library.Sections.Keybind = function(self, Data)
