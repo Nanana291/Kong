@@ -8185,33 +8185,57 @@ local Library do
                     Items["LeftLine"] = Instances:Create("Frame", {
                         Parent = Items["Divider"].Instance,
                         Name = "\0",
-                        AnchorPoint = Vector2New(0, 0.5),
-                        Position = UDim2New(0, 20, 0.5, 0),
-                        Size = UDim2New(0.5, -20 - (Items["Title"].Instance.TextBounds.X / 2) - 10, 0, 1),
+                        AnchorPoint = Vector2New(1, 0.5),
+                        Position = UDim2New(0.5, 0, 0.5, 0),
+                        Size = UDim2New(0.5, 0, 0, 1),
                         BorderColor3 = FromRGB(0, 0, 0),
                         ZIndex = 2,
                         BorderSizePixel = 0,
                         BackgroundColor3 = FromRGB(45, 45, 48)
                     })  Items["LeftLine"]:AddToTheme({BackgroundColor3 = "Outline"})
 
+                    Instances:Create("UIGradient", {
+                        Parent = Items["LeftLine"].Instance,
+                        Transparency = NumSequence{
+                            NumSequenceKeypoint(0, 1),
+                            NumSequenceKeypoint(1, 0)
+                        }
+                    })
+
                     Items["RightLine"] = Instances:Create("Frame", {
                         Parent = Items["Divider"].Instance,
                         Name = "\0",
-                        AnchorPoint = Vector2New(1, 0.5),
-                        Position = UDim2New(1, -20, 0.5, 0),
-                        Size = UDim2New(0.5, -20 - (Items["Title"].Instance.TextBounds.X / 2) - 10, 0, 1),
+                        AnchorPoint = Vector2New(0, 0.5),
+                        Position = UDim2New(0.5, 0, 0.5, 0),
+                        Size = UDim2New(0.5, 0, 0, 1),
                         BorderColor3 = FromRGB(0, 0, 0),
                         ZIndex = 2,
                         BorderSizePixel = 0,
                         BackgroundColor3 = FromRGB(45, 45, 48)
                     })  Items["RightLine"]:AddToTheme({BackgroundColor3 = "Outline"})
 
-                    -- Update lines when text size changes (e.g. font loading)
-                    Library:Connect(Items["Title"].Instance:GetPropertyChangedSignal("TextBounds"), function()
+                    Instances:Create("UIGradient", {
+                        Parent = Items["RightLine"].Instance,
+                        Transparency = NumSequence{
+                            NumSequenceKeypoint(0, 0),
+                            NumSequenceKeypoint(1, 1)
+                        }
+                    })
+
+                    local function UpdateLines()
                         local HalfText = Items["Title"].Instance.TextBounds.X / 2
-                        Items["LeftLine"].Instance.Size = UDim2New(0.5, -30 - HalfText, 0, 1)
-                        Items["RightLine"].Instance.Size = UDim2New(0.5, -30 - HalfText, 0, 1)
-                    end)
+                        local Padding = 10
+                        local EdgeMargin = 20
+
+                        Items["LeftLine"].Instance.Position = UDim2New(0.5, -HalfText - Padding, 0.5, 0)
+                        Items["RightLine"].Instance.Position = UDim2New(0.5, HalfText + Padding, 0.5, 0)
+
+                        Items["LeftLine"].Instance.Size = UDim2New(0.5, -HalfText - Padding - EdgeMargin, 0, 1)
+                        Items["RightLine"].Instance.Size = UDim2New(0.5, -HalfText - Padding - EdgeMargin, 0, 1)
+                    end
+
+                    Library:Connect(Items["Title"].Instance:GetPropertyChangedSignal("TextBounds"), UpdateLines)
+                    UpdateLines()
                 else
                     Items["Line"] = Instances:Create("Frame", {
                         Parent = Items["Divider"].Instance,
@@ -8224,6 +8248,17 @@ local Library do
                         BorderSizePixel = 0,
                         BackgroundColor3 = FromRGB(45, 45, 48)
                     })  Items["Line"]:AddToTheme({BackgroundColor3 = "Outline"})
+
+                    Instances:Create("UIGradient", {
+                        Parent = Items["Line"].Instance,
+                        Transparency = NumSequence{
+                            NumSequenceKeypoint(0, 1),
+                            NumSequenceKeypoint(0.2, 0.2),
+                            NumSequenceKeypoint(0.5, 0),
+                            NumSequenceKeypoint(0.8, 0.2),
+                            NumSequenceKeypoint(1, 1)
+                        }
+                    })
                 end
             end
 
