@@ -12,6 +12,127 @@ local Library do
     local TweenService = game:GetService("TweenService")
     local Lighting = game:GetService("Lighting")
 
+    local BaseURL = "https://raw.githubusercontent.com/deividcomsono/Obsidian/refs/heads/main/"
+    local CustomImageManager = {}
+    local CustomImageManagerAssets = {
+        TransparencyTexture = {
+            RobloxId = 139785960036434,
+            Path = "Obsidian/assets/TransparencyTexture.png",
+            URL = BaseURL .. "assets/TransparencyTexture.png",
+
+            Id = nil,
+        },
+
+        SaturationMap = {
+            RobloxId = 4155801252,
+            Path = "Obsidian/assets/SaturationMap.png",
+            URL = BaseURL .. "assets/SaturationMap.png",
+
+            Id = nil,
+        }
+    }
+    do
+        local function RecursiveCreatePath(Path, IsFile)
+            if not isfolder or not makefolder then
+                return
+            end
+
+            local Segments = Path:split("/")
+            local TraversedPath = ""
+
+            if IsFile then
+                table.remove(Segments, #Segments)
+            end
+
+            for _, Segment in ipairs(Segments) do
+                if not isfolder(TraversedPath .. Segment) then
+                    makefolder(TraversedPath .. Segment)
+                end
+
+                TraversedPath = TraversedPath .. Segment .. "/"
+            end
+
+            return TraversedPath
+        end
+
+        function CustomImageManager.AddAsset(AssetName, RobloxAssetId, URL, ForceRedownload)
+            if CustomImageManagerAssets[AssetName] ~= nil then
+                error(string.format("Asset %q already exists", AssetName))
+            end
+
+            assert(typeof(RobloxAssetId) == "number", "RobloxAssetId must be a number")
+
+            CustomImageManagerAssets[AssetName] = {
+                RobloxId = RobloxAssetId,
+                Path = string.format("Obsidian/custom_assets/%s", AssetName),
+                URL = URL,
+
+                Id = nil,
+            }
+
+            CustomImageManager.DownloadAsset(AssetName, ForceRedownload)
+        end
+
+        function CustomImageManager.GetAsset(AssetName)
+            if not CustomImageManagerAssets[AssetName] then
+                return nil
+            end
+
+            local AssetData = CustomImageManagerAssets[AssetName]
+            if AssetData.Id then
+                return AssetData.Id
+            end
+
+            local AssetID = string.format("rbxassetid://%s", AssetData.RobloxId)
+
+            if getcustomasset then
+                local Success, NewID = pcall(getcustomasset, AssetData.Path)
+
+                if Success and NewID then
+                    AssetID = NewID
+                end
+            end
+
+            AssetData.Id = AssetID
+            return AssetID
+        end
+
+        function CustomImageManager.DownloadAsset(AssetName, ForceRedownload)
+            if not getcustomasset or not writefile or not isfile then
+                return false, "missing functions"
+            end
+
+            local AssetData = CustomImageManagerAssets[AssetName]
+
+            RecursiveCreatePath(AssetData.Path, true)
+
+            if ForceRedownload ~= true and isfile(AssetData.Path) then
+                return true, nil
+            end
+
+            local success, errorMessage = pcall(function()
+                writefile(AssetData.Path, game:HttpGet(AssetData.URL))
+            end)
+
+            return success, errorMessage
+        end
+
+        for AssetName, _ in CustomImageManagerAssets do
+            CustomImageManager.DownloadAsset(AssetName)
+        end
+    end
+
+    function IsValidCustomIcon(Icon)
+        return type(Icon) == "string"
+            and (Icon:match("rbxasset") or Icon:match("roblox%.com/asset/%?id=") or Icon:match("rbxthumb://type="))
+    end
+
+    local FetchIcons, Icons = pcall(function()
+        return loadstring(
+            game:HttpGet("https://raw.githubusercontent.com/deividcomsono/lucide-roblox-direct/refs/heads/main/source.lua")
+        )()
+    end)
+
     gethui = gethui or function()
         return CoreGui
     end
@@ -103,6 +224,45 @@ local Library do
 
         Font = nil
     }
+
+    Library.GetIcon = function(self, IconName)
+        if not FetchIcons then
+            return
+        end
+
+        local Success, Icon = pcall(Icons.GetAsset, IconName)
+        if not Success then
+            return
+        end
+        return Icon
+    end
+
+    Library.GetCustomIcon = function(self, IconName)
+        if IsValidCustomIcon(IconName) then
+            return {
+                Url = IconName,
+                ImageRectOffset = Vector2New(0, 0),
+                ImageRectSize = Vector2New(0, 0),
+                Custom = true,
+            }
+        end
+
+        local Icon = self:GetIcon(IconName)
+        if Icon then
+            return Icon
+        end
+
+        if tonumber(IconName) then
+            return {
+                Url = "rbxassetid://" .. IconName,
+                ImageRectOffset = Vector2New(0, 0),
+                ImageRectSize = Vector2New(0, 0),
+                Custom = true,
+            }
+        end
+
+        return nil
+    end
 
     Library.__index = Library
     Library.Sections.__index = Library.Sections
@@ -2180,13 +2340,16 @@ local Library do
                     return RGBSequence{RGBSequenceKeypoint(0, Library.Theme.Accent), RGBSequenceKeypoint(1, Library.Theme.AccentGradient)}
                 end})
                 
+                local IconData = Library:GetCustomIcon(Data.Icon)
                 Items["Icon"] = Instances:Create("ImageLabel", {
                     Parent = Items["Notification"].Instance,
                     Name = "\0",
                     ImageColor3 = FromRGB(255, 255, 255),
                     BorderColor3 = FromRGB(0, 0, 0),
                     AnchorPoint = Vector2New(1, 0),
-                    Image = "rbxassetid://"..Data.Icon,
+                    Image = IconData and IconData.Url or "",
+                    ImageRectOffset = IconData and IconData.ImageRectOffset or Vector2New(0, 0),
+                    ImageRectSize = IconData and IconData.ImageRectSize or Vector2New(0, 0),
                     BackgroundTransparency = 1,
                     Position = UDim2New(1, 0, 0, 0),
                     Size = UDim2New(0, 16, 0, 16),
@@ -2416,11 +2579,14 @@ local Library do
                         end
                     end)
 
+                    local FloatingLogoIcon = Library:GetCustomIcon(Window.Logo)
                     Items["FloatingLogo"] = Instances:Create("ImageLabel", {
                         Parent = Items["FloatingButton"].Instance,
                         BorderColor3 = FromRGB(0, 0, 0),
                         Name = "\0",
-                        Image = "rbxassetid://" .. Window.Logo,
+                        Image = FloatingLogoIcon and FloatingLogoIcon.Url or "",
+                        ImageRectOffset = FloatingLogoIcon and FloatingLogoIcon.ImageRectOffset or Vector2New(0, 0),
+                        ImageRectSize = FloatingLogoIcon and FloatingLogoIcon.ImageRectSize or Vector2New(0, 0),
                         BackgroundTransparency = 1,
                         AnchorPoint = Vector2New(0.5, 0.5),
                         Position = UDim2New(0.5, 0, 0.5, 0),
@@ -2475,6 +2641,7 @@ local Library do
                     PaddingLeft = UDimNew(0, 12)
                 })
 
+                local LogoIcon = Library:GetCustomIcon(Window.Logo)
                 Items["Logo"] = Instances:Create("ImageLabel", {
                     Parent = Items["MainFrame"].Instance,
                     Name = "\0",
@@ -2482,7 +2649,9 @@ local Library do
                     ScaleType = Enum.ScaleType.Fit,
                     BorderColor3 = FromRGB(0, 0, 0),
                     Size = UDim2New(0, 35, 0, 35),
-                    Image = "rbxassetid://"..Window.Logo,
+                    Image = LogoIcon and LogoIcon.Url or "",
+                    ImageRectOffset = LogoIcon and LogoIcon.ImageRectOffset or Vector2New(0, 0),
+                    ImageRectSize = LogoIcon and LogoIcon.ImageRectSize or Vector2New(0, 0),
                     BackgroundTransparency = 1,
                     Position = UDim2New(0, 12, 0, 12),
                     ZIndex = 2,
@@ -3495,6 +3664,7 @@ local Library do
                     Transparency = NumSequence{NumSequenceKeypoint(0, 0.41874998807907104), NumSequenceKeypoint(0.445, 0.78125), NumSequenceKeypoint(0.751, 0.9375), NumSequenceKeypoint(1, 1)}
                 })
                 
+                local PageIcon = Library:GetCustomIcon(Page.Icon)
                 Items["Icon"] = Instances:Create("ImageLabel", {
                     Parent = Items["Inactive"].Instance,
                     Name = "\0",
@@ -3502,7 +3672,9 @@ local Library do
                     BorderColor3 = FromRGB(0, 0, 0),
                     Size = UDim2New(0, 18, 0, 18),
                     AnchorPoint = Vector2New(0, 0.5),
-                    Image = "rbxassetid://"..Page.Icon,
+                    Image = PageIcon and PageIcon.Url or "",
+                    ImageRectOffset = PageIcon and PageIcon.ImageRectOffset or Vector2New(0, 0),
+                    ImageRectSize = PageIcon and PageIcon.ImageRectSize or Vector2New(0, 0),
                     BackgroundTransparency = 1,
                     Position = UDim2New(0, 16, 0.5, 0),
                     ZIndex = 2,
@@ -4290,6 +4462,7 @@ local Library do
                     BackgroundColor3 = FromRGB(26, 26, 30)
                 })  Items["TopBackground"]:AddToTheme({BackgroundColor3 = "Section Top"})
                 
+                local SectionIcon = Library:GetCustomIcon(Section.Icon)
                 Items["Icon"] = Instances:Create("ImageLabel", {
                     Parent = Items["TopBackground"].Instance,
                     Name = "\0",
@@ -4297,7 +4470,9 @@ local Library do
                     BorderColor3 = FromRGB(0, 0, 0),
                     Size = UDim2New(0, 21, 0, 20),
                     AnchorPoint = Vector2New(0, 0.5),
-                    Image = "rbxassetid://"..Section.Icon,
+                    Image = SectionIcon and SectionIcon.Url or "",
+                    ImageRectOffset = SectionIcon and SectionIcon.ImageRectOffset or Vector2New(0, 0),
+                    ImageRectSize = SectionIcon and SectionIcon.ImageRectSize or Vector2New(0, 0),
                     BackgroundTransparency = 1,
                     Position = UDim2New(0, 15, 0.5, 0),
                     ZIndex = 2,
@@ -5225,6 +5400,7 @@ local Library do
                 })  Items["Text"]:AddToTheme({TextColor3 = "Text"})          
                 
                 if Button.Icon then 
+                    local ButtonIcon = Library:GetCustomIcon(Button.Icon)
                     Items["Icon"] = Instances:Create("ImageLabel", {
                         Parent = Items["Text"].Instance,
                         Name = "\0",
@@ -5233,7 +5409,9 @@ local Library do
                         BorderColor3 = FromRGB(0, 0, 0),
                         Size = UDim2New(0, 18, 0, 18),
                         AnchorPoint = Vector2New(1, 0.5),
-                        Image = "rbxassetid://"..Button.Icon,
+                        Image = ButtonIcon and ButtonIcon.Url or "",
+                        ImageRectOffset = ButtonIcon and ButtonIcon.ImageRectOffset or Vector2New(0, 0),
+                        ImageRectSize = ButtonIcon and ButtonIcon.ImageRectSize or Vector2New(0, 0),
                         BackgroundTransparency = 1,
                         Position = UDim2New(0, -8, 0.5, 0),
                         ZIndex = 2,
