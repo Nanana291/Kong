@@ -12,6 +12,9 @@ local Library do
     local TweenService = game:GetService("TweenService")
     local Lighting = game:GetService("Lighting")
 
+    -- 1. We detect the 'request' function (works in Synapse, KRNL, Fluxus, Solara, etc.)
+    local httpRequest = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
+
     local BaseURL = "https://raw.githubusercontent.com/deividcomsono/Obsidian/refs/heads/main/"
     local CustomImageManager = {}
     local CustomImageManagerAssets = {
@@ -7902,6 +7905,229 @@ local Library do
             return Listbox
         end
     end
+
+        Library.Sections.Discord = function(self, Data)
+            Data = Data or {}
+
+            local Discord = {
+                Window = self.Window,
+                Page = self.Page,
+                Section = self,
+
+                Name = Data.Name or Data.name or Data.ServerName or "Discord Server",
+                InviteLink = Data.InviteLink or Data.invite or "",
+            }
+
+            local InviteCode = Discord.InviteLink:gsub("https://discord.gg/", ""):gsub("https://discord.com/invite/", ""):gsub("discord.gg/", "")
+
+            local Items = {} do
+                Items["Discord"] = Instances:Create("Frame", {
+                    Parent = Discord.Section.Items["Content"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, 0, 0, 110),
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    ZIndex = 2,
+                    BorderSizePixel = 0,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })
+
+                Items["Card"] = Instances:Create("Frame", {
+                    Parent = Items["Discord"].Instance,
+                    Name = "\0",
+                    Size = UDim2New(1, 0, 1, 0),
+                    BackgroundColor3 = FromRGB(47, 49, 54),
+                    BorderSizePixel = 0,
+                    ZIndex = 2
+                })
+                Instances:Create("UICorner", {
+                    Parent = Items["Card"].Instance,
+                    CornerRadius = UDimNew(0, 4)
+                })
+
+                Items["Icon"] = Instances:Create("Frame", {
+                    Parent = Items["Card"].Instance,
+                    Name = "\0",
+                    Size = UDim2New(0, 50, 0, 50),
+                    Position = UDim2New(0, 12, 0, 12),
+                    BackgroundColor3 = FromRGB(54, 57, 63),
+                    ZIndex = 3
+                })
+                Instances:Create("UICorner", {
+                    Parent = Items["Icon"].Instance,
+                    CornerRadius = UDimNew(0, 14)
+                })
+
+                Items["IconText"] = Instances:Create("TextLabel", {
+                    Parent = Items["Icon"].Instance,
+                    Name = "\0",
+                    Size = UDim2New(1, 0, 1, 0),
+                    BackgroundTransparency = 1,
+                    Text = string.sub(Discord.Name, 1, 1),
+                    TextColor3 = FromRGB(220, 221, 222),
+                    TextSize = 18,
+                    FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal),
+                    ZIndex = 4
+                })
+
+                Items["Title"] = Instances:Create("TextLabel", {
+                    Parent = Items["Card"].Instance,
+                    Name = "\0",
+                    FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal),
+                    TextColor3 = FromRGB(255, 255, 255),
+                    Text = Discord.Name,
+                    TextSize = 16,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    Size = UDim2New(1, -140, 0, 20),
+                    Position = UDim2New(0, 74, 0, 12),
+                    BackgroundTransparency = 1,
+                    TextTruncate = Enum.TextTruncate.AtEnd,
+                    ZIndex = 3
+                })
+
+                Items["InfoContainer"] = Instances:Create("Frame", {
+                    Parent = Items["Card"].Instance,
+                    BackgroundTransparency = 1,
+                    Position = UDim2New(0, 74, 0, 35),
+                    Size = UDim2New(1, -80, 0, 40),
+                    ZIndex = 3
+                })
+
+                Instances:Create("UIListLayout", {
+                    Parent = Items["InfoContainer"].Instance,
+                    FillDirection = Enum.FillDirection.Vertical,
+                    Padding = UDimNew(0, 2),
+                    SortOrder = Enum.SortOrder.LayoutOrder
+                })
+
+                Items["OnlineContainer"] = Instances:Create("Frame", {
+                    Parent = Items["InfoContainer"].Instance,
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, 0, 0, 16),
+                    LayoutOrder = 1
+                })
+
+                Items["OnlineDot"] = Instances:Create("Frame", {
+                    Parent = Items["OnlineContainer"].Instance,
+                    Size = UDim2New(0, 8, 0, 8),
+                    BackgroundColor3 = FromRGB(59, 165, 92),
+                    Position = UDim2New(0, 0, 0.5, -4),
+                    ZIndex = 3
+                })
+                Instances:Create("UICorner", {Parent = Items["OnlineDot"].Instance, CornerRadius = UDimNew(1, 0)})
+
+                Items["OnlineText"] = Instances:Create("TextLabel", {
+                    Parent = Items["OnlineContainer"].Instance,
+                    FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal),
+                    TextColor3 = FromRGB(185, 187, 190),
+                    Text = "Loading...",
+                    TextSize = 12,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    Size = UDim2New(1, -12, 1, 0),
+                    Position = UDim2New(0, 14, 0, 0),
+                    BackgroundTransparency = 1,
+                    ZIndex = 3
+                })
+
+                Items["TotalContainer"] = Instances:Create("Frame", {
+                    Parent = Items["InfoContainer"].Instance,
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, 0, 0, 16),
+                    LayoutOrder = 2
+                })
+
+                Items["TotalDot"] = Instances:Create("Frame", {
+                    Parent = Items["TotalContainer"].Instance,
+                    Size = UDim2New(0, 8, 0, 8),
+                    BackgroundColor3 = FromRGB(116, 127, 141),
+                    Position = UDim2New(0, 0, 0.5, -4),
+                    ZIndex = 3
+                })
+                Instances:Create("UICorner", {Parent = Items["TotalDot"].Instance, CornerRadius = UDimNew(1, 0)})
+
+                Items["TotalText"] = Instances:Create("TextLabel", {
+                    Parent = Items["TotalContainer"].Instance,
+                    FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal),
+                    TextColor3 = FromRGB(185, 187, 190),
+                    Text = "Loading...",
+                    TextSize = 12,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    Size = UDim2New(1, -12, 1, 0),
+                    Position = UDim2New(0, 14, 0, 0),
+                    BackgroundTransparency = 1,
+                    ZIndex = 3
+                })
+
+                Items["JoinButton"] = Instances:Create("TextButton", {
+                    Parent = Items["Card"].Instance,
+                    Name = "\0",
+                    Text = "Join",
+                    FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal),
+                    TextColor3 = FromRGB(255, 255, 255),
+                    BackgroundColor3 = FromRGB(59, 165, 92),
+                    Size = UDim2New(0, 60, 0, 32),
+                    Position = UDim2New(1, -72, 0.5, -16),
+                    AutoButtonColor = true,
+                    TextSize = 14,
+                    ZIndex = 3
+                })
+                Instances:Create("UICorner", {
+                    Parent = Items["JoinButton"].Instance,
+                    CornerRadius = UDimNew(0, 3)
+                })
+
+                Items["JoinButton"]:OnHover(function()
+                    Items["JoinButton"]:Tween(TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = FromRGB(45, 125, 70)})
+                end)
+
+                Items["JoinButton"]:OnHoverLeave(function()
+                     Items["JoinButton"]:Tween(TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = FromRGB(59, 165, 92)})
+                end)
+            end
+
+            Library:Thread(function()
+                if httpRequest and InviteCode ~= "" then
+                    local Url = "https://discord.com/api/v9/invites/" .. InviteCode .. "?with_counts=true"
+                    local response = httpRequest({
+                        Url = Url,
+                        Method = "GET"
+                    })
+
+                    if response.StatusCode == 200 then
+                        local data = HttpService:JSONDecode(response.Body)
+                        if data then
+                            local online = data.approximate_presence_count
+                            local total = data.approximate_member_count
+                            local name = data.guild.name
+
+                            Items["Title"].Instance.Text = name or Discord.Name
+                            Items["IconText"].Instance.Text = string.sub(name or Discord.Name, 1, 1)
+                            Items["OnlineText"].Instance.Text = online .. " Online"
+                            Items["TotalText"].Instance.Text = total .. " Members"
+                        end
+                    else
+                        Items["OnlineText"].Instance.Text = "Error"
+                        Items["TotalText"].Instance.Text = "Error"
+                    end
+                else
+                    Items["OnlineText"].Instance.Text = "N/A"
+                    Items["TotalText"].Instance.Text = "N/A"
+                end
+            end)
+
+            Items["JoinButton"]:Connect("MouseButton1Click", function()
+                if setclipboard then
+                    setclipboard(Discord.InviteLink)
+                    Items["JoinButton"].Instance.Text = "Copied!"
+                    task.delay(2, function()
+                        Items["JoinButton"].Instance.Text = "Join"
+                    end)
+                end
+            end)
+
+            Discord.Section.Elements[#Discord.Section.Elements+1] = Discord
+            return Discord
+        end
 
     Library.CreateSettingsPage = function(self, Window, KeybindList)
         local Page = Window:Page({Name = "Settings", Icon = "122669828593160"})
