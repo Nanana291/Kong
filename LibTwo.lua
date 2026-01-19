@@ -5022,14 +5022,11 @@ local Library do
                     LayoutOrder = 1
                 })
 
-                Items["TabButtons"] = Instances:Create("ScrollingFrame", {
+                Items["TabButtons"] = Instances:Create("Frame", {
                     Parent = Items["Top"].Instance,
                     Name = "\0",
                     BackgroundTransparency = 1,
                     Size = UDim2New(1, 0, 1, 0),
-                    CanvasSize = UDim2New(0, 0, 0, 0),
-                    ScrollBarThickness = 0,
-                    AutomaticCanvasSize = Enum.AutomaticSize.X,
                     ZIndex = 2,
                     BorderSizePixel = 0
                 })
@@ -5038,7 +5035,7 @@ local Library do
                     Parent = Items["TabButtons"].Instance,
                     FillDirection = Enum.FillDirection.Horizontal,
                     SortOrder = Enum.SortOrder.LayoutOrder,
-                    Padding = UDimNew(0, 5)
+                    Padding = UDimNew(0, 0)
                 })
 
                 Items["Content"] = Instances:Create("Frame", {
@@ -5068,24 +5065,27 @@ local Library do
                     Elements = {}
                 }
 
+                TableInsert(Tabbox.Tabs, Tab)
+
+                -- Recalculate width
+                local Width = 1 / #Tabbox.Tabs
+                for _, T in pairs(Tabbox.Tabs) do
+                    T.Items["Button"].Instance.Size = UDim2New(Width, 0, 1, 0)
+                end
+
                 Tab.Items["Button"] = Instances:Create("TextButton", {
                     Parent = Items["TabButtons"].Instance,
                     Name = "\0",
-                    Text = IsIcon and "" or Name,
-                    Size = UDim2New(0, 0, 1, 0),
-                    AutomaticSize = Enum.AutomaticSize.X,
+                    Text = "",
+                    Size = UDim2New(Width, 0, 1, 0),
                     BackgroundTransparency = 1,
+                    BackgroundColor3 = FromRGB(35, 35, 38), -- Lighter than container (29, 28, 32)
                     FontFace = Library.Font,
-                    TextColor3 = FromRGB(150, 150, 150),
+                    TextColor3 = FromRGB(255, 255, 255),
                     TextSize = 14,
                     ZIndex = 3,
-                    BorderSizePixel = 0
-                })
-
-                Instances:Create("UIPadding", {
-                    Parent = Tab.Items["Button"].Instance,
-                    PaddingLeft = UDimNew(0, 10),
-                    PaddingRight = UDimNew(0, 10)
+                    BorderSizePixel = 0,
+                    AutoButtonColor = false
                 })
 
                 if IsIcon then
@@ -5099,10 +5099,9 @@ local Library do
                         ImageRectOffset = Icon.ImageRectOffset,
                         ImageRectSize = Icon.ImageRectSize,
                         ImageColor3 = FromRGB(150, 150, 150),
-                        BorderSizePixel = 0
+                        BorderSizePixel = 0,
+                        ZIndex = 4
                     })
-                    Tab.Items["Button"].Instance.Size = UDim2New(0, 30, 1, 0)
-                    Tab.Items["Button"].Instance.AutomaticSize = Enum.AutomaticSize.None
                 end
 
                 Tab.Items["Content"] = Instances:Create("Frame", {
@@ -5138,19 +5137,23 @@ local Library do
                     Tabbox.ActiveTab = Tab
 
                     Tab.Items["Content"].Instance.Visible = true
+
+                    -- Active Style
+                    Tab.Items["Button"]:Tween(nil, {BackgroundTransparency = 0})
+
                     if Tab.Items["Icon"] then
                         Tab.Items["Icon"]:Tween(nil, {ImageColor3 = Library.Theme.Accent})
-                    else
-                        Tab.Items["Button"]:Tween(nil, {TextColor3 = Library.Theme.Accent})
                     end
                 end
 
                 function Tab:Hide()
                     Tab.Items["Content"].Instance.Visible = false
+
+                    -- Inactive Style
+                    Tab.Items["Button"]:Tween(nil, {BackgroundTransparency = 1})
+
                     if Tab.Items["Icon"] then
                         Tab.Items["Icon"]:Tween(nil, {ImageColor3 = FromRGB(150, 150, 150)})
-                    else
-                        Tab.Items["Button"]:Tween(nil, {TextColor3 = FromRGB(150, 150, 150)})
                     end
                 end
 

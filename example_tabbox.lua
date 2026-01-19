@@ -12,15 +12,15 @@ local Page = Window:Page({Name = "Main", Icon = "rbxassetid://1234567890"})
 -- Left Tabbox
 local LeftTabBox = Page:AddLeftTabbox()
 
--- Icon only tab (using "trending-up" which is a valid Lucide icon name)
+-- Icon tab 1
 local IconTab = LeftTabBox:AddTab("trending-up")
-IconTab:Label("This tab has an icon only!")
+IconTab:Label("This is the Trending tab")
 IconTab:Button({Name = "Click Me", Callback = function() print("Clicked") end})
 
--- Text tab
-local TextTab = LeftTabBox:AddTab("Settings")
-TextTab:Label("This tab has text!")
-TextTab:Toggle({Name = "Enabled", Default = true})
+-- Icon tab 2
+local SettingsTab = LeftTabBox:AddTab("settings")
+SettingsTab:Label("This is the Settings tab")
+SettingsTab:Toggle({Name = "Enabled", Default = true})
 
 -- Right Tabbox
 local RightTabBox = Page:AddRightTabbox()
