@@ -5070,7 +5070,9 @@ local Library do
                 -- Recalculate width
                 local Width = 1 / #Tabbox.Tabs
                 for _, T in pairs(Tabbox.Tabs) do
-                    T.Items["Button"].Instance.Size = UDim2New(Width, 0, 1, 0)
+                    if T.Items["Button"] then
+                        T.Items["Button"].Instance.Size = UDim2New(Width, 0, 1, 0)
+                    end
                 end
 
                 Tab.Items["Button"] = Instances:Create("TextButton", {
