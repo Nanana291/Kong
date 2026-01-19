@@ -2435,6 +2435,7 @@ local Library do
                 Name = Data.Name or Data.name or "Window",
                 SubName = Data.SubName or Data.subname or "Fine-tuning for sure wins",
                 Logo = Data.Logo or Data.logo or "1l20959262762131",
+                Compact = Data.Compact or false,
                 
                 Pages = { },
                 Items = { },
@@ -3388,6 +3389,29 @@ local Library do
             
             local Debounce = false
 
+            function Window:SetCompact(Bool)
+                Window.Compact = Bool
+                local TargetWidth = Bool and 50 or 225
+
+                Items["LeftTabs"]:Tween(TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2New(0, TargetWidth, 1, 0)})
+
+                for _, Page in pairs(Window.Pages) do
+                    local Button = Page.Items["Inactive"]
+                    local Text = Page.Items["Text"]
+                    local Icon = Page.Items["Icon"]
+
+                    if Bool then
+                        Text:Tween(nil, {TextTransparency = 1})
+                        Icon:Tween(nil, {Position = UDim2New(0.5, 0, 0.5, 0)})
+                        Button:Tween(nil, {Size = UDim2New(1, 0, 0, 40)})
+                    else
+                        Text:Tween(nil, {TextTransparency = Page.Active and 0 or 0.3})
+                        Icon:Tween(nil, {Position = UDim2New(0, 16, 0.5, 0)})
+                        Button:Tween(nil, {Size = UDim2New(0, 200, 0, 40)})
+                    end
+                end
+            end
+
             function Window:SetCenter()
                 local CenterPosition = Items["MainFrame"].Instance.AbsolutePosition
                 task.wait()
@@ -3595,6 +3619,9 @@ local Library do
             end)]]
 
             Window:SetCenter()
+            if Window.Compact then
+                Window:SetCompact(true)
+            end
             task.wait()
             Window:SetOpen(true)
             return setmetatable(Window, Library)
@@ -3751,6 +3778,7 @@ local Library do
             }
 
             local Items = { } do
+                local IsCompact = Page.Window.Compact
                 Items["Inactive"] = Instances:Create("TextButton", {
                     Parent = Page.Window.Items["LeftTabs"].Instance,
                     Name = "\0",
@@ -3761,7 +3789,7 @@ local Library do
                     AutoButtonColor = false,
                     BackgroundTransparency = 1,
                     BorderSizePixel = 0,
-                    Size = UDim2New(0, 200, 0, 40),
+                    Size = IsCompact and UDim2New(1, 0, 0, 40) or UDim2New(0, 200, 0, 40),
                     ZIndex = 2,
                     TextSize = 14,
                     BackgroundColor3 = FromRGB(124, 163, 255)
@@ -3804,12 +3832,12 @@ local Library do
                     ImageColor3 = FromRGB(255, 255, 255),
                     BorderColor3 = FromRGB(0, 0, 0),
                     Size = UDim2New(0, 18, 0, 18),
-                    AnchorPoint = Vector2New(0, 0.5),
+                    AnchorPoint = IsCompact and Vector2New(0.5, 0.5) or Vector2New(0, 0.5),
                     Image = PageIcon and PageIcon.Url or "",
                     ImageRectOffset = PageIcon and PageIcon.ImageRectOffset or Vector2New(0, 0),
                     ImageRectSize = PageIcon and PageIcon.ImageRectSize or Vector2New(0, 0),
                     BackgroundTransparency = 1,
-                    Position = UDim2New(0, 16, 0.5, 0),
+                    Position = IsCompact and UDim2New(0.5, 0, 0.5, 0) or UDim2New(0, 16, 0.5, 0),
                     ZIndex = 2,
                     BorderSizePixel = 0,
                     BackgroundColor3 = FromRGB(255, 255, 255)
@@ -3838,6 +3866,7 @@ local Library do
                     BorderSizePixel = 0,
                     ZIndex = 2,
                     TextSize = 14,
+                    TextTransparency = IsCompact and 1 or 0.3,
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })  Items["Text"]:AddToTheme({TextColor3 = "Text"})      
                 
@@ -8515,6 +8544,7 @@ local Library do
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })
 
+                -- Header Text
                 Items["Header"] = Instances:Create("TextLabel", {
                     Parent = Items["Discord"].Instance,
                     Name = "\0",
@@ -8529,6 +8559,7 @@ local Library do
                     ZIndex = 2
                 })
 
+                -- Card Background
                 Items["Card"] = Instances:Create("Frame", {
                     Parent = Items["Discord"].Instance,
                     Name = "\0",
@@ -8543,6 +8574,7 @@ local Library do
                     CornerRadius = UDimNew(0, 4)
                 })
 
+                -- Server Icon
                 Items["Icon"] = Instances:Create("ImageLabel", {
                     Parent = Items["Card"].Instance,
                     Name = "\0",
@@ -8571,6 +8603,7 @@ local Library do
                     ZIndex = 4
                 })
 
+                -- Server Title
                 Items["Title"] = Instances:Create("TextLabel", {
                     Parent = Items["Card"].Instance,
                     Name = "\0",
@@ -8580,35 +8613,34 @@ local Library do
                     TextSize = 15,
                     TextXAlignment = Enum.TextXAlignment.Left,
                     Size = UDim2New(1, -165, 0, 20),
-                    Position = UDim2New(0, 78, 0, 20),
+                    Position = UDim2New(0, 78, 0, 15),
                     BackgroundTransparency = 1,
                     TextTruncate = Enum.TextTruncate.AtEnd,
                     ZIndex = 3
                 })
 
-                Items["InfoContainer"] = Instances:Create("Frame", {
+                -- "Members" Subtitle
+                Items["MembersLabel"] = Instances:Create("TextLabel", {
                     Parent = Items["Card"].Instance,
+                    Name = "\0",
+                    FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal),
+                    TextColor3 = FromRGB(181, 186, 193),
+                    Text = "Members",
+                    TextSize = 12,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    Size = UDim2New(1, -165, 0, 15),
+                    Position = UDim2New(0, 78, 0, 38),
                     BackgroundTransparency = 1,
-                    Position = UDim2New(0, 78, 0, 43),
-                    Size = UDim2New(1, -165, 0, 16),
                     ZIndex = 3
                 })
 
-                Instances:Create("UIListLayout", {
-                    Parent = Items["InfoContainer"].Instance,
-                    FillDirection = Enum.FillDirection.Horizontal,
-                    Padding = UDimNew(0, 12),
-                    SortOrder = Enum.SortOrder.LayoutOrder,
-                    VerticalAlignment = Enum.VerticalAlignment.Center
-                })
-
-                -- Online Container
+                -- Online Members (Green)
                 Items["OnlineContainer"] = Instances:Create("Frame", {
-                    Parent = Items["InfoContainer"].Instance,
+                    Parent = Items["Card"].Instance,
                     BackgroundTransparency = 1,
-                    AutomaticSize = Enum.AutomaticSize.X,
-                    Size = UDim2New(0, 0, 1, 0),
-                    LayoutOrder = 1
+                    Position = UDim2New(0, 78, 0, 56),
+                    Size = UDim2New(1, -165, 0, 16),
+                    ZIndex = 3
                 })
 
                 Items["OnlineDot"] = Instances:Create("Frame", {
@@ -8620,7 +8652,6 @@ local Library do
                 })
                 Instances:Create("UICorner", {Parent = Items["OnlineDot"].Instance, CornerRadius = UDimNew(1, 0)})
 
-                -- Pulse Effect for Online Dot
                 local Pulse = Instances:Create("Frame", {
                     Parent = Items["OnlineDot"].Instance,
                     Name = "Pulse",
@@ -8639,8 +8670,8 @@ local Library do
 
                 Items["OnlineText"] = Instances:Create("TextLabel", {
                     Parent = Items["OnlineContainer"].Instance,
-                    FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal),
-                    TextColor3 = FromRGB(181, 186, 193),
+                    FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal),
+                    TextColor3 = FromRGB(35, 165, 89),
                     Text = "Loading...",
                     TextSize = 12,
                     TextXAlignment = Enum.TextXAlignment.Left,
@@ -8651,38 +8682,7 @@ local Library do
                     ZIndex = 3
                 })
 
-                -- Total Container
-                Items["TotalContainer"] = Instances:Create("Frame", {
-                    Parent = Items["InfoContainer"].Instance,
-                    BackgroundTransparency = 1,
-                    AutomaticSize = Enum.AutomaticSize.X,
-                    Size = UDim2New(0, 0, 1, 0),
-                    LayoutOrder = 2
-                })
-
-                Items["TotalDot"] = Instances:Create("Frame", {
-                    Parent = Items["TotalContainer"].Instance,
-                    Size = UDim2New(0, 8, 0, 8),
-                    BackgroundColor3 = FromRGB(128, 132, 142),
-                    Position = UDim2New(0, 0, 0.5, -4),
-                    ZIndex = 3
-                })
-                Instances:Create("UICorner", {Parent = Items["TotalDot"].Instance, CornerRadius = UDimNew(1, 0)})
-
-                Items["TotalText"] = Instances:Create("TextLabel", {
-                    Parent = Items["TotalContainer"].Instance,
-                    FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal),
-                    TextColor3 = FromRGB(181, 186, 193),
-                    Text = "Loading...",
-                    TextSize = 12,
-                    TextXAlignment = Enum.TextXAlignment.Left,
-                    AutomaticSize = Enum.AutomaticSize.X,
-                    Size = UDim2New(0, 0, 1, 0),
-                    Position = UDim2New(0, 14, 0, 0),
-                    BackgroundTransparency = 1,
-                    ZIndex = 3
-                })
-
+                -- Join Button
                 Items["JoinButton"] = Instances:Create("TextButton", {
                     Parent = Items["Card"].Instance,
                     Name = "\0",
@@ -8726,7 +8726,6 @@ local Library do
 
                         if Success and data then
                             local online = data.approximate_presence_count
-                            local total = data.approximate_member_count
                             local name = data.guild.name
 
                             Items["Title"].Instance.Text = name or Discord.Name
@@ -8740,16 +8739,13 @@ local Library do
                                 Items["IconText"].Instance.Visible = true
                             end
 
-                            Items["OnlineText"].Instance.Text = online .. " Online"
-                            Items["TotalText"].Instance.Text = total .. " Members"
+                            Items["OnlineText"].Instance.Text = "Online Members: " .. online
                         end
                     else
                         Items["OnlineText"].Instance.Text = "Error"
-                        Items["TotalText"].Instance.Text = "Error"
                     end
                 else
                     Items["OnlineText"].Instance.Text = "N/A"
-                    Items["TotalText"].Instance.Text = "N/A"
                 end
             end)
 
