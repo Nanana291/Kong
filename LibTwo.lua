@@ -4979,6 +4979,209 @@ local Library do
             return setmetatable(Section, Library.Sections)
         end
 
+        Library.Pages.Tabbox = function(self, Data)
+            Data = Data or {}
+
+            local Tabbox = {
+                Window = self.Window,
+                Page = self,
+                Side = Data.Side or 1,
+                Tabs = {},
+                ActiveTab = nil,
+                Items = {}
+            }
+
+            local Items = {} do
+                Items["Section"] = Instances:Create("Frame", {
+                    Parent = Tabbox.Page.ColumnsData[Tabbox.Side].Instance,
+                    Name = "\0",
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    BackgroundTransparency = 1,
+                    ClipsDescendants = true,
+                    BorderSizePixel = 0,
+                    Size = UDim2New(1, 0, 0, 0),
+                    ZIndex = 2,
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    BackgroundColor3 = FromRGB(29, 28, 32)
+                })
+
+                Items["Top"] = Instances:Create("Frame", {
+                    Parent = Items["Section"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, 0, 0, 30),
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    ZIndex = 2,
+                    BorderSizePixel = 0,
+                })
+
+                Items["TabButtons"] = Instances:Create("ScrollingFrame", {
+                    Parent = Items["Top"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, 0, 1, 0),
+                    CanvasSize = UDim2New(0, 0, 0, 0),
+                    ScrollBarThickness = 0,
+                    AutomaticCanvasSize = Enum.AutomaticSize.X,
+                    ZIndex = 2,
+                    BorderSizePixel = 0
+                })
+
+                Instances:Create("UIListLayout", {
+                    Parent = Items["TabButtons"].Instance,
+                    FillDirection = Enum.FillDirection.Horizontal,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Padding = UDimNew(0, 5)
+                })
+
+                Items["Content"] = Instances:Create("Frame", {
+                    Parent = Items["Section"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 0.65,
+                    Size = UDim2New(1, 0, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    BorderSizePixel = 0,
+                    ZIndex = 2,
+                    BackgroundColor3 = FromRGB(26, 26, 30)
+                })
+                Instances:Create("UICorner", {Parent = Items["Content"].Instance, CornerRadius = UDimNew(0, 4)})
+            end
+
+            function Tabbox:AddTab(Name)
+                local Icon = Library:GetCustomIcon(Name)
+                local IsIcon = Icon ~= nil
+
+                local Tab = {
+                    Window = Tabbox.Window,
+                    Page = Tabbox.Page,
+                    Section = Tabbox,
+                    Items = {},
+                    Elements = {}
+                }
+
+                Tab.Items["Button"] = Instances:Create("TextButton", {
+                    Parent = Items["TabButtons"].Instance,
+                    Name = "\0",
+                    Text = IsIcon and "" or Name,
+                    Size = UDim2New(0, 0, 1, 0),
+                    AutomaticSize = Enum.AutomaticSize.X,
+                    BackgroundTransparency = 1,
+                    FontFace = Library.Font,
+                    TextColor3 = FromRGB(150, 150, 150),
+                    TextSize = 14,
+                    ZIndex = 3,
+                    BorderSizePixel = 0
+                })
+
+                Instances:Create("UIPadding", {
+                    Parent = Tab.Items["Button"].Instance,
+                    PaddingLeft = UDimNew(0, 10),
+                    PaddingRight = UDimNew(0, 10)
+                })
+
+                if IsIcon then
+                    Tab.Items["Icon"] = Instances:Create("ImageLabel", {
+                        Parent = Tab.Items["Button"].Instance,
+                        BackgroundTransparency = 1,
+                        Size = UDim2New(0, 20, 0, 20),
+                        Position = UDim2New(0.5, 0, 0.5, 0),
+                        AnchorPoint = Vector2New(0.5, 0.5),
+                        Image = Icon.Url,
+                        ImageRectOffset = Icon.ImageRectOffset,
+                        ImageRectSize = Icon.ImageRectSize,
+                        ImageColor3 = FromRGB(150, 150, 150),
+                        BorderSizePixel = 0
+                    })
+                    Tab.Items["Button"].Instance.Size = UDim2New(0, 30, 1, 0)
+                    Tab.Items["Button"].Instance.AutomaticSize = Enum.AutomaticSize.None
+                end
+
+                Tab.Items["Content"] = Instances:Create("Frame", {
+                    Parent = Items["Content"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, 0, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    Visible = false,
+                    BorderSizePixel = 0
+                })
+
+                Instances:Create("UIListLayout", {
+                    Parent = Tab.Items["Content"].Instance,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Padding = UDimNew(0, 5)
+                })
+
+                Instances:Create("UIPadding", {
+                    Parent = Tab.Items["Content"].Instance,
+                    PaddingTop = UDimNew(0, 10),
+                    PaddingBottom = UDimNew(0, 10),
+                    PaddingLeft = UDimNew(0, 10),
+                    PaddingRight = UDimNew(0, 10)
+                })
+
+                function Tab:Show()
+                    if Tabbox.ActiveTab then
+                        Tabbox.ActiveTab:Hide()
+                    end
+                    Tabbox.ActiveTab = Tab
+
+                    Tab.Items["Content"].Instance.Visible = true
+                    if Tab.Items["Icon"] then
+                        Tab.Items["Icon"]:Tween(nil, {ImageColor3 = Library.Theme.Accent})
+                    else
+                        Tab.Items["Button"]:Tween(nil, {TextColor3 = Library.Theme.Accent})
+                    end
+                end
+
+                function Tab:Hide()
+                    Tab.Items["Content"].Instance.Visible = false
+                    if Tab.Items["Icon"] then
+                        Tab.Items["Icon"]:Tween(nil, {ImageColor3 = FromRGB(150, 150, 150)})
+                    else
+                        Tab.Items["Button"]:Tween(nil, {TextColor3 = FromRGB(150, 150, 150)})
+                    end
+                end
+
+                function Tab:RefreshPosition(Bool)
+                end
+
+                function Tab:TweenElements(Bool, Debounce)
+                    for Index, Value in Tab.Elements do
+                        if Value.RefreshPosition then
+                            Value:RefreshPosition(Bool)
+                        end
+                        if not Debounce then
+                            task.wait(0.03)
+                        end
+                    end
+                end
+
+                Tab.Items["Button"]:Connect("MouseButton1Down", function()
+                    Tab:Show()
+                end)
+
+                if not Tabbox.ActiveTab then
+                    Tab:Show()
+                end
+
+                Tab.Page.Sections[Name] = Tab
+                return setmetatable(Tab, Library.Sections)
+            end
+
+            Tabbox.Items = Items
+            return Tabbox
+        end
+
+        Library.Pages.AddLeftTabbox = function(self, Name)
+            return self:Tabbox({ Side = 1, Name = Name })
+        end
+
+        Library.Pages.AddRightTabbox = function(self, Name)
+            return self:Tabbox({ Side = 2, Name = Name })
+        end
+
         Library.Sections.Toggle = function(self, Data)
             Data = Data or { }
             
