@@ -5005,6 +5005,12 @@ local Library do
                     BackgroundColor3 = FromRGB(29, 28, 32)
                 })
 
+                Instances:Create("UIListLayout", {
+                    Parent = Items["Section"].Instance,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Padding = UDimNew(0, 0)
+                })
+
                 Items["Top"] = Instances:Create("Frame", {
                     Parent = Items["Section"].Instance,
                     Name = "\0",
@@ -5013,6 +5019,7 @@ local Library do
                     BorderColor3 = FromRGB(0, 0, 0),
                     ZIndex = 2,
                     BorderSizePixel = 0,
+                    LayoutOrder = 1
                 })
 
                 Items["TabButtons"] = Instances:Create("ScrollingFrame", {
@@ -5043,7 +5050,8 @@ local Library do
                     BorderColor3 = FromRGB(0, 0, 0),
                     BorderSizePixel = 0,
                     ZIndex = 2,
-                    BackgroundColor3 = FromRGB(26, 26, 30)
+                    BackgroundColor3 = FromRGB(26, 26, 30),
+                    LayoutOrder = 2
                 })
                 Instances:Create("UICorner", {Parent = Items["Content"].Instance, CornerRadius = UDimNew(0, 4)})
             end
@@ -5122,6 +5130,8 @@ local Library do
                 })
 
                 function Tab:Show()
+                    if Tabbox.ActiveTab == Tab then return end
+
                     if Tabbox.ActiveTab then
                         Tabbox.ActiveTab:Hide()
                     end
