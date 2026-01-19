@@ -1805,9 +1805,11 @@ local Library do
                 end
                 
                 NewTween.Tween.Completed:Connect(function()
+                    if not Library then return end
                     Debounce = false 
                     Items["ColorpickerWindow"].Instance.Visible = Colorpicker.IsOpen
                     task.wait(0.2)
+                    if not Library then return end
                     Items["ColorpickerWindow"].Instance.Parent = not Colorpicker.IsOpen and Library.UnusedHolder.Instance or Library.Holder.Instance
                 end)
             end
@@ -3308,9 +3310,11 @@ local Library do
                         end
                         
                         NewTween.Tween.Completed:Connect(function()
+                        if not Library then return end
                             Debounce = false 
                             SettingsItems["Settings"].Instance.Visible = Settings.IsOpen
                             task.wait(0.2)
+                        if not Library then return end
                             SettingsItems["Settings"].Instance.Parent = not Settings.IsOpen and Library.UnusedHolder.Instance or Library.Holder.Instance
                         end)
                     end
@@ -5053,6 +5057,16 @@ local Library do
                 Instances:Create("UICorner", {Parent = Items["Content"].Instance, CornerRadius = UDimNew(0, 4)})
             end
 
+            function Tabbox:RefreshPosition(Bool)
+                if Bool then
+                    Items["Header"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 0)})
+                    Items["Content"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 30)})
+                else
+                    Items["Header"].Instance.Position = UDim2New(0, 30, 0, 0)
+                    Items["Content"].Instance.Position = UDim2New(0, 30, 0, 30)
+                end
+            end
+
             function Tabbox:AddTab(Name)
                 local Icon = Library:GetCustomIcon(Name)
                 local IsIcon = Icon ~= nil
@@ -5584,9 +5598,11 @@ local Library do
                     end
                     
                     NewTween.Tween.Completed:Connect(function()
+                        if not Library then return end
                         Debounce = false 
                         SettingsItem["Settings"].Instance.Visible = Settings.IsOpen
                         task.wait(0.2)
+                        if not Library then return end
                         SettingsItem["Settings"].Instance.Parent = not Settings.IsOpen and Library.UnusedHolder.Instance or Library.Holder.Instance
                     end)
                 end
@@ -6444,9 +6460,11 @@ local Library do
                 end
                 
                 NewTween.Tween.Completed:Connect(function()
+                    if not Library then return end
                     Debounce = false 
                     Items["OptionHolder"].Instance.Visible = Dropdown.IsOpen
                     task.wait(0.2)
+                    if not Library then return end
                     Items["OptionHolder"].Instance.Parent = not Dropdown.IsOpen and Library.UnusedHolder.Instance or Library.Holder.Instance
                 end)
             end
@@ -7044,9 +7062,11 @@ local Library do
                 end
 
                 NewTween.Tween.Completed:Connect(function()
+                    if not Library then return end
                     Debounce = false
                     Items["OptionHolder"].Instance.Visible = Dropdown.IsOpen
                     task.wait(0.2)
+                    if not Library then return end
                     Items["OptionHolder"].Instance.Parent = not Dropdown.IsOpen and Library.UnusedHolder.Instance or Library.Holder.Instance
                 end)
             end
@@ -7385,6 +7405,16 @@ local Library do
                     SortOrder = Enum.SortOrder.LayoutOrder,
                     Padding = UDimNew(0, 0) -- Overlap is handled by visibility
                 })
+            end
+
+            function Tabbox:RefreshPosition(Bool)
+                if Bool then
+                    Items["Header"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 0)})
+                    Items["Content"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 30)})
+                else
+                    Items["Header"].Instance.Position = UDim2New(0, 30, 0, 0)
+                    Items["Content"].Instance.Position = UDim2New(0, 30, 0, 30)
+                end
             end
 
             function Tabbox:AddTab(Name)
@@ -9165,6 +9195,16 @@ local Library do
                 end)
             end
 
+            function Discord:RefreshPosition(Bool)
+                if Bool then
+                    Items["Header"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 2, 0, 0)})
+                    Items["Card"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 20)})
+                else
+                    Items["Header"].Instance.Position = UDim2New(0, 32, 0, 0)
+                    Items["Card"].Instance.Position = UDim2New(0, 30, 0, 20)
+                end
+            end
+
             Library:Thread(function()
                 if httpRequest and InviteCode ~= "" then
                     local Url = "https://discord.com/api/v9/invites/" .. InviteCode .. "?with_counts=true"
@@ -9341,6 +9381,9 @@ local Library do
                         }
                     })
                 end
+            end
+
+            function Divider:RefreshPosition(Bool)
             end
 
             Divider.Section.Elements[#Divider.Section.Elements+1] = Divider
