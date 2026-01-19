@@ -8619,26 +8619,11 @@ local Library do
                     ZIndex = 3
                 })
 
-                -- "Members" Subtitle
-                Items["MembersLabel"] = Instances:Create("TextLabel", {
-                    Parent = Items["Card"].Instance,
-                    Name = "\0",
-                    FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal),
-                    TextColor3 = FromRGB(181, 186, 193),
-                    Text = "Members",
-                    TextSize = 12,
-                    TextXAlignment = Enum.TextXAlignment.Left,
-                    Size = UDim2New(1, -165, 0, 15),
-                    Position = UDim2New(0, 78, 0, 38),
-                    BackgroundTransparency = 1,
-                    ZIndex = 3
-                })
-
                 -- Online Members (Green)
                 Items["OnlineContainer"] = Instances:Create("Frame", {
                     Parent = Items["Card"].Instance,
                     BackgroundTransparency = 1,
-                    Position = UDim2New(0, 78, 0, 56),
+                    Position = UDim2New(0, 78, 0, 38),
                     Size = UDim2New(1, -165, 0, 16),
                     ZIndex = 3
                 })
@@ -8673,7 +8658,39 @@ local Library do
                     FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal),
                     TextColor3 = FromRGB(35, 165, 89),
                     Text = "Loading...",
-                    TextSize = 12,
+                    TextSize = 10,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    AutomaticSize = Enum.AutomaticSize.X,
+                    Size = UDim2New(0, 0, 1, 0),
+                    Position = UDim2New(0, 14, 0, 0),
+                    BackgroundTransparency = 1,
+                    ZIndex = 3
+                })
+
+                -- Total Members (Gray)
+                Items["TotalContainer"] = Instances:Create("Frame", {
+                    Parent = Items["Card"].Instance,
+                    BackgroundTransparency = 1,
+                    Position = UDim2New(0, 78, 0, 56),
+                    Size = UDim2New(1, -165, 0, 16),
+                    ZIndex = 3
+                })
+
+                Items["TotalDot"] = Instances:Create("Frame", {
+                    Parent = Items["TotalContainer"].Instance,
+                    Size = UDim2New(0, 8, 0, 8),
+                    BackgroundColor3 = FromRGB(128, 132, 142),
+                    Position = UDim2New(0, 0, 0.5, -4),
+                    ZIndex = 3
+                })
+                Instances:Create("UICorner", {Parent = Items["TotalDot"].Instance, CornerRadius = UDimNew(1, 0)})
+
+                Items["TotalText"] = Instances:Create("TextLabel", {
+                    Parent = Items["TotalContainer"].Instance,
+                    FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal),
+                    TextColor3 = FromRGB(128, 132, 142),
+                    Text = "Loading...",
+                    TextSize = 10,
                     TextXAlignment = Enum.TextXAlignment.Left,
                     AutomaticSize = Enum.AutomaticSize.X,
                     Size = UDim2New(0, 0, 1, 0),
@@ -8726,6 +8743,7 @@ local Library do
 
                         if Success and data then
                             local online = data.approximate_presence_count
+                            local total = data.approximate_member_count
                             local name = data.guild.name
 
                             Items["Title"].Instance.Text = name or Discord.Name
@@ -8739,13 +8757,16 @@ local Library do
                                 Items["IconText"].Instance.Visible = true
                             end
 
-                            Items["OnlineText"].Instance.Text = "Online Members: " .. online
+                            Items["OnlineText"].Instance.Text = online .. " Online"
+                            Items["TotalText"].Instance.Text = total .. " Members"
                         end
                     else
                         Items["OnlineText"].Instance.Text = "Error"
+                        Items["TotalText"].Instance.Text = "Error"
                     end
                 else
                     Items["OnlineText"].Instance.Text = "N/A"
+                    Items["TotalText"].Instance.Text = "N/A"
                 end
             end)
 
