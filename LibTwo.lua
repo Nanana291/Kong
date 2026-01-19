@@ -7388,6 +7388,9 @@ local Library do
             end
 
             function Tabbox:AddTab(Name)
+                local Icon = Library:GetCustomIcon(Name)
+                local IsIcon = Icon ~= nil
+
                 local Tab = {
                     Tabbox = Tabbox,
                     Name = Name,
@@ -7400,7 +7403,7 @@ local Library do
                 local Button = Instances:Create("TextButton", {
                     Parent = Items["ButtonContainer"].Instance,
                     Name = Name,
-                    Text = Name,
+                    Text = IsIcon and "" or Name,
                     FontFace = Library.Font,
                     TextColor3 = FromRGB(255, 255, 255),
                     TextSize = 13,
@@ -7415,6 +7418,22 @@ local Library do
                     Parent = Button.Instance,
                     CornerRadius = UDimNew(0, 4)
                 })
+
+                if IsIcon then
+                    Tab.Items["Icon"] = Instances:Create("ImageLabel", {
+                        Parent = Button.Instance,
+                        BackgroundTransparency = 1,
+                        Size = UDim2New(0, 18, 0, 18),
+                        Position = UDim2New(0.5, 0, 0.5, 0),
+                        AnchorPoint = Vector2New(0.5, 0.5),
+                        Image = Icon.Url,
+                        ImageRectOffset = Icon.ImageRectOffset,
+                        ImageRectSize = Icon.ImageRectSize,
+                        ImageColor3 = FromRGB(180, 180, 180),
+                        BorderSizePixel = 0,
+                        ZIndex = 3
+                    })
+                end
 
                 Tab.Items["Button"] = Button
 
@@ -7479,6 +7498,11 @@ local Library do
                         BackgroundColor3 = FromRGB(35, 35, 40),
                         TextColor3 = FromRGB(180, 180, 180)
                     })
+                    if Tabbox.ActiveTab.Items["Icon"] then
+                        Tabbox.ActiveTab.Items["Icon"]:Tween(TweenInfo.new(0.2), {
+                            ImageColor3 = FromRGB(180, 180, 180)
+                        })
+                    end
                 end
 
                 Tabbox.ActiveTab = Tab
@@ -7489,6 +7513,11 @@ local Library do
                     BackgroundColor3 = Library.Theme.Accent,
                     TextColor3 = FromRGB(255, 255, 255)
                 })
+                if Tab.Items["Icon"] then
+                    Tab.Items["Icon"]:Tween(TweenInfo.new(0.2), {
+                        ImageColor3 = FromRGB(255, 255, 255)
+                    })
+                end
             end
 
             -- Hook AddTab to auto-select first
