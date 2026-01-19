@@ -7179,7 +7179,7 @@ local Library do
                     FontFace = Library.Font,
                     Text = "1",
                     PlaceholderText = "#",
-                    TextColor3 = FromRGB(240, 240, 240),
+                    TextColor3 = FromHex("116ac2"),
                     PlaceholderColor3 = FromRGB(180, 180, 180),
                     BackgroundTransparency = 1,
                     BorderSizePixel = 0,
@@ -7190,7 +7190,7 @@ local Library do
                     TextSize = 13,
                     TextXAlignment = Enum.TextXAlignment.Right,
                     BackgroundColor3 = FromRGB(255, 255, 255)
-                }) PriorityBox:AddToTheme({TextColor3 = "Text"})
+                })
 
                 local OptionData = {
                     Button = OptionButton,
@@ -7318,6 +7318,196 @@ local Library do
             Dropdown.Section.Elements[#Dropdown.Section.Elements+1] = Dropdown
             return Dropdown
         end
+
+        Library.Sections.Tabbox = function(self, Data)
+            Data = Data or {}
+
+            local Tabbox = {
+                Window = self.Window,
+                Page = self.Page,
+                Section = self,
+
+                Tabs = {},
+                ActiveTab = nil
+            }
+
+            local Items = {} do
+                Items["Tabbox"] = Instances:Create("Frame", {
+                    Parent = Tabbox.Section.Items["Content"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, 0, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    ZIndex = 2,
+                    BorderSizePixel = 0,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })
+
+                -- Container for Tab Buttons (Header)
+                Items["Header"] = Instances:Create("Frame", {
+                    Parent = Items["Tabbox"].Instance,
+                    Name = "\0",
+                    Size = UDim2New(1, 0, 0, 25),
+                    BackgroundColor3 = FromRGB(255, 255, 255),
+                    BackgroundTransparency = 1,
+                    ZIndex = 2
+                })
+
+                Items["ButtonContainer"] = Instances:Create("Frame", {
+                    Parent = Items["Header"].Instance,
+                    Name = "\0",
+                    Size = UDim2New(1, 0, 1, 0),
+                    BackgroundTransparency = 1,
+                    ZIndex = 2
+                })
+
+                Instances:Create("UIListLayout", {
+                    Parent = Items["ButtonContainer"].Instance,
+                    FillDirection = Enum.FillDirection.Horizontal,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Padding = UDimNew(0, 4) -- Small gap between tabs
+                })
+
+                -- Content Frame (where elements go)
+                Items["Content"] = Instances:Create("Frame", {
+                    Parent = Items["Tabbox"].Instance,
+                    Name = "\0",
+                    Size = UDim2New(1, 0, 0, 0),
+                    Position = UDim2New(0, 0, 0, 30), -- Offset by header height + padding
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    BackgroundTransparency = 1,
+                    ZIndex = 2
+                })
+
+                 Instances:Create("UIListLayout", {
+                    Parent = Items["Content"].Instance,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Padding = UDimNew(0, 0) -- Overlap is handled by visibility
+                })
+            end
+
+            function Tabbox:AddTab(Name)
+                local Tab = {
+                    Tabbox = Tabbox,
+                    Name = Name,
+                    Items = {},
+                    Elements = {},
+                    IsOpen = false
+                }
+
+                -- Create Tab Button
+                local Button = Instances:Create("TextButton", {
+                    Parent = Items["ButtonContainer"].Instance,
+                    Name = Name,
+                    Text = Name,
+                    FontFace = Library.Font,
+                    TextColor3 = FromRGB(255, 255, 255),
+                    TextSize = 13,
+                    Size = UDim2New(0, 0, 1, 0), -- Width set dynamically
+                    BackgroundColor3 = FromRGB(35, 35, 40),
+                    BackgroundTransparency = 0, -- Inactive state
+                    AutoButtonColor = false,
+                    BorderSizePixel = 0,
+                    ZIndex = 2
+                })
+                Instances:Create("UICorner", {
+                    Parent = Button.Instance,
+                    CornerRadius = UDimNew(0, 4)
+                })
+
+                Tab.Items["Button"] = Button
+
+                -- Create Tab Content Container
+                local Content = Instances:Create("Frame", {
+                    Parent = Items["Content"].Instance,
+                    Name = Name,
+                    Size = UDim2New(1, 0, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    BackgroundTransparency = 1,
+                    Visible = false,
+                    ZIndex = 2
+                })
+
+                Instances:Create("UIListLayout", {
+                    Parent = Content.Instance,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Padding = UDimNew(0, 6)
+                })
+
+                Instances:Create("UIPadding", {
+                    Parent = Content.Instance,
+                    PaddingTop = UDimNew(0, 6),
+                    PaddingBottom = UDimNew(0, 6)
+                })
+
+                Tab.Items["Content"] = Content
+
+                -- Button Click Logic
+                Button:Connect("MouseButton1Click", function()
+                    Tabbox:SetTab(Tab)
+                end)
+
+                -- Resize Logic (Equal Widths)
+                local function UpdateWidths()
+                    local Count = #Tabbox.Tabs
+                    if Count > 0 then
+                        local Width = 1 / Count
+                        for _, T in ipairs(Tabbox.Tabs) do
+                            if T.Items["Button"] and T.Items["Button"].Instance then
+                                T.Items["Button"].Instance.Size = UDim2New(Width, -((4 * (Count - 1)) / Count), 1, 0)
+                            end
+                        end
+                    end
+                end
+
+                table.insert(Tabbox.Tabs, Tab)
+                UpdateWidths()
+
+                -- Set Metatable for Element Creation inside Tab
+                setmetatable(Tab, Library.Sections) -- Reuse Section metatable for element creation functions
+
+                return Tab
+            end
+
+            function Tabbox:SetTab(Tab)
+                if Tabbox.ActiveTab then
+                    Tabbox.ActiveTab.IsOpen = false
+                    Tabbox.ActiveTab.Items["Content"].Instance.Visible = false
+                    -- Reset Style (Inactive)
+                    Tabbox.ActiveTab.Items["Button"]:Tween(TweenInfo.new(0.2), {
+                        BackgroundColor3 = FromRGB(35, 35, 40),
+                        TextColor3 = FromRGB(180, 180, 180)
+                    })
+                end
+
+                Tabbox.ActiveTab = Tab
+                Tab.IsOpen = true
+                Tab.Items["Content"].Instance.Visible = true
+                -- Set Style (Active)
+                Tab.Items["Button"]:Tween(TweenInfo.new(0.2), {
+                    BackgroundColor3 = Library.Theme.Accent,
+                    TextColor3 = FromRGB(255, 255, 255)
+                })
+            end
+
+            -- Hook AddTab to auto-select first
+            local OriginalAddTab = Tabbox.AddTab
+            Tabbox.AddTab = function(self, Name)
+                local Tab = OriginalAddTab(self, Name)
+                if #Tabbox.Tabs == 1 then
+                    Tabbox:SetTab(Tab)
+                end
+                return Tab
+            end
+
+            Tabbox.Section.Elements[#Tabbox.Section.Elements+1] = Tabbox
+            return Tabbox
+        end
+
+        -- Aliases for Sections
+        Library.Sections.AddLeftTabbox = Library.Sections.Tabbox
+        Library.Sections.AddRightTabbox = Library.Sections.Tabbox
 
         Library.Sections.Label = function(self, Name)
             local Label = {
