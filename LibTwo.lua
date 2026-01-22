@@ -2438,12 +2438,34 @@ local Library do
                 SubName = Data.SubName or Data.subname or "Fine-tuning for sure wins",
                 Logo = Data.Logo or Data.logo or "1l20959262762131",
                 Compact = Data.Compact or false,
+                SelectedTab = Data.SelectedTab or 1,
                 
                 Pages = { },
                 Items = { },
                 IsOpen = false,
                 CurrentAlignment = "LeftTabs"
             }
+
+            function Window:SelectTab(Tab)
+                if type(Tab) == "number" then
+                    local Page = Window.Pages[Tab]
+                    if Page then
+                        for _, P in ipairs(Window.Pages) do
+                            if P.Active and P ~= Page then
+                                P:Turn(false)
+                            end
+                        end
+                        Page:Turn(true)
+                    end
+                elseif type(Tab) == "table" and Tab.Turn then -- Assuming it's a Page object
+                    for _, P in ipairs(Window.Pages) do
+                        if P.Active and P ~= Tab then
+                            P:Turn(false)
+                        end
+                    end
+                    Tab:Turn(true)
+                end
+            end
 
             local Items = { } do
                 Items["MainFrame"] = Instances:Create("Frame", {
@@ -4022,6 +4044,18 @@ local Library do
             end
             
             TableInsert(Page.Window.Pages, Page)
+
+            if Page.Window.SelectedTab and Page.Window.SelectedTab == #Page.Window.Pages then
+                -- If this is the newly added page and matches SelectedTab index, select it
+                -- First turn off any existing active page if needed (though existing logic might handle it)
+                for _, P in ipairs(Page.Window.Pages) do
+                    if P ~= Page and P.Active then
+                        P:Turn(false)
+                    end
+                end
+                Page:Turn(true)
+            end
+
             return setmetatable(Page, Library.Pages)
         end
 
@@ -5259,27 +5293,18 @@ local Library do
                     Name = "\0",
                     CornerRadius = UDimNew(0, 3)
                 })
-                
-                Items["Accent"] = Instances:Create("Frame", {
+
+                Items["IndicatorStroke"] = Instances:Create("UIStroke", {
                     Parent = Items["Indicator"].Instance,
                     Name = "\0",
-                    Size = UDim2New(0, 0, 0, 0),
-                    BorderColor3 = FromRGB(0, 0, 0),
-                    ZIndex = 2,
-                    BorderSizePixel = 0,
-                    BackgroundColor3 = FromRGB(255, 255, 255),
-                    AnchorPoint = Vector2New(0.5, 0.5),
-                    Position = UDim2New(0.5, 0, 0.5, 0)
-                })  --Items["Accent"]:AddToTheme({BackgroundColor3 = "Accent"})
-
-                Instances:Create("UICorner", {
-                    Parent = Items["Accent"].Instance,
-                    Name = "\0",
-                    CornerRadius = UDimNew(0, 3)
-                })
+                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+                    Color = FromRGB(0, 0, 0),
+                    Thickness = 1,
+                    Transparency = 0.8
+                }) Items["IndicatorStroke"]:AddToTheme({Color = "Outline"})
 
                 Items["CheckImage"] = Instances:Create("ImageLabel", {
-                    Parent = Items["Accent"].Instance,
+                    Parent = Items["Indicator"].Instance,
                     Name = "\0",
                     BorderColor3 = FromRGB(0, 0, 0),
                     Size = UDim2New(0, 0, 0, 0),
@@ -5291,7 +5316,7 @@ local Library do
                     BorderSizePixel = 0,
                     ImageTransparency = 1,
                     BackgroundColor3 = FromRGB(255, 255, 255)
-                })  Items["CheckImage"]:AddToTheme({ImageColor3 = "Text"})
+                })
                 
                 Items["Text"] = Instances:Create("TextLabel", {
                     Parent = Items["Toggle"].Instance,
@@ -5312,29 +5337,27 @@ local Library do
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })  Items["Text"]:AddToTheme({TextColor3 = "Text"})
 
-                Items["Gradient"] = Instances:Create("UIGradient", {
-                    Parent = Items["Accent"].Instance,
+                Items["IndicatorGradient"] = Instances:Create("UIGradient", {
+                    Parent = Items["Indicator"].Instance,
                     Name = "\0",
-                    Enabled = true,
+                    Enabled = false,
                     Rotation = -115,
                     Color = RGBSequence{RGBSequenceKeypoint(0, FromRGB(255, 255, 255)), RGBSequenceKeypoint(1, FromRGB(143, 143, 143))}
-                })  Items["Gradient"]:AddToTheme({Color = function()
+                })  Items["IndicatorGradient"]:AddToTheme({Color = function()
                     return RGBSequence{RGBSequenceKeypoint(0, Library.Theme.Accent), RGBSequenceKeypoint(1, Library.Theme.AccentGradient)}
                 end})
 
                 Items["Toggle"]:OnHover(function()
-                    Items["Indicator"]:Tween(TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Size = UDim2New(0, 21, 0, 21), Position = UDim2New(0, -3, 0, -3)})
+                    --Items["Indicator"]:Tween(TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Size = UDim2New(0, 21, 0, 21), Position = UDim2New(0, -3, 0, -3)})
                 end)
 
                 Items["Toggle"]:OnHoverLeave(function()
-                    Items["Indicator"]:Tween(TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Size = UDim2New(0, 18, 0, 18), Position = UDim2New(0, 0, 0, 0)})
+                    --Items["Indicator"]:Tween(TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Size = UDim2New(0, 18, 0, 18), Position = UDim2New(0, 0, 0, 0)})
                 end)
             end
 
             Items["Indicator"].Instance.Position = UDim2New(0, 30, 0, 0)
             Items["Text"].Instance.Position = UDim2New(0, 54, 0, 0)
-
-            --Toggle.Section.Items["Fade"].Instance.Size = UDim2New(1, 0, 0, Toggle.Section.Items["Content"].Instance.AbsoluteSize.X - 180)
 
             function Toggle:RefreshPosition(Bool)
                 if Bool then
@@ -5354,16 +5377,16 @@ local Library do
                 Toggle.Value = Value 
                 Library.Flags[Toggle.Flag] = Value 
 
-                if Toggle.Value then 
-                    Items["Accent"]:Tween(TweenInfo.new(Library.Tween.Time + 0.1, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {BackgroundTransparency = 0, Size = UDim2New(1, 0, 1, 0)})
-                    Items["CheckImage"]:Tween(nil, {ImageTransparency = 0, Size = UDim2New(0, 10, 0, 9)})
-
-                    --Items["Gradient"].Instance.Enabled = true 
+                if Toggle.Value then
+                    Items["IndicatorGradient"].Instance.Enabled = true
+                    Items["Indicator"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = FromRGB(255, 255, 255)})
+                    Items["CheckImage"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {ImageTransparency = 0, Size = UDim2New(0, 12, 0, 12)})
+                    Items["IndicatorStroke"]:Tween(nil, {Transparency = 1})
                 else
-                    Items["Accent"]:Tween(TweenInfo.new(Library.Tween.Time + 0.05, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {BackgroundTransparency = 1, Size = UDim2New(0, 0, 0, 0)})
-                    Items["CheckImage"]:Tween(nil, {ImageTransparency = 1, Size = UDim2New(0, 0, 0, 0)})
-
-                    --Items["Gradient"].Instance.Enabled = false
+                    Items["IndicatorGradient"].Instance.Enabled = false
+                    Items["Indicator"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = Library.Theme.Element})
+                    Items["CheckImage"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {ImageTransparency = 1, Size = UDim2New(0, 0, 0, 0)})
+                    Items["IndicatorStroke"]:Tween(nil, {Transparency = 0.8})
                 end
 
                 if Toggle.Callback then 
