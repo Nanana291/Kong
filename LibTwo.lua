@@ -5331,10 +5331,20 @@ local Library do
                 end)
             end
 
-            Items["Indicator"].Instance.Position = UDim2New(0, 60, 0, 0)
-            Items["Text"].Instance.Position = UDim2New(0, 84, 0, 0)
+            Items["Indicator"].Instance.Position = UDim2New(0, 30, 0, 0)
+            Items["Text"].Instance.Position = UDim2New(0, 54, 0, 0)
 
             --Toggle.Section.Items["Fade"].Instance.Size = UDim2New(1, 0, 0, Toggle.Section.Items["Content"].Instance.AbsoluteSize.X - 180)
+
+            function Toggle:RefreshPosition(Bool)
+                if Bool then
+                    Items["Indicator"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 0)})
+                    Items["Text"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 24, 0, 0)})
+                else
+                    Items["Indicator"].Instance.Position = UDim2New(0, 30, 0, 0)
+                    Items["Text"].Instance.Position = UDim2New(0, 54, 0, 0)
+                end
+            end
 
             function Toggle:Get()
                 return Toggle.Value 
@@ -6050,8 +6060,8 @@ local Library do
             --Slider.Section.Items["Fade"].Instance.Size = UDim2New(1, 0, 0, Slider.Section.Items["Content"].Instance.AbsoluteSize.X - 180)
 
             --Items["Value"].Instance.TextTransparency = 1
-            Items["RealSlider"].Instance.Position = UDim2New(0, 80, 1, -3)
-            Items["Text"].Instance.Position = UDim2New(0, 80, 0, 0)
+            Items["RealSlider"].Instance.Position = UDim2New(0, 30, 1, -3)
+            Items["Text"].Instance.Position = UDim2New(0, 30, 0, 0)
 
             function Slider:Get()
                 return Slider.Value 
@@ -6063,12 +6073,12 @@ local Library do
 
             function Slider:RefreshPosition(Bool)
                 if Bool then 
-                    Items["RealSlider"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 20, 1, -3)})
+                    Items["RealSlider"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 1, -3)})
                     Items["Text"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 0)})
                    -- Items["Value"].Instance.TextTransparency = 0.3
                 else
-                    Items["RealSlider"].Instance.Position = UDim2New(0, 80, 1, -3)
-                    Items["Text"].Instance.Position = UDim2New(0, 80, 0, 0)
+                    Items["RealSlider"].Instance.Position = UDim2New(0, 30, 1, -3)
+                    Items["Text"].Instance.Position = UDim2New(0, 30, 0, 0)
                    -- Items["Value"].Instance.TextTransparency = 1
                 end
             end
@@ -9020,6 +9030,7 @@ local Library do
 
                 Name = Data.Name or Data.name or Data.ServerName or "Discord Server",
                 InviteLink = Data.InviteLink or Data.invite or "",
+                TargetServerID = Data.TargetServerID or Data.id or nil,
             }
 
             local InviteCode = Discord.InviteLink:gsub("https://discord.gg/", ""):gsub("https://discord.com/invite/", ""):gsub("discord.gg/", "")
@@ -9244,23 +9255,35 @@ local Library do
                         end)
 
                         if Success and data then
-                            local online = data.approximate_presence_count
-                            local total = data.approximate_member_count
-                            local name = data.guild.name
-
-                            Items["Title"].Instance.Text = name or Discord.Name
-
-                            if data.guild.icon then
-                                local iconUrl = "https://cdn.discordapp.com/icons/" .. data.guild.id .. "/" .. data.guild.icon .. ".png"
-                                Items["Icon"].Instance.Image = iconUrl
-                                Items["IconText"].Instance.Visible = false
+                            if Discord.TargetServerID and data.guild and data.guild.id ~= Discord.TargetServerID then
+                                warn("⚠️ WARNING: The invitation works, but the server ID does not match the one you entered.")
+                                warn("Invitation ID: " .. (data.guild and data.guild.id or "N/A"))
                             else
-                                Items["IconText"].Instance.Text = string.sub(name or Discord.Name, 1, 1)
-                                Items["IconText"].Instance.Visible = true
-                            end
+                                local online = data.approximate_presence_count
+                                local total = data.approximate_member_count
+                                local name = data.guild.name
 
-                            Items["OnlineText"].Instance.Text = online .. " Online"
-                            Items["TotalText"].Instance.Text = total .. " Members"
+                                Items["Title"].Instance.Text = name or Discord.Name
+
+                                if data.guild.icon then
+                                    local iconUrl = "https://cdn.discordapp.com/icons/" .. data.guild.id .. "/" .. data.guild.icon .. ".png"
+                                    Items["Icon"].Instance.Image = iconUrl
+                                    Items["IconText"].Instance.Visible = false
+                                else
+                                    Items["IconText"].Instance.Text = string.sub(name or Discord.Name, 1, 1)
+                                    Items["IconText"].Instance.Visible = true
+                                end
+
+                                Items["OnlineText"].Instance.Text = online .. " Online"
+                                Items["TotalText"].Instance.Text = total .. " Members"
+
+                                print("--------------------------------")
+                                print("✅ Server Verified: " .. (name or "Unknown"))
+                                print("🆔 Correct ID: " .. (data.guild.id or "N/A"))
+                                print("🟢 Online: " .. online)
+                                print("👥 Totals: " .. total)
+                                print("--------------------------------")
+                            end
                         end
                     else
                         Items["OnlineText"].Instance.Text = "Error"
