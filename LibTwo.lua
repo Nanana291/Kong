@@ -8378,13 +8378,14 @@ local Library do
         end
 
         Library.Sections.Textbox = function(self, Data)
-            Data = Data or { }
+            Data = Data or {}
 
             local Textbox = {
                 Window = self.Window,
                 Page = self.Page,
                 Section = self,
 
+                Name = Data.Name or Data.name or "Textbox",
                 Flag = Data.Flag or Data.flag or Library:NextFlag(),
                 Default = Data.Default or Data.default or "",
                 Callback = Data.Callback or Data.callback or function() end,
@@ -8395,7 +8396,7 @@ local Library do
                 Value = ""
             }
 
-            local Items = { } do 
+            local Items = {} do
                 Items["Textbox"] = Instances:Create("Frame", {
                     Parent = Textbox.Section.Items["Content"].Instance,
                     Name = "\0",
@@ -8406,21 +8407,36 @@ local Library do
                     Size = UDim2New(1, 0, 0, 32),
                     ZIndex = 2,
                     BorderSizePixel = 0,
-                    BackgroundColor3 = FromRGB(27, 26, 29)
+                    BackgroundColor3 = FromRGB(255, 255, 255)
                 }) 
-                
-                Instances:Create("UICorner", {
+
+                Items["Title"] = Instances:Create("TextLabel", {
                     Parent = Items["Textbox"].Instance,
                     Name = "\0",
-                    CornerRadius = UDimNew(0, 4)
-                })
+                    FontFace = Library.Font,
+                    TextColor3 = FromRGB(240, 240, 240),
+                    TextTransparency = 0.3,
+                    Text = Textbox.Name,
+                    AutomaticSize = Enum.AutomaticSize.X,
+                    Size = UDim2New(0, 0, 0, 15),
+                    AnchorPoint = Vector2New(0, 0.5),
+                    BorderSizePixel = 0,
+                    BackgroundTransparency = 1,
+                    Position = UDim2New(0, 30, 0.5, 0),
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    ZIndex = 2,
+                    TextSize = 14,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })  Items["Title"]:AddToTheme({TextColor3 = "Text"})
                 
                 Items["Background"] = Instances:Create("Frame", {
                     Parent = Items["Textbox"].Instance,
                     Name = "\0",
                     Active = true,
                     BorderColor3 = FromRGB(0, 0, 0),
-                    Size = UDim2New(1, 0, 1, 0),
+                    AnchorPoint = Vector2New(1, 0.5),
+                    Position = UDim2New(1, 30, 0.5, 0),
+                    Size = UDim2New(0, 160, 0, 22),
                     Selectable = true,
                     ZIndex = 2,
                     ClipsDescendants = true,
@@ -8428,6 +8444,13 @@ local Library do
                     BackgroundColor3 = FromRGB(27, 26, 29)
                 })  Items["Background"]:AddToTheme({BackgroundColor3 = "Element"})
                 
+                Instances:Create("UIStroke", {
+                    Parent = Items["Background"].Instance,
+                    Name = "\0",
+                    Color = FromRGB(35, 33, 38),
+                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                }):AddToTheme({Color = "Outline"})
+
                 Instances:Create("UICorner", {
                     Parent = Items["Background"].Instance,
                     Name = "\0",
@@ -8442,14 +8465,14 @@ local Library do
                     BorderColor3 = FromRGB(0, 0, 0),
                     Text = "",
                     ZIndex = 2,
-                    Size = UDim2New(1, -20, 0, 15),
-                    Position = UDim2New(0, 10, 0, 8),
+                    Size = UDim2New(1, -20, 1, 0),
+                    Position = UDim2New(0, 10, 0, 0),
                     BorderSizePixel = 0,
                     BackgroundTransparency = 1,
                     PlaceholderColor3 = FromRGB(185, 185, 185),
                     TextXAlignment = Enum.TextXAlignment.Left,
                     PlaceholderText = Textbox.Placeholder,
-                    TextSize = 14,
+                    TextSize = 13,
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })  Items["Input"]:AddToTheme({TextColor3 = "Text"})               
             end
@@ -8464,9 +8487,11 @@ local Library do
 
             function Textbox:RefreshPosition(Bool)
                 if Bool then
-                    Items["Background"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 0)})
+                    Items["Title"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0.5, 0)})
+                    Items["Background"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(1, 0, 0.5, 0)})
                 else
-                    Items["Background"].Instance.Position = UDim2New(0, 30, 0, 0)
+                    Items["Title"].Instance.Position = UDim2New(0, 30, 0.5, 0)
+                    Items["Background"].Instance.Position = UDim2New(1, 30, 0.5, 0)
                 end
             end
 
