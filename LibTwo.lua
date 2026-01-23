@@ -3628,15 +3628,35 @@ local Library do
             --]]
 
             function Window:Init()
-                for __, Value in Window.Pages do 
-                    if Value.Active then 
-                        for _, Value2 in Value.Sections do 
-                            task.spawn(function()
-                                Value2:TweenElements(true)
-                            end)
+                local OriginalTweenCreate = Tween.Create
+
+                Tween.Create = function(self, Item, Info, Goal, IsRawItem)
+                    local Item = IsRawItem and Item or Item.Instance
+                    if not Item then return end
+
+                    for Property, Value in pairs(Goal) do
+                        Item[Property] = Value
+                    end
+
+                    return {
+                        Tween = {
+                            Play = function() end,
+                            Completed = { Connect = function() return { Disconnect = function() end } end }
+                        }
+                    }
+                end
+
+                pcall(function()
+                    for __, Value in Window.Pages do
+                        if Value.Active then
+                            for _, Value2 in Value.Sections do
+                                Value2:TweenElements(true, true)
+                            end
                         end
                     end
-                end
+                end)
+
+                Tween.Create = OriginalTweenCreate
             end
 
             --[[Library:Connect(UserInputService.InputBegan, function(Input)
