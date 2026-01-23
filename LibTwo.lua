@@ -6361,6 +6361,38 @@ local Library do
                     Name = "\0",
                     CornerRadius = UDimNew(0, 5)
                 })
+
+                Items["Search"] = Instances:Create("TextBox", {
+                    Parent = Items["OptionHolder"].Instance,
+                    Name = "\0",
+                    FontFace = Library.Font,
+                    CursorPosition = -1,
+                    TextColor3 = FromRGB(240, 240, 240),
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    Text = "",
+                    ZIndex = 2,
+                    Size = UDim2New(1, -16, 0, 30),
+                    Position = UDim2New(0, 8, 0, 8),
+                    BorderSizePixel = 0,
+                    PlaceholderColor3 = FromRGB(185, 185, 185),
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    PlaceholderText = "Search..",
+                    TextSize = 14,
+                    BackgroundColor3 = FromRGB(35, 33, 38)
+                })  Items["Search"]:AddToTheme({TextColor3 = "Text", BackgroundColor3 = "Section Background 2"})
+
+                Instances:Create("UICorner", {
+                    Parent = Items["Search"].Instance,
+                    Name = "\0",
+                    CornerRadius = UDimNew(0, 4)
+                })
+
+                Instances:Create("UIPadding", {
+                    Parent = Items["Search"].Instance,
+                    Name = "\0",
+                    PaddingTop = UDimNew(0, 4),
+                    PaddingLeft = UDimNew(0, 8)
+                })
                 
                 Items["Holder"] = Instances:Create("ScrollingFrame", {
                     Parent = Items["OptionHolder"].Instance,
@@ -6368,9 +6400,9 @@ local Library do
                     Active = true,
                     AutomaticCanvasSize = Enum.AutomaticSize.Y,
                     ScrollBarThickness = 2,
-                    Size = UDim2New(1, -16, 1, -16),
+                    Size = UDim2New(1, -16, 1, -50),
                     BackgroundTransparency = 1,
-                    Position = UDim2New(0, 8, 0, 8),
+                    Position = UDim2New(0, 8, 0, 42),
                     BackgroundColor3 = FromRGB(255, 255, 255),
                     BorderColor3 = FromRGB(0, 0, 0),
                     BorderSizePixel = 0,
@@ -6455,8 +6487,7 @@ local Library do
                     
                     RenderStepped = RunService.RenderStepped:Connect(function()
                         Items["OptionHolder"].Instance.Position = UDim2New(0, Items["RealDropdown"].Instance.AbsolutePosition.X, 0, Items["RealDropdown"].Instance.AbsolutePosition.Y + Items["RealDropdown"].Instance.AbsoluteSize.Y + 5)
-                        Items["OptionHolder"].Instance.Position = UDim2New(0, Items["RealDropdown"].Instance.AbsolutePosition.X, 0, Items["RealDropdown"].Instance.AbsolutePosition.Y + Items["RealDropdown"].Instance.AbsoluteSize.Y + 5)
-                        Items["OptionHolder"].Instance.Size = UDim2New(0, Items["RealDropdown"].Instance.AbsoluteSize.X, 0, Dropdown.OptionHolderSize)
+                        Items["OptionHolder"].Instance.Size = UDim2New(0, Items["RealDropdown"].Instance.AbsoluteSize.X, 0, Dropdown.OptionHolderSize + 34)
                     end)
 
                     for Index, Value in Library.OpenFrames do 
@@ -6643,7 +6674,8 @@ local Library do
                     Name = Option,
                     OptionText = OptionText,
                     OptionAccent = OptionAccent,
-                    Selected = false
+                    Selected = false,
+                    IsSearching = false
                 }
                 
                 function OptionData:Toggle(Value)
@@ -6654,6 +6686,30 @@ local Library do
                         OptionText:Tween(nil, {TextTransparency = 0.3, Position = UDim2New(0, 0, 0.5, 0)})
                         OptionAccent:Tween(nil, {BackgroundTransparency = 1})
                     end
+                end
+
+                function OptionData:Search(Bool)
+                    Library:Thread(function()
+                        if Bool then
+                            OptionData.IsSearching = true
+                            OptionText:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {TextTransparency = 1})
+                            task.wait(0.08)
+                            OptionButton:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2New(1, 0, 0, 0)})
+
+                            if OptionData.Selected then
+                                OptionAccent:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {BackgroundTransparency = 1})
+                            end
+                        else
+                            OptionData.IsSearching = false
+                            OptionText:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {TextTransparency = OptionData.Selected and 0 or 0.3})
+                            task.wait(0.08)
+                            OptionButton:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2New(1, 0, 0, 20)})
+
+                            if OptionData.Selected then
+                                OptionAccent:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {BackgroundTransparency = 0})
+                            end
+                        end
+                    end)
                 end
 
                 function OptionData:RefreshPosition(Bool)
@@ -6797,6 +6853,26 @@ local Library do
                     Dropdown.IsOpen = not Library:IsClipped(Items["OptionHolder"].Instance, Dropdown.Section.Items["Section"].Instance.Parent)
                     Items["OptionHolder"].Instance.Visible = Dropdown.IsOpen
                 end
+            end)
+
+            Library:Connect(Items["Search"].Instance:GetPropertyChangedSignal("Text"), function()
+                Library:Thread(function()
+                    for Index, Value in Dropdown.OptionsWithIndexes do
+                        local InputText = Items["Search"].Instance.Text
+                        if InputText ~= "" then
+                            if StringFind(StringLower(Value.Name), Library:EscapePattern(StringLower(InputText))) then
+                                Value.Button.Instance.Visible = true
+                                Value:Search(false)
+                            else
+                                Value:Search(true)
+                                Value.Button.Instance.Visible = false
+                            end
+                        else
+                            Value:Search(false)
+                            Value.Button.Instance.Visible = true
+                        end
+                    end
+                end)
             end)
 
             for Index, Value in Dropdown.Items do 
