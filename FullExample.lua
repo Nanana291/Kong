@@ -38,7 +38,7 @@ local MyToggle = ToggleSection:Toggle({
 })
 
 -- Toggle with Settings (Keybind inside) and Colorpicker
-MyToggle:Settings() -- Adds a settings cog
+local ToggleSettings = MyToggle:Settings() -- Adds a settings cog
 MyToggle:Colorpicker({
     Flag = "AimbotColor",
     Default = Color3.fromRGB(255, 0, 0),
@@ -49,7 +49,7 @@ MyToggle:Colorpicker({
 
 ToggleSection:Divider({Title = "Sliders"})
 
-ToggleSection:Slider({
+local MySlider = ToggleSection:Slider({
     Name = "WalkSpeed",
     Flag = "WalkSpeedSlider",
     Min = 16,
@@ -77,7 +77,7 @@ ToggleSection:Slider({
 -- Section 2: Dropdowns (Right Side)
 local DropdownSection = MainTab:Section({Name = "Dropdowns", Side = 2})
 
-DropdownSection:Dropdown({
+local MyDropdown = DropdownSection:Dropdown({
     Name = "Target Mode",
     Flag = "TargetDropdown",
     Items = {"Head", "Torso", "Random"},
@@ -87,7 +87,7 @@ DropdownSection:Dropdown({
     end
 })
 
-DropdownSection:Dropdown({
+local MultiDropdown = DropdownSection:Dropdown({
     Name = "Multi Selection",
     Flag = "MultiDropdown",
     Items = {"Esp Box", "Esp Tracers", "Esp Name", "Esp Health"},
@@ -101,7 +101,7 @@ DropdownSection:Dropdown({
 DropdownSection:Divider({Title = "Priority Dropdown"})
 
 -- New Priority Dropdown
-DropdownSection:PriorityDropdown({
+local PrioDropdown = DropdownSection:PriorityDropdown({
     Name = "Target Priority",
     Flag = "PriorityList",
     Items = {"Players", "NPCs", "Bosses"},
@@ -118,7 +118,7 @@ local InputTab = Window:Page({Name = "Inputs & Text", Icon = "138827881557940", 
 
 local InputSection = InputTab:Section({Name = "User Input", Side = 1})
 
-InputSection:Textbox({
+local MyTextbox = InputSection:Textbox({
     Name = "Player Name",
     Flag = "PlayerTextbox",
     Placeholder = "Enter name...",
@@ -138,7 +138,7 @@ InputSection:Textbox({
     end
 })
 
-InputSection:Keybind({
+local MyKeybind = InputSection:Keybind({
     Name = "Panic Key",
     Flag = "PanicBind",
     Default = Enum.KeyCode.RightAlt,
@@ -150,8 +150,8 @@ InputSection:Keybind({
 
 local TextSection = InputTab:Section({Name = "Text & Visuals", Side = 2})
 
-TextSection:Label("This is a simple label")
-TextSection:Label("Label with Colorpicker"):Colorpicker({
+local MyLabel = TextSection:Label("This is a simple label")
+local LabelColor = TextSection:Label("Label with Colorpicker"):Colorpicker({
     Default = Color3.fromRGB(0, 255, 0),
     Callback = function(Color)
         print("Label Color:", Color)
@@ -160,7 +160,7 @@ TextSection:Label("Label with Colorpicker"):Colorpicker({
 
 TextSection:Divider() -- Simple line divider
 
-TextSection:Paragraph({
+local MyParagraph = TextSection:Paragraph({
     Name = "Important Info",
     Text = "This is a paragraph element.\nIt supports multiple lines of text.",
     Icon = "1234567890" -- Optional Asset ID
@@ -173,7 +173,7 @@ local ListTab = Window:Page({Name = "Lists & Tabs", Icon = "138827881557940", Co
 
 local ListSection = ListTab:Section({Name = "Listboxes", Side = 1})
 
-ListSection:Listbox({
+local MyListbox = ListSection:Listbox({
     Name = "Player List",
     Flag = "PlayerList",
     Items = {"Player1", "Player2", "Player3", "Player4", "Player5"},
@@ -231,6 +231,114 @@ NotifSection:Button({
     Name = "Select Main Tab",
     Callback = function()
         Window:SelectTab(MainTab)
+    end
+})
+
+-- ============================================================================
+-- Page 5: Runtime Updates (Showing off functions)
+-- ============================================================================
+local RuntimeTab = Window:Page({Name = "Functions", Icon = "138827881557940", Columns = 1})
+local FuncSection = RuntimeTab:Section({Name = "Test Functions", Side = 1})
+
+FuncSection:Paragraph({
+    Name = "Instructions",
+    Text = "Click the buttons below to trigger runtime updates on elements in other tabs."
+})
+
+FuncSection:Button({
+    Name = "Update Label Text",
+    Callback = function()
+        MyLabel:SetText("Updated Text: " .. tostring(math.random(1, 100)))
+        Window:SelectTab(InputTab)
+    end
+})
+
+FuncSection:Button({
+    Name = "Toggle Visibility (Label)",
+    Callback = function()
+        -- Toggles visibility of the label created on Page 2
+        -- Note: We don't track visibility state here, just flipping it blindly or setting true/false
+        MyLabel:SetVisibility(false)
+        task.delay(1, function() MyLabel:SetVisibility(true) end)
+        Window:SelectTab(InputTab)
+    end
+})
+
+FuncSection:Button({
+    Name = "Set Toggle State (True)",
+    Callback = function()
+        MyToggle:Set(true)
+        Window:SelectTab(MainTab)
+    end
+})
+
+FuncSection:Button({
+    Name = "Set Slider Value (100)",
+    Callback = function()
+        MySlider:Set(100)
+        Window:SelectTab(MainTab)
+    end
+})
+
+FuncSection:Button({
+    Name = "Refresh Dropdown List",
+    Callback = function()
+        MyDropdown:Refresh({"New A", "New B", "New C"})
+        MyDropdown:Set("New A")
+        Window:SelectTab(MainTab)
+    end
+})
+
+FuncSection:Button({
+    Name = "Update Paragraph",
+    Callback = function()
+        MyParagraph:SetTitle("Updated Title")
+        MyParagraph:SetText("This paragraph has been updated via code at " .. os.time())
+        Window:SelectTab(InputTab)
+    end
+})
+
+FuncSection:Button({
+    Name = "Set Textbox Value",
+    Callback = function()
+        MyTextbox:Set("Scripted Input")
+        Window:SelectTab(InputTab)
+    end
+})
+
+FuncSection:Button({
+    Name = "Set Keybind (E)",
+    Callback = function()
+        MyKeybind:Set(Enum.KeyCode.E)
+        Window:SelectTab(InputTab)
+    end
+})
+
+FuncSection:Button({
+    Name = "Update Listbox",
+    Callback = function()
+        MyListbox:Refresh({"Admin", "Mod", "User", "Guest"})
+        MyListbox:Set("Admin")
+        Window:SelectTab(ListTab)
+    end
+})
+
+FuncSection:Button({
+    Name = "Set Colorpicker (Blue)",
+    Callback = function()
+        LabelColor:Set(Color3.fromRGB(0, 0, 255))
+        Window:SelectTab(InputTab)
+    end
+})
+
+FuncSection:Button({
+    Name = "Toggle Compact Mode",
+    Callback = function()
+        -- Toggles between icon-only and full text sidebar
+        Window:SetCompact(not Window.Compact) -- Accessing internal state if exposed, or just flipping toggle
+        -- Since Window.Compact is exposed in the table passed to creation, let's assume we can track it or toggle it.
+        -- If Window object updates its .Compact property:
+        -- Window:SetCompact(true/false)
     end
 })
 
