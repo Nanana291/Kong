@@ -2274,9 +2274,24 @@ local Library do
                     AutomaticSize = Enum.AutomaticSize.XY,
                     BackgroundColor3 = FromRGB(27, 25, 29)
                 })
+
+                -- Main Layout Container
+                Items["Container"] = Instances:Create("Frame", {
+                    Parent = Items["Notification"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    AutomaticSize = Enum.AutomaticSize.XY,
+                    ZIndex = 2
+                })
+
+                Instances:Create("UIListLayout", {
+                    Parent = Items["Container"].Instance,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Padding = UDimNew(0, 4)
+                })
                 
                 Items["Title"] = Instances:Create("TextLabel", {
-                    Parent = Items["Notification"].Instance,
+                    Parent = Items["Container"].Instance,
                     Name = "\0",
                     FontFace = Library.Font,
                     TextColor3 = FromRGB(255, 255, 255),
@@ -2287,6 +2302,7 @@ local Library do
                     BorderSizePixel = 0,
                     AutomaticSize = Enum.AutomaticSize.XY,
                     TextSize = 14,
+                    LayoutOrder = 1,
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })  Items["Title"]:AddToTheme({TextColor3 = "Text"})
                 
@@ -2306,7 +2322,7 @@ local Library do
                 })
                 
                 Items["Description"] = Instances:Create("TextLabel", {
-                    Parent = Items["Notification"].Instance,
+                    Parent = Items["Container"].Instance,
                     Name = "\0",
                     FontFace = Library.Font,
                     TextColor3 = FromRGB(255, 255, 255),
@@ -2315,20 +2331,39 @@ local Library do
                     Size = UDim2New(0, 0, 0, 15),
                     BorderSizePixel = 0,
                     BackgroundTransparency = 1,
-                    Position = UDim2New(0, 0, 0, 20),
                     BorderColor3 = FromRGB(0, 0, 0),
                     AutomaticSize = Enum.AutomaticSize.XY,
                     TextSize = 14,
+                    LayoutOrder = 2,
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })  Items["Description"]:AddToTheme({TextColor3 = "Text"})
+
+                if Data.SubText then
+                    Items["SubText"] = Instances:Create("TextLabel", {
+                        Parent = Items["Container"].Instance,
+                        Name = "\0",
+                        FontFace = Library.Font,
+                        TextColor3 = FromRGB(255, 255, 255),
+                        TextTransparency = 0.4,
+                        Text = Data.SubText,
+                        Size = UDim2New(0, 0, 0, 14),
+                        BorderSizePixel = 0,
+                        BackgroundTransparency = 1,
+                        BorderColor3 = FromRGB(0, 0, 0),
+                        AutomaticSize = Enum.AutomaticSize.XY,
+                        TextSize = 13,
+                        LayoutOrder = 3,
+                        BackgroundColor3 = FromRGB(255, 255, 255)
+                    })  Items["SubText"]:AddToTheme({TextColor3 = "Text"})
+                end
                 
                 Items["Accent"] = Instances:Create("Frame", {
-                    Parent = Items["Notification"].Instance,
+                    Parent = Items["Container"].Instance,
                     Name = "\0",
-                    Position = UDim2New(0, 0, 0, Items["Description"].Instance.AbsoluteSize.Y + Items["Title"].Instance.AbsoluteSize.Y + 12),
                     BorderColor3 = FromRGB(0, 0, 0),
                     Size = UDim2New(0, 0, 0, 6),
                     BorderSizePixel = 0,
+                    LayoutOrder = 4,
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })
                 
@@ -2337,14 +2372,27 @@ local Library do
                     Name = "\0",
                     CornerRadius = UDimNew(1, 0)
                 })
-                
-                Instances:Create("UIGradient", {
-                    Parent = Items["Accent"].Instance,
-                    Name = "\0",
-                    Color = RGBSequence{RGBSequenceKeypoint(0, FromRGB(255, 255, 255)), RGBSequenceKeypoint(1, FromRGB(143, 143, 143))}
-                }):AddToTheme({Color = function()
-                    return RGBSequence{RGBSequenceKeypoint(0, Library.Theme.Accent), RGBSequenceKeypoint(1, Library.Theme.AccentGradient)}
-                end})
+
+                local CustomColor = Data.Color
+                if CustomColor and type(CustomColor) == "string" then
+                     CustomColor = FromHex(CustomColor)
+                end
+
+                if CustomColor then
+                    Instances:Create("UIGradient", {
+                        Parent = Items["Accent"].Instance,
+                        Name = "\0",
+                        Color = RGBSequence{RGBSequenceKeypoint(0, CustomColor), RGBSequenceKeypoint(1, CustomColor)}
+                    })
+                else
+                    Instances:Create("UIGradient", {
+                        Parent = Items["Accent"].Instance,
+                        Name = "\0",
+                        Color = RGBSequence{RGBSequenceKeypoint(0, FromRGB(255, 255, 255)), RGBSequenceKeypoint(1, FromRGB(143, 143, 143))}
+                    }):AddToTheme({Color = function()
+                        return RGBSequence{RGBSequenceKeypoint(0, Library.Theme.Accent), RGBSequenceKeypoint(1, Library.Theme.AccentGradient)}
+                    end})
+                end
                 
                 local IconData = Library:GetCustomIcon(Data.Icon)
                 Items["Icon"] = Instances:Create("ImageLabel", {
@@ -2363,7 +2411,14 @@ local Library do
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })
                 
-                if not Data.IconColor then
+                if CustomColor then
+                    Instances:Create("UIGradient", {
+                        Parent = Items["Icon"].Instance,
+                        Name = "\0",
+                        Rotation = -115,
+                        Color = RGBSequence{RGBSequenceKeypoint(0, CustomColor), RGBSequenceKeypoint(1, CustomColor)}
+                    })
+                elseif not Data.IconColor then
                     Instances:Create("UIGradient", {
                         Parent = Items["Icon"].Instance,
                         Name = "\0",
