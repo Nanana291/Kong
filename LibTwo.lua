@@ -2321,11 +2321,35 @@ local Library do
                     TextSize = 14,
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })  Items["Description"]:AddToTheme({TextColor3 = "Text"})
+
+                if Data.SubText then
+                    Items["SubText"] = Instances:Create("TextLabel", {
+                        Parent = Items["Notification"].Instance,
+                        Name = "\0",
+                        FontFace = Library.Font,
+                        TextColor3 = FromRGB(255, 255, 255),
+                        TextTransparency = 0.5,
+                        Text = Data.SubText,
+                        Size = UDim2New(0, 0, 0, 15),
+                        BorderSizePixel = 0,
+                        BackgroundTransparency = 1,
+                        Position = UDim2New(0, 0, 0, 20 + Items["Description"].Instance.AbsoluteSize.Y + 4),
+                        BorderColor3 = FromRGB(0, 0, 0),
+                        AutomaticSize = Enum.AutomaticSize.XY,
+                        TextSize = 12,
+                        BackgroundColor3 = FromRGB(255, 255, 255)
+                    })  Items["SubText"]:AddToTheme({TextColor3 = "Text"})
+                end
                 
+                local AccentPosition = Items["Description"].Instance.AbsoluteSize.Y + Items["Title"].Instance.AbsoluteSize.Y + 12
+                if Data.SubText and Items["SubText"] then
+                    AccentPosition = AccentPosition + Items["SubText"].Instance.AbsoluteSize.Y + 4
+                end
+
                 Items["Accent"] = Instances:Create("Frame", {
                     Parent = Items["Notification"].Instance,
                     Name = "\0",
-                    Position = UDim2New(0, 0, 0, Items["Description"].Instance.AbsoluteSize.Y + Items["Title"].Instance.AbsoluteSize.Y + 12),
+                    Position = UDim2New(0, 0, 0, AccentPosition),
                     BorderColor3 = FromRGB(0, 0, 0),
                     Size = UDim2New(0, 0, 0, 6),
                     BorderSizePixel = 0,
@@ -2338,13 +2362,26 @@ local Library do
                     CornerRadius = UDimNew(1, 0)
                 })
                 
-                Instances:Create("UIGradient", {
-                    Parent = Items["Accent"].Instance,
-                    Name = "\0",
-                    Color = RGBSequence{RGBSequenceKeypoint(0, FromRGB(255, 255, 255)), RGBSequenceKeypoint(1, FromRGB(143, 143, 143))}
-                }):AddToTheme({Color = function()
-                    return RGBSequence{RGBSequenceKeypoint(0, Library.Theme.Accent), RGBSequenceKeypoint(1, Library.Theme.AccentGradient)}
-                end})
+                if Data.Color then
+                    local AccentColor = Data.Color
+                    if type(AccentColor) == "string" then
+                        AccentColor = FromHex(AccentColor)
+                    end
+
+                    Instances:Create("UIGradient", {
+                        Parent = Items["Accent"].Instance,
+                        Name = "\0",
+                        Color = RGBSequence{RGBSequenceKeypoint(0, AccentColor), RGBSequenceKeypoint(1, AccentColor)}
+                    })
+                else
+                    Instances:Create("UIGradient", {
+                        Parent = Items["Accent"].Instance,
+                        Name = "\0",
+                        Color = RGBSequence{RGBSequenceKeypoint(0, FromRGB(255, 255, 255)), RGBSequenceKeypoint(1, FromRGB(143, 143, 143))}
+                    }):AddToTheme({Color = function()
+                        return RGBSequence{RGBSequenceKeypoint(0, Library.Theme.Accent), RGBSequenceKeypoint(1, Library.Theme.AccentGradient)}
+                    end})
+                end
                 
                 local IconData = Library:GetCustomIcon(Data.Icon)
                 Items["Icon"] = Instances:Create("ImageLabel", {
@@ -2363,7 +2400,19 @@ local Library do
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })
                 
-                if not Data.IconColor then
+                if Data.Color then
+                    local IconColor = Data.Color
+                    if type(IconColor) == "string" then
+                        IconColor = FromHex(IconColor)
+                    end
+
+                    Instances:Create("UIGradient", {
+                        Parent = Items["Icon"].Instance,
+                        Name = "\0",
+                        Rotation = -115,
+                        Color = RGBSequence{RGBSequenceKeypoint(0, IconColor), RGBSequenceKeypoint(1, IconColor)}
+                    })
+                elseif not Data.IconColor then
                     Instances:Create("UIGradient", {
                         Parent = Items["Icon"].Instance,
                         Name = "\0",
