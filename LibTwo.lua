@@ -6362,15 +6362,47 @@ local Library do
                     CornerRadius = UDimNew(0, 5)
                 })
                 
+                Items["Search"] = Instances:Create("TextBox", {
+                    Parent = Items["OptionHolder"].Instance,
+                    Name = "\0",
+                    FontFace = Library.Font,
+                    CursorPosition = -1,
+                    TextColor3 = FromRGB(240, 240, 240),
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    Text = "",
+                    ZIndex = 2,
+                    Size = UDim2New(1, -16, 0, 30),
+                    Position = UDim2New(0, 8, 0, 8),
+                    BorderSizePixel = 0,
+                    PlaceholderColor3 = FromRGB(185, 185, 185),
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    PlaceholderText = "Search..",
+                    TextSize = 14,
+                    BackgroundColor3 = FromRGB(27, 26, 29)
+                })  Items["Search"]:AddToTheme({TextColor3 = "Text", BackgroundColor3 = "Element"})
+
+                Instances:Create("UICorner", {
+                    Parent = Items["Search"].Instance,
+                    Name = "\0",
+                    CornerRadius = UDimNew(0, 6)
+                })
+
+                Instances:Create("UIPadding", {
+                    Parent = Items["Search"].Instance,
+                    Name = "\0",
+                    PaddingTop = UDimNew(0, 4),
+                    PaddingLeft = UDimNew(0, 8)
+                })
+
                 Items["Holder"] = Instances:Create("ScrollingFrame", {
                     Parent = Items["OptionHolder"].Instance,
                     Name = "\0",
                     Active = true,
                     AutomaticCanvasSize = Enum.AutomaticSize.Y,
                     ScrollBarThickness = 2,
-                    Size = UDim2New(1, -16, 1, -16),
+                    Size = UDim2New(1, -16, 1, -50),
                     BackgroundTransparency = 1,
-                    Position = UDim2New(0, 8, 0, 8),
+                    Position = UDim2New(0, 8, 0, 42),
                     BackgroundColor3 = FromRGB(255, 255, 255),
                     BorderColor3 = FromRGB(0, 0, 0),
                     BorderSizePixel = 0,
@@ -6455,8 +6487,23 @@ local Library do
                     
                     RenderStepped = RunService.RenderStepped:Connect(function()
                         Items["OptionHolder"].Instance.Position = UDim2New(0, Items["RealDropdown"].Instance.AbsolutePosition.X, 0, Items["RealDropdown"].Instance.AbsolutePosition.Y + Items["RealDropdown"].Instance.AbsoluteSize.Y + 5)
-                        Items["OptionHolder"].Instance.Position = UDim2New(0, Items["RealDropdown"].Instance.AbsolutePosition.X, 0, Items["RealDropdown"].Instance.AbsolutePosition.Y + Items["RealDropdown"].Instance.AbsoluteSize.Y + 5)
-                        Items["OptionHolder"].Instance.Size = UDim2New(0, Items["RealDropdown"].Instance.AbsoluteSize.X, 0, Dropdown.OptionHolderSize)
+
+                        local VisibleOptions = 0
+                        for _, Option in ipairs(Dropdown.OptionsWithIndexes) do
+                            if Option.Button.Instance.Visible then
+                                VisibleOptions = VisibleOptions + 1
+                            end
+                        end
+
+                        local ContentHeight = (VisibleOptions * 24) + 12 + 35
+                        local MaxHeight = Dropdown.OptionHolderSize
+                        local Height = math.min(ContentHeight, MaxHeight)
+
+                        local BaseWidth = Items["RealDropdown"].Instance.AbsoluteSize.X
+                        local ContentWidth = Dropdown.MaxOptionWidth + 50
+                        local Width = math.max(BaseWidth, ContentWidth)
+
+                        Items["OptionHolder"].Instance.Size = UDim2New(0, Width, 0, Height)
                     end)
 
                     for Index, Value in Library.OpenFrames do 
@@ -6756,6 +6803,12 @@ local Library do
                 Dropdown.OptionsWithIndexes[#Dropdown.OptionsWithIndexes+1] = OptionData
                 OptionData:RefreshPosition(false)
 
+                if Items["Search"].Instance.Text ~= "" then
+                    if not StringFind(StringLower(Option), Library:EscapePattern(StringLower(Items["Search"].Instance.Text))) then
+                        OptionButton.Instance.Visible = false
+                    end
+                end
+
                 return OptionData
             end
 
@@ -6796,6 +6849,21 @@ local Library do
                 if Property == "AbsolutePosition" and Dropdown.IsOpen then
                     Dropdown.IsOpen = not Library:IsClipped(Items["OptionHolder"].Instance, Dropdown.Section.Items["Section"].Instance.Parent)
                     Items["OptionHolder"].Instance.Visible = Dropdown.IsOpen
+                end
+            end)
+
+            Library:Connect(Items["Search"].Instance:GetPropertyChangedSignal("Text"), function()
+                local InputText = Items["Search"].Instance.Text
+                for _, Option in ipairs(Dropdown.OptionsWithIndexes) do
+                    if InputText ~= "" then
+                        if StringFind(StringLower(Option.Name), Library:EscapePattern(StringLower(InputText))) then
+                            Option.Button.Instance.Visible = true
+                        else
+                            Option.Button.Instance.Visible = false
+                        end
+                    else
+                        Option.Button.Instance.Visible = true
+                    end
                 end
             end)
 
