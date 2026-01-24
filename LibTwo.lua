@@ -4050,7 +4050,7 @@ local Library do
                 end)
             end
 
-            Items["Inactive"]:Connect("MouseButton1Down", function()
+            Items["Inactive"]:Connect("MouseButton1Click", function()
                 for Index, Value in Page.Window.Pages do 
                     if Value == Page and Page.Active then
                         return
@@ -5321,7 +5321,7 @@ local Library do
                     ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
                     Color = FromRGB(0, 0, 0),
                     Thickness = 1,
-                    Transparency = 0.8
+                    Transparency = 0.5
                 }) Items["IndicatorStroke"]:AddToTheme({Color = "Outline"})
 
                 Items["CheckImage"] = Instances:Create("ImageLabel", {
@@ -5407,7 +5407,7 @@ local Library do
                     Items["IndicatorGradient"].Instance.Enabled = false
                     Items["Indicator"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = Library.Theme.Element})
                     Items["CheckImage"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {ImageTransparency = 1, Size = UDim2New(0, 0, 0, 0)})
-                    Items["IndicatorStroke"]:Tween(nil, {Transparency = 0.8})
+                    Items["IndicatorStroke"]:Tween(nil, {Transparency = 0.5})
                 end
 
                 if Toggle.Callback then 
