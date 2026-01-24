@@ -3982,17 +3982,21 @@ local Library do
             local Debounce = false
 
             function Page:Turn(Bool)
+                if Page.Active == Bool then
+                    return
+                end
+
                 if Debounce then 
                     return 
                 end
 
                 Page.Active = Bool 
-                
                 Debounce = true
-                Items["Page"].Instance.Visible = Bool 
-                Items["Page"].Instance.Parent = Bool and Page.Window.Items["Content"].Instance or Library.UnusedHolder.Instance
 
                 if Page.Active then
+                    Items["Page"].Instance.Visible = true
+                    Items["Page"].Instance.Parent = Page.Window.Items["Content"].Instance
+
                     Items["Inactive"]:Tween(nil, {BackgroundTransparency = 0.25})
                     Items["SelectedIndicator"]:Tween(TweenInfo.new(0.6, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {BackgroundTransparency = 0, Size = UDim2New(0, 4, 0, 18)})
 
@@ -4019,8 +4023,6 @@ local Library do
                 local AllInstances = Items["Page"].Instance:GetDescendants()
                 TableInsert(AllInstances, Items["Page"].Instance)
                 
-                local NewTween 
-
                 for Index, Value in AllInstances do 
                     local TransparencyProperty = Tween:GetProperty(Value)
 
@@ -4030,17 +4032,20 @@ local Library do
 
                     if type(TransparencyProperty) == "table" then 
                         for _, Property in TransparencyProperty do 
-                            NewTween = Tween:FadeItem(Value, Property, Bool, Library.FadeSpeed)
+                            Tween:FadeItem(Value, Property, Bool, Library.FadeSpeed)
                         end
                     else
-                        NewTween = Tween:FadeItem(Value, TransparencyProperty, Bool, Library.FadeSpeed)
+                        Tween:FadeItem(Value, TransparencyProperty, Bool, Library.FadeSpeed)
                     end
                 end
 
-                Library:Connect(NewTween.Tween.Completed, function()
+                task.delay(Library.FadeSpeed + 0.1, function()
                     Debounce = false
 
                     if not Page.Active then 
+                        Items["Page"].Instance.Visible = false
+                        Items["Page"].Instance.Parent = Library.UnusedHolder.Instance
+
                         for Index, Value in Page.Sections do 
                             task.spawn(function()
                                 Value:TweenElements(false, true)
@@ -4051,13 +4056,7 @@ local Library do
             end
 
             Items["Inactive"]:Connect("MouseButton1Click", function()
-                for Index, Value in Page.Window.Pages do 
-                    if Value == Page and Page.Active then
-                        return
-                    end
-
-                    Value:Turn(Value == Page)
-                end
+                Page.Window:SelectTab(Page)
             end)
 
             if #Page.Window.Pages == 0 then 
