@@ -191,8 +191,8 @@ local Library do
         Flags = { },
 
         Tween = {
-            Time = 0.25,
-            Style = Enum.EasingStyle.Quint,
+            Time = 0.3,
+            Style = Enum.EasingStyle.Quad,
             Direction = Enum.EasingDirection.Out
         },
 
@@ -2264,224 +2264,170 @@ local Library do
         end
 
         Library.Notification = function(self, Data)
-            local Data = Data or {}
-            local Title = Data.Title or "Notification"
-            local Description = Data.Description or ""
-            local SubText = Data.SubText
-            local Duration = Data.Duration or 5
-            local Icon = Data.Icon
-            local Color = Data.Color or Library.Theme.Accent
-
-            local Items = { }
-
-            Items["Notification"] = Instances:Create("Frame", {
-                Parent = Library.NotifHolder.Instance,
-                Name = "\0",
-                BackgroundTransparency = 1,
-                Size = UDim2New(1, 0, 0, 0),
-                ClipsDescendants = true,
-                ZIndex = 1
-            })
-
-            Items["Main"] = Instances:Create("Frame", {
-                Parent = Items["Notification"].Instance,
-                Name = "\0",
-                Size = UDim2New(1, 0, 1, 0),
-                Position = UDim2New(1, 50, 0, 0),
-                BackgroundColor3 = FromRGB(20, 20, 23),
-                BackgroundTransparency = 0.1,
-                BorderColor3 = FromRGB(0, 0, 0),
-                BorderSizePixel = 0,
-                ZIndex = 2
-            })
-
-            Instances:Create("UICorner", {
-                Parent = Items["Main"].Instance,
-                CornerRadius = UDimNew(0, 6)
-            })
-
-            Instances:Create("UIStroke", {
-                Parent = Items["Main"].Instance,
-                Color = FromRGB(40, 40, 45),
-                Thickness = 1,
-                Transparency = 0.5
-            }):AddToTheme({Color = "Outline"})
-
-            Items["ContentLayout"] = Instances:Create("Frame", {
-                Parent = Items["Main"].Instance,
-                Name = "\0",
-                Size = UDim2New(1, 0, 1, -4),
-                BackgroundTransparency = 1,
-                ZIndex = 3
-            })
-
-            Instances:Create("UIListLayout", {
-                Parent = Items["ContentLayout"].Instance,
-                FillDirection = Enum.FillDirection.Horizontal,
-                VerticalAlignment = Enum.VerticalAlignment.Center,
-                Padding = UDimNew(0, 12),
-                SortOrder = Enum.SortOrder.LayoutOrder
-            })
-
-            Instances:Create("UIPadding", {
-                Parent = Items["ContentLayout"].Instance,
-                PaddingTop = UDimNew(0, 12),
-                PaddingBottom = UDimNew(0, 12),
-                PaddingLeft = UDimNew(0, 12),
-                PaddingRight = UDimNew(0, 12)
-            })
-
-            if Icon then
-                local IconData = Library:GetCustomIcon(Icon)
-                Items["Icon"] = Instances:Create("ImageLabel", {
-                    Parent = Items["ContentLayout"].Instance,
+            local Items = { } do 
+                Items["Notification"] = Instances:Create("Frame", {
+                    Parent = Library.NotifHolder.Instance,
                     Name = "\0",
-                    Size = UDim2New(0, 24, 0, 24),
-                    BackgroundTransparency = 1,
-                    Image = IconData and IconData.Url or "",
-                    ImageRectOffset = IconData and IconData.ImageRectOffset or Vector2New(0,0),
-                    ImageRectSize = IconData and IconData.ImageRectSize or Vector2New(0,0),
-                    ImageColor3 = FromRGB(255, 255, 255),
-                    LayoutOrder = 1,
-                    ZIndex = 3
+                    BackgroundTransparency = 0.3499999940395355,
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    BorderSizePixel = 0,
+                    AutomaticSize = Enum.AutomaticSize.XY,
+                    BackgroundColor3 = FromRGB(27, 25, 29)
                 })
                 
-                if type(Color) == "userdata" then
-                     Items["Icon"].Instance.ImageColor3 = Color
-                elseif Data.IconColor then
+                Items["Title"] = Instances:Create("TextLabel", {
+                    Parent = Items["Notification"].Instance,
+                    Name = "\0",
+                    FontFace = Library.Font,
+                    TextColor3 = FromRGB(255, 255, 255),
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    Text = Data.Title,
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(0, 0, 0, 15),
+                    BorderSizePixel = 0,
+                    AutomaticSize = Enum.AutomaticSize.XY,
+                    TextSize = 14,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })  Items["Title"]:AddToTheme({TextColor3 = "Text"})
+                
+                Instances:Create("UIPadding", {
+                    Parent = Items["Notification"].Instance,
+                    Name = "\0",
+                    PaddingTop = UDimNew(0, 8),
+                    PaddingBottom = UDimNew(0, 8),
+                    PaddingRight = UDimNew(0, 8),
+                    PaddingLeft = UDimNew(0, 8)
+                })
+                
+                Instances:Create("UICorner", {
+                    Parent = Items["Notification"].Instance,
+                    Name = "\0",
+                    CornerRadius = UDimNew(0, 5)
+                })
+                
+                Items["Description"] = Instances:Create("TextLabel", {
+                    Parent = Items["Notification"].Instance,
+                    Name = "\0",
+                    FontFace = Library.Font,
+                    TextColor3 = FromRGB(255, 255, 255),
+                    TextTransparency = 0.30000001192092896,
+                    Text = Data.Description,
+                    Size = UDim2New(0, 0, 0, 15),
+                    BorderSizePixel = 0,
+                    BackgroundTransparency = 1,
+                    Position = UDim2New(0, 0, 0, 20),
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.XY,
+                    TextSize = 14,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })  Items["Description"]:AddToTheme({TextColor3 = "Text"})
+                
+                Items["Accent"] = Instances:Create("Frame", {
+                    Parent = Items["Notification"].Instance,
+                    Name = "\0",
+                    Position = UDim2New(0, 0, 0, Items["Description"].Instance.AbsoluteSize.Y + Items["Title"].Instance.AbsoluteSize.Y + 12),
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    Size = UDim2New(0, 0, 0, 6),
+                    BorderSizePixel = 0,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })
+                
+                Instances:Create("UICorner", {
+                    Parent = Items["Accent"].Instance,
+                    Name = "\0",
+                    CornerRadius = UDimNew(1, 0)
+                })
+                
+                Instances:Create("UIGradient", {
+                    Parent = Items["Accent"].Instance,
+                    Name = "\0",
+                    Color = RGBSequence{RGBSequenceKeypoint(0, FromRGB(255, 255, 255)), RGBSequenceKeypoint(1, FromRGB(143, 143, 143))}
+                }):AddToTheme({Color = function()
+                    return RGBSequence{RGBSequenceKeypoint(0, Library.Theme.Accent), RGBSequenceKeypoint(1, Library.Theme.AccentGradient)}
+                end})
+                
+                local IconData = Library:GetCustomIcon(Data.Icon)
+                Items["Icon"] = Instances:Create("ImageLabel", {
+                    Parent = Items["Notification"].Instance,
+                    Name = "\0",
+                    ImageColor3 = FromRGB(255, 255, 255),
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    AnchorPoint = Vector2New(1, 0),
+                    Image = IconData and IconData.Url or "",
+                    ImageRectOffset = IconData and IconData.ImageRectOffset or Vector2New(0, 0),
+                    ImageRectSize = IconData and IconData.ImageRectSize or Vector2New(0, 0),
+                    BackgroundTransparency = 1,
+                    Position = UDim2New(1, 0, 0, 0),
+                    Size = UDim2New(0, 16, 0, 16),
+                    BorderSizePixel = 0,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })
+                
+                if not Data.IconColor then
+                    Instances:Create("UIGradient", {
+                        Parent = Items["Icon"].Instance,
+                        Name = "\0",
+                        Rotation = -115,
+                        Color = RGBSequence{RGBSequenceKeypoint(0, FromRGB(255, 255, 255)), RGBSequenceKeypoint(1, FromRGB(143, 143, 143))}
+                    }):AddToTheme({Color = function()
+                        return RGBSequence{RGBSequenceKeypoint(0, Library.Theme.Accent), RGBSequenceKeypoint(1, Library.Theme.AccentGradient)}
+                    end})             
+                else
                     Instances:Create("UIGradient", {
                         Parent = Items["Icon"].Instance,
                         Name = "\0",
                         Rotation = -115,
                         Color = RGBSequence{RGBSequenceKeypoint(0, Data.IconColor.Start), RGBSequenceKeypoint(1, Data.IconColor.End)}
-                    })
-                else
-                     Items["Icon"]:AddToTheme({ImageColor3 = "Accent"})
+                    })         
+                end   
+            end
+
+            local Size = Items["Notification"].Instance.AbsoluteSize
+            Items["Notification"].Instance.Size = UDim2New(0, 0, 0, 0)
+
+            for Index, Value in Items do 
+                if Value.Instance:IsA("Frame") then
+                    Value.Instance.BackgroundTransparency = 1
+                elseif Value.Instance:IsA("TextLabel") then 
+                    Value.Instance.TextTransparency = 1
+                elseif Value.Instance:IsA("ImageLabel") then 
+                    Value.Instance.ImageTransparency = 1
                 end
-            end
-
-            Items["TextContainer"] = Instances:Create("Frame", {
-                Parent = Items["ContentLayout"].Instance,
-                Name = "\0",
-                Size = UDim2New(1, Icon and -36 or 0, 0, 0),
-                AutomaticSize = Enum.AutomaticSize.Y,
-                BackgroundTransparency = 1,
-                LayoutOrder = 2,
-                ZIndex = 3
-            })
-
-            Instances:Create("UIListLayout", {
-                Parent = Items["TextContainer"].Instance,
-                Padding = UDimNew(0, 4),
-                SortOrder = Enum.SortOrder.LayoutOrder
-            })
-
-            Items["Title"] = Instances:Create("TextLabel", {
-                Parent = Items["TextContainer"].Instance,
-                Name = "\0",
-                FontFace = Library.Font,
-                Text = Title,
-                TextColor3 = FromRGB(255, 255, 255),
-                TextSize = 14,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                AutomaticSize = Enum.AutomaticSize.Y,
-                Size = UDim2New(1, 0, 0, 0),
-                BackgroundTransparency = 1,
-                RichText = true,
-                LayoutOrder = 1,
-                ZIndex = 3
-            }):AddToTheme({TextColor3 = "Text"})
-
-            Items["Description"] = Instances:Create("TextLabel", {
-                Parent = Items["TextContainer"].Instance,
-                Name = "\0",
-                FontFace = Library.Font,
-                Text = Description,
-                TextColor3 = FromRGB(200, 200, 200),
-                TextSize = 13,
-                TextXAlignment = Enum.TextXAlignment.Left,
-                AutomaticSize = Enum.AutomaticSize.Y,
-                Size = UDim2New(1, 0, 0, 0),
-                BackgroundTransparency = 1,
-                TextWrapped = true,
-                RichText = true,
-                LayoutOrder = 2,
-                ZIndex = 3
-            }):AddToTheme({TextColor3 = "Text"})
-
-            if SubText then
-                Items["SubText"] = Instances:Create("TextLabel", {
-                    Parent = Items["TextContainer"].Instance,
-                    Name = "\0",
-                    FontFace = Library.Font,
-                    Text = SubText,
-                    TextColor3 = FromRGB(150, 150, 150),
-                    TextSize = 12,
-                    TextXAlignment = Enum.TextXAlignment.Left,
-                    AutomaticSize = Enum.AutomaticSize.Y,
-                    Size = UDim2New(1, 0, 0, 0),
-                    BackgroundTransparency = 1,
-                    TextWrapped = true,
-                    LayoutOrder = 3,
-                    ZIndex = 3
-                })
-            end
-
-            Items["ProgressBar"] = Instances:Create("Frame", {
-                Parent = Items["Main"].Instance,
-                Name = "\0",
-                Size = UDim2New(1, 0, 0, 2),
-                Position = UDim2New(0, 0, 1, -2),
-                BorderSizePixel = 0,
-                BackgroundColor3 = (type(Color) == "userdata" and Color) or FromRGB(255, 255, 255),
-                ZIndex = 4
-            })
+            end 
             
-            if type(Color) == "string" then
-                Items["ProgressBar"]:AddToTheme({BackgroundColor3 = "Accent"})
-            end
+            task.wait(0.2)
 
-            Instances:Create("UICorner", {
-                Parent = Items["ProgressBar"].Instance,
-                CornerRadius = UDimNew(0, 2)
-            })
-
-            -- Calculate required height
             Items["Notification"].Instance.AutomaticSize = Enum.AutomaticSize.Y
-            Items["Notification"].Instance.Visible = false
-            -- Force update
-            Items["Notification"].Instance.Parent = Library.NotifHolder.Instance
 
             Library:Thread(function()
-                task.wait() -- Wait for layout to calculate
-                local TargetHeight = Items["Notification"].Instance.AbsoluteSize.Y
-                Items["Notification"].Instance.AutomaticSize = Enum.AutomaticSize.None
-                Items["Notification"].Instance.Visible = true
-                Items["Notification"].Instance.Size = UDim2New(1, 0, 0, 0)
+                for Index, Value in Items do 
+                    if Value.Instance:IsA("Frame") then
+                        Value:Tween(TweenInfo.new(1, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out, 0, false, 0), {BackgroundTransparency = 0})
+                    elseif Value.Instance:IsA("TextLabel") then 
+                        Value:Tween(TweenInfo.new(1, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out, 0, false, 0), {TextTransparency = 0})
+                    elseif Value.Instance:IsA("ImageLabel") then 
+                        Value:Tween(TweenInfo.new(1, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out, 0, false, 0), {ImageTransparency = 0})
+                    end
+                end
 
-                -- Animate Height Open
-                Items["Notification"]:Tween(TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Size = UDim2New(1, 0, 0, TargetHeight)})
+                Items["Notification"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out, 0, false, 0), {Size = UDim2New(0, Size.X, 0, Size.Y)})
+                Items["Accent"]:Tween(TweenInfo.new(Data.Duration, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {Size = UDim2New(1, 0, 0, 6)})
 
-                task.wait(0.1)
+                task.delay(Data.Duration + 0.15, function()
+                    for Index, Value in Items do 
+                        if Value.Instance:IsA("Frame") then
+                            Value:Tween(nil, {BackgroundTransparency = 1})
+                        elseif Value.Instance:IsA("TextLabel") then 
+                            Value:Tween(nil, {TextTransparency = 1})
+                        elseif Value.Instance:IsA("ImageLabel") then 
+                            Value:Tween(nil, {ImageTransparency = 1})
+                        end
+                    end
 
-                -- Slide Main In
-                Items["Main"]:Tween(TweenInfo.new(0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 0)})
-
-                -- Progress Bar
-                Items["ProgressBar"]:Tween(TweenInfo.new(Duration, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut), {Size = UDim2New(0, 0, 0, 2)})
-
-                task.wait(Duration)
-
-                -- Slide Out
-                Items["Main"]:Tween(TweenInfo.new(0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {Position = UDim2New(1, 50, 0, 0)})
-
-                task.wait(0.3)
-
-                -- Animate Height Close
-                Items["Notification"]:Tween(TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Size = UDim2New(1, 0, 0, 0)})
-
-                task.wait(0.3)
-                Items["Notification"]:Clean()
+                    Items["Notification"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out, 0, false, 0), {Size = UDim2New(0, 0, 0, 0)})
+                    task.wait(0.5)
+                    Items["Notification"]:Clean()
+                end)
             end)
         end
 
@@ -6539,32 +6485,25 @@ local Library do
                         end
                     end)
                     
-                    local VisibleOptions = 0
-                    for _, Option in ipairs(Dropdown.OptionsWithIndexes) do
-                        if Option.Button.Instance.Visible then
-                            VisibleOptions = VisibleOptions + 1
-                        end
-                    end
-
-                    local ContentHeight = (VisibleOptions * 24) + 12 + 35
-                    local MaxHeight = Dropdown.OptionHolderSize
-                    local TargetHeight = math.min(ContentHeight, MaxHeight)
-
-                    local BaseWidth = Items["RealDropdown"].Instance.AbsoluteSize.X
-                    local ContentWidth = Dropdown.MaxOptionWidth + 50
-                    local Width = math.max(BaseWidth, ContentWidth)
-
-                    Items["OptionHolder"].Instance.Size = UDim2New(0, Width, 0, 0)
-                    Items["OptionHolder"]:Tween(TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Size = UDim2New(0, Width, 0, TargetHeight)})
-
                     RenderStepped = RunService.RenderStepped:Connect(function()
                         Items["OptionHolder"].Instance.Position = UDim2New(0, Items["RealDropdown"].Instance.AbsolutePosition.X, 0, Items["RealDropdown"].Instance.AbsolutePosition.Y + Items["RealDropdown"].Instance.AbsoluteSize.Y + 5)
+
+                        local VisibleOptions = 0
+                        for _, Option in ipairs(Dropdown.OptionsWithIndexes) do
+                            if Option.Button.Instance.Visible then
+                                VisibleOptions = VisibleOptions + 1
+                            end
+                        end
+
+                        local ContentHeight = (VisibleOptions * 24) + 12 + 35
+                        local MaxHeight = Dropdown.OptionHolderSize
+                        local Height = math.min(ContentHeight, MaxHeight)
 
                         local BaseWidth = Items["RealDropdown"].Instance.AbsoluteSize.X
                         local ContentWidth = Dropdown.MaxOptionWidth + 50
                         local Width = math.max(BaseWidth, ContentWidth)
 
-                        Items["OptionHolder"].Instance.Size = UDim2New(0, Width, 0, Items["OptionHolder"].Instance.Size.Y.Offset)
+                        Items["OptionHolder"].Instance.Size = UDim2New(0, Width, 0, Height)
                     end)
 
                     for Index, Value in Library.OpenFrames do 
@@ -6594,8 +6533,6 @@ local Library do
 
                     Items["ArrowIcon"]:Tween(nil, {Rotation = 0, ImageColor3 = FromRGB(141, 141, 150)})
                     Items["Gradient"].Instance.Enabled = false
-
-                    Items["OptionHolder"]:Tween(TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Size = UDim2New(0, Items["OptionHolder"].Instance.Size.X.Offset, 0, 0)})
                 end
 
                 local Descendants = Items["OptionHolder"].Instance:GetDescendants()
@@ -6928,19 +6865,6 @@ local Library do
                         Option.Button.Instance.Visible = true
                     end
                 end
-
-                local Count = 0
-                for _, V in ipairs(Dropdown.OptionsWithIndexes) do
-                    if V.Button.Instance.Visible then Count = Count + 1 end
-                end
-
-                local ContentHeight = (Count * 24) + 12
-                local MaxHeight = Dropdown.OptionHolderSize
-                local TargetHeight = math.min(ContentHeight, MaxHeight)
-
-                Items["OptionHolder"]:Tween(TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-                    Size = UDim2New(0, Items["OptionHolder"].Instance.Size.X.Offset, 0, TargetHeight)
-                })
             end)
 
             for Index, Value in Dropdown.Items do 
@@ -7197,34 +7121,22 @@ local Library do
                             task.spawn(function()
                                 Value:RefreshPosition(true)
                             end)
-                            task.wait(0.02)
+                            task.wait(0.05)
                         end
                     end)
-
-                    local Count = 0
-                    for _, V in ipairs(Dropdown.OptionsWithIndexes) do
-                        if V.Button.Instance.Visible then Count = Count + 1 end
-                    end
-
-                    local ContentHeight = (Count * 24) + 12
-                    local MaxHeight = Dropdown.OptionHolderSize
-                    local TargetHeight = math.min(ContentHeight, MaxHeight)
-
-                    local BaseWidth = Items["RealDropdown"].Instance.AbsoluteSize.X * 2
-                    local ContentWidth = Dropdown.MaxOptionWidth + 80
-                    local Width = math.max(BaseWidth, ContentWidth)
-
-                    Items["OptionHolder"].Instance.Size = UDim2New(0, Width, 0, 0)
-                    Items["OptionHolder"]:Tween(TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Size = UDim2New(0, Width, 0, TargetHeight)})
 
                     RenderStepped = RunService.RenderStepped:Connect(function()
                         Items["OptionHolder"].Instance.Position = UDim2New(0, Items["RealDropdown"].Instance.AbsolutePosition.X, 0, Items["RealDropdown"].Instance.AbsolutePosition.Y + Items["RealDropdown"].Instance.AbsoluteSize.Y + 5)
 
-                        local BWidth = Items["RealDropdown"].Instance.AbsoluteSize.X * 2
-                        local CWidth = Dropdown.MaxOptionWidth + 80
-                        local TWidth = math.max(BWidth, CWidth)
+                        local ContentHeight = (#Dropdown.OptionsWithIndexes * 24) + 12
+                        local MaxHeight = Dropdown.OptionHolderSize
+                        local Height = math.min(ContentHeight, MaxHeight)
 
-                        Items["OptionHolder"].Instance.Size = UDim2New(0, TWidth, 0, Items["OptionHolder"].Instance.Size.Y.Offset)
+                        local BaseWidth = Items["RealDropdown"].Instance.AbsoluteSize.X * 2
+                        local ContentWidth = Dropdown.MaxOptionWidth + 80
+                        local Width = math.max(BaseWidth, ContentWidth)
+
+                        Items["OptionHolder"].Instance.Size = UDim2New(0, Width, 0, Height)
                     end)
 
                     for Index, Value in Library.OpenFrames do
@@ -7250,8 +7162,6 @@ local Library do
                     end
                     Items["ArrowIcon"]:Tween(nil, {Rotation = 0, ImageColor3 = FromRGB(141, 141, 150)})
                     Items["Gradient"].Instance.Enabled = false
-
-                    Items["OptionHolder"]:Tween(TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Size = UDim2New(0, Items["OptionHolder"].Instance.Size.X.Offset, 0, 0)})
                 end
 
                 local Descendants = Items["OptionHolder"].Instance:GetDescendants()
@@ -7750,10 +7660,6 @@ local Library do
                 Tabbox.ActiveTab = Tab
                 Tab.IsOpen = true
                 Tab.Items["Content"].Instance.Visible = true
-
-                -- Fade In Content
-                Tab.Items["Content"]:FadeItem(true, 0.25)
-
                 -- Set Style (Active)
                 Tab.Items["Button"]:Tween(TweenInfo.new(0.2), {
                     BackgroundColor3 = Library.Theme.Accent,
