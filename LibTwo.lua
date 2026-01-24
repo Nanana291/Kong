@@ -539,7 +539,7 @@ local Library do
             end
 
             if IsMobile then
-                if Event == "MouseButton1Down" or Event == "MouseButton1Click" then 
+                if Event == "MouseButton1Down" then
                     Event = "TouchTap"
                 elseif Event == "MouseButton2Down" or Event == "MouseButton2Click" then 
                     Event = "TouchLongPress"
@@ -1839,7 +1839,7 @@ local Library do
                 Colorpicker:Update()
             end
 
-            Items["ColorpickerButton"]:Connect("MouseButton1Down", function()
+            Items["ColorpickerButton"]:Connect("MouseButton1Click", function()
                 Colorpicker:SetOpen(not Colorpicker.IsOpen)
             end)
 
@@ -1954,7 +1954,7 @@ local Library do
                         Alpha = Colorpicker.Alpha,
                     }
     
-                    SavedColor:Connect("MouseButton1Down", function()
+                    SavedColor:Connect("MouseButton1Click", function()
                         local NewColorData = Colorpicker.SavedColors[SaveIndex]
                         Colorpicker:Set(NewColorData.Color, NewColorData.Alpha)
                     end)
@@ -2785,7 +2785,7 @@ local Library do
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })  Items["CloseIcon"]:AddToTheme({ImageColor3 = "Text"})        
                 
-                Items["CloseButton"]:Connect("MouseButton1Down", function()
+                Items["CloseButton"]:Connect("MouseButton1Click", function()
                     Library:Unload()
                 end)
 
@@ -3342,7 +3342,7 @@ local Library do
                         end)
                     end
     
-                    SettingsItems["CloseButton"]:Connect("MouseButton1Down", function()
+                    SettingsItems["CloseButton"]:Connect("MouseButton1Click", function()
                         Settings:SetOpen(false)
                     end)
     
@@ -3793,7 +3793,7 @@ local Library do
                     end
                 end
 
-                Items["Header"]:Connect("MouseButton1Down", function()
+                Items["Header"]:Connect("MouseButton1Click", function()
                     Category:SetOpen(not Category.IsOpen)
                 end)
 
@@ -4612,7 +4612,7 @@ local Library do
                 end
             end
 
-            Items["SendButton"]:Connect("MouseButton1Down", function()
+            Items["SendButton"]:Connect("MouseButton1Click", function()
                 if GlobalChat:GetTypedMessage() == "" then
                     return
                 end
@@ -5029,7 +5029,7 @@ local Library do
                 end
             end
 
-            Items["Toggle"]:Connect("MouseButton1Down", function()
+            Items["Toggle"]:Connect("MouseButton1Click", function()
                 Section:ToggleBackground()
             end)
 
@@ -5242,7 +5242,7 @@ local Library do
                     end
                 end
 
-                Tab.Items["Button"]:Connect("MouseButton1Down", function()
+                Tab.Items["Button"]:Connect("MouseButton1Click", function()
                     Tab:Show()
                 end)
 
@@ -5661,7 +5661,7 @@ local Library do
                     end)
                 end
 
-                SettingsItem["Button"]:Connect("MouseButton1Down", function()
+                SettingsItem["Button"]:Connect("MouseButton1Click", function()
                     Settings:SetOpen(false)
                 end)
 
@@ -5918,7 +5918,7 @@ local Library do
                 end
             end
 
-            Items["Button"]:Connect("MouseButton1Down", function()
+            Items["Button"]:Connect("MouseButton1Click", function()
                 Button:Press()
             end)
 
@@ -6145,11 +6145,11 @@ local Library do
                 end
             end
 
-            Items["Plus"]:Connect("MouseButton1Down", function()
+            Items["Plus"]:Connect("MouseButton1Click", function()
                 Slider:Set(Slider.Value + Slider.Decimals)
             end)
 
-            Items["Minus"]:Connect("MouseButton1Down", function()
+            Items["Minus"]:Connect("MouseButton1Click", function()
                 Slider:Set(Slider.Value - Slider.Decimals)
             end)
 
@@ -6795,7 +6795,7 @@ local Library do
                     end
                 end
 
-                OptionData.Button:Connect("MouseButton1Down", function()
+                OptionData.Button:Connect("MouseButton1Click", function()
                     OptionData:Set()
                 end)
 
@@ -6829,7 +6829,7 @@ local Library do
                 end
             end
 
-            Items["RealDropdown"]:Connect("MouseButton1Down", function()
+            Items["RealDropdown"]:Connect("MouseButton1Click", function()
                 Dropdown:SetOpen(not Dropdown.IsOpen)
             end)
 
@@ -7382,7 +7382,7 @@ local Library do
                     end
                 end
 
-                OptionData.Button:Connect("MouseButton1Down", function()
+                OptionData.Button:Connect("MouseButton1Click", function()
                     OptionData:Set()
                 end)
 
@@ -7425,7 +7425,7 @@ local Library do
                 end
             end
 
-            Items["RealDropdown"]:Connect("MouseButton1Down", function()
+            Items["RealDropdown"]:Connect("MouseButton1Click", function()
                 Dropdown:SetOpen(not Dropdown.IsOpen)
             end)
 
@@ -8469,17 +8469,17 @@ local Library do
                 end
             end)
 
-            Items["Toggle"]:Connect("MouseButton1Down", function()
+            Items["Toggle"]:Connect("MouseButton1Click", function()
                 Keybind.ModeSelected = "Toggle"
                 Keybind:SetMode("Toggle")
             end)
 
-            Items["Hold"]:Connect("MouseButton1Down", function()
+            Items["Hold"]:Connect("MouseButton1Click", function()
                 Keybind.ModeSelected = "Hold"
                 Keybind:SetMode("Hold")
             end)
 
-            Items["Always"]:Connect("MouseButton1Down", function()
+            Items["Always"]:Connect("MouseButton1Click", function()
                 Keybind.ModeSelected = "Always"
                 Keybind:SetMode("Always")
             end)
@@ -8853,7 +8853,7 @@ local Library do
                 end
             end
 
-            Items["Header"]:Connect("MouseButton1Down", function()
+            Items["Header"]:Connect("MouseButton1Click", function()
                 Listbox:SetOpen(not Listbox.IsOpen)
             end)
 
@@ -9069,7 +9069,7 @@ local Library do
                     end
                 end
 
-                OptionData.Button:Connect("MouseButton1Down", function()
+                OptionData.Button:Connect("MouseButton1Click", function()
                     OptionData:Set()
                 end)
 
