@@ -9622,6 +9622,15 @@ local Library do
                     Library:RefreshConfigsList(ConfigsDropdown)
                 end
             })
+
+            ConfigsSection:Button({
+                Name = "Set As Autoload Config",
+                Callback = function()
+                    if ConfigSelected then
+                        writefile(Library.Folders.Configs .. "/autoload.txt", ConfigSelected)
+                    end
+                end
+            })
         end
 
         return Page
