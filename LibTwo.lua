@@ -1042,6 +1042,20 @@ local Library do
         return Success, Result
     end
 
+    Library.LoadAutoloadConfig = function(self)
+        if not isfile(Library.Folders.Configs .. "/autoload.txt") then
+            return
+        end
+
+        local Config = readfile(Library.Folders.Configs .. "/autoload.txt")
+
+        if not isfile(Library.Folders.Configs .. "/" .. Config .. ".json") then
+            return
+        end
+
+        Library:LoadConfig(readfile(Library.Folders.Configs .. "/" .. Config .. ".json"))
+    end
+
     Library.DeleteConfig = function(self, Config)
         if isfile(Library.Folders.Configs .. "/" .. Config) then 
             delfile(Library.Folders.Configs .. "/" .. Config)
