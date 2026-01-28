@@ -1032,7 +1032,11 @@ local Library do
                 if type(Value) == "table" and Value.Key then 
                     SetFunction(Value)
                 elseif type(Value) == "table" and Value.Color then
-                    SetFunction(Value.Color, Value.Alpha)
+                    local Color = Value.Color
+                    if type(Color) == "string" and Color:sub(1, 1) == "#" then
+                        Color = FromHex(Color)
+                    end
+                    SetFunction(Color, Value.Alpha)
                 else
                     SetFunction(Value)
                 end
@@ -1053,7 +1057,10 @@ local Library do
             return
         end
 
-        Library:LoadConfig(readfile(Library.Folders.Configs .. "/" .. Config .. ".json"))
+        local Success, Err = Library:LoadConfig(readfile(Library.Folders.Configs .. "/" .. Config .. ".json"))
+        if not Success then
+            warn("Failed to load autoload config: " .. tostring(Err))
+        end
     end
 
     Library.DeleteConfig = function(self, Config)
