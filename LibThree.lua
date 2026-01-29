@@ -8556,7 +8556,7 @@ local Library do
 
                 Name = Data.Name or Data.name or "Textbox",
                 Flag = Data.Flag or Data.flag or Library:NextFlag(),
-                Default = Data.Default or Data.default or "",
+                Default = Data.Default or Data.default,
                 Callback = Data.Callback or Data.callback or function() end,
                 Placeholder = Data.Placeholder or Data.placeholder or "Placeholder",
                 Numeric = Data.Numeric or Data.numeric or false,
@@ -8725,7 +8725,7 @@ local Library do
                 end
 
                 Textbox.Value = Value
-                Items["Input"].Instance.Text = Value
+                Items["Input"].Instance.Text = tostring(Value)
                 Library.Flags[Textbox.Flag] = Value
 
                 if Textbox.Callback then
@@ -8926,7 +8926,7 @@ local Library do
                 end)
             end
 
-            if Textbox.Default then
+            if Textbox.Default ~= nil then
                 Textbox:Set(Textbox.Default)
             end
 
