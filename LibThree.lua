@@ -8714,8 +8714,6 @@ local Library do
                     Items["ResultsHolder"].Instance.Parent = Library.Holder.Instance
 
                     ResultsRenderStepped = RunService.RenderStepped:Connect(function()
-                        Items["ResultsHolder"].Instance.Position = UDim2New(0, Items["Background"].Instance.AbsolutePosition.X, 0, Items["Background"].Instance.AbsolutePosition.Y + Items["Background"].Instance.AbsoluteSize.Y + 5)
-
                         local Count = 0
                         for _, child in ipairs(Items["ResultsList"].Instance:GetChildren()) do
                             if child:IsA("TextButton") then Count = Count + 1 end
@@ -8724,6 +8722,14 @@ local Library do
                         local ContentHeight = (Count * 24) + 16 -- Add some padding
                         local Height = math.min(ContentHeight, 200)
                         Items["ResultsHolder"].Instance.Size = UDim2New(0, Items["Background"].Instance.AbsoluteSize.X, 0, Height)
+
+                        -- Position above
+                        Items["ResultsHolder"].Instance.Position = UDim2New(
+                            0,
+                            Items["Background"].Instance.AbsolutePosition.X,
+                            0,
+                            Items["Background"].Instance.AbsolutePosition.Y - Height - 5
+                        )
                     end)
 
                      for Index, Value in Library.OpenFrames do
