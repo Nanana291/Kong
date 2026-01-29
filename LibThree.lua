@@ -5786,6 +5786,10 @@ local Library do
                 Toggle:Set(Value)
             end
 
+            if Toggle.Section.Page.Active then
+                Toggle:RefreshPosition(true)
+            end
+
             Toggle.Section.Elements[#Toggle.Section.Elements+1] = Toggle
 
             return Toggle 
@@ -6211,6 +6215,10 @@ local Library do
 
             Library.SetFlags[Slider.Flag] = function(Value)
                 Slider:Set(Value)
+            end
+
+            if Slider.Section.Page.Active then
+                Slider:RefreshPosition(true)
             end
 
             Slider.Section.Elements[#Slider.Section.Elements+1] = Slider
@@ -6894,6 +6902,10 @@ local Library do
                 Dropdown:Set(Value)
             end
 
+            if Dropdown.Section.Page.Active then
+                Dropdown:RefreshPosition(true)
+            end
+
             Dropdown.Section.Elements[#Dropdown.Section.Elements+1] = Dropdown
             return Dropdown
         end
@@ -7472,6 +7484,10 @@ local Library do
                 Dropdown:Set(Value)
             end
 
+            if Dropdown.Section.Page.Active then
+                Dropdown:RefreshPosition(true)
+            end
+
             Dropdown.Section.Elements[#Dropdown.Section.Elements+1] = Dropdown
             return Dropdown
         end
@@ -7697,6 +7713,10 @@ local Library do
                 return Tab
             end
 
+            if Tabbox.Section.Page.Active then
+                Tabbox:RefreshPosition(true)
+            end
+
             Tabbox.Section.Elements[#Tabbox.Section.Elements+1] = Tabbox
             return Tabbox
         end
@@ -7836,6 +7856,10 @@ local Library do
                 })
 
                 return NewColorpicker
+            end
+
+            if Label.Section.Page.Active then
+                Label:RefreshPosition(true)
             end
 
             Label.Section.Elements[#Label.Section.Elements+1] = Label
@@ -8000,6 +8024,10 @@ local Library do
                 else
                     Items["Container"].Instance.Position = UDim2New(0, 0, 0, 5) -- Default offset
                 end
+            end
+
+            if Paragraph.Section.Page.Active then
+                Paragraph:RefreshPosition(true)
             end
 
             Paragraph.Section.Elements[#Paragraph.Section.Elements+1] = Paragraph
@@ -8510,6 +8538,10 @@ local Library do
                 Keybind:Set(Value)
             end
 
+            if Keybind.Section.Page.Active then
+                Keybind:RefreshPosition(true)
+            end
+
             Keybind.Section.Elements[#Keybind.Section.Elements+1] = Keybind
             return Keybind 
         end
@@ -8900,6 +8932,10 @@ local Library do
 
             Library.SetFlags[Textbox.Flag] = function(Value)
                 Textbox:Set(Value)
+            end
+
+            if Textbox.Section.Page.Active then
+                Textbox:RefreshPosition(true)
             end
 
             Textbox.Section.Elements[#Textbox.Section.Elements+1] = Textbox
@@ -9376,6 +9412,10 @@ local Library do
                 Listbox:Set(Value)
             end
 
+            if Listbox.Section.Page.Active then
+                Listbox:RefreshPosition(true)
+            end
+
             Listbox.Section.Elements[#Listbox.Section.Elements+1] = Listbox
             return Listbox
         end
@@ -9666,6 +9706,10 @@ local Library do
                 end
             end)
 
+            if Discord.Section.Page.Active then
+                Discord:RefreshPosition(true)
+            end
+
             Discord.Section.Elements[#Discord.Section.Elements+1] = Discord
             return Discord
         end
@@ -9793,6 +9837,10 @@ local Library do
             end
 
             function Divider:RefreshPosition(Bool)
+            end
+
+            if Divider.Section.Page.Active then
+                Divider:RefreshPosition(true)
             end
 
             Divider.Section.Elements[#Divider.Section.Elements+1] = Divider
