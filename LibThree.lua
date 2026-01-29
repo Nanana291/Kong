@@ -5786,7 +5786,7 @@ local Library do
                 Toggle:Set(Value)
             end
 
-            if Toggle.Section.Page.Active then
+            if Toggle.Section.Page and Toggle.Section.Page.Active then
                 Toggle:RefreshPosition(true)
             end
 
@@ -6217,7 +6217,7 @@ local Library do
                 Slider:Set(Value)
             end
 
-            if Slider.Section.Page.Active then
+            if Slider.Section.Page and Slider.Section.Page.Active then
                 Slider:RefreshPosition(true)
             end
 
@@ -6902,7 +6902,7 @@ local Library do
                 Dropdown:Set(Value)
             end
 
-            if Dropdown.Section.Page.Active then
+            if Dropdown.Section.Page and Dropdown.Section.Page.Active then
                 Dropdown:RefreshPosition(true)
             end
 
@@ -7484,7 +7484,7 @@ local Library do
                 Dropdown:Set(Value)
             end
 
-            if Dropdown.Section.Page.Active then
+            if Dropdown.Section.Page and Dropdown.Section.Page.Active then
                 Dropdown:RefreshPosition(true)
             end
 
@@ -7713,7 +7713,7 @@ local Library do
                 return Tab
             end
 
-            if Tabbox.Section.Page.Active then
+            if Tabbox.Section.Page and Tabbox.Section.Page.Active then
                 Tabbox:RefreshPosition(true)
             end
 
@@ -7858,7 +7858,7 @@ local Library do
                 return NewColorpicker
             end
 
-            if Label.Section.Page.Active then
+            if Label.Section.Page and Label.Section.Page.Active then
                 Label:RefreshPosition(true)
             end
 
@@ -8026,7 +8026,7 @@ local Library do
                 end
             end
 
-            if Paragraph.Section.Page.Active then
+            if Paragraph.Section.Page and Paragraph.Section.Page.Active then
                 Paragraph:RefreshPosition(true)
             end
 
@@ -8538,7 +8538,7 @@ local Library do
                 Keybind:Set(Value)
             end
 
-            if Keybind.Section.Page.Active then
+            if Keybind.Section.Page and Keybind.Section.Page.Active then
                 Keybind:RefreshPosition(true)
             end
 
@@ -8934,7 +8934,7 @@ local Library do
                 Textbox:Set(Value)
             end
 
-            if Textbox.Section.Page.Active then
+            if Textbox.Section.Page and Textbox.Section.Page.Active then
                 Textbox:RefreshPosition(true)
             end
 
@@ -9412,7 +9412,7 @@ local Library do
                 Listbox:Set(Value)
             end
 
-            if Listbox.Section.Page.Active then
+            if Listbox.Section.Page and Listbox.Section.Page.Active then
                 Listbox:RefreshPosition(true)
             end
 
@@ -9706,7 +9706,7 @@ local Library do
                 end
             end)
 
-            if Discord.Section.Page.Active then
+            if Discord.Section.Page and Discord.Section.Page.Active then
                 Discord:RefreshPosition(true)
             end
 
@@ -9839,7 +9839,7 @@ local Library do
             function Divider:RefreshPosition(Bool)
             end
 
-            if Divider.Section.Page.Active then
+            if Divider.Section.Page and Divider.Section.Page.Active then
                 Divider:RefreshPosition(true)
             end
 
