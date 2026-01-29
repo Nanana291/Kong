@@ -8530,6 +8530,10 @@ local Library do
                 Numeric = Data.Numeric or Data.numeric or false,
                 Finished = Data.Finished or Data.finished or false,
 
+                AutoComplete = Data.AutoComplete or false,
+                CompleteOptions = Data.CompleteOptions or {},
+                ResultsIsOpen = false,
+
                 Value = ""
             }
 
@@ -8611,7 +8615,56 @@ local Library do
                     PlaceholderText = Textbox.Placeholder,
                     TextSize = 13,
                     BackgroundColor3 = FromRGB(255, 255, 255)
-                })  Items["Input"]:AddToTheme({TextColor3 = "Text"})               
+                })  Items["Input"]:AddToTheme({TextColor3 = "Text"})
+
+                if Textbox.AutoComplete then
+                    Items["ResultsHolder"] = Instances:Create("Frame", {
+                        Parent = Library.UnusedHolder.Instance,
+                        Name = "\0",
+                        Visible = false,
+                        Position = UDim2New(0, 0, 0, 0),
+                        Size = UDim2New(0, 0, 0, 0),
+                        BorderColor3 = FromRGB(0, 0, 0),
+                        BorderSizePixel = 0,
+                        ZIndex = 3,
+                        BackgroundColor3 = FromRGB(27, 25, 29)
+                    })  Items["ResultsHolder"]:AddToTheme({BackgroundColor3 = "Background"})
+
+                    Instances:Create("UIStroke", {
+                        Parent = Items["ResultsHolder"].Instance,
+                        Name = "\0",
+                        Color = FromRGB(35, 33, 38),
+                        ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                    }):AddToTheme({Color = "Outline"})
+
+                    Instances:Create("UICorner", {
+                        Parent = Items["ResultsHolder"].Instance,
+                        Name = "\0",
+                        CornerRadius = UDimNew(0, 5)
+                    })
+                    
+                    Items["ResultsList"] = Instances:Create("ScrollingFrame", {
+                        Parent = Items["ResultsHolder"].Instance,
+                        Name = "\0",
+                        Active = true,
+                        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+                        ScrollBarThickness = 2,
+                        Size = UDim2New(1, -16, 1, -16),
+                        BackgroundTransparency = 1,
+                        Position = UDim2New(0, 8, 0, 8),
+                        BackgroundColor3 = FromRGB(255, 255, 255),
+                        BorderColor3 = FromRGB(0, 0, 0),
+                        BorderSizePixel = 0,
+                        CanvasSize = UDim2New(0, 0, 0, 0)
+                    }) Items["ResultsList"]:AddToTheme({ScrollBarImageColor3 = "Accent"})
+
+                    Instances:Create("UIListLayout", {
+                        Parent = Items["ResultsList"].Instance,
+                        Name = "\0",
+                        Padding = UDimNew(0, 4),
+                        SortOrder = Enum.SortOrder.LayoutOrder
+                    })
+                end
             end
             
             function Textbox:Get()
@@ -8648,6 +8701,154 @@ local Library do
                 end
             end
 
+            local ResultsRenderStepped
+
+            function Textbox:SetOpen(Bool)
+                if not Textbox.AutoComplete then return end
+                if Textbox.ResultsIsOpen == Bool then return end
+                
+                Textbox.ResultsIsOpen = Bool
+                
+                if Bool then
+                    Items["ResultsHolder"].Instance.Visible = true
+                    Items["ResultsHolder"].Instance.Parent = Library.Holder.Instance
+                    
+                    ResultsRenderStepped = RunService.RenderStepped:Connect(function()
+                        Items["ResultsHolder"].Instance.Position = UDim2New(0, Items["Background"].Instance.AbsolutePosition.X, 0, Items["Background"].Instance.AbsolutePosition.Y + Items["Background"].Instance.AbsoluteSize.Y + 5)
+                        
+                        local Count = 0
+                        for _, child in ipairs(Items["ResultsList"].Instance:GetChildren()) do
+                            if child:IsA("TextButton") then Count = Count + 1 end
+                        end
+                        
+                        local ContentHeight = (Count * 24) + 16 -- Add some padding
+                        local Height = math.min(ContentHeight, 200)
+                        Items["ResultsHolder"].Instance.Size = UDim2New(0, Items["Background"].Instance.AbsoluteSize.X, 0, Height)
+                    end)
+                    
+                     for Index, Value in Library.OpenFrames do 
+                        if Value ~= Textbox then
+                            Value:SetOpen(false)
+                        end
+                    end
+                    Library.OpenFrames[Textbox] = Textbox 
+                else
+                     Items["ResultsHolder"].Instance.Visible = false
+                     Items["ResultsHolder"].Instance.Parent = Library.UnusedHolder.Instance
+                     
+                     if ResultsRenderStepped then
+                        ResultsRenderStepped:Disconnect()
+                        ResultsRenderStepped = nil
+                     end
+
+                     if Library.OpenFrames[Textbox] then 
+                        Library.OpenFrames[Textbox] = nil
+                    end
+                end
+            end
+
+            function Textbox:UpdateResults()
+                if not Textbox.AutoComplete then return end
+                
+                local InputText = Items["Input"].Instance.Text
+                
+                -- Clear old
+                for _, child in ipairs(Items["ResultsList"].Instance:GetChildren()) do
+                    if child:IsA("TextButton") then child:Destroy() end
+                end
+                
+                if InputText == "" then
+                    Textbox:SetOpen(false)
+                    return
+                end
+                
+                local function EscapePattern(s)
+                    return s:gsub("([%(%)%.%%%+%-%*%?%[%]%^%$])", "%%%1")
+                end
+                
+                local Pattern = ""
+                for i = 1, #InputText do
+                     local c = InputText:sub(i,i)
+                     if c:match("%a") then
+                         Pattern = Pattern .. "[" .. string.upper(c) .. string.lower(c) .. "]"
+                     else
+                         Pattern = Pattern .. EscapePattern(c)
+                     end
+                end
+                
+                local Count = 0
+                for _, Option in ipairs(Textbox.CompleteOptions) do
+                    if string.find(Option, Pattern) then
+                        Count = Count + 1
+                        local Button = Instances:Create("TextButton", {
+                            Parent = Items["ResultsList"].Instance,
+                            Name = "\0",
+                            FontFace = Library.Font,
+                            TextColor3 = FromRGB(240, 240, 240),
+                            BorderColor3 = FromRGB(0, 0, 0),
+                            Text = "",
+                            AutoButtonColor = false,
+                            BackgroundTransparency = 1,
+                            Size = UDim2New(1, 0, 0, 20),
+                            BorderSizePixel = 0,
+                            TextSize = 14,
+                            BackgroundColor3 = FromRGB(255, 255, 255),
+                            RichText = true
+                        })  Button:AddToTheme({TextColor3 = "Text"})
+                        
+                        -- Highlighting
+                        local HighlightedText = string.gsub(Option, "("..Pattern..")", function(s)
+                            return Library:ToRich(s, Library.Theme.Accent)
+                        end)
+                        Button.Instance.Text = HighlightedText
+                        
+                        -- Alignment
+                        Button.Instance.TextXAlignment = Enum.TextXAlignment.Left
+                        
+                         local Accent = Instances:Create("Frame", {
+                            Parent = Button.Instance,
+                            Name = "\0",
+                            BorderColor3 = FromRGB(0, 0, 0),
+                            AnchorPoint = Vector2New(0, 0.5),
+                            BackgroundTransparency = 1,
+                            Position = UDim2New(0, 0, 0.5, 0),
+                            Size = UDim2New(0, 3, 0, 14), 
+                            BorderSizePixel = 0,
+                            BackgroundColor3 = FromRGB(255, 255, 255)
+                        })
+                         Instances:Create("UIGradient", {
+                            Parent = Accent.Instance,
+                             Color = RGBSequence{RGBSequenceKeypoint(0, FromRGB(255, 255, 255)), RGBSequenceKeypoint(1, FromRGB(143, 143, 143))}
+                         }):AddToTheme({Color = function()
+                            return RGBSequence{RGBSequenceKeypoint(0, Library.Theme.Accent), RGBSequenceKeypoint(1, Library.Theme.AccentGradient)}
+                        end})
+                        
+                         Instances:Create("UIPadding", {
+                            Parent = Button.Instance,
+                            PaddingLeft = UDimNew(0, 8)
+                        })
+
+                        Button:Connect("MouseButton1Click", function()
+                            Textbox:Set(Option)
+                            Textbox:SetOpen(false)
+                        end)
+                        
+                        Button:OnHover(function()
+                             Accent:Tween(nil, {BackgroundTransparency = 0})
+                        end)
+                        Button:OnHoverLeave(function()
+                             Accent:Tween(nil, {BackgroundTransparency = 1})
+                        end)
+                    end
+                end
+                
+                if Count > 0 then
+                    Textbox:SetOpen(true)
+                else
+                    Textbox:SetOpen(false)
+                end
+            end
+
             if Textbox.Finished then 
                 Items["Input"]:Connect("FocusLost", function(PressedEnterQuestionMark)
                     if PressedEnterQuestionMark then
@@ -8657,6 +8858,33 @@ local Library do
             else
                 Library:Connect(Items["Input"].Instance:GetPropertyChangedSignal("Text"), function()
                     Textbox:Set(Items["Input"].Instance.Text)
+                end)
+            end
+
+            if Textbox.AutoComplete then
+                 Library:Connect(Items["Input"].Instance:GetPropertyChangedSignal("Text"), function()
+                    if Items["Input"].Instance.Text ~= Textbox.Value then
+                         if Items["Input"].Instance:IsFocused() then
+                             Textbox:UpdateResults()
+                         end
+                    end
+                 end)
+                 
+                 Items["Input"]:Connect("Focused", function()
+                     if Items["Input"].Instance.Text ~= "" then
+                         Textbox:UpdateResults()
+                     end
+                 end)
+                 
+                 Library:Connect(UserInputService.InputBegan, function(Input)
+                    if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
+                        if Textbox.ResultsIsOpen then
+                             if Library:IsMouseOverFrame(Items["ResultsHolder"]) then return end
+                             if Library:IsMouseOverFrame(Items["Background"]) then return end
+                             
+                             Textbox:SetOpen(false)
+                        end
+                    end
                 end)
             end
 
