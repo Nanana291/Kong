@@ -5430,6 +5430,115 @@ local Library do
                 end
             end
 
+            local GetAddonsHolder = function()
+                if Items["AddonsHolder"] then
+                    return Items["AddonsHolder"]
+                end
+
+                Items["AddonsHolder"] = Instances:Create("Frame", {
+                    Parent = Items["Text"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(0, 0, 1, 0),
+                    Position = UDim2New(1, 6, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.X,
+                    ZIndex = 2
+                })
+
+                Instances:Create("UIListLayout", {
+                    Parent = Items["AddonsHolder"].Instance,
+                    FillDirection = Enum.FillDirection.Horizontal,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Padding = UDimNew(0, 5),
+                    VerticalAlignment = Enum.VerticalAlignment.Center
+                })
+
+                return Items["AddonsHolder"]
+            end
+
+            function Toggle:Keybind(Data)
+                Data = Data or {}
+
+                local Keybind = {
+                    Key = Data.Key or Data.key or Enum.KeyCode.RightControl,
+                    Flag = Data.Flag or Data.flag or Library:NextFlag(),
+                    Mode = "Toggle",
+                    Value = "None",
+                    Picking = false
+                }
+
+                local Holder = GetAddonsHolder()
+
+                local KeyButton = Instances:Create("TextButton", {
+                    Parent = Holder.Instance,
+                    Name = "\0",
+                    FontFace = Library.Font,
+                    TextColor3 = FromRGB(141, 141, 150),
+                    Text = "[None]",
+                    AutoButtonColor = false,
+                    BackgroundTransparency = 1,
+                    AutomaticSize = Enum.AutomaticSize.X,
+                    Size = UDim2New(0, 0, 1, 0),
+                    BorderSizePixel = 0,
+                    ZIndex = 2,
+                    TextSize = 12,
+                    LayoutOrder = 1
+                })
+
+                function Keybind:Set(Key)
+                    if StringFind(tostring(Key), "Enum") then
+                        Keybind.Key = tostring(Key)
+                        local KeyString = Keys[Keybind.Key] or StringGSub(tostring(Key), "Enum.KeyCode.", "")
+                        Keybind.Value = KeyString
+                        KeyButton.Instance.Text = "[" .. KeyString .. "]"
+                        Library.Flags[Keybind.Flag] = Keybind.Key
+                    elseif type(Key) == "string" then
+                         -- Handle loading from config (string representation)
+                         Keybind.Key = Key
+                         local KeyString = Keys[Keybind.Key] or StringGSub(Key, "Enum.KeyCode.", "")
+                         Keybind.Value = KeyString
+                         KeyButton.Instance.Text = "[" .. KeyString .. "]"
+                         Library.Flags[Keybind.Flag] = Keybind.Key
+                    end
+                    Keybind.Picking = false
+                end
+
+                KeyButton:Connect("MouseButton1Click", function()
+                    Keybind.Picking = true
+                    KeyButton.Instance.Text = "[...]"
+                    
+                    local InputBegan
+                    InputBegan = UserInputService.InputBegan:Connect(function(Input)
+                        if Input.UserInputType == Enum.UserInputType.Keyboard then
+                            Keybind:Set(Input.KeyCode)
+                            InputBegan:Disconnect()
+                        elseif Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.MouseButton2 then
+                             -- Optionally support mouse buttons
+                             Keybind:Set(Input.UserInputType)
+                             InputBegan:Disconnect()
+                        end
+                    end)
+                end)
+
+                Library:Connect(UserInputService.InputBegan, function(Input)
+                    if not Keybind.Picking and Keybind.Value ~= "None" then
+                        if tostring(Input.KeyCode) == Keybind.Key or tostring(Input.UserInputType) == Keybind.Key then
+                            Toggle:Set(not Toggle.Value)
+                        end
+                    end
+                end)
+
+                if Data.Key then
+                    Keybind:Set(Data.Key)
+                end
+                
+                Library.SetFlags[Keybind.Flag] = function(Value)
+                    Keybind:Set(Value)
+                end
+
+                return Toggle
+            end
+
             local SettingsItem = { }
 
             function Toggle:Settings(Size)
@@ -5463,8 +5572,9 @@ local Library do
                         CornerRadius = UDimNew(0, 6)
                     })                    
 
+                    local Holder = GetAddonsHolder()
                     SettingsItem["SettingsIcon"] = Instances:Create("ImageLabel", {
-                        Parent = Items["Text"].Instance,
+                        Parent = Holder.Instance,
                         Name = "\0",
                         ImageColor3 = FromRGB(141, 141, 150),
                         BorderColor3 = FromRGB(0, 0, 0),
@@ -5472,10 +5582,11 @@ local Library do
                         AnchorPoint = Vector2New(0, 0.5),
                         Image = "rbxassetid://101500482366184",
                         BackgroundTransparency = 1,
-                        Position = UDim2New(1, 6, 0.5, 1),
+                        Position = UDim2New(0, 0, 0.5, 0),
                         ZIndex = 2,
                         BorderSizePixel = 0,
-                        BackgroundColor3 = FromRGB(255, 255, 255)
+                        BackgroundColor3 = FromRGB(255, 255, 255),
+                        LayoutOrder = 2
                     })  Items["SettingsIcon"] = SettingsItem["SettingsIcon"]
 
                     SettingsItem["Content"] = Instances:Create("ScrollingFrame", {
@@ -9850,6 +9961,60 @@ local Library do
     Library.CreateSettingsPage = function(self, Window, KeybindList)
         local Page = Window:Page({Name = "Settings", Icon = "122669828593160"})
 
+        local SettingsSection = Page:Section({Name = "UI Settings", Side = 1}) do
+            SettingsSection:Keybind({
+                Name = "Menu Keybind",
+                Flag = "UI_MenuBind",
+                Default = Enum.KeyCode.RightControl,
+                Callback = function(Value)
+                    Window:SetOpen(Value)
+                end
+            })
+
+            SettingsSection:Button({
+                Name = "Unload UI",
+                Callback = function()
+                    Library:Unload()
+                end
+            })
+
+            SettingsSection:Slider({
+                Name = "Background Transparency",
+                Flag = "UI_BackgroundTransparency",
+                Default = 0.12,
+                Min = 0,
+                Max = 1,
+                Decimals = 0.01,
+                Callback = function(Value)
+                    Window:SetTransparency(Value)
+                end
+            })
+
+            SettingsSection:Slider({
+                Name = "Fade Speed",
+                Flag = "UI_FadeSpeed",
+                Default = Library.FadeSpeed,
+                Min = 0,
+                Max = 1,
+                Decimals = 0.01,
+                Callback = function(Value)
+                    Library.FadeSpeed = Value
+                end
+            })
+
+            SettingsSection:Slider({
+                Name = "Tween Speed",
+                Flag = "UI_TweenSpeed",
+                Default = Library.Tween.Time,
+                Min = 0,
+                Max = 1,
+                Decimals = 0.01,
+                Callback = function(Value)
+                    Library.Tween.Time = Value
+                end
+            })
+        end
+
         local ConfigsSection = Page:Section({Name = "Configs", Side = 2}) do 
             local ConfigName
             local ConfigSelected
@@ -9880,7 +10045,24 @@ local Library do
                         if not isfile(Library.Folders.Configs .. "/" .. ConfigName .. ".json") then
                             writefile(Library.Folders.Configs .. "/" .. ConfigName .. ".json", Library:GetConfig())
                             Library:RefreshConfigsList(ConfigsDropdown)
+                            Library:Notification({
+                                Title = "Config Created",
+                                Description = string.format("Created config %q", ConfigName),
+                                Duration = 5
+                            })
+                        else
+                            Library:Notification({
+                                Title = "Config Error",
+                                Description = string.format("Config %q already exists", ConfigName),
+                                Duration = 5
+                            })
                         end
+                    else
+                        Library:Notification({
+                            Title = "Config Error",
+                            Description = "Please enter a config name",
+                            Duration = 5
+                        })
                     end
                 end
             })
@@ -9891,6 +10073,11 @@ local Library do
                     if ConfigSelected then
                         Library:DeleteConfig(ConfigSelected)
                         Library:RefreshConfigsList(ConfigsDropdown)
+                        Library:Notification({
+                            Title = "Config Deleted",
+                            Description = string.format("Deleted config %q", ConfigSelected),
+                            Duration = 5
+                        })
                     end
                 end
             })
@@ -9900,6 +10087,11 @@ local Library do
                 Callback = function()
                     if ConfigSelected then
                         Library:LoadConfig(readfile(Library.Folders.Configs .. "/" .. ConfigSelected))
+                        Library:Notification({
+                            Title = "Config Loaded",
+                            Description = string.format("Loaded config %q", ConfigSelected),
+                            Duration = 5
+                        })
                     end
                 end
             })
@@ -9909,6 +10101,11 @@ local Library do
                 Callback = function()
                     if ConfigSelected then
                         writefile(Library.Folders.Configs .. "/" .. ConfigSelected, Library:GetConfig())
+                        Library:Notification({
+                            Title = "Config Saved",
+                            Description = string.format("Saved config %q", ConfigSelected),
+                            Duration = 5
+                        })
                     end
                 end
             })
@@ -9917,6 +10114,11 @@ local Library do
                 Name = "Refresh",
                 Callback = function()
                     Library:RefreshConfigsList(ConfigsDropdown)
+                    Library:Notification({
+                        Title = "Configs Refreshed",
+                        Description = "Refreshed the config list",
+                        Duration = 5
+                    })
                 end
             })
 
@@ -9925,6 +10127,11 @@ local Library do
                 Callback = function()
                     if ConfigSelected then
                         writefile(Library.Folders.Configs .. "/autoload.txt", ConfigSelected)
+                        Library:Notification({
+                            Title = "Autoload Set",
+                            Description = string.format("Set %q as autoload config", ConfigSelected),
+                            Duration = 5
+                        })
                     end
                 end
             })
