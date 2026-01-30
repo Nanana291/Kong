@@ -5786,7 +5786,7 @@ local Library do
                 Toggle:Set(Value)
             end
 
-            if Toggle.Section.Page.Active then
+            if Toggle.Section.Page and Toggle.Section.Page.Active then
                 Toggle:RefreshPosition(true)
             end
 
@@ -6217,7 +6217,7 @@ local Library do
                 Slider:Set(Value)
             end
 
-            if Slider.Section.Page.Active then
+            if Slider.Section.Page and Slider.Section.Page.Active then
                 Slider:RefreshPosition(true)
             end
 
@@ -6902,7 +6902,7 @@ local Library do
                 Dropdown:Set(Value)
             end
 
-            if Dropdown.Section.Page.Active then
+            if Dropdown.Section.Page and Dropdown.Section.Page.Active then
                 Dropdown:RefreshPosition(true)
             end
 
@@ -7484,7 +7484,7 @@ local Library do
                 Dropdown:Set(Value)
             end
 
-            if Dropdown.Section.Page.Active then
+            if Dropdown.Section.Page and Dropdown.Section.Page.Active then
                 Dropdown:RefreshPosition(true)
             end
 
@@ -7713,7 +7713,7 @@ local Library do
                 return Tab
             end
 
-            if Tabbox.Section.Page.Active then
+            if Tabbox.Section.Page and Tabbox.Section.Page.Active then
                 Tabbox:RefreshPosition(true)
             end
 
@@ -7858,7 +7858,7 @@ local Library do
                 return NewColorpicker
             end
 
-            if Label.Section.Page.Active then
+            if Label.Section.Page and Label.Section.Page.Active then
                 Label:RefreshPosition(true)
             end
 
@@ -8026,7 +8026,7 @@ local Library do
                 end
             end
 
-            if Paragraph.Section.Page.Active then
+            if Paragraph.Section.Page and Paragraph.Section.Page.Active then
                 Paragraph:RefreshPosition(true)
             end
 
@@ -8538,7 +8538,7 @@ local Library do
                 Keybind:Set(Value)
             end
 
-            if Keybind.Section.Page.Active then
+            if Keybind.Section.Page and Keybind.Section.Page.Active then
                 Keybind:RefreshPosition(true)
             end
 
@@ -8674,7 +8674,7 @@ local Library do
                         Name = "\0",
                         CornerRadius = UDimNew(0, 5)
                     })
-
+                    
                     Items["ResultsList"] = Instances:Create("ScrollingFrame", {
                         Parent = Items["ResultsHolder"].Instance,
                         Name = "\0",
@@ -8738,48 +8738,48 @@ local Library do
             function Textbox:SetOpen(Bool)
                 if not Textbox.AutoComplete then return end
                 if Textbox.ResultsIsOpen == Bool then return end
-
+                
                 Textbox.ResultsIsOpen = Bool
-
+                
                 if Bool then
                     Items["ResultsHolder"].Instance.Visible = true
                     Items["ResultsHolder"].Instance.Parent = Library.Holder.Instance
-
+                    
                     ResultsRenderStepped = RunService.RenderStepped:Connect(function()
                         local Count = 0
                         for _, child in ipairs(Items["ResultsList"].Instance:GetChildren()) do
                             if child:IsA("TextButton") then Count = Count + 1 end
                         end
-
+                        
                         local ContentHeight = (Count * 24) + 16 -- Add some padding
                         local Height = math.min(ContentHeight, 200)
                         Items["ResultsHolder"].Instance.Size = UDim2New(0, Items["Background"].Instance.AbsoluteSize.X, 0, Height)
-
+                        
                         -- Position above
                         Items["ResultsHolder"].Instance.Position = UDim2New(
-                            0,
-                            Items["Background"].Instance.AbsolutePosition.X,
-                            0,
+                            0, 
+                            Items["Background"].Instance.AbsolutePosition.X, 
+                            0, 
                             Items["Background"].Instance.AbsolutePosition.Y - Height - 5
                         )
                     end)
-
-                     for Index, Value in Library.OpenFrames do
+                    
+                     for Index, Value in Library.OpenFrames do 
                         if Value ~= Textbox then
                             Value:SetOpen(false)
                         end
                     end
-                    Library.OpenFrames[Textbox] = Textbox
+                    Library.OpenFrames[Textbox] = Textbox 
                 else
                      Items["ResultsHolder"].Instance.Visible = false
                      Items["ResultsHolder"].Instance.Parent = Library.UnusedHolder.Instance
-
+                     
                      if ResultsRenderStepped then
                         ResultsRenderStepped:Disconnect()
                         ResultsRenderStepped = nil
                      end
 
-                     if Library.OpenFrames[Textbox] then
+                     if Library.OpenFrames[Textbox] then 
                         Library.OpenFrames[Textbox] = nil
                     end
                 end
@@ -8787,23 +8787,23 @@ local Library do
 
             function Textbox:UpdateResults()
                 if not Textbox.AutoComplete then return end
-
+                
                 local InputText = Items["Input"].Instance.Text
-
+                
                 -- Clear old
                 for _, child in ipairs(Items["ResultsList"].Instance:GetChildren()) do
                     if child:IsA("TextButton") then child:Destroy() end
                 end
-
+                
                 if InputText == "" then
                     Textbox:SetOpen(false)
                     return
                 end
-
+                
                 local function EscapePattern(s)
                     return s:gsub("([%(%)%.%%%+%-%*%?%[%]%^%$])", "%%%1")
                 end
-
+                
                 local Pattern = ""
                 for i = 1, #InputText do
                      local c = InputText:sub(i,i)
@@ -8813,7 +8813,7 @@ local Library do
                          Pattern = Pattern .. EscapePattern(c)
                      end
                 end
-
+                
                 local Count = 0
                 for _, Option in ipairs(Textbox.CompleteOptions) do
                     if string.find(Option, Pattern) then
@@ -8833,16 +8833,16 @@ local Library do
                             BackgroundColor3 = FromRGB(255, 255, 255),
                             RichText = true
                         })  Button:AddToTheme({TextColor3 = "Text"})
-
+                        
                         -- Highlighting
                         local HighlightedText = string.gsub(Option, "("..Pattern..")", function(s)
                             return Library:ToRich(s, Library.Theme.Accent)
                         end)
                         Button.Instance.Text = HighlightedText
-
+                        
                         -- Alignment
                         Button.Instance.TextXAlignment = Enum.TextXAlignment.Left
-
+                        
                          local Accent = Instances:Create("Frame", {
                             Parent = Button.Instance,
                             Name = "\0",
@@ -8850,7 +8850,7 @@ local Library do
                             AnchorPoint = Vector2New(0, 0.5),
                             BackgroundTransparency = 1,
                             Position = UDim2New(0, 0, 0.5, 0),
-                            Size = UDim2New(0, 3, 0, 14),
+                            Size = UDim2New(0, 3, 0, 14), 
                             BorderSizePixel = 0,
                             BackgroundColor3 = FromRGB(255, 255, 255)
                         })
@@ -8860,7 +8860,7 @@ local Library do
                          }):AddToTheme({Color = function()
                             return RGBSequence{RGBSequenceKeypoint(0, Library.Theme.Accent), RGBSequenceKeypoint(1, Library.Theme.AccentGradient)}
                         end})
-
+                        
                          Instances:Create("UIPadding", {
                             Parent = Button.Instance,
                             PaddingLeft = UDimNew(0, 8)
@@ -8870,7 +8870,7 @@ local Library do
                             Textbox:Set(Option)
                             Textbox:SetOpen(false)
                         end)
-
+                        
                         Button:OnHover(function()
                              Accent:Tween(nil, {BackgroundTransparency = 0})
                         end)
@@ -8879,7 +8879,7 @@ local Library do
                         end)
                     end
                 end
-
+                
                 if Count > 0 then
                     Textbox:SetOpen(true)
                 else
@@ -8907,19 +8907,19 @@ local Library do
                          end
                     end
                  end)
-
+                 
                  Items["Input"]:Connect("Focused", function()
                      if Items["Input"].Instance.Text ~= "" then
                          Textbox:UpdateResults()
                      end
                  end)
-
+                 
                  Library:Connect(UserInputService.InputBegan, function(Input)
                     if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
                         if Textbox.ResultsIsOpen then
                              if Library:IsMouseOverFrame(Items["ResultsHolder"]) then return end
                              if Library:IsMouseOverFrame(Items["Background"]) then return end
-
+                             
                              Textbox:SetOpen(false)
                         end
                     end
@@ -8934,7 +8934,7 @@ local Library do
                 Textbox:Set(Value)
             end
 
-            if Textbox.Section.Page.Active then
+            if Textbox.Section.Page and Textbox.Section.Page.Active then
                 Textbox:RefreshPosition(true)
             end
 
@@ -9412,7 +9412,7 @@ local Library do
                 Listbox:Set(Value)
             end
 
-            if Listbox.Section.Page.Active then
+            if Listbox.Section.Page and Listbox.Section.Page.Active then
                 Listbox:RefreshPosition(true)
             end
 
@@ -9706,7 +9706,7 @@ local Library do
                 end
             end)
 
-            if Discord.Section.Page.Active then
+            if Discord.Section.Page and Discord.Section.Page.Active then
                 Discord:RefreshPosition(true)
             end
 
@@ -9839,7 +9839,7 @@ local Library do
             function Divider:RefreshPosition(Bool)
             end
 
-            if Divider.Section.Page.Active then
+            if Divider.Section.Page and Divider.Section.Page.Active then
                 Divider:RefreshPosition(true)
             end
 
