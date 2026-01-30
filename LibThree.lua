@@ -9850,6 +9850,60 @@ local Library do
     Library.CreateSettingsPage = function(self, Window, KeybindList)
         local Page = Window:Page({Name = "Settings", Icon = "122669828593160"})
 
+        local SettingsSection = Page:Section({Name = "UI Settings", Side = 1}) do
+            SettingsSection:Keybind({
+                Name = "Menu Keybind",
+                Flag = "UI_MenuBind",
+                Default = Enum.KeyCode.RightControl,
+                Callback = function(Value)
+                    Window:SetOpen(Value)
+                end
+            })
+
+            SettingsSection:Button({
+                Name = "Unload UI",
+                Callback = function()
+                    Library:Unload()
+                end
+            })
+
+            SettingsSection:Slider({
+                Name = "Background Transparency",
+                Flag = "UI_BackgroundTransparency",
+                Default = 0.12,
+                Min = 0,
+                Max = 1,
+                Decimals = 0.01,
+                Callback = function(Value)
+                    Window:SetTransparency(Value)
+                end
+            })
+
+            SettingsSection:Slider({
+                Name = "Fade Speed",
+                Flag = "UI_FadeSpeed",
+                Default = Library.FadeSpeed,
+                Min = 0,
+                Max = 1,
+                Decimals = 0.01,
+                Callback = function(Value)
+                    Library.FadeSpeed = Value
+                end
+            })
+
+            SettingsSection:Slider({
+                Name = "Tween Speed",
+                Flag = "UI_TweenSpeed",
+                Default = Library.Tween.Time,
+                Min = 0,
+                Max = 1,
+                Decimals = 0.01,
+                Callback = function(Value)
+                    Library.Tween.Time = Value
+                end
+            })
+        end
+
         local ConfigsSection = Page:Section({Name = "Configs", Side = 2}) do 
             local ConfigName
             local ConfigSelected
@@ -9880,7 +9934,24 @@ local Library do
                         if not isfile(Library.Folders.Configs .. "/" .. ConfigName .. ".json") then
                             writefile(Library.Folders.Configs .. "/" .. ConfigName .. ".json", Library:GetConfig())
                             Library:RefreshConfigsList(ConfigsDropdown)
+                            Library:Notification({
+                                Title = "Config Created",
+                                Description = string.format("Created config %q", ConfigName),
+                                Duration = 5
+                            })
+                        else
+                            Library:Notification({
+                                Title = "Config Error",
+                                Description = string.format("Config %q already exists", ConfigName),
+                                Duration = 5
+                            })
                         end
+                    else
+                        Library:Notification({
+                            Title = "Config Error",
+                            Description = "Please enter a config name",
+                            Duration = 5
+                        })
                     end
                 end
             })
@@ -9891,6 +9962,11 @@ local Library do
                     if ConfigSelected then
                         Library:DeleteConfig(ConfigSelected)
                         Library:RefreshConfigsList(ConfigsDropdown)
+                        Library:Notification({
+                            Title = "Config Deleted",
+                            Description = string.format("Deleted config %q", ConfigSelected),
+                            Duration = 5
+                        })
                     end
                 end
             })
@@ -9900,6 +9976,11 @@ local Library do
                 Callback = function()
                     if ConfigSelected then
                         Library:LoadConfig(readfile(Library.Folders.Configs .. "/" .. ConfigSelected))
+                        Library:Notification({
+                            Title = "Config Loaded",
+                            Description = string.format("Loaded config %q", ConfigSelected),
+                            Duration = 5
+                        })
                     end
                 end
             })
@@ -9909,6 +9990,11 @@ local Library do
                 Callback = function()
                     if ConfigSelected then
                         writefile(Library.Folders.Configs .. "/" .. ConfigSelected, Library:GetConfig())
+                        Library:Notification({
+                            Title = "Config Saved",
+                            Description = string.format("Saved config %q", ConfigSelected),
+                            Duration = 5
+                        })
                     end
                 end
             })
@@ -9917,6 +10003,11 @@ local Library do
                 Name = "Refresh",
                 Callback = function()
                     Library:RefreshConfigsList(ConfigsDropdown)
+                    Library:Notification({
+                        Title = "Configs Refreshed",
+                        Description = "Refreshed the config list",
+                        Duration = 5
+                    })
                 end
             })
 
@@ -9925,6 +10016,11 @@ local Library do
                 Callback = function()
                     if ConfigSelected then
                         writefile(Library.Folders.Configs .. "/autoload.txt", ConfigSelected)
+                        Library:Notification({
+                            Title = "Autoload Set",
+                            Description = string.format("Set %q as autoload config", ConfigSelected),
+                            Duration = 5
+                        })
                     end
                 end
             })
