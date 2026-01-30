@@ -413,8 +413,17 @@ local Library do
         Tween.FadeItem = function(self, Item, Property, Visibility, Speed)
             local Item = Item or self.Item 
 
-            local OldTransparency = Item[Property]
-            Item[Property] = Visibility and 1 or OldTransparency
+            local Success, OldTransparency = pcall(function()
+                return Item[Property]
+            end)
+
+            if not Success then
+                return
+            end
+
+            pcall(function()
+                Item[Property] = Visibility and 1 or OldTransparency
+            end)
 
             local NewTween = Tween:Create(Item, TweenInfo.new(Speed or Library.Tween.Time, Library.Tween.Style, Library.Tween.Direction), {
                 [Property] = Visibility and OldTransparency or 1
@@ -423,7 +432,9 @@ local Library do
             Library:Connect(NewTween.Tween.Completed, function()
                 if not Visibility then 
                     task.wait()
-                    Item[Property] = OldTransparency
+                    pcall(function()
+                        Item[Property] = OldTransparency
+                    end)
                 end
             end)
 
@@ -986,9 +997,13 @@ local Library do
 
         for Property, Value in ThemeData.Properties do
             if type(Value) == "string" then
-                Item[Property] = self.Theme[Value]
+                pcall(function()
+                    Item[Property] = self.Theme[Value]
+                end)
             else
-                Item[Property] = Value()
+                pcall(function()
+                    Item[Property] = Value()
+                end)
             end
         end
 
@@ -1112,9 +1127,13 @@ local Library do
         for _, Item in self.ThemeItems do
             for Property, Value in Item.Properties do
                 if type(Value) == "string" and Value == Theme then
-                    Item.Item[Property] = Color
+                    pcall(function()
+                        Item.Item[Property] = Color
+                    end)
                 elseif type(Value) == "function" then
-                    Item.Item[Property] = Value()
+                    pcall(function()
+                        Item.Item[Property] = Value()
+                    end)
                 end
             end
         end
