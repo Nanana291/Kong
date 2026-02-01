@@ -9637,17 +9637,35 @@ local Library do
                     TextColor3 = FromRGB(255, 255, 255),
                     Size = UDim2New(0, 32, 0, 32),
                     Position = UDim2New(1, -32, 0, 0),
-                    BackgroundColor3 = FromRGB(35, 35, 40),
+                    BackgroundColor3 = FromRGB(20, 20, 20),
                     AutoButtonColor = true,
                     BorderSizePixel = 0,
                     TextSize = 18,
                     ZIndex = 2
-                }) Items["AddButton"]:AddToTheme({BackgroundColor3 = "Accent", TextColor3 = "Text"})
+                }) Items["AddButton"]:AddToTheme({TextColor3 = "Text"})
 
                 Instances:Create("UICorner", {
                     Parent = Items["AddButton"].Instance,
-                    CornerRadius = UDimNew(1, 0) -- Circle
+                    CornerRadius = UDimNew(0, 4)
                 })
+
+                local AddButtonStroke = Instances:Create("UIStroke", {
+                    Parent = Items["AddButton"].Instance,
+                    Name = "\0",
+                    Color = FromRGB(60, 60, 60),
+                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+                    Transparency = 0
+                })
+
+                Items["AddButton"]:OnHover(function()
+                    Items["AddButton"]:Tween(nil, {BackgroundColor3 = Library.Theme.Accent})
+                    AddButtonStroke:Tween(nil, {Transparency = 1})
+                end)
+
+                Items["AddButton"]:OnHoverLeave(function()
+                    Items["AddButton"]:Tween(nil, {BackgroundColor3 = FromRGB(20, 20, 20)})
+                    AddButtonStroke:Tween(nil, {Transparency = 0})
+                end)
 
                 -- List Area
                 Items["ListArea"] = Instances:Create("Frame", {
@@ -9694,7 +9712,20 @@ local Library do
 
                     for _, child in ipairs(Items["ListArea"].Instance:GetChildren()) do
                         if child:IsA("Frame") and child.Name == Text then
-                            child:Destroy()
+                            local Info = TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+                            TweenService:Create(child, Info, {Size = UDim2New(1, 0, 0, 0), BackgroundTransparency = 1}):Play()
+
+                             for _, desc in ipairs(child:GetDescendants()) do
+                                if desc:IsA("UIStroke") then
+                                    TweenService:Create(desc, Info, {Transparency = 1}):Play()
+                                elseif desc:IsA("TextLabel") or desc:IsA("TextButton") then
+                                     TweenService:Create(desc, Info, {TextTransparency = 1, BackgroundTransparency = 1}):Play()
+                                end
+                            end
+
+                            task.delay(0.35, function()
+                                child:Destroy()
+                            end)
                             break
                         end
                     end
@@ -9713,8 +9744,9 @@ local Library do
                 local ItemFrame = Instances:Create("Frame", {
                     Parent = Items["ListArea"].Instance,
                     Name = Text,
-                    Size = UDim2New(1, 0, 0, 30),
+                    Size = UDim2New(1, 0, 0, 0),
                     BackgroundColor3 = FromRGB(27, 26, 29),
+                    BackgroundTransparency = 1,
                     BorderSizePixel = 0,
                     ZIndex = 2
                 }) ItemFrame:AddToTheme({BackgroundColor3 = "Element"})
@@ -9724,12 +9756,13 @@ local Library do
                     CornerRadius = UDimNew(0, 4)
                 })
 
-                Instances:Create("UIStroke", {
+                local ItemStroke = Instances:Create("UIStroke", {
                     Parent = ItemFrame.Instance,
                     Name = "\0",
                     Color = FromRGB(35, 33, 38),
-                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-                }):AddToTheme({Color = "Outline"})
+                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+                    Transparency = 1
+                }) ItemStroke:AddToTheme({Color = "Outline"})
 
                 local ItemText = Instances:Create("TextLabel", {
                     Parent = ItemFrame.Instance,
@@ -9740,6 +9773,7 @@ local Library do
                     Size = UDim2New(1, -40, 1, 0),
                     Position = UDim2New(0, 10, 0, 0),
                     BackgroundTransparency = 1,
+                    TextTransparency = 1,
                     TextXAlignment = Enum.TextXAlignment.Left,
                     TextSize = 13,
                     ZIndex = 2
@@ -9754,7 +9788,9 @@ local Library do
                     Size = UDim2New(0, 20, 0, 20),
                     Position = UDim2New(1, -25, 0.5, 0),
                     AnchorPoint = Vector2New(0, 0.5),
-                    BackgroundColor3 = FromRGB(255, 60, 60),
+                    BackgroundColor3 = FromRGB(20, 20, 20),
+                    BackgroundTransparency = 1,
+                    TextTransparency = 1,
                     AutoButtonColor = true,
                     BorderSizePixel = 0,
                     TextSize = 14,
@@ -9762,8 +9798,24 @@ local Library do
                 })
                 Instances:Create("UICorner", {
                     Parent = RemoveButton.Instance,
-                    CornerRadius = UDimNew(1, 0)
+                    CornerRadius = UDimNew(0, 4)
                 })
+
+                local RemoveButtonStroke = Instances:Create("UIStroke", {
+                    Parent = RemoveButton.Instance,
+                    Name = "\0",
+                    Color = FromRGB(60, 60, 60),
+                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+                    Transparency = 1
+                })
+
+                RemoveButton:OnHover(function()
+                     RemoveButton:Tween(nil, {BackgroundColor3 = FromRGB(255, 60, 60)})
+                end)
+
+                RemoveButton:OnHoverLeave(function()
+                     RemoveButton:Tween(nil, {BackgroundColor3 = FromRGB(20, 20, 20)})
+                end)
 
                 RemoveButton:Connect("MouseButton1Click", function()
                     InputList:Remove(Text)
@@ -9772,6 +9824,14 @@ local Library do
                 if InputList.Callback then
                     Library:SafeCall(InputList.Callback, InputList.Value)
                 end
+
+                Library:Thread(function()
+                    ItemFrame:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2New(1, 0, 0, 30), BackgroundTransparency = 0})
+                    ItemStroke:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Transparency = 0})
+                    ItemText:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {TextTransparency = 0})
+                    RemoveButton:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {BackgroundTransparency = 0, TextTransparency = 0})
+                    RemoveButtonStroke:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Transparency = 0})
+                end)
             end
 
             Items["AddButton"]:Connect("MouseButton1Click", function()
