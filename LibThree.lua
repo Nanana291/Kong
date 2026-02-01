@@ -9964,7 +9964,7 @@ local Library do
                 Default = Data.Default or Data.default or {},
                 Callback = Data.Callback or Data.callback or function() end,
                 Placeholder = Data.Placeholder or "Add item...",
-                
+
                 Value = {},
                 Items = {} -- Stores the UI objects for items
             }
@@ -9982,36 +9982,54 @@ local Library do
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })
 
+                -- Inner Container for Layout
+                Items["InnerContainer"] = Instances:Create("Frame", {
+                    Parent = Items["InputList"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, -10, 0, 0),
+                    Position = UDim2New(0, 5, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    BorderSizePixel = 0,
+                    ZIndex = 2
+                })
+
+                Instances:Create("UIListLayout", {
+                    Parent = Items["InnerContainer"].Instance,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Padding = UDimNew(0, 8)
+                })
+
                 -- Header
                 Items["Title"] = Instances:Create("TextLabel", {
-                    Parent = Items["InputList"].Instance,
+                    Parent = Items["InnerContainer"].Instance,
                     Name = "\0",
                     FontFace = Library.Font,
                     TextColor3 = FromRGB(240, 240, 240),
                     TextTransparency = 0.3,
                     Text = InputList.Name,
-                    Size = UDim2New(1, -10, 0, 15),
-                    AnchorPoint = Vector2New(0, 0),
+                    Size = UDim2New(1, 0, 0, 15),
                     BorderSizePixel = 0,
                     BackgroundTransparency = 1,
-                    Position = UDim2New(0, 5, 0, 0),
                     TextXAlignment = Enum.TextXAlignment.Left,
                     BorderColor3 = FromRGB(0, 0, 0),
                     ZIndex = 2,
                     TextSize = 14,
+                    LayoutOrder = 1,
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })  Items["Title"]:AddToTheme({TextColor3 = "Text"})
 
                 -- Input Area
                 Items["InputFrame"] = Instances:Create("Frame", {
-                    Parent = Items["InputList"].Instance,
+                    Parent = Items["InnerContainer"].Instance,
                     Name = "\0",
                     BackgroundTransparency = 1,
-                    Size = UDim2New(1, -10, 0, 25),
-                    Position = UDim2New(0, 5, 0, 20),
+                    Size = UDim2New(1, 0, 0, 30),
                     BorderColor3 = FromRGB(0, 0, 0),
                     ZIndex = 2,
-                    BorderSizePixel = 0
+                    BorderSizePixel = 0,
+                    LayoutOrder = 2
                 })
 
                 Items["InputBox"] = Instances:Create("TextBox", {
@@ -10023,7 +10041,7 @@ local Library do
                     Text = "",
                     PlaceholderText = InputList.Placeholder,
                     PlaceholderColor3 = FromRGB(180, 180, 180),
-                    Size = UDim2New(1, -25, 1, 0),
+                    Size = UDim2New(1, -35, 1, 0),
                     Position = UDim2New(0, 0, 0, 0),
                     BorderSizePixel = 0,
                     TextXAlignment = Enum.TextXAlignment.Left,
@@ -10036,10 +10054,17 @@ local Library do
                     Parent = Items["InputBox"].Instance,
                     CornerRadius = UDimNew(0, 4)
                 })
-                
+
+                Instances:Create("UIStroke", {
+                    Parent = Items["InputBox"].Instance,
+                    Name = "\0",
+                    Color = FromRGB(35, 33, 38),
+                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                }):AddToTheme({Color = "Outline"})
+
                 Instances:Create("UIPadding", {
                     Parent = Items["InputBox"].Instance,
-                    PaddingLeft = UDimNew(0, 5)
+                    PaddingLeft = UDimNew(0, 8)
                 })
 
                 Items["AddButton"] = Instances:Create("TextButton", {
@@ -10048,12 +10073,12 @@ local Library do
                     FontFace = Library.Font,
                     TextColor3 = FromRGB(255, 255, 255),
                     Text = "+",
-                    Size = UDim2New(0, 20, 1, 0),
-                    Position = UDim2New(1, -20, 0, 0),
+                    Size = UDim2New(0, 30, 1, 0),
+                    Position = UDim2New(1, -30, 0, 0),
                     BorderSizePixel = 0,
                     BackgroundColor3 = FromRGB(27, 26, 29),
                     AutoButtonColor = false,
-                    TextSize = 16
+                    TextSize = 18
                 }) Items["AddButton"]:AddToTheme({BackgroundColor3 = "Element", TextColor3 = "Text"})
 
                 Instances:Create("UICorner", {
@@ -10061,20 +10086,27 @@ local Library do
                     CornerRadius = UDimNew(0, 4)
                 })
 
+                Instances:Create("UIStroke", {
+                    Parent = Items["AddButton"].Instance,
+                    Name = "\0",
+                    Color = FromRGB(35, 33, 38),
+                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                }):AddToTheme({Color = "Outline"})
+
                 -- List Area
                 Items["ListFrame"] = Instances:Create("ScrollingFrame", {
-                    Parent = Items["InputList"].Instance,
+                    Parent = Items["InnerContainer"].Instance,
                     Name = "\0",
                     BackgroundTransparency = 1,
-                    Size = UDim2New(1, -10, 0, 0),
-                    Position = UDim2New(0, 5, 0, 50),
+                    Size = UDim2New(1, 0, 0, 0),
                     BorderColor3 = FromRGB(0, 0, 0),
                     BorderSizePixel = 0,
                     AutomaticCanvasSize = Enum.AutomaticSize.Y,
                     AutomaticSize = Enum.AutomaticSize.Y,
                     ScrollBarThickness = 2,
                     CanvasSize = UDim2New(0, 0, 0, 0),
-                    ScrollBarImageColor3 = FromRGB(124, 163, 255)
+                    ScrollBarImageColor3 = FromRGB(124, 163, 255),
+                    LayoutOrder = 3
                 }) Items["ListFrame"]:AddToTheme({ScrollBarImageColor3 = "Accent"})
 
                 Instances:Create("UIListLayout", {
@@ -10109,11 +10141,17 @@ local Library do
 
                 Instances:Create("UICorner", {Parent = Item.Instance, CornerRadius = UDimNew(0, 4)})
 
+                Instances:Create("UIStroke", {
+                    Parent = Item.Instance,
+                    Color = FromRGB(35, 33, 38),
+                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                }):AddToTheme({Color = "Outline"})
+
                 local Label = Instances:Create("TextLabel", {
                     Parent = Item.Instance,
                     Text = Text,
                     Size = UDim2New(1, -25, 1, 0),
-                    Position = UDim2New(0, 5, 0, 0),
+                    Position = UDim2New(0, 8, 0, 0),
                     BackgroundTransparency = 1,
                     TextColor3 = FromRGB(200, 200, 200),
                     TextXAlignment = Enum.TextXAlignment.Left,
@@ -10208,13 +10246,9 @@ local Library do
 
             function InputList:RefreshPosition(Bool)
                 if Bool then
-                    Items["Title"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 5, 0, 0)})
-                    Items["InputFrame"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 5, 0, 20)})
-                    Items["ListFrame"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 5, 0, 50)})
+                    Items["InnerContainer"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 5, 0, 0)})
                 else
-                    Items["Title"].Instance.Position = UDim2New(0, 35, 0, 0)
-                    Items["InputFrame"].Instance.Position = UDim2New(0, 35, 0, 20)
-                    Items["ListFrame"].Instance.Position = UDim2New(0, 35, 0, 50)
+                    Items["InnerContainer"].Instance.Position = UDim2New(0, 35, 0, 0)
                 end
             end
 
@@ -10238,7 +10272,7 @@ local Library do
                 Flag = Data.Flag or Data.flag or Library:NextFlag(),
                 Default = Data.Default or Data.default or {},
                 Callback = Data.Callback or Data.callback or function() end,
-                
+
                 Value = {}, -- Ordered list of values
                 Items = {} -- Map of Value -> ItemFrame
             }
@@ -10256,40 +10290,58 @@ local Library do
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })
 
+                -- Inner Container for Layout
+                Items["InnerContainer"] = Instances:Create("Frame", {
+                    Parent = Items["SortableList"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, -10, 0, 0),
+                    Position = UDim2New(0, 5, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    BorderSizePixel = 0,
+                    ZIndex = 2
+                })
+
+                Instances:Create("UIListLayout", {
+                    Parent = Items["InnerContainer"].Instance,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Padding = UDimNew(0, 8)
+                })
+
                 -- Header
                 Items["Title"] = Instances:Create("TextLabel", {
-                    Parent = Items["SortableList"].Instance,
+                    Parent = Items["InnerContainer"].Instance,
                     Name = "\0",
                     FontFace = Library.Font,
                     TextColor3 = FromRGB(240, 240, 240),
                     TextTransparency = 0.3,
                     Text = SortableList.Name,
-                    Size = UDim2New(1, -10, 0, 15),
-                    AnchorPoint = Vector2New(0, 0),
+                    Size = UDim2New(1, 0, 0, 15),
                     BorderSizePixel = 0,
                     BackgroundTransparency = 1,
-                    Position = UDim2New(0, 5, 0, 0),
                     TextXAlignment = Enum.TextXAlignment.Left,
                     BorderColor3 = FromRGB(0, 0, 0),
                     ZIndex = 2,
                     TextSize = 14,
+                    LayoutOrder = 1,
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })  Items["Title"]:AddToTheme({TextColor3 = "Text"})
 
                 -- List Area
                 Items["ListFrame"] = Instances:Create("ScrollingFrame", {
-                    Parent = Items["SortableList"].Instance,
+                    Parent = Items["InnerContainer"].Instance,
                     Name = "\0",
                     BackgroundTransparency = 1,
-                    Size = UDim2New(1, -10, 0, 0),
-                    Position = UDim2New(0, 5, 0, 20),
+                    Size = UDim2New(1, 0, 0, 0),
                     BorderColor3 = FromRGB(0, 0, 0),
                     BorderSizePixel = 0,
                     AutomaticCanvasSize = Enum.AutomaticSize.Y,
                     AutomaticSize = Enum.AutomaticSize.Y,
                     ScrollBarThickness = 2,
                     CanvasSize = UDim2New(0, 0, 0, 0),
-                    ScrollBarImageColor3 = FromRGB(124, 163, 255)
+                    ScrollBarImageColor3 = FromRGB(124, 163, 255),
+                    LayoutOrder = 2
                 }) Items["ListFrame"]:AddToTheme({ScrollBarImageColor3 = "Accent"})
 
                 Instances:Create("UIListLayout", {
@@ -10312,7 +10364,7 @@ local Library do
 
                 TableInsert(SortableList.Value, Text)
                 local Index = #SortableList.Value
-                
+
                 local Item = Instances:Create("Frame", {
                     Parent = Items["ListFrame"].Instance,
                     Name = Text,
@@ -10323,6 +10375,12 @@ local Library do
                 }) Item:AddToTheme({BackgroundColor3 = "Element"})
 
                 Instances:Create("UICorner", {Parent = Item.Instance, CornerRadius = UDimNew(0, 4)})
+
+                Instances:Create("UIStroke", {
+                    Parent = Item.Instance,
+                    Color = FromRGB(35, 33, 38),
+                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                }):AddToTheme({Color = "Outline"})
 
                 local Label = Instances:Create("TextLabel", {
                     Parent = Item.Instance,
@@ -10405,7 +10463,7 @@ local Library do
                     -- Swap LayoutOrders
                     local Item1 = SortableList.Items[Text]
                     local Item2 = SortableList.Items[Temp]
-                    
+
                     Item1.Instance.LayoutOrder = Index - 1
                     Item2.Instance.LayoutOrder = Index
 
@@ -10430,7 +10488,7 @@ local Library do
                     -- Swap LayoutOrders
                     local Item1 = SortableList.Items[Text]
                     local Item2 = SortableList.Items[Temp]
-                    
+
                     Item1.Instance.LayoutOrder = Index + 1
                     Item2.Instance.LayoutOrder = Index
 
@@ -10467,11 +10525,9 @@ local Library do
 
             function SortableList:RefreshPosition(Bool)
                 if Bool then
-                    Items["Title"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 5, 0, 0)})
-                    Items["ListFrame"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 5, 0, 20)})
+                    Items["InnerContainer"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 5, 0, 0)})
                 else
-                    Items["Title"].Instance.Position = UDim2New(0, 35, 0, 0)
-                    Items["ListFrame"].Instance.Position = UDim2New(0, 35, 0, 20)
+                    Items["InnerContainer"].Instance.Position = UDim2New(0, 35, 0, 0)
                 end
             end
 
