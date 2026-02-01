@@ -9651,6 +9651,20 @@ local Library do
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })  Items["Input"]:AddToTheme({TextColor3 = "Text"})
 
+                Items["Input"]:Connect("Focused", function()
+                    local Stroke = Items["InputBackground"].Instance:FindFirstChildOfClass("UIStroke")
+                    if Stroke then
+                        TweenService:Create(Stroke, TweenInfo.new(0.3), {Color = Library.Theme.Accent}):Play()
+                    end
+                end)
+
+                Items["Input"]:Connect("FocusLost", function()
+                     local Stroke = Items["InputBackground"].Instance:FindFirstChildOfClass("UIStroke")
+                    if Stroke then
+                        TweenService:Create(Stroke, TweenInfo.new(0.3), {Color = Library.Theme.Outline}):Play()
+                    end
+                end)
+
                 -- Add Button
                 Items["AddButton"] = Instances:Create("TextButton", {
                     Parent = Items["InputArea"].Instance,
@@ -9682,10 +9696,10 @@ local Library do
                     ImageColor3 = FromRGB(255, 255, 255)
                 })
 
-                Instances:Create("UICorner", {
-                    Parent = Items["AddButton"].Instance,
-                    CornerRadius = UDimNew(0, 4)
-                })
+                -- Instances:Create("UICorner", {
+                --     Parent = Items["AddButton"].Instance,
+                --     CornerRadius = UDimNew(0, 4)
+                -- })
 
                 local AddButtonStroke = Instances:Create("UIStroke", {
                     Parent = Items["AddButton"].Instance,
@@ -9696,13 +9710,13 @@ local Library do
                 })
 
                 Items["AddButton"]:OnHover(function()
-                    Items["AddButton"]:Tween(nil, {BackgroundColor3 = Library.Theme.Accent})
-                    AddButtonStroke:Tween(nil, {Transparency = 1})
+                    Items["AddIcon"]:Tween(nil, {ImageColor3 = Library.Theme.Accent})
+                    AddButtonStroke:Tween(nil, {Color = Library.Theme.Accent})
                 end)
 
                 Items["AddButton"]:OnHoverLeave(function()
-                    Items["AddButton"]:Tween(nil, {BackgroundColor3 = FromRGB(20, 20, 20)})
-                    AddButtonStroke:Tween(nil, {Transparency = 0})
+                    Items["AddIcon"]:Tween(nil, {ImageColor3 = FromRGB(255, 255, 255)})
+                    AddButtonStroke:Tween(nil, {Color = FromRGB(60, 60, 60)})
                 end)
 
                 -- List Area
@@ -9853,10 +9867,10 @@ local Library do
                     ImageTransparency = 1
                 })
 
-                Instances:Create("UICorner", {
-                    Parent = RemoveButton.Instance,
-                    CornerRadius = UDimNew(0, 4)
-                })
+                -- Instances:Create("UICorner", {
+                --     Parent = RemoveButton.Instance,
+                --     CornerRadius = UDimNew(0, 4)
+                -- })
 
                 local RemoveButtonStroke = Instances:Create("UIStroke", {
                     Parent = RemoveButton.Instance,
@@ -9867,11 +9881,13 @@ local Library do
                 })
 
                 RemoveButton:OnHover(function()
-                     RemoveButton:Tween(nil, {BackgroundColor3 = FromRGB(255, 60, 60)})
+                     RemoveButtonStroke:Tween(nil, {Color = FromRGB(255, 60, 60)})
+                     RemoveIcon:Tween(nil, {ImageColor3 = FromRGB(255, 60, 60)})
                 end)
 
                 RemoveButton:OnHoverLeave(function()
-                     RemoveButton:Tween(nil, {BackgroundColor3 = FromRGB(20, 20, 20)})
+                     RemoveButtonStroke:Tween(nil, {Color = FromRGB(60, 60, 60)})
+                     RemoveIcon:Tween(nil, {ImageColor3 = FromRGB(255, 255, 255)})
                 end)
 
                 ItemFrame:OnHover(function()
