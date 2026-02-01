@@ -9951,6 +9951,538 @@ local Library do
             return Divider
         end
 
+        Library.Sections.InputList = function(self, Data)
+            Data = Data or {}
+
+            local InputList = {
+                Window = self.Window,
+                Page = self.Page,
+                Section = self,
+
+                Name = Data.Name or Data.name or "Input List",
+                Flag = Data.Flag or Data.flag or Library:NextFlag(),
+                Default = Data.Default or Data.default or {},
+                Callback = Data.Callback or Data.callback or function() end,
+                Placeholder = Data.Placeholder or "Add item...",
+
+                Value = {},
+                Items = {} -- Stores the UI objects for items
+            }
+
+            local Items = {} do
+                Items["InputList"] = Instances:Create("Frame", {
+                    Parent = InputList.Section.Items["Content"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, 0, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    BorderSizePixel = 0,
+                    ZIndex = 2,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })
+
+                -- Header
+                Items["Title"] = Instances:Create("TextLabel", {
+                    Parent = Items["InputList"].Instance,
+                    Name = "\0",
+                    FontFace = Library.Font,
+                    TextColor3 = FromRGB(240, 240, 240),
+                    TextTransparency = 0.3,
+                    Text = InputList.Name,
+                    Size = UDim2New(1, -10, 0, 15),
+                    AnchorPoint = Vector2New(0, 0),
+                    BorderSizePixel = 0,
+                    BackgroundTransparency = 1,
+                    Position = UDim2New(0, 5, 0, 0),
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    ZIndex = 2,
+                    TextSize = 14,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })  Items["Title"]:AddToTheme({TextColor3 = "Text"})
+
+                -- Input Area
+                Items["InputFrame"] = Instances:Create("Frame", {
+                    Parent = Items["InputList"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, -10, 0, 25),
+                    Position = UDim2New(0, 5, 0, 20),
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    ZIndex = 2,
+                    BorderSizePixel = 0
+                })
+
+                Items["InputBox"] = Instances:Create("TextBox", {
+                    Parent = Items["InputFrame"].Instance,
+                    Name = "\0",
+                    FontFace = Library.Font,
+                    TextColor3 = FromRGB(240, 240, 240),
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    Text = "",
+                    PlaceholderText = InputList.Placeholder,
+                    PlaceholderColor3 = FromRGB(180, 180, 180),
+                    Size = UDim2New(1, -25, 1, 0),
+                    Position = UDim2New(0, 0, 0, 0),
+                    BorderSizePixel = 0,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    TextSize = 14,
+                    BackgroundColor3 = FromRGB(27, 26, 29),
+                    ClearTextOnFocus = false
+                }) Items["InputBox"]:AddToTheme({BackgroundColor3 = "Element", TextColor3 = "Text"})
+
+                Instances:Create("UICorner", {
+                    Parent = Items["InputBox"].Instance,
+                    CornerRadius = UDimNew(0, 4)
+                })
+
+                Instances:Create("UIPadding", {
+                    Parent = Items["InputBox"].Instance,
+                    PaddingLeft = UDimNew(0, 5)
+                })
+
+                Items["AddButton"] = Instances:Create("TextButton", {
+                    Parent = Items["InputFrame"].Instance,
+                    Name = "\0",
+                    FontFace = Library.Font,
+                    TextColor3 = FromRGB(255, 255, 255),
+                    Text = "+",
+                    Size = UDim2New(0, 20, 1, 0),
+                    Position = UDim2New(1, -20, 0, 0),
+                    BorderSizePixel = 0,
+                    BackgroundColor3 = FromRGB(27, 26, 29),
+                    AutoButtonColor = false,
+                    TextSize = 16
+                }) Items["AddButton"]:AddToTheme({BackgroundColor3 = "Element", TextColor3 = "Text"})
+
+                Instances:Create("UICorner", {
+                    Parent = Items["AddButton"].Instance,
+                    CornerRadius = UDimNew(0, 4)
+                })
+
+                -- List Area
+                Items["ListFrame"] = Instances:Create("ScrollingFrame", {
+                    Parent = Items["InputList"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, -10, 0, 0),
+                    Position = UDim2New(0, 5, 0, 50),
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    BorderSizePixel = 0,
+                    AutomaticCanvasSize = Enum.AutomaticSize.Y,
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    ScrollBarThickness = 2,
+                    CanvasSize = UDim2New(0, 0, 0, 0),
+                    ScrollBarImageColor3 = FromRGB(124, 163, 255)
+                }) Items["ListFrame"]:AddToTheme({ScrollBarImageColor3 = "Accent"})
+
+                Instances:Create("UIListLayout", {
+                    Parent = Items["ListFrame"].Instance,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Padding = UDimNew(0, 4)
+                })
+            end
+
+            function InputList:UpdateState()
+                Library.Flags[InputList.Flag] = InputList.Value
+                if InputList.Callback then
+                    Library:SafeCall(InputList.Callback, InputList.Value)
+                end
+            end
+
+            function InputList:Add(Text)
+                if not Text or Text == "" then return end
+                if TableFind(InputList.Value, Text) then return end
+
+                TableInsert(InputList.Value, Text)
+                InputList:UpdateState()
+
+                local Item = Instances:Create("Frame", {
+                    Parent = Items["ListFrame"].Instance,
+                    Name = Text,
+                    Size = UDim2New(1, 0, 0, 25),
+                    BackgroundColor3 = FromRGB(32, 30, 34),
+                    BorderSizePixel = 0,
+                    BackgroundTransparency = 1 -- Animate in
+                }) Item:AddToTheme({BackgroundColor3 = "Element"})
+
+                Instances:Create("UICorner", {Parent = Item.Instance, CornerRadius = UDimNew(0, 4)})
+
+                local Label = Instances:Create("TextLabel", {
+                    Parent = Item.Instance,
+                    Text = Text,
+                    Size = UDim2New(1, -25, 1, 0),
+                    Position = UDim2New(0, 5, 0, 0),
+                    BackgroundTransparency = 1,
+                    TextColor3 = FromRGB(200, 200, 200),
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    FontFace = Library.Font,
+                    TextSize = 13,
+                    TextTruncate = Enum.TextTruncate.AtEnd
+                }) Label:AddToTheme({TextColor3 = "Text"})
+
+                local RemoveBtn = Instances:Create("TextButton", {
+                    Parent = Item.Instance,
+                    Text = "x",
+                    Size = UDim2New(0, 20, 1, 0),
+                    Position = UDim2New(1, -20, 0, 0),
+                    BackgroundTransparency = 1,
+                    TextColor3 = FromRGB(255, 100, 100),
+                    TextSize = 14,
+                    FontFace = Library.Font
+                })
+
+                RemoveBtn:Connect("MouseButton1Click", function()
+                    InputList:Remove(Text)
+                end)
+
+                InputList.Items[Text] = Item
+
+                -- Animation
+                Item:FadeItem(true, 0.3)
+            end
+
+            function InputList:Remove(Text)
+                local Index = TableFind(InputList.Value, Text)
+                if Index then
+                    TableRemove(InputList.Value, Index)
+                    InputList:UpdateState()
+
+                    local Item = InputList.Items[Text]
+                    InputList.Items[Text] = nil
+
+                    if Item then
+                        Item:FadeItem(false, 0.2)
+                        task.delay(0.2, function()
+                            Item.Instance:Destroy()
+                        end)
+                    end
+                end
+            end
+
+            function InputList:Set(List)
+                InputList:Clear()
+                for _, V in ipairs(List) do
+                    InputList:Add(V)
+                end
+            end
+
+            function InputList:Get()
+                return InputList.Value
+            end
+
+            function InputList:Clear()
+                for _, Item in pairs(InputList.Items) do
+                    Item.Instance:Destroy()
+                end
+                InputList.Items = {}
+                InputList.Value = {}
+                InputList:UpdateState()
+            end
+
+            Items["AddButton"]:Connect("MouseButton1Click", function()
+                local Text = Items["InputBox"].Instance.Text
+                if Text ~= "" then
+                    InputList:Add(Text)
+                    Items["InputBox"].Instance.Text = ""
+                end
+            end)
+
+            Items["InputBox"]:Connect("FocusLost", function(Enter)
+                if Enter then
+                    local Text = Items["InputBox"].Instance.Text
+                    if Text ~= "" then
+                        InputList:Add(Text)
+                        Items["InputBox"].Instance.Text = ""
+                        task.delay(0.1, function()
+                             Items["InputBox"].Instance:CaptureFocus()
+                        end)
+                    end
+                end
+            end)
+
+            if Data.Default then
+                InputList:Set(Data.Default)
+            end
+
+            function InputList:RefreshPosition(Bool)
+                if Bool then
+                    Items["Title"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 5, 0, 0)})
+                    Items["InputFrame"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 5, 0, 20)})
+                    Items["ListFrame"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 5, 0, 50)})
+                else
+                    Items["Title"].Instance.Position = UDim2New(0, 35, 0, 0)
+                    Items["InputFrame"].Instance.Position = UDim2New(0, 35, 0, 20)
+                    Items["ListFrame"].Instance.Position = UDim2New(0, 35, 0, 50)
+                end
+            end
+
+            if InputList.Section.Page and InputList.Section.Page.Active then
+                InputList:RefreshPosition(true)
+            end
+
+            InputList.Section.Elements[#InputList.Section.Elements+1] = InputList
+            return InputList
+        end
+
+        Library.Sections.SortableList = function(self, Data)
+            Data = Data or {}
+
+            local SortableList = {
+                Window = self.Window,
+                Page = self.Page,
+                Section = self,
+
+                Name = Data.Name or Data.name or "Sortable List",
+                Flag = Data.Flag or Data.flag or Library:NextFlag(),
+                Default = Data.Default or Data.default or {},
+                Callback = Data.Callback or Data.callback or function() end,
+
+                Value = {}, -- Ordered list of values
+                Items = {} -- Map of Value -> ItemFrame
+            }
+
+            local Items = {} do
+                Items["SortableList"] = Instances:Create("Frame", {
+                    Parent = SortableList.Section.Items["Content"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, 0, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    BorderSizePixel = 0,
+                    ZIndex = 2,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })
+
+                -- Header
+                Items["Title"] = Instances:Create("TextLabel", {
+                    Parent = Items["SortableList"].Instance,
+                    Name = "\0",
+                    FontFace = Library.Font,
+                    TextColor3 = FromRGB(240, 240, 240),
+                    TextTransparency = 0.3,
+                    Text = SortableList.Name,
+                    Size = UDim2New(1, -10, 0, 15),
+                    AnchorPoint = Vector2New(0, 0),
+                    BorderSizePixel = 0,
+                    BackgroundTransparency = 1,
+                    Position = UDim2New(0, 5, 0, 0),
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    ZIndex = 2,
+                    TextSize = 14,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })  Items["Title"]:AddToTheme({TextColor3 = "Text"})
+
+                -- List Area
+                Items["ListFrame"] = Instances:Create("ScrollingFrame", {
+                    Parent = Items["SortableList"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, -10, 0, 0),
+                    Position = UDim2New(0, 5, 0, 20),
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    BorderSizePixel = 0,
+                    AutomaticCanvasSize = Enum.AutomaticSize.Y,
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    ScrollBarThickness = 2,
+                    CanvasSize = UDim2New(0, 0, 0, 0),
+                    ScrollBarImageColor3 = FromRGB(124, 163, 255)
+                }) Items["ListFrame"]:AddToTheme({ScrollBarImageColor3 = "Accent"})
+
+                Instances:Create("UIListLayout", {
+                    Parent = Items["ListFrame"].Instance,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Padding = UDimNew(0, 4)
+                })
+            end
+
+            function SortableList:UpdateState()
+                Library.Flags[SortableList.Flag] = SortableList.Value
+                if SortableList.Callback then
+                    Library:SafeCall(SortableList.Callback, SortableList.Value)
+                end
+            end
+
+            function SortableList:Add(Text)
+                if not Text or Text == "" then return end
+                if TableFind(SortableList.Value, Text) then return end
+
+                TableInsert(SortableList.Value, Text)
+                local Index = #SortableList.Value
+
+                local Item = Instances:Create("Frame", {
+                    Parent = Items["ListFrame"].Instance,
+                    Name = Text,
+                    Size = UDim2New(1, 0, 0, 25),
+                    BackgroundColor3 = FromRGB(32, 30, 34),
+                    BorderSizePixel = 0,
+                    LayoutOrder = Index
+                }) Item:AddToTheme({BackgroundColor3 = "Element"})
+
+                Instances:Create("UICorner", {Parent = Item.Instance, CornerRadius = UDimNew(0, 4)})
+
+                local Label = Instances:Create("TextLabel", {
+                    Parent = Item.Instance,
+                    Text = Text,
+                    Size = UDim2New(1, -50, 1, 0), -- Room for buttons
+                    Position = UDim2New(0, 5, 0, 0),
+                    BackgroundTransparency = 1,
+                    TextColor3 = FromRGB(200, 200, 200),
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    FontFace = Library.Font,
+                    TextSize = 13,
+                    TextTruncate = Enum.TextTruncate.AtEnd
+                }) Label:AddToTheme({TextColor3 = "Text"})
+
+                -- Up Button
+                local UpBtn = Instances:Create("TextButton", {
+                    Parent = Item.Instance,
+                    Name = "Up",
+                    Text = "^",
+                    Rotation = 0,
+                    Size = UDim2New(0, 20, 1, 0),
+                    Position = UDim2New(1, -45, 0, 0),
+                    BackgroundTransparency = 1,
+                    TextColor3 = FromRGB(255, 255, 255),
+                    TextSize = 14,
+                    FontFace = Library.Font
+                })
+
+                -- Down Button
+                local DownBtn = Instances:Create("TextButton", {
+                    Parent = Item.Instance,
+                    Name = "Down",
+                    Text = "v",
+                    Size = UDim2New(0, 20, 1, 0),
+                    Position = UDim2New(1, -25, 0, 0),
+                    BackgroundTransparency = 1,
+                    TextColor3 = FromRGB(255, 255, 255),
+                    TextSize = 12,
+                    FontFace = Library.Font
+                })
+
+                UpBtn:Connect("MouseButton1Click", function()
+                    SortableList:MoveUp(Text)
+                end)
+
+                DownBtn:Connect("MouseButton1Click", function()
+                    SortableList:MoveDown(Text)
+                end)
+
+                SortableList.Items[Text] = Item
+                SortableList:UpdateState()
+            end
+
+            function SortableList:Remove(Text)
+                local Index = TableFind(SortableList.Value, Text)
+                if Index then
+                    TableRemove(SortableList.Value, Index)
+                    if SortableList.Items[Text] then
+                        SortableList.Items[Text].Instance:Destroy()
+                        SortableList.Items[Text] = nil
+                    end
+                    -- Re-index LayoutOrders
+                    for i, val in ipairs(SortableList.Value) do
+                        if SortableList.Items[val] then
+                            SortableList.Items[val].Instance.LayoutOrder = i
+                        end
+                    end
+                    SortableList:UpdateState()
+                end
+            end
+
+            function SortableList:MoveUp(Text)
+                local Index = TableFind(SortableList.Value, Text)
+                if Index and Index > 1 then
+                    -- Swap in table
+                    local Temp = SortableList.Value[Index - 1]
+                    SortableList.Value[Index - 1] = Text
+                    SortableList.Value[Index] = Temp
+
+                    -- Swap LayoutOrders
+                    local Item1 = SortableList.Items[Text]
+                    local Item2 = SortableList.Items[Temp]
+
+                    Item1.Instance.LayoutOrder = Index - 1
+                    Item2.Instance.LayoutOrder = Index
+
+                    -- Highlight effect
+                    Item1:Tween(TweenInfo.new(0.2), {BackgroundColor3 = Library.Theme.Accent})
+                    task.delay(0.2, function()
+                        Item1:Tween(TweenInfo.new(0.3), {BackgroundColor3 = Library.Theme.Element})
+                    end)
+
+                    SortableList:UpdateState()
+                end
+            end
+
+            function SortableList:MoveDown(Text)
+                local Index = TableFind(SortableList.Value, Text)
+                if Index and Index < #SortableList.Value then
+                    -- Swap in table
+                    local Temp = SortableList.Value[Index + 1]
+                    SortableList.Value[Index + 1] = Text
+                    SortableList.Value[Index] = Temp
+
+                    -- Swap LayoutOrders
+                    local Item1 = SortableList.Items[Text]
+                    local Item2 = SortableList.Items[Temp]
+
+                    Item1.Instance.LayoutOrder = Index + 1
+                    Item2.Instance.LayoutOrder = Index
+
+                    -- Highlight effect
+                    Item1:Tween(TweenInfo.new(0.2), {BackgroundColor3 = Library.Theme.Accent})
+                    task.delay(0.2, function()
+                        Item1:Tween(TweenInfo.new(0.3), {BackgroundColor3 = Library.Theme.Element})
+                    end)
+
+                    SortableList:UpdateState()
+                end
+            end
+
+            function SortableList:Set(List)
+                -- Clear existing
+                for _, Item in pairs(SortableList.Items) do
+                    Item.Instance:Destroy()
+                end
+                SortableList.Items = {}
+                SortableList.Value = {}
+
+                for _, V in ipairs(List) do
+                    SortableList:Add(V)
+                end
+            end
+
+            function SortableList:Get()
+                return SortableList.Value
+            end
+
+            if Data.Default then
+                SortableList:Set(Data.Default)
+            end
+
+            function SortableList:RefreshPosition(Bool)
+                if Bool then
+                    Items["Title"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 5, 0, 0)})
+                    Items["ListFrame"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 5, 0, 20)})
+                else
+                    Items["Title"].Instance.Position = UDim2New(0, 35, 0, 0)
+                    Items["ListFrame"].Instance.Position = UDim2New(0, 35, 0, 20)
+                end
+            end
+
+            if SortableList.Section.Page and SortableList.Section.Page.Active then
+                SortableList:RefreshPosition(true)
+            end
+
+            SortableList.Section.Elements[#SortableList.Section.Elements+1] = SortableList
+            return SortableList
+        end
+
     Library.CreateSettingsPage = function(self, Window, KeybindList)
         local Page = Window:Page({Name = "Settings", Icon = "122669828593160"})
 
