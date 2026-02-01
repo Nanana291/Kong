@@ -252,6 +252,14 @@ local Library do
 
         local Icon = self:GetIcon(IconName)
         if Icon then
+            if type(Icon) == "string" then
+                return {
+                    Url = Icon,
+                    ImageRectOffset = Vector2New(0, 0),
+                    ImageRectSize = Vector2New(0, 0),
+                    Custom = true,
+                }
+            end
             return Icon
         end
 
@@ -9609,6 +9617,21 @@ local Library do
                     CornerRadius = UDimNew(0, 4)
                 })
 
+                local InputIconData = Library:GetCustomIcon("pencil")
+                Items["InputIcon"] = Instances:Create("ImageLabel", {
+                    Parent = Items["InputBackground"].Instance,
+                    Name = "\0",
+                    Image = InputIconData and InputIconData.Url or "",
+                    ImageRectOffset = InputIconData and InputIconData.ImageRectOffset or Vector2New(0, 0),
+                    ImageRectSize = InputIconData and InputIconData.ImageRectSize or Vector2New(0, 0),
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(0, 16, 0, 16),
+                    Position = UDim2New(0, 8, 0.5, 0),
+                    AnchorPoint = Vector2New(0, 0.5),
+                    ZIndex = 2,
+                    ImageColor3 = FromRGB(180, 180, 180)
+                })
+
                 Items["Input"] = Instances:Create("TextBox", {
                     Parent = Items["InputBackground"].Instance,
                     Name = "\0",
@@ -9617,8 +9640,8 @@ local Library do
                     BorderColor3 = FromRGB(0, 0, 0),
                     Text = "",
                     ZIndex = 2,
-                    Size = UDim2New(1, -20, 1, 0),
-                    Position = UDim2New(0, 10, 0, 0),
+                    Size = UDim2New(1, -34, 1, 0),
+                    Position = UDim2New(0, 30, 0, 0),
                     BorderSizePixel = 0,
                     BackgroundTransparency = 1,
                     PlaceholderColor3 = FromRGB(185, 185, 185),
@@ -9632,7 +9655,7 @@ local Library do
                 Items["AddButton"] = Instances:Create("TextButton", {
                     Parent = Items["InputArea"].Instance,
                     Name = "\0",
-                    Text = "+",
+                    Text = "",
                     FontFace = Library.Font,
                     TextColor3 = FromRGB(255, 255, 255),
                     Size = UDim2New(0, 32, 0, 32),
@@ -9642,7 +9665,22 @@ local Library do
                     BorderSizePixel = 0,
                     TextSize = 18,
                     ZIndex = 2
-                }) Items["AddButton"]:AddToTheme({TextColor3 = "Text"})
+                })
+
+                local AddIconData = Library:GetCustomIcon("plus")
+                Items["AddIcon"] = Instances:Create("ImageLabel", {
+                    Parent = Items["AddButton"].Instance,
+                    Name = "\0",
+                    Image = AddIconData and AddIconData.Url or "",
+                    ImageRectOffset = AddIconData and AddIconData.ImageRectOffset or Vector2New(0, 0),
+                    ImageRectSize = AddIconData and AddIconData.ImageRectSize or Vector2New(0, 0),
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(0, 18, 0, 18),
+                    Position = UDim2New(0.5, 0, 0.5, 0),
+                    AnchorPoint = Vector2New(0.5, 0.5),
+                    ZIndex = 3,
+                    ImageColor3 = FromRGB(255, 255, 255)
+                })
 
                 Instances:Create("UICorner", {
                     Parent = Items["AddButton"].Instance,
@@ -9714,15 +9752,17 @@ local Library do
                         if child:IsA("Frame") and child.Name == Text then
                             local Info = TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
                             TweenService:Create(child, Info, {Size = UDim2New(1, 0, 0, 0), BackgroundTransparency = 1}):Play()
-                            
+
                              for _, desc in ipairs(child:GetDescendants()) do
                                 if desc:IsA("UIStroke") then
                                     TweenService:Create(desc, Info, {Transparency = 1}):Play()
                                 elseif desc:IsA("TextLabel") or desc:IsA("TextButton") then
                                      TweenService:Create(desc, Info, {TextTransparency = 1, BackgroundTransparency = 1}):Play()
+                                elseif desc:IsA("ImageLabel") then
+                                     TweenService:Create(desc, Info, {ImageTransparency = 1, BackgroundTransparency = 1}):Play()
                                 end
                             end
-                            
+
                             task.delay(0.35, function()
                                 child:Destroy()
                             end)
@@ -9782,7 +9822,7 @@ local Library do
                 local RemoveButton = Instances:Create("TextButton", {
                     Parent = ItemFrame.Instance,
                     Name = "\0",
-                    Text = "x",
+                    Text = "",
                     FontFace = Library.Font,
                     TextColor3 = FromRGB(255, 255, 255),
                     Size = UDim2New(0, 20, 0, 20),
@@ -9796,6 +9836,23 @@ local Library do
                     TextSize = 14,
                     ZIndex = 2
                 })
+
+                local RemoveIconData = Library:GetCustomIcon("trash-2")
+                local RemoveIcon = Instances:Create("ImageLabel", {
+                    Parent = RemoveButton.Instance,
+                    Name = "\0",
+                    Image = RemoveIconData and RemoveIconData.Url or "",
+                    ImageRectOffset = RemoveIconData and RemoveIconData.ImageRectOffset or Vector2New(0, 0),
+                    ImageRectSize = RemoveIconData and RemoveIconData.ImageRectSize or Vector2New(0, 0),
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(0, 12, 0, 12),
+                    Position = UDim2New(0.5, 0, 0.5, 0),
+                    AnchorPoint = Vector2New(0.5, 0.5),
+                    ZIndex = 3,
+                    ImageColor3 = FromRGB(255, 255, 255),
+                    ImageTransparency = 1
+                })
+
                 Instances:Create("UICorner", {
                     Parent = RemoveButton.Instance,
                     CornerRadius = UDimNew(0, 4)
@@ -9817,6 +9874,18 @@ local Library do
                      RemoveButton:Tween(nil, {BackgroundColor3 = FromRGB(20, 20, 20)})
                 end)
 
+                ItemFrame:OnHover(function()
+                    RemoveButton:Tween(nil, {BackgroundTransparency = 0})
+                    RemoveIcon:Tween(nil, {ImageTransparency = 0})
+                    RemoveButtonStroke:Tween(nil, {Transparency = 0})
+                end)
+
+                ItemFrame:OnHoverLeave(function()
+                    RemoveButton:Tween(nil, {BackgroundTransparency = 1})
+                    RemoveIcon:Tween(nil, {ImageTransparency = 1})
+                    RemoveButtonStroke:Tween(nil, {Transparency = 1})
+                end)
+
                 RemoveButton:Connect("MouseButton1Click", function()
                     InputList:Remove(Text)
                 end)
@@ -9829,8 +9898,6 @@ local Library do
                     ItemFrame:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2New(1, 0, 0, 30), BackgroundTransparency = 0})
                     ItemStroke:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Transparency = 0})
                     ItemText:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {TextTransparency = 0})
-                    RemoveButton:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {BackgroundTransparency = 0, TextTransparency = 0})
-                    RemoveButtonStroke:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Transparency = 0})
                 end)
             end
 
