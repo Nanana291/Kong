@@ -9523,6 +9523,282 @@ local Library do
             Listbox.Section.Elements[#Listbox.Section.Elements+1] = Listbox
             return Listbox
         end
+
+        Library.Sections.InputList = function(self, Data)
+            Data = Data or {}
+
+            local InputList = {
+                Window = self.Window,
+                Page = self.Page,
+                Section = self,
+
+                Name = Data.Name or Data.name or "InputList",
+                Flag = Data.Flag or Data.flag or Library:NextFlag(),
+                Callback = Data.Callback or Data.callback or function() end,
+                Placeholder = Data.Placeholder or Data.placeholder or "Enter text...",
+
+                Value = {},
+            }
+
+            local Items = {} do
+                Items["InputList"] = Instances:Create("Frame", {
+                    Parent = InputList.Section.Items["Content"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, 0, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    ZIndex = 2,
+                    BorderSizePixel = 0,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })
+
+                -- Title
+                Items["Title"] = Instances:Create("TextLabel", {
+                    Parent = Items["InputList"].Instance,
+                    Name = "\0",
+                    FontFace = Library.Font,
+                    TextColor3 = FromRGB(240, 240, 240),
+                    TextTransparency = 0.3,
+                    Text = InputList.Name,
+                    AutomaticSize = Enum.AutomaticSize.X,
+                    Size = UDim2New(0, 0, 0, 15),
+                    AnchorPoint = Vector2New(0, 0),
+                    BorderSizePixel = 0,
+                    BackgroundTransparency = 1,
+                    Position = UDim2New(0, 30, 0, 0),
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    ZIndex = 2,
+                    TextSize = 14,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })  Items["Title"]:AddToTheme({TextColor3 = "Text"})
+
+                -- Input Area
+                Items["InputArea"] = Instances:Create("Frame", {
+                    Parent = Items["InputList"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, -60, 0, 32),
+                    Position = UDim2New(0, 30, 0, 20),
+                    ZIndex = 2
+                })
+
+                -- Input Box Background
+                Items["InputBackground"] = Instances:Create("Frame", {
+                    Parent = Items["InputArea"].Instance,
+                    Name = "\0",
+                    Active = true,
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    Size = UDim2New(1, -35, 1, 0),
+                    ZIndex = 2,
+                    ClipsDescendants = true,
+                    BorderSizePixel = 0,
+                    BackgroundColor3 = FromRGB(27, 26, 29)
+                })  Items["InputBackground"]:AddToTheme({BackgroundColor3 = "Element"})
+
+                Instances:Create("UIStroke", {
+                    Parent = Items["InputBackground"].Instance,
+                    Name = "\0",
+                    Color = FromRGB(35, 33, 38),
+                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                }):AddToTheme({Color = "Outline"})
+
+                Instances:Create("UICorner", {
+                    Parent = Items["InputBackground"].Instance,
+                    Name = "\0",
+                    CornerRadius = UDimNew(0, 4)
+                })
+
+                Items["Input"] = Instances:Create("TextBox", {
+                    Parent = Items["InputBackground"].Instance,
+                    Name = "\0",
+                    FontFace = Library.Font,
+                    TextColor3 = FromRGB(240, 240, 240),
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    Text = "",
+                    ZIndex = 2,
+                    Size = UDim2New(1, -20, 1, 0),
+                    Position = UDim2New(0, 10, 0, 0),
+                    BorderSizePixel = 0,
+                    BackgroundTransparency = 1,
+                    PlaceholderColor3 = FromRGB(185, 185, 185),
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    PlaceholderText = InputList.Placeholder,
+                    TextSize = 13,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })  Items["Input"]:AddToTheme({TextColor3 = "Text"})
+
+                -- Add Button
+                Items["AddButton"] = Instances:Create("TextButton", {
+                    Parent = Items["InputArea"].Instance,
+                    Name = "\0",
+                    Text = "+",
+                    FontFace = Library.Font,
+                    TextColor3 = FromRGB(255, 255, 255),
+                    Size = UDim2New(0, 32, 0, 32),
+                    Position = UDim2New(1, -32, 0, 0),
+                    BackgroundColor3 = FromRGB(35, 35, 40),
+                    AutoButtonColor = true,
+                    BorderSizePixel = 0,
+                    TextSize = 18,
+                    ZIndex = 2
+                }) Items["AddButton"]:AddToTheme({BackgroundColor3 = "Accent", TextColor3 = "Text"})
+
+                Instances:Create("UICorner", {
+                    Parent = Items["AddButton"].Instance,
+                    CornerRadius = UDimNew(1, 0) -- Circle
+                })
+
+                -- List Area
+                Items["ListArea"] = Instances:Create("Frame", {
+                    Parent = Items["InputList"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, -60, 0, 0),
+                    Position = UDim2New(0, 30, 0, 60),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    ZIndex = 2
+                })
+
+                Instances:Create("UIListLayout", {
+                    Parent = Items["ListArea"].Instance,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Padding = UDimNew(0, 5)
+                })
+            end
+
+            function InputList:GetTable()
+                return InputList.Value
+            end
+
+            function InputList:SetVisibility(Bool)
+                Items["InputList"].Instance.Visible = Bool
+            end
+
+            function InputList:RefreshPosition(Bool)
+                if Bool then
+                    Items["Title"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 0)})
+                    Items["InputArea"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 20)})
+                    Items["ListArea"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 60)})
+                else
+                    Items["Title"].Instance.Position = UDim2New(0, 30, 0, 0)
+                    Items["InputArea"].Instance.Position = UDim2New(0, 30, 0, 20)
+                    Items["ListArea"].Instance.Position = UDim2New(0, 30, 0, 60)
+                end
+            end
+
+            function InputList:Remove(Text)
+                local Index = TableFind(InputList.Value, Text)
+                if Index then
+                    TableRemove(InputList.Value, Index)
+
+                    for _, child in ipairs(Items["ListArea"].Instance:GetChildren()) do
+                        if child:IsA("Frame") and child.Name == Text then
+                            child:Destroy()
+                            break
+                        end
+                    end
+
+                    if InputList.Callback then
+                        Library:SafeCall(InputList.Callback, InputList.Value)
+                    end
+                end
+            end
+
+            function InputList:Add(Text)
+                if Text == "" or TableFind(InputList.Value, Text) then return end
+
+                TableInsert(InputList.Value, Text)
+
+                local ItemFrame = Instances:Create("Frame", {
+                    Parent = Items["ListArea"].Instance,
+                    Name = Text,
+                    Size = UDim2New(1, 0, 0, 30),
+                    BackgroundColor3 = FromRGB(27, 26, 29),
+                    BorderSizePixel = 0,
+                    ZIndex = 2
+                }) ItemFrame:AddToTheme({BackgroundColor3 = "Element"})
+
+                Instances:Create("UICorner", {
+                    Parent = ItemFrame.Instance,
+                    CornerRadius = UDimNew(0, 4)
+                })
+
+                Instances:Create("UIStroke", {
+                    Parent = ItemFrame.Instance,
+                    Name = "\0",
+                    Color = FromRGB(35, 33, 38),
+                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                }):AddToTheme({Color = "Outline"})
+
+                local ItemText = Instances:Create("TextLabel", {
+                    Parent = ItemFrame.Instance,
+                    Name = "\0",
+                    FontFace = Library.Font,
+                    TextColor3 = FromRGB(240, 240, 240),
+                    Text = Text,
+                    Size = UDim2New(1, -40, 1, 0),
+                    Position = UDim2New(0, 10, 0, 0),
+                    BackgroundTransparency = 1,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    TextSize = 13,
+                    ZIndex = 2
+                }) ItemText:AddToTheme({TextColor3 = "Text"})
+
+                local RemoveButton = Instances:Create("TextButton", {
+                    Parent = ItemFrame.Instance,
+                    Name = "\0",
+                    Text = "x",
+                    FontFace = Library.Font,
+                    TextColor3 = FromRGB(255, 255, 255),
+                    Size = UDim2New(0, 20, 0, 20),
+                    Position = UDim2New(1, -25, 0.5, 0),
+                    AnchorPoint = Vector2New(0, 0.5),
+                    BackgroundColor3 = FromRGB(255, 60, 60),
+                    AutoButtonColor = true,
+                    BorderSizePixel = 0,
+                    TextSize = 14,
+                    ZIndex = 2
+                })
+                Instances:Create("UICorner", {
+                    Parent = RemoveButton.Instance,
+                    CornerRadius = UDimNew(1, 0)
+                })
+
+                RemoveButton:Connect("MouseButton1Click", function()
+                    InputList:Remove(Text)
+                end)
+
+                if InputList.Callback then
+                    Library:SafeCall(InputList.Callback, InputList.Value)
+                end
+            end
+
+            Items["AddButton"]:Connect("MouseButton1Click", function()
+                local Text = Items["Input"].Instance.Text
+                if Text ~= "" then
+                    InputList:Add(Text)
+                    Items["Input"].Instance.Text = ""
+                end
+            end)
+
+            Items["Input"]:Connect("FocusLost", function(Enter)
+                if Enter then
+                    local Text = Items["Input"].Instance.Text
+                    if Text ~= "" then
+                        InputList:Add(Text)
+                        Items["Input"].Instance.Text = ""
+                    end
+                end
+            end)
+
+            if InputList.Section.Page and InputList.Section.Page.Active then
+                InputList:RefreshPosition(true)
+            end
+
+            InputList.Section.Elements[#InputList.Section.Elements+1] = InputList
+            return InputList
+        end
     end
 
         Library.Sections.Discord = function(self, Data)
