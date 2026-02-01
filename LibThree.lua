@@ -1323,7 +1323,7 @@ local Library do
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })
                 
-                if not Data.Parent2.Instance:FindFirstChild("nig") then
+                if not Data.Parent2.Instance:FindFirstChild("PaletteIcon") then
                     Items["PaletteIcon"] = Instances:Create("ImageLabel", {
                         Parent = Data.Parent2.Instance,
                         ImageColor3 = FromRGB(141, 141, 150),
@@ -1331,7 +1331,7 @@ local Library do
                         Size = UDim2New(0, 16, 0, 16),
                         AnchorPoint = Vector2New(0.5, 1),
                         Image = "rbxassetid://92464809279921",
-                        Name = "nig",
+                        Name = "PaletteIcon",
                         BackgroundTransparency = 1,
                         Position = UDim2New(1, -16, 1, -6),
                         ZIndex = 2,
@@ -7886,14 +7886,14 @@ local Library do
 
                     if Items["SubElements"] then
                         Items["SubElements"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 30)})
-                        Tween:Create(Items["Label"].Instance:FindFirstChild("nig"), TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(1, -16, 1, -6)}, true)
+                        Tween:Create(Items["Label"].Instance:FindFirstChild("PaletteIcon"), TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(1, -16, 1, -6)}, true)
                     end
                 else 
                     Items["Text"].Instance.Position = UDim2New(0, 30, 0, 5)
 
                     if Items["SubElements"] then
                         Items["SubElements"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 30, 0, 30)})
-                        Tween:Create(Items["Label"].Instance:FindFirstChild("nig"), TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(1, 30, 1, -6)}, true)
+                        Tween:Create(Items["Label"].Instance:FindFirstChild("PaletteIcon"), TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(1, 30, 1, -6)}, true)
                     end
                 end
             end
@@ -9949,6 +9949,393 @@ local Library do
 
             Divider.Section.Elements[#Divider.Section.Elements+1] = Divider
             return Divider
+        end
+
+        Library.Sections.Image = function(self, Data)
+            Data = Data or {}
+
+            local Image = {
+                Window = self.Window,
+                Page = self.Page,
+                Section = self,
+                Image = Data.Image or "",
+                Size = Data.Size or UDim2New(1, 0, 0, 100),
+                ScaleType = Data.ScaleType or Enum.ScaleType.Fit
+            }
+
+            local Items = {} do
+                Items["ImageContainer"] = Instances:Create("Frame", {
+                    Parent = Image.Section.Items["Content"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = Image.Size,
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    ZIndex = 2,
+                    BorderSizePixel = 0,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })
+
+                local ImageData = Library:GetCustomIcon(Image.Image)
+                Items["Image"] = Instances:Create("ImageLabel", {
+                    Parent = Items["ImageContainer"].Instance,
+                    Name = "\0",
+                    Image = ImageData and ImageData.Url or Image.Image,
+                    ImageRectOffset = ImageData and ImageData.ImageRectOffset or Vector2New(0, 0),
+                    ImageRectSize = ImageData and ImageData.ImageRectSize or Vector2New(0, 0),
+                    Size = UDim2New(1, 0, 1, 0),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    ScaleType = Image.ScaleType,
+                    ZIndex = 2,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })
+            end
+
+            function Image:SetImage(NewImage)
+                local ImageData = Library:GetCustomIcon(NewImage)
+                Items["Image"].Instance.Image = ImageData and ImageData.Url or NewImage
+                Items["Image"].Instance.ImageRectOffset = ImageData and ImageData.ImageRectOffset or Vector2New(0, 0)
+                Items["Image"].Instance.ImageRectSize = ImageData and ImageData.ImageRectSize or Vector2New(0, 0)
+            end
+
+            function Image:RefreshPosition(Bool)
+                if Bool then
+                    Items["ImageContainer"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 0)})
+                else
+                    Items["ImageContainer"].Instance.Position = UDim2New(0, 0, 0, 0)
+                end
+            end
+
+            if Image.Section.Page and Image.Section.Page.Active then
+                Image:RefreshPosition(true)
+            end
+
+            Image.Section.Elements[#Image.Section.Elements+1] = Image
+            return Image
+        end
+
+        Library.Sections.ProgressBar = function(self, Data)
+            Data = Data or {}
+
+            local ProgressBar = {
+                Window = self.Window,
+                Page = self.Page,
+                Section = self,
+                Name = Data.Name or "ProgressBar",
+                Value = Data.Default or 0,
+                Color = Data.Color
+            }
+
+            local Items = {} do
+                Items["ProgressBar"] = Instances:Create("Frame", {
+                    Parent = ProgressBar.Section.Items["Content"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, 0, 0, 35),
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    ZIndex = 2,
+                    BorderSizePixel = 0,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })
+
+                Items["Title"] = Instances:Create("TextLabel", {
+                    Parent = Items["ProgressBar"].Instance,
+                    Name = "\0",
+                    FontFace = Library.Font,
+                    TextColor3 = FromRGB(240, 240, 240),
+                    TextTransparency = 0.3,
+                    Text = ProgressBar.Name,
+                    AutomaticSize = Enum.AutomaticSize.X,
+                    Size = UDim2New(0, 0, 0, 15),
+                    BackgroundTransparency = 1,
+                    Position = UDim2New(0, 30, 0, 0),
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    ZIndex = 2,
+                    TextSize = 14,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })  Items["Title"]:AddToTheme({TextColor3 = "Text"})
+
+                Items["BarBackground"] = Instances:Create("Frame", {
+                    Parent = Items["ProgressBar"].Instance,
+                    Name = "\0",
+                    Size = UDim2New(1, -60, 0, 6),
+                    Position = UDim2New(0, 30, 0, 20),
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    ZIndex = 2,
+                    BorderSizePixel = 0,
+                    BackgroundColor3 = FromRGB(40, 40, 45)
+                }) Items["BarBackground"]:AddToTheme({BackgroundColor3 = "Section Background 2"})
+
+                Instances:Create("UICorner", {
+                    Parent = Items["BarBackground"].Instance,
+                    CornerRadius = UDimNew(1, 0)
+                })
+
+                Items["Fill"] = Instances:Create("Frame", {
+                    Parent = Items["BarBackground"].Instance,
+                    Name = "\0",
+                    Size = UDim2New(ProgressBar.Value, 0, 1, 0),
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    ZIndex = 2,
+                    BorderSizePixel = 0,
+                    BackgroundColor3 = ProgressBar.Color or FromRGB(255, 255, 255)
+                })
+
+                if not ProgressBar.Color then
+                     Items["Fill"]:AddToTheme({BackgroundColor3 = "Accent"})
+                end
+
+                Instances:Create("UICorner", {
+                    Parent = Items["Fill"].Instance,
+                    CornerRadius = UDimNew(1, 0)
+                })
+            end
+
+            function ProgressBar:Set(Value)
+                Value = MathClamp(Value, 0, 1)
+                ProgressBar.Value = Value
+                Items["Fill"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Size = UDim2New(Value, 0, 1, 0)})
+            end
+
+            function ProgressBar:RefreshPosition(Bool)
+                if Bool then
+                    Items["Title"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 0)})
+                    Items["BarBackground"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 20)})
+                else
+                    Items["Title"].Instance.Position = UDim2New(0, 30, 0, 0)
+                    Items["BarBackground"].Instance.Position = UDim2New(0, 30, 0, 20)
+                end
+            end
+
+            if ProgressBar.Section.Page and ProgressBar.Section.Page.Active then
+                ProgressBar:RefreshPosition(true)
+            end
+
+            ProgressBar.Section.Elements[#ProgressBar.Section.Elements+1] = ProgressBar
+            return ProgressBar
+        end
+
+        Library.Sections.Colorpicker = function(self, Data)
+            Data = Data or {}
+
+            local ColorpickerElement = {
+                Window = self.Window,
+                Page = self.Page,
+                Section = self,
+                Name = Data.Name or "Colorpicker",
+                Flag = Data.Flag or Library:NextFlag(),
+                Default = Data.Default or Color3.fromRGB(255, 255, 255),
+                Callback = Data.Callback or function() end,
+                Alpha = Data.Alpha or false
+            }
+
+            local Items = {} do
+                Items["Colorpicker"] = Instances:Create("Frame", {
+                    Parent = ColorpickerElement.Section.Items["Content"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, 0, 0, 30),
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    ZIndex = 2,
+                    BorderSizePixel = 0,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })
+
+                Items["Title"] = Instances:Create("TextLabel", {
+                    Parent = Items["Colorpicker"].Instance,
+                    Name = "\0",
+                    FontFace = Library.Font,
+                    TextColor3 = FromRGB(240, 240, 240),
+                    TextTransparency = 0.3,
+                    Text = ColorpickerElement.Name,
+                    AutomaticSize = Enum.AutomaticSize.X,
+                    Size = UDim2New(0, 0, 0, 15),
+                    BackgroundTransparency = 1,
+                    Position = UDim2New(0, 30, 0.5, 0),
+                    AnchorPoint = Vector2New(0, 0.5),
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    ZIndex = 2,
+                    TextSize = 14,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })  Items["Title"]:AddToTheme({TextColor3 = "Text"})
+
+                Items["Container"] = Instances:Create("Frame", {
+                    Parent = Items["Colorpicker"].Instance,
+                    Name = "\0",
+                    Size = UDim2New(0, 42, 0, 20),
+                    AnchorPoint = Vector2New(1, 0.5),
+                    Position = UDim2New(1, -10, 0.5, 0),
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    ZIndex = 2,
+                    BorderSizePixel = 0,
+                    BackgroundTransparency = 1,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })
+
+                local NewColorpicker, ColorpickerItems = Library:CreateColorpicker({
+                    Parent = Items["Container"],
+                    Parent2 = Items["Colorpicker"],
+                    Page = ColorpickerElement.Page,
+                    Section = ColorpickerElement.Section,
+                    Flag = ColorpickerElement.Flag,
+                    Default = ColorpickerElement.Default,
+                    Callback = ColorpickerElement.Callback,
+                    Alpha = ColorpickerElement.Alpha
+                })
+
+                function ColorpickerElement:Set(Color, Alpha)
+                    NewColorpicker:Set(Color, Alpha)
+                end
+            end
+
+            function ColorpickerElement:RefreshPosition(Bool)
+                if Bool then
+                    Items["Title"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0.5, 0)})
+                    Items["Container"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(1, 0, 0.5, 0)})
+                    Tween:Create(Items["Colorpicker"].Instance:FindFirstChild("PaletteIcon"), TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(1, -16, 1, -6)}, true)
+                else
+                    Items["Title"].Instance.Position = UDim2New(0, 30, 0.5, 0)
+                    Items["Container"].Instance.Position = UDim2New(1, 30, 0.5, 0)
+                    Tween:Create(Items["Colorpicker"].Instance:FindFirstChild("PaletteIcon"), TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(1, 30, 1, -6)}, true)
+                end
+            end
+
+            if ColorpickerElement.Section.Page and ColorpickerElement.Section.Page.Active then
+                ColorpickerElement:RefreshPosition(true)
+            end
+
+            ColorpickerElement.Section.Elements[#ColorpickerElement.Section.Elements+1] = ColorpickerElement
+            return ColorpickerElement
+        end
+
+        Library.Sections.ChipSet = function(self, Data)
+            Data = Data or {}
+
+            local ChipSet = {
+                Window = self.Window,
+                Page = self.Page,
+                Section = self,
+                Options = Data.Options or {},
+                Value = Data.Default or {},
+                Callback = Data.Callback or function() end
+            }
+
+            local function Contains(Tbl, Val)
+                for _, v in ipairs(Tbl) do
+                    if v == Val then return true end
+                end
+                return false
+            end
+
+            local Items = {} do
+                Items["ChipSet"] = Instances:Create("Frame", {
+                    Parent = ChipSet.Section.Items["Content"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, 0, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    ZIndex = 2,
+                    BorderSizePixel = 0,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })
+
+                Items["Container"] = Instances:Create("Frame", {
+                    Parent = Items["ChipSet"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, -60, 0, 0),
+                    Position = UDim2New(0, 30, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    BorderSizePixel = 0
+                })
+
+                Instances:Create("UIListLayout", {
+                    Parent = Items["Container"].Instance,
+                    FillDirection = Enum.FillDirection.Horizontal,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Padding = UDimNew(0, 4),
+                    Wraps = true
+                })
+
+                Instances:Create("UIPadding", {
+                    Parent = Items["Container"].Instance,
+                    PaddingTop = UDimNew(0, 4),
+                    PaddingBottom = UDimNew(0, 4)
+                })
+            end
+
+            function ChipSet:Add(Option)
+                local Chip = Instances:Create("TextButton", {
+                    Parent = Items["Container"].Instance,
+                    Name = Option,
+                    Text = Option,
+                    FontFace = Library.Font,
+                    TextSize = 12,
+                    AutomaticSize = Enum.AutomaticSize.XY,
+                    Size = UDim2New(0, 0, 0, 24),
+                    BackgroundColor3 = FromRGB(40, 40, 45),
+                    TextColor3 = FromRGB(200, 200, 200),
+                    AutoButtonColor = false,
+                    BorderSizePixel = 0
+                })
+                Instances:Create("UICorner", {
+                    Parent = Chip.Instance,
+                    CornerRadius = UDimNew(0, 4)
+                })
+                Instances:Create("UIPadding", {
+                    Parent = Chip.Instance,
+                    PaddingLeft = UDimNew(0, 8),
+                    PaddingRight = UDimNew(0, 8)
+                })
+
+                local IsSelected = Contains(ChipSet.Value, Option)
+
+                if IsSelected then
+                    Chip.Instance.BackgroundColor3 = Library.Theme.Accent
+                    Chip.Instance.TextColor3 = FromRGB(255, 255, 255)
+                end
+
+                Chip:Connect("MouseButton1Click", function()
+                    local Selected = Contains(ChipSet.Value, Option)
+
+                    if Selected then
+                        for i, v in ipairs(ChipSet.Value) do
+                            if v == Option then
+                                table.remove(ChipSet.Value, i)
+                                break
+                            end
+                        end
+                        Chip:Tween(TweenInfo.new(0.2), {BackgroundColor3 = FromRGB(40, 40, 45), TextColor3 = FromRGB(200, 200, 200)})
+                    else
+                        table.insert(ChipSet.Value, Option)
+                        Chip:Tween(TweenInfo.new(0.2), {BackgroundColor3 = Library.Theme.Accent, TextColor3 = FromRGB(255, 255, 255)})
+                    end
+
+                    if ChipSet.Callback then
+                        Library:SafeCall(ChipSet.Callback, ChipSet.Value)
+                    end
+                end)
+            end
+
+            function ChipSet:RefreshPosition(Bool)
+                if Bool then
+                    Items["Container"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 0)})
+                else
+                    Items["Container"].Instance.Position = UDim2New(0, 30, 0, 0)
+                end
+            end
+
+            for _, Opt in ipairs(ChipSet.Options) do
+                ChipSet:Add(Opt)
+            end
+
+            if ChipSet.Section.Page and ChipSet.Section.Page.Active then
+                ChipSet:RefreshPosition(true)
+            end
+
+            ChipSet.Section.Elements[#ChipSet.Section.Elements+1] = ChipSet
+            return ChipSet
         end
 
     Library.CreateSettingsPage = function(self, Window, KeybindList)
