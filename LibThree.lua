@@ -2541,7 +2541,7 @@ local Library do
                 Items["MainFrame"]:MakeResizeable(Vector2New(Items["MainFrame"].Instance.AbsoluteSize.X, Items["MainFrame"].Instance.AbsoluteSize.Y), Vector2New(9999, 9999), OriginalSizes)
                 Library:MakeBlurred(Items["MainFrame"], Window)
                 
-                Items["LeftTabs"] = Instances:Create("Frame", {
+                Items["LeftTabs"] = Instances:Create("ScrollingFrame", {
                     Parent = Items["MainFrame"].Instance,
                     Name = "\0",
                     Visible = true,
@@ -2551,8 +2551,12 @@ local Library do
                     Size = UDim2New(0, 225, 1, 0),
                     ZIndex = 2,
                     BorderSizePixel = 0,
-                    BackgroundColor3 = FromRGB(27, 25, 29)
-                })  Items["LeftTabs"]:AddToTheme({BackgroundColor3 = "Background"})
+                    BackgroundColor3 = FromRGB(27, 25, 29),
+                    CanvasSize = UDim2New(0, 0, 0, 0),
+                    AutomaticCanvasSize = Enum.AutomaticSize.Y,
+                    ScrollBarThickness = 2,
+                    ScrollBarImageColor3 = FromRGB(0, 0, 0)
+                })  Items["LeftTabs"]:AddToTheme({BackgroundColor3 = "Background", ScrollBarImageColor3 = "Accent"})
 
                 Library:MakeBlurred(Items["LeftTabs"], Window)
 
