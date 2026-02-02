@@ -9683,8 +9683,8 @@ local Library do
                     TextColor3 = FromRGB(255, 255, 255),
                     Size = UDim2New(0, 32, 0, 32),
                     Position = UDim2New(1, -32, 0, 0),
-                    BackgroundColor3 = FromRGB(20, 20, 20),
-                    AutoButtonColor = true,
+                    BackgroundColor3 = FromRGB(0, 0, 0),
+                    AutoButtonColor = false,
                     BorderSizePixel = 0,
                     TextSize = 18,
                     ZIndex = 2
@@ -9704,11 +9704,6 @@ local Library do
                     ZIndex = 3,
                     ImageColor3 = FromRGB(255, 255, 255)
                 })
-
-                -- Instances:Create("UICorner", {
-                --     Parent = Items["AddButton"].Instance,
-                --     CornerRadius = UDimNew(0, 4)
-                -- })
 
                 local AddButtonStroke = Instances:Create("UIStroke", {
                     Parent = Items["AddButton"].Instance,
@@ -9851,10 +9846,10 @@ local Library do
                     Size = UDim2New(0, 20, 0, 20),
                     Position = UDim2New(1, -25, 0.5, 0),
                     AnchorPoint = Vector2New(0, 0.5),
-                    BackgroundColor3 = FromRGB(20, 20, 20),
+                    BackgroundColor3 = FromRGB(0, 0, 0),
                     BackgroundTransparency = 1,
                     TextTransparency = 1,
-                    AutoButtonColor = true,
+                    AutoButtonColor = false,
                     BorderSizePixel = 0,
                     TextSize = 14,
                     ZIndex = 2
@@ -9875,11 +9870,6 @@ local Library do
                     ImageColor3 = FromRGB(255, 255, 255),
                     ImageTransparency = 1
                 })
-
-                -- Instances:Create("UICorner", {
-                --     Parent = RemoveButton.Instance,
-                --     CornerRadius = UDimNew(0, 4)
-                -- })
 
                 local RemoveButtonStroke = Instances:Create("UIStroke", {
                     Parent = RemoveButton.Instance,
