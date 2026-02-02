@@ -5174,6 +5174,7 @@ local Library do
             end
 
             function Tabbox:AddTab(Name)
+                if not Library then return end
                 local Icon = Library:GetCustomIcon(Name)
                 local IsIcon = Icon ~= nil
 
@@ -6764,6 +6765,7 @@ local Library do
             end
 
             function Dropdown:Add(Option)
+                if not Library then return end
                 local OptionButton = Instances:Create("TextButton", {
                     Parent = Items["Holder"].Instance,
                     Name = "\0",
@@ -9326,6 +9328,7 @@ local Library do
             end
 
             function Listbox:Add(Option)
+                if not Library then return end
                 local OptionButton = Instances:Create("TextButton", {
                     Parent = Items["Holder"].Instance,
                     Name = "\0",
@@ -9674,7 +9677,7 @@ local Library do
                     end
                 end)
 
-                -- Add Button
+                -- Add Button (Square, Black background)
                 Items["AddButton"] = Instances:Create("TextButton", {
                     Parent = Items["InputArea"].Instance,
                     Name = "\0",
@@ -9683,7 +9686,7 @@ local Library do
                     TextColor3 = FromRGB(255, 255, 255),
                     Size = UDim2New(0, 32, 0, 32),
                     Position = UDim2New(1, -32, 0, 0),
-                    BackgroundColor3 = FromRGB(0, 0, 0),
+                    BackgroundColor3 = FromRGB(0, 0, 0), -- Black
                     AutoButtonColor = false,
                     BorderSizePixel = 0,
                     TextSize = 18,
@@ -9713,6 +9716,7 @@ local Library do
                     Transparency = 0
                 })
 
+                -- Pink animation for Add Button
                 Items["AddButton"]:OnHover(function()
                     Items["AddIcon"]:Tween(nil, {ImageColor3 = Library.Theme.Accent})
                     AddButtonStroke:Tween(nil, {Color = Library.Theme.Accent})
@@ -9762,6 +9766,7 @@ local Library do
             end
 
             function InputList:Remove(Text)
+                if not Library then return end
                 local Index = TableFind(InputList.Value, Text)
                 if Index then
                     TableRemove(InputList.Value, Index)
@@ -9795,6 +9800,7 @@ local Library do
             end
 
             function InputList:Add(Text)
+                if not Library then return end
                 if Text == "" or TableFind(InputList.Value, Text) then return end
 
                 TableInsert(InputList.Value, Text)
@@ -9837,6 +9843,7 @@ local Library do
                     ZIndex = 2
                 }) ItemText:AddToTheme({TextColor3 = "Text"})
 
+                -- Remove Button (Square, Black background)
                 local RemoveButton = Instances:Create("TextButton", {
                     Parent = ItemFrame.Instance,
                     Name = "\0",
@@ -9846,8 +9853,8 @@ local Library do
                     Size = UDim2New(0, 20, 0, 20),
                     Position = UDim2New(1, -25, 0.5, 0),
                     AnchorPoint = Vector2New(0, 0.5),
-                    BackgroundColor3 = FromRGB(0, 0, 0),
-                    BackgroundTransparency = 1,
+                    BackgroundColor3 = FromRGB(0, 0, 0), -- Black
+                    BackgroundTransparency = 1, -- Start transparent to match frame
                     TextTransparency = 1,
                     AutoButtonColor = false,
                     BorderSizePixel = 0,
@@ -9879,6 +9886,7 @@ local Library do
                     Transparency = 1
                 })
 
+                -- Red animation for Remove Button
                 RemoveButton:OnHover(function()
                      RemoveButtonStroke:Tween(nil, {Color = FromRGB(255, 60, 60)})
                      RemoveIcon:Tween(nil, {ImageColor3 = FromRGB(255, 60, 60)})
