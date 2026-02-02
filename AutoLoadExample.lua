@@ -1,4 +1,4 @@
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/refs/heads/main/LibThree.lua"))()
+local Library = loadstring(readfile("LibThree.lua"))()
 
 -- 1. Create the Window
 local Window = Library:Window({
