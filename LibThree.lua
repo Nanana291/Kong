@@ -1075,12 +1075,17 @@ local Library do
         end
 
         local Config = readfile(Library.Folders.Configs .. "/autoload.txt")
+        local FileName = Library.Folders.Configs .. "/" .. Config
 
-        if not isfile(Library.Folders.Configs .. "/" .. Config .. ".json") then
-            return
+        if not isfile(FileName) then
+            if isfile(FileName .. ".json") then
+                FileName = FileName .. ".json"
+            else
+                return
+            end
         end
 
-        local Success, Err = Library:LoadConfig(readfile(Library.Folders.Configs .. "/" .. Config .. ".json"))
+        local Success, Err = Library:LoadConfig(readfile(FileName))
         if not Success then
             warn("Failed to load autoload config: " .. tostring(Err))
         end
