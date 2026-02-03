@@ -371,11 +371,30 @@ local Library do
     Library.Theme = TableClone(Themes["Preset"])
 
     -- Folders
-    for Index, Value in Library.Folders do 
-        if not isfolder(Value) then
-            makefolder(Value)
+    Library.SetFolder = function(self, Folder)
+        self.Folders.Directory = Folder
+        self.Folders.Configs = Folder .. "/Configs"
+        self.Folders.Assets = Folder .. "/Assets"
+
+        local function RecursiveMakeFolder(Path)
+            local Segments = Path:split("/")
+            local TraversedPath = ""
+
+            for _, Segment in ipairs(Segments) do
+                TraversedPath = TraversedPath .. Segment
+                if not isfolder(TraversedPath) then
+                    makefolder(TraversedPath)
+                end
+                TraversedPath = TraversedPath .. "/"
+            end
         end
+
+        RecursiveMakeFolder(self.Folders.Directory)
+        RecursiveMakeFolder(self.Folders.Configs)
+        RecursiveMakeFolder(self.Folders.Assets)
     end
+
+    Library:SetFolder("lyapossss")
 
     -- Tweening
     local Tween = { } do
@@ -1101,10 +1120,8 @@ local Library do
         local CurrentList = { }
         local List = { }
 
-        local ConfigFolderName = StringGSub(Library.Folders.Configs, Library.Folders.Directory .. "/", "")
-
         for Index, Value in listfiles(Library.Folders.Configs) do
-            local FileName = StringGSub(Value, Library.Folders.Directory .. "\\" .. ConfigFolderName .. "\\", "")
+            local FileName = Value:match("[^/\\]+$")
             List[Index] = FileName
         end
 
