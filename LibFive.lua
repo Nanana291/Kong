@@ -225,7 +225,9 @@ local Library do
         NotifHolder = nil,
         UnusedHolder = nil,
 
-        Font = nil
+        Font = nil,
+
+        MinSize = Vector2New(480, 360)
     }
 
     Library.GetIcon = function(self, IconName)
@@ -1176,6 +1178,69 @@ local Library do
 
         return MousePosition.X >= Frame.AbsolutePosition.X and MousePosition.X <= Frame.AbsolutePosition.X + Frame.AbsoluteSize.X 
         and MousePosition.Y >= Frame.AbsolutePosition.Y and MousePosition.Y <= Frame.AbsolutePosition.Y + Frame.AbsoluteSize.Y
+    end
+
+    Library.MakeResizable = function(self, UI, DragFrame)
+        local StartPos
+        local FrameSize
+        local Dragging = false
+        local Changed
+
+        local function IsClickInput(Input)
+            return (Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch)
+                and Input.UserInputState == Enum.UserInputState.Begin
+        end
+
+        local function IsHoverInput(Input)
+            return (Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch)
+                and Input.UserInputState == Enum.UserInputState.Change
+        end
+
+        Library:Connect(DragFrame.InputBegan, function(Input)
+            if not IsClickInput(Input) then return end
+
+            StartPos = Input.Position
+            FrameSize = UI.Size
+            Dragging = true
+
+            Changed = Input.Changed:Connect(function()
+                if Input.UserInputState == Enum.UserInputState.End then
+                    Dragging = false
+                    if Changed then
+                        Changed:Disconnect()
+                        Changed = nil
+                    end
+                end
+            end)
+        end)
+
+        Library:Connect(UserInputService.InputChanged, function(Input)
+            if not UI.Visible then
+                Dragging = false
+                if Changed then
+                    Changed:Disconnect()
+                    Changed = nil
+                end
+                return
+            end
+
+            if Dragging and IsHoverInput(Input) then
+                local Delta = Input.Position - StartPos
+                local NewX = FrameSize.X.Offset + Delta.X
+                local NewY = FrameSize.Y.Offset + Delta.Y
+                
+                -- Enforce MinSize
+                NewX = math.max(NewX, Library.MinSize.X)
+                NewY = math.max(NewY, Library.MinSize.Y)
+
+                UI.Size = UDim2New(
+                    FrameSize.X.Scale,
+                    NewX,
+                    FrameSize.Y.Scale,
+                    NewY
+                )
+            end
+        end)
     end
 
     Library.Lerp = function(self, Start, Finish, Time)
@@ -2879,6 +2944,34 @@ local Library do
                     Name = "\0",
                     CornerRadius = UDimNew(0, 7)
                 })
+
+                --// Resize Button
+                Items["ResizeButton"] = Instances:Create("TextButton", {
+                    Parent = Items["MainFrame"].Instance,
+                    Name = "ResizeButton",
+                    Text = "",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(0, 20, 0, 20),
+                    Position = UDim2New(1, 0, 1, 0),
+                    AnchorPoint = Vector2New(1, 1),
+                    ZIndex = 10,
+                    AutoButtonColor = false
+                })
+
+                local ResizeIcon = Library:GetCustomIcon("move-diagonal-2")
+                Items["ResizeImage"] = Instances:Create("ImageLabel", {
+                    Parent = Items["ResizeButton"].Instance,
+                    Image = ResizeIcon and ResizeIcon.Url or "",
+                    ImageRectOffset = ResizeIcon and ResizeIcon.ImageRectOffset or Vector2New(0, 0),
+                    ImageRectSize = ResizeIcon and ResizeIcon.ImageRectSize or Vector2New(0, 0),
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, 0, 1, 0),
+                    ImageTransparency = 0.5,
+                    ImageColor3 = FromRGB(255, 255, 255)
+                })
+                Items["ResizeImage"]:AddToTheme({ImageColor3 = "Text"})
+
+                Library:MakeResizable(Items["MainFrame"].Instance, Items["ResizeButton"].Instance)
 
                 Instances:Create("UICorner", {
                     Parent = Items["MainFrame"].Instance,
