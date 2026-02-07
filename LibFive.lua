@@ -2967,6 +2967,7 @@ local Library do
                     BackgroundTransparency = 1,
                     Size = UDim2New(1, 0, 1, 0),
                     ImageTransparency = 0.5,
+                    ZIndex = 10,
                     ImageColor3 = FromRGB(255, 255, 255)
                 })
                 Items["ResizeImage"]:AddToTheme({ImageColor3 = "Text"})
