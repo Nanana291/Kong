@@ -11244,7 +11244,7 @@ local Library do
                 Items["ModalFrame"] = Instances:Create("Frame", {
                     Parent = Items["ModalOverlay"].Instance,
                     Name = "\0",
-                    Size = UDim2New(1, -40, 1, -40),
+                    Size = UDim2New(0, 380, 0, 250),
                     Position = UDim2New(0.5, 0, 0.5, 0),
                     AnchorPoint = Vector2New(0.5, 0.5),
                     BackgroundColor3 = FromRGB(20, 20, 23),
@@ -11254,6 +11254,19 @@ local Library do
                 Instances:Create("UICorner", {
                     Parent = Items["ModalFrame"].Instance,
                     CornerRadius = UDimNew(0, 8)
+                })
+                
+                Instances:Create("UIStroke", {
+                    Parent = Items["ModalFrame"].Instance,
+                    Color = FromRGB(45, 45, 48),
+                    Transparency = 0,
+                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+                    Thickness = 1
+                })
+
+                Items["ModalScale"] = Instances:Create("UIScale", {
+                    Parent = Items["ModalFrame"].Instance,
+                    Scale = 0
                 })
 
                 -- Modal Header
@@ -11345,7 +11358,25 @@ local Library do
 
             function Log:SetOpen(Bool)
                 Log.IsOpen = Bool
-                Items["ModalOverlay"].Instance.Visible = Bool
+                
+                if Bool then
+                    Items["ModalOverlay"].Instance.Visible = true
+                    Items["ModalOverlay"]:Tween(TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.5})
+                    
+                    Items["ModalScale"]:Tween(TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1})
+                    Items["ModalFrame"]:Tween(TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0})
+                else
+                    Items["ModalOverlay"]:Tween(TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1})
+                    
+                    Items["ModalScale"]:Tween(TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.In), {Scale = 0})
+                    Items["ModalFrame"]:Tween(TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1})
+                    
+                    task.delay(0.25, function()
+                        if not Log.IsOpen then
+                            Items["ModalOverlay"].Instance.Visible = false
+                        end
+                    end)
+                end
             end
 
             Items["Button"]:Connect("MouseButton1Click", function()
