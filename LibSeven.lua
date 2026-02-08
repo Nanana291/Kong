@@ -11231,7 +11231,7 @@ local Library do
 
                 -- Modal Overlay (Full Screen Blocker)
                 Items["ModalOverlay"] = Instances:Create("Frame", {
-                    Parent = Library.Holder.Instance,
+                    Parent = Log.Window.Items["MainFrame"].Instance,
                     Name = "\0",
                     Size = UDim2New(1, 0, 1, 0),
                     BackgroundColor3 = FromRGB(0, 0, 0),
@@ -11244,7 +11244,7 @@ local Library do
                 Items["ModalFrame"] = Instances:Create("Frame", {
                     Parent = Items["ModalOverlay"].Instance,
                     Name = "\0",
-                    Size = UDim2New(0, 450, 0, 600),
+                    Size = UDim2New(1, -40, 1, -40),
                     Position = UDim2New(0.5, 0, 0.5, 0),
                     AnchorPoint = Vector2New(0.5, 0.5),
                     BackgroundColor3 = FromRGB(20, 20, 23),
