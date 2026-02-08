@@ -7161,6 +7161,7 @@ local Library do
                 OptionHolderSize = Data.OptionHolderSize or Data.optionholder or 125,
                 MaxOptionWidth = 0,
                 IsMulti = Data.IsMulti or Data.ismulti or false,
+                DefaultAmount = Data.DefaultAmount or Data.defaultamount or 1,
 
                 Value = { },
                 Options = { },
@@ -7486,14 +7487,26 @@ local Library do
                         end
                      end
 
-                     for Name, Amount in pairs(Option) do
-                         local Opt = Dropdown.Options[Name]
-                         if Opt then
-                             Opt.Selected = true
-                             Opt.Amount = Amount
-                             Opt.AmountBox.Instance.Text = tostring(Amount)
-                             Opt:Toggle("Active")
-                             if not Dropdown.IsMulti then break end
+                     local IsArray = #Option > 0
+                     if IsArray then
+                         for _, Name in ipairs(Option) do
+                             local Opt = Dropdown.Options[Name]
+                             if Opt then
+                                 Opt.Selected = true
+                                 Opt:Toggle("Active")
+                                 if not Dropdown.IsMulti then break end
+                             end
+                         end
+                     else
+                         for Name, Amount in pairs(Option) do
+                             local Opt = Dropdown.Options[Name]
+                             if Opt then
+                                 Opt.Selected = true
+                                 Opt.Amount = Amount
+                                 Opt.AmountBox.Instance.Text = tostring(Amount)
+                                 Opt:Toggle("Active")
+                                 if not Dropdown.IsMulti then break end
+                             end
                          end
                      end
                 elseif type(Option) == "string" then
@@ -7528,6 +7541,10 @@ local Library do
                          end
                      end
                 end
+            end
+
+            function Dropdown:SetOptions(Option)
+                Dropdown:Set(Option)
             end
 
             function Dropdown:Add(Option)
@@ -7600,7 +7617,7 @@ local Library do
                     Parent = OptionButton.Instance,
                     Name = "\0",
                     FontFace = Library.Font,
-                    Text = "1",
+                    Text = tostring(Dropdown.DefaultAmount),
                     PlaceholderText = "#",
                     TextColor3 = FromRGB(255, 255, 255),
                     PlaceholderColor3 = FromRGB(180, 180, 180),
@@ -7637,7 +7654,7 @@ local Library do
                     OptionAccent = OptionAccent,
                     AmountBox = AmountBox,
                     Selected = false,
-                    Amount = 1
+                    Amount = Dropdown.DefaultAmount
                 }
 
                 function OptionData:Toggle(Value)
