@@ -230,6 +230,8 @@ local Library do
         MinSize = Vector2New(480, 360)
     }
 
+    local Tween, Instances
+
     Library.GetIcon = function(self, IconName)
         if not FetchIcons then
             return
@@ -851,7 +853,7 @@ local Library do
     end
 
     -- Tweening
-    local Tween = { } do
+    Tween = { } do
         Tween.__index = Tween
 
         Tween.Create = function(self, Item, Info, Goal, IsRawItem)
@@ -957,7 +959,7 @@ local Library do
     end
 
     -- Instances
-    local Instances = { } do
+    Instances = { } do
         Instances.__index = Instances
 
         Instances.Create = function(self, Class, Properties)
