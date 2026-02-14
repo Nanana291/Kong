@@ -927,7 +927,86 @@ local Library do
         PaddingBottom = UDimNew(0, 12),
         PaddingRight = UDimNew(0, 12),
         PaddingLeft = UDimNew(0, 12)
-    })    
+    })
+
+    -- Tooltip UI
+    local TooltipLabel = Instances:Create("TextLabel", {
+        BackgroundColor3 = FromRGB(12, 12, 14),
+        BorderSizePixel = 0,
+        TextSize = 14,
+        TextWrapped = true,
+        Visible = false,
+        ZIndex = 200,
+        Parent = Library.Holder.Instance,
+        FontFace = Library.Font,
+        TextColor3 = FromRGB(235, 235, 235),
+        AutomaticSize = Enum.AutomaticSize.XY
+    })
+    TooltipLabel:AddToTheme({BackgroundColor3 = "Background", TextColor3 = "Text"})
+
+    Instances:Create("UICorner", {
+        CornerRadius = UDimNew(0, 6),
+        Parent = TooltipLabel.Instance,
+    })
+
+    Instances:Create("UIStroke", {
+        Color = FromRGB(25, 25, 28),
+        Thickness = 1,
+        Parent = TooltipLabel.Instance,
+    }):AddToTheme({Color = "Outline"})
+
+    Instances:Create("UIPadding", {
+        PaddingBottom = UDimNew(0, 4),
+        PaddingLeft = UDimNew(0, 8),
+        PaddingRight = UDimNew(0, 8),
+        PaddingTop = UDimNew(0, 4),
+        Parent = TooltipLabel.Instance,
+    })
+
+    local CurrentHoverInstance
+    function Library:AddTooltip(InfoStr, HoverInstance)
+        if typeof(InfoStr) ~= "string" or InfoStr == "" then return end
+
+        local function DoHover()
+            if CurrentHoverInstance == HoverInstance then
+                return
+            end
+
+            CurrentHoverInstance = HoverInstance
+            TooltipLabel.Instance.Text = InfoStr
+            TooltipLabel.Instance.Visible = true
+
+            Library:Thread(function()
+                while CurrentHoverInstance == HoverInstance and TooltipLabel.Instance.Visible do
+                    local MousePos = UserInputService:GetMouseLocation()
+                    local ScreenSize = Camera.ViewportSize
+                    local TooltipSize = TooltipLabel.Instance.AbsoluteSize
+
+                    local PosX = MousePos.X + 15
+                    local PosY = MousePos.Y + 15
+
+                    if PosX + TooltipSize.X > ScreenSize.X - 10 then
+                        PosX = MousePos.X - TooltipSize.X - 15
+                    end
+
+                    if PosY + TooltipSize.Y > ScreenSize.Y - 10 then
+                        PosY = MousePos.Y - TooltipSize.Y - 15
+                    end
+
+                    TooltipLabel.Instance.Position = UDim2FromOffset(PosX, PosY)
+                    RunService.RenderStepped:Wait()
+                end
+            end)
+        end
+
+        Library:Connect(HoverInstance.MouseEnter, DoHover)
+        Library:Connect(HoverInstance.MouseLeave, function()
+            if CurrentHoverInstance == HoverInstance then
+                TooltipLabel.Instance.Visible = false
+                CurrentHoverInstance = nil
+            end
+        end)
+    end
 
     Library.Unload = function(self)
         for Index, Value in self.Connections do 
@@ -6025,6 +6104,10 @@ local Library do
 
             Toggle.Section.Elements[#Toggle.Section.Elements+1] = Toggle
 
+            if Data.ToolTip or Data.tooltip then
+                Library:AddTooltip(Data.ToolTip or Data.tooltip, Items["Toggle"].Instance)
+            end
+
             return Toggle 
         end
 
@@ -6173,6 +6256,10 @@ local Library do
             Items["Button"]:Connect("MouseButton1Click", function()
                 Button:Press()
             end)
+
+            if Data.ToolTip or Data.tooltip then
+                Library:AddTooltip(Data.ToolTip or Data.tooltip, Items["Button"].Instance)
+            end
 
             return Button
         end
@@ -6455,6 +6542,11 @@ local Library do
             end
 
             Slider.Section.Elements[#Slider.Section.Elements+1] = Slider
+
+            if Data.ToolTip or Data.tooltip then
+                Library:AddTooltip(Data.ToolTip or Data.tooltip, Items["Slider"].Instance)
+            end
+
             return Slider 
         end
 
@@ -7141,6 +7233,11 @@ local Library do
             end
 
             Dropdown.Section.Elements[#Dropdown.Section.Elements+1] = Dropdown
+
+            if Data.ToolTip or Data.tooltip then
+                Library:AddTooltip(Data.ToolTip or Data.tooltip, Items["Dropdown"].Instance)
+            end
+
             return Dropdown
         end
 
@@ -7798,6 +7895,11 @@ local Library do
             end
 
             Dropdown.Section.Elements[#Dropdown.Section.Elements+1] = Dropdown
+
+            if Data.ToolTip or Data.tooltip then
+                Library:AddTooltip(Data.ToolTip or Data.tooltip, Items["Dropdown"].Instance)
+            end
+
             return Dropdown
         end
 
@@ -8380,6 +8482,11 @@ local Library do
             end
 
             Dropdown.Section.Elements[#Dropdown.Section.Elements+1] = Dropdown
+
+            if Data.ToolTip or Data.tooltip then
+                Library:AddTooltip(Data.ToolTip or Data.tooltip, Items["Dropdown"].Instance)
+            end
+
             return Dropdown
         end
 
@@ -8616,13 +8723,14 @@ local Library do
         Library.Sections.AddLeftTabbox = Library.Sections.Tabbox
         Library.Sections.AddRightTabbox = Library.Sections.Tabbox
 
-        Library.Sections.Label = function(self, Name)
+        Library.Sections.Label = function(self, Data)
+            Data = type(Data) == "table" and Data or {Name = Data}
             local Label = {
                 Window = self.Window,
                 Page = self.Page,
                 Section = self,
 
-                Name = Name or "Label"
+                Name = Data.Name or Data.name or "Label"
             }
 
             local Items = { } do 
@@ -8754,6 +8862,11 @@ local Library do
             end
 
             Label.Section.Elements[#Label.Section.Elements+1] = Label
+
+            if Data.ToolTip or Data.tooltip then
+                Library:AddTooltip(Data.ToolTip or Data.tooltip, Items["Label"].Instance)
+            end
+
             return Label
         end
 
@@ -8922,6 +9035,11 @@ local Library do
             end
 
             Paragraph.Section.Elements[#Paragraph.Section.Elements+1] = Paragraph
+
+            if Data.ToolTip or Data.tooltip then
+                Library:AddTooltip(Data.ToolTip or Data.tooltip, Items["Paragraph"].Instance)
+            end
+
             return Paragraph
         end
 
@@ -9434,6 +9552,11 @@ local Library do
             end
 
             Keybind.Section.Elements[#Keybind.Section.Elements+1] = Keybind
+
+            if Data.ToolTip or Data.tooltip then
+                Library:AddTooltip(Data.ToolTip or Data.tooltip, Items["Label"].Instance)
+            end
+
             return Keybind 
         end
 
@@ -9830,6 +9953,11 @@ local Library do
             end
 
             Textbox.Section.Elements[#Textbox.Section.Elements+1] = Textbox
+
+            if Data.ToolTip or Data.tooltip then
+                Library:AddTooltip(Data.ToolTip or Data.tooltip, Items["Textbox"].Instance)
+            end
+
             return Textbox
         end
 
@@ -10309,6 +10437,11 @@ local Library do
             end
 
             Listbox.Section.Elements[#Listbox.Section.Elements+1] = Listbox
+
+            if Data.ToolTip or Data.tooltip then
+                Library:AddTooltip(Data.ToolTip or Data.tooltip, Items["Header"].Instance)
+            end
+
             return Listbox
         end
 
@@ -10715,6 +10848,11 @@ local Library do
             end
 
             InputList.Section.Elements[#InputList.Section.Elements+1] = InputList
+
+            if Data.ToolTip or Data.tooltip then
+                Library:AddTooltip(Data.ToolTip or Data.tooltip, Items["InputList"].Instance)
+            end
+
             return InputList
         end
     end
@@ -11009,6 +11147,11 @@ local Library do
             end
 
             Discord.Section.Elements[#Discord.Section.Elements+1] = Discord
+
+            if Data.ToolTip or Data.tooltip then
+                Library:AddTooltip(Data.ToolTip or Data.tooltip, Items["Discord"].Instance)
+            end
+
             return Discord
         end
 
@@ -11142,6 +11285,11 @@ local Library do
             end
 
             Divider.Section.Elements[#Divider.Section.Elements+1] = Divider
+
+            if Data.ToolTip or Data.tooltip then
+                Library:AddTooltip(Data.ToolTip or Data.tooltip, Items["Divider"].Instance)
+            end
+
             return Divider
         end
 
@@ -11543,6 +11691,11 @@ local Library do
             end
 
             Log.Section.Elements[#Log.Section.Elements+1] = Log
+
+            if Data.ToolTip or Data.tooltip then
+                Library:AddTooltip(Data.ToolTip or Data.tooltip, Items["Button"].Instance)
+            end
+
             return Log
         end
 
