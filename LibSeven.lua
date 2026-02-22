@@ -4938,6 +4938,7 @@ local Library do
                     PaddingBottom = UDimNew(0, 1)
                 })
                 
+                -- Main Horizontal Container
                 Items["TopBackground"] = Instances:Create("Frame", {
                     Parent = Items["Top"].Instance,
                     Name = "\0",
@@ -4950,20 +4951,39 @@ local Library do
                     BorderSizePixel = 0,
                     BackgroundColor3 = FromRGB(26, 26, 30)
                 })  Items["TopBackground"]:AddToTheme({BackgroundColor3 = "Section Top"})
+
+                Instances:Create("UIListLayout", {
+                    Parent = Items["TopBackground"].Instance,
+                    FillDirection = Enum.FillDirection.Horizontal,
+                    VerticalAlignment = Enum.VerticalAlignment.Center,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Padding = UDimNew(0, 0)
+                })
+
+                -- 1. Icon Container
+                Items["IconContainer"] = Instances:Create("Frame", {
+                    Parent = Items["TopBackground"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(0, 50, 0, 30),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    LayoutOrder = 1,
+                    ZIndex = 2
+                })
                 
                 local SectionIcon = Library:GetCustomIcon(Section.Icon)
                 Items["Icon"] = Instances:Create("ImageLabel", {
-                    Parent = Items["TopBackground"].Instance,
+                    Parent = Items["IconContainer"].Instance,
                     Name = "\0",
                     ImageColor3 = FromRGB(255, 255, 255),
                     BorderColor3 = FromRGB(0, 0, 0),
                     Size = UDim2New(0, 21, 0, 20),
-                    AnchorPoint = Vector2New(0, 0),
+                    AnchorPoint = Vector2New(0.5, 0.5),
+                    Position = UDim2New(0.5, 0, 0.5, 0),
                     Image = SectionIcon and SectionIcon.Url or "",
                     ImageRectOffset = SectionIcon and SectionIcon.ImageRectOffset or Vector2New(0, 0),
                     ImageRectSize = SectionIcon and SectionIcon.ImageRectSize or Vector2New(0, 0),
                     BackgroundTransparency = 1,
-                    Position = UDim2New(0, 15, 0, 10),
                     ZIndex = 2,
                     BorderSizePixel = 0,
                     BackgroundColor3 = FromRGB(255, 255, 255)
@@ -4977,13 +4997,14 @@ local Library do
                     return RGBSequence{RGBSequenceKeypoint(0, Library.Theme.Accent), RGBSequenceKeypoint(1, Library.Theme.AccentGradient)}
                 end})
                 
+                -- 2. Left Container (Title + Description)
                 Items["TextContainer"] = Instances:Create("Frame", {
                     Parent = Items["TopBackground"].Instance,
                     Name = "\0",
                     BackgroundTransparency = 1,
-                    Position = UDim2New(0, 50, 0, 10),
-                    Size = UDim2New(1, -60, 0, 0),
+                    Size = UDim2New(1, -95, 0, 0),
                     AutomaticSize = Enum.AutomaticSize.Y,
+                    LayoutOrder = 2,
                     ZIndex = 2
                 })
 
@@ -4995,7 +5016,8 @@ local Library do
 
                 Instances:Create("UIPadding", {
                     Parent = Items["TextContainer"].Instance,
-                    PaddingBottom = UDimNew(0, 10)
+                    PaddingBottom = UDimNew(0, 10),
+                    PaddingTop = UDimNew(0, 10)
                 })
 
                 Items["Title"] = Instances:Create("TextLabel", {
@@ -5045,16 +5067,27 @@ local Library do
                     CornerRadius = UDimNew(0, 4)
                 })
                 
+                -- 3. Toggle Container
+                Items["ToggleContainer"] = Instances:Create("Frame", {
+                    Parent = Items["TopBackground"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(0, 45, 0, 30),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    LayoutOrder = 3,
+                    ZIndex = 2
+                })
+
                 Items["Toggle"] = Instances:Create("TextButton", {
-                    Parent = Items["Top"].Instance,
+                    Parent = Items["ToggleContainer"].Instance,
                     Name = "\0",
                     Active = false,
                     BorderColor3 = FromRGB(0, 0, 0),
                     Text = "",
                     AutoButtonColor = false,
-                    AnchorPoint = Vector2New(1, 0.5),
+                    AnchorPoint = Vector2New(0.5, 0.5),
                     Selectable = false,
-                    Position = UDim2New(1, -15, 0.5, 0),
+                    Position = UDim2New(0.5, 0, 0.5, 0),
                     Size = UDim2New(0, 26, 0, 16),
                     ZIndex = 2,
                     BorderSizePixel = 0,
