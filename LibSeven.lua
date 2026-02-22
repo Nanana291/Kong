@@ -4890,7 +4890,7 @@ local Library do
                 Page = self,
 
                 Name = Data.Name or Data.name or "Section",
-                Description = Data.Description or Data.Description or "",
+                Description = Data.Description or Data.desc or "",
                 Icon = Data.Icon or Data.icon or "123944728972740",
                 Side = Data.Side or Data.side or 1,
 
@@ -4907,22 +4907,36 @@ local Library do
                     BackgroundTransparency = 0.6499999761581421,
                     ClipsDescendants = true,
                     BorderSizePixel = 0,
-                    Size = UDim2New(1, 0, 0, 45),
+                    Size = UDim2New(1, 0, 0, 0),
                     ZIndex = 2,
                     AutomaticSize = Enum.AutomaticSize.Y,
                     BackgroundColor3 = FromRGB(29, 28, 32)
                 })  Items["Section"]:AddToTheme({BackgroundColor3 = "Section Background 2"})
+
+                Instances:Create("UIListLayout", {
+                    Parent = Items["Section"].Instance,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Padding = UDimNew(0, 0),
+                    HorizontalAlignment = Enum.HorizontalAlignment.Center
+                })
                 
                 Items["Top"] = Instances:Create("Frame", {
                     Parent = Items["Section"].Instance,
                     Name = "\0",
                     BackgroundTransparency = 0.6499999761581421,
-                    Size = UDim2New(1, 0, 0, 55),
+                    Size = UDim2New(1, 0, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
                     BorderColor3 = FromRGB(0, 0, 0),
                     ZIndex = 2,
                     BorderSizePixel = 0,
-                    BackgroundColor3 = FromRGB(31, 31, 36)
+                    BackgroundColor3 = FromRGB(31, 31, 36),
+                    LayoutOrder = 1
                 })  Items["Top"]:AddToTheme({BackgroundColor3 = "Outline"})
+
+                Instances:Create("UIPadding", {
+                    Parent = Items["Top"].Instance,
+                    PaddingBottom = UDimNew(0, 1)
+                })
                 
                 Items["TopBackground"] = Instances:Create("Frame", {
                     Parent = Items["Top"].Instance,
@@ -4930,7 +4944,8 @@ local Library do
                     BorderColor3 = FromRGB(0, 0, 0),
                     BackgroundTransparency = 0.6499999761581421,
                     Position = UDim2New(0, 1, 0, 1),
-                    Size = UDim2New(1, -2, 1, -2),
+                    Size = UDim2New(1, -2, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
                     ZIndex = 2,
                     BorderSizePixel = 0,
                     BackgroundColor3 = FromRGB(26, 26, 30)
@@ -4943,12 +4958,12 @@ local Library do
                     ImageColor3 = FromRGB(255, 255, 255),
                     BorderColor3 = FromRGB(0, 0, 0),
                     Size = UDim2New(0, 21, 0, 20),
-                    AnchorPoint = Vector2New(0, 0.5),
+                    AnchorPoint = Vector2New(0, 0),
                     Image = SectionIcon and SectionIcon.Url or "",
                     ImageRectOffset = SectionIcon and SectionIcon.ImageRectOffset or Vector2New(0, 0),
                     ImageRectSize = SectionIcon and SectionIcon.ImageRectSize or Vector2New(0, 0),
                     BackgroundTransparency = 1,
-                    Position = UDim2New(0, 15, 0.5, 0),
+                    Position = UDim2New(0, 15, 0, 10),
                     ZIndex = 2,
                     BorderSizePixel = 0,
                     BackgroundColor3 = FromRGB(255, 255, 255)
@@ -4962,46 +4977,73 @@ local Library do
                     return RGBSequence{RGBSequenceKeypoint(0, Library.Theme.Accent), RGBSequenceKeypoint(1, Library.Theme.AccentGradient)}
                 end})
                 
-                Items["Description"] = Instances:Create("TextLabel", {
+                Items["TextContainer"] = Instances:Create("Frame", {
                     Parent = Items["TopBackground"].Instance,
                     Name = "\0",
-                    FontFace = Library.Font,
-                    TextColor3 = FromRGB(183, 183, 183),
-                    BorderColor3 = FromRGB(0, 0, 0),
-                    Text = Section.Description,
-                    AutomaticSize = Enum.AutomaticSize.X,
-                    Size = UDim2New(0, 0, 0, 15),
                     BackgroundTransparency = 1,
-                    Position = UDim2New(0, 50, 0, 28),
-                    BorderSizePixel = 0,
-                    TextTransparency = 0.4,
-                    ZIndex = 2,
-                    TextSize = 15,
-                    BackgroundColor3 = FromRGB(255, 255, 255)
-                })  Items["Description"]:AddToTheme({TextColor3 = "Text"})
-                
-                Instances:Create("UICorner", {
-                    Parent = Items["TopBackground"].Instance,
-                    Name = "\0",
-                    CornerRadius = UDimNew(0, 4)
+                    Position = UDim2New(0, 50, 0, 10),
+                    Size = UDim2New(1, -60, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    ZIndex = 2
                 })
-                
+
+                Instances:Create("UIListLayout", {
+                    Parent = Items["TextContainer"].Instance,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Padding = UDimNew(0, 3)
+                })
+
+                Instances:Create("UIPadding", {
+                    Parent = Items["TextContainer"].Instance,
+                    PaddingBottom = UDimNew(0, 10)
+                })
+
                 Items["Title"] = Instances:Create("TextLabel", {
-                    Parent = Items["TopBackground"].Instance,
+                    Parent = Items["TextContainer"].Instance,
                     Name = "\0",
                     FontFace = Library.Font,
                     TextColor3 = FromRGB(248, 248, 248),
                     BorderColor3 = FromRGB(0, 0, 0),
                     Text = Section.Name,
-                    AutomaticSize = Enum.AutomaticSize.X,
-                    Size = UDim2New(0, 0, 0, 15),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    Size = UDim2New(1, 0, 0, 15),
                     BackgroundTransparency = 1,
-                    Position = UDim2New(0, 50, 0, 10),
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    TextWrapped = true,
                     BorderSizePixel = 0,
                     ZIndex = 2,
                     TextSize = 15,
-                    BackgroundColor3 = FromRGB(255, 255, 255)
+                    BackgroundColor3 = FromRGB(255, 255, 255),
+                    LayoutOrder = 1
                 })  Items["Title"]:AddToTheme({TextColor3 = "Text"})
+
+                if Section.Description and Section.Description ~= "" then
+                    Items["Description"] = Instances:Create("TextLabel", {
+                        Parent = Items["TextContainer"].Instance,
+                        Name = "\0",
+                        FontFace = Library.Font,
+                        TextColor3 = FromRGB(183, 183, 183),
+                        BorderColor3 = FromRGB(0, 0, 0),
+                        Text = Section.Description,
+                        AutomaticSize = Enum.AutomaticSize.Y,
+                        Size = UDim2New(1, 0, 0, 0),
+                        BackgroundTransparency = 1,
+                        TextXAlignment = Enum.TextXAlignment.Left,
+                        TextWrapped = true,
+                        BorderSizePixel = 0,
+                        TextTransparency = 0.4,
+                        ZIndex = 2,
+                        TextSize = 13,
+                        BackgroundColor3 = FromRGB(255, 255, 255),
+                        LayoutOrder = 2
+                    })  Items["Description"]:AddToTheme({TextColor3 = "Text"})
+                end
+
+                Instances:Create("UICorner", {
+                    Parent = Items["TopBackground"].Instance,
+                    Name = "\0",
+                    CornerRadius = UDimNew(0, 4)
+                })
                 
                 Items["Toggle"] = Instances:Create("TextButton", {
                     Parent = Items["Top"].Instance,
@@ -5177,8 +5219,9 @@ local Library do
                     Name = "\0",
                     BorderColor3 = FromRGB(0, 0, 0),
                     BackgroundTransparency = 0.6499999761581421,
-                    Position = UDim2New(0, 1, 0, 55),
-                    Size = UDim2New(1, -2, 1, -56),
+                    Size = UDim2New(1, -2, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    LayoutOrder = 2,
                     ZIndex = 2,
                     BorderSizePixel = 0,
                     BackgroundColor3 = FromRGB(24, 22, 25)
