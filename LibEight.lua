@@ -6368,7 +6368,7 @@ local Library do
                     Parent = Slider.Section.Items["Content"].Instance,
                     Name = "\0",
                     BackgroundTransparency = 1,
-                    Size = UDim2New(1, 0, 0, 35),
+                    Size = UDim2New(1, 0, 0, 50),
                     BorderColor3 = FromRGB(0, 0, 0),
                     ZIndex = 2,
                     BorderSizePixel = 0,
@@ -6402,7 +6402,7 @@ local Library do
                     AutoButtonColor = false,
                     AnchorPoint = Vector2New(0, 1),
                     BorderSizePixel = 0,
-                    Position = UDim2New(0, 20, 1, -3),
+                    Position = UDim2New(0, 20, 1, -15),
                     Size = UDim2New(1, -40, 0, 7),
                     ZIndex = 2,
                     TextSize = 14,
@@ -6490,6 +6490,15 @@ local Library do
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })  Items["Minus"]:AddToTheme({TextColor3 = "Text"})
 
+                Items["Ticks"] = Instances:Create("Frame", {
+                    Parent = Items["RealSlider"].Instance,
+                    Name = "Ticks",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, 0, 1, 0),
+                    Position = UDim2New(0, 0, 0, 0),
+                    ZIndex = 1
+                })
+
                 Items["Value"] = Instances:Create("TextLabel", {
                     Parent = Items["Slider"].Instance,
                     Name = "\0",
@@ -6518,10 +6527,59 @@ local Library do
                 end)
             end
 
+            function Slider:UpdateTicks()
+                -- clear old ticks
+                for _, child in ipairs(Items["Ticks"].Instance:GetChildren()) do
+                    child:Destroy()
+                end
+
+                local TickCount = 5
+
+                for i = 1, TickCount do
+                    local alpha = (i - 1) / (TickCount - 1)
+                    local val = Library:Round(Slider.Min + (Slider.Max - Slider.Min) * alpha, Slider.Decimals)
+
+                    local TickHolder = Instances:Create("Frame", {
+                        Parent = Items["Ticks"].Instance,
+                        Name = "Tick_" .. i,
+                        BackgroundTransparency = 1,
+                        Position = UDim2New(alpha, 0, 1, 0),
+                        Size = UDim2New(0, 2, 0, 3),
+                        AnchorPoint = Vector2New(0.5, 0),
+                        ZIndex = 1
+                    })
+
+                    Instances:Create("Frame", {
+                        Parent = TickHolder.Instance,
+                        Name = "TickLine",
+                        BackgroundColor3 = FromRGB(80, 80, 80), -- similar to track color
+                        BorderSizePixel = 0,
+                        Position = UDim2New(0.5, 0, 0, 0),
+                        AnchorPoint = Vector2New(0.5, 0),
+                        Size = UDim2New(0, 1, 0, 4), -- Tick separator bar
+                        ZIndex = 1
+                    })
+
+                    Instances:Create("TextLabel", {
+                        Parent = TickHolder.Instance,
+                        Name = "TickValue",
+                        FontFace = Library.Font,
+                        TextColor3 = FromRGB(150, 150, 150), -- slightly dim
+                        Text = tostring(val) .. (Slider.Suffix or ""),
+                        BackgroundTransparency = 1,
+                        Position = UDim2New(0.5, 0, 0, 6),
+                        AnchorPoint = Vector2New(0.5, 0),
+                        AutomaticSize = Enum.AutomaticSize.XY,
+                        TextSize = 10,
+                        ZIndex = 1
+                    })
+                end
+            end
+
             --Slider.Section.Items["Fade"].Instance.Size = UDim2New(1, 0, 0, Slider.Section.Items["Content"].Instance.AbsoluteSize.X - 180)
 
             --Items["Value"].Instance.TextTransparency = 1
-            Items["RealSlider"].Instance.Position = UDim2New(0, 30, 1, -3)
+            Items["RealSlider"].Instance.Position = UDim2New(0, 30, 1, -15)
             Items["Text"].Instance.Position = UDim2New(0, 30, 0, 0)
 
             function Slider:Get()
@@ -6534,11 +6592,11 @@ local Library do
 
             function Slider:RefreshPosition(Bool)
                 if Bool then 
-                    Items["RealSlider"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 1, -3)})
+                    Items["RealSlider"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 1, -15)})
                     Items["Text"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 0)})
                    -- Items["Value"].Instance.TextTransparency = 0.3
                 else
-                    Items["RealSlider"].Instance.Position = UDim2New(0, 30, 1, -3)
+                    Items["RealSlider"].Instance.Position = UDim2New(0, 30, 1, -15)
                     Items["Text"].Instance.Position = UDim2New(0, 30, 0, 0)
                    -- Items["Value"].Instance.TextTransparency = 1
                 end
@@ -6610,6 +6668,8 @@ local Library do
             if Slider.Default then
                 Slider:Set(Slider.Default)
             end
+
+            Slider:UpdateTicks()
 
             Library.SetFlags[Slider.Flag] = function(Value)
                 Slider:Set(Value)
