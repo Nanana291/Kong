@@ -11218,6 +11218,235 @@ local Library do
             return AvatarPreview
         end
 
+        Library.Sections.ProgressBar = function(self, Data)
+            Data = type(Data) == "table" and Data or {}
+
+            local ProgressBar = {
+                Window = self.Window,
+                Page = self.Page,
+                Section = self,
+
+                Title = Data.Title or Data.title or "Progress",
+                Value = Data.Value or Data.value or 0,
+                Max = Data.Max or Data.max or 100,
+                ShowText = Data.ShowText ~= nil and Data.ShowText or Data.showText ~= nil and Data.showText or true,
+                Height = Data.Height or Data.height or 8,
+                Color = Data.Color or Data.color or Library.Theme.Accent,
+                BackgroundColor = Data.BackgroundColor or Data.backgroundColor or FromRGB(27, 26, 29),
+                Rounded = Data.Rounded ~= nil and Data.Rounded or Data.rounded ~= nil and Data.rounded or true,
+
+                CustomText = nil
+            }
+
+            ProgressBar.Value = math.clamp(ProgressBar.Value, 0, ProgressBar.Max)
+
+            local Items = {} do
+                Items["Container"] = Instances:Create("Frame", {
+                    Parent = ProgressBar.Section.Items["Content"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, 0, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    ZIndex = 2,
+                    BorderSizePixel = 0,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })
+
+                -- Layout for the container
+                Instances:Create("UIListLayout", {
+                    Parent = Items["Container"].Instance,
+                    FillDirection = Enum.FillDirection.Vertical,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Padding = UDimNew(0, 8)
+                })
+
+                Instances:Create("UIPadding", {
+                    Parent = Items["Container"].Instance,
+                    PaddingTop = UDimNew(0, 5),
+                    PaddingBottom = UDimNew(0, 5),
+                    PaddingLeft = UDimNew(0, 5),
+                    PaddingRight = UDimNew(0, 5)
+                })
+
+                -- Top Frame for Title and Text
+                Items["TopFrame"] = Instances:Create("Frame", {
+                    Parent = Items["Container"].Instance,
+                    Name = "\0",
+                    Size = UDim2New(1, 0, 0, 15),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    ZIndex = 2
+                })
+
+                -- Title
+                Items["Title"] = Instances:Create("TextLabel", {
+                    Parent = Items["TopFrame"].Instance,
+                    Name = "\0",
+                    FontFace = Library.Font,
+                    TextColor3 = FromRGB(240, 240, 240),
+                    TextTransparency = 0.3,
+                    Text = ProgressBar.Title,
+                    AutomaticSize = Enum.AutomaticSize.X,
+                    Size = UDim2New(0, 0, 1, 0),
+                    AnchorPoint = Vector2New(0, 0.5),
+                    Position = UDim2New(0, 0, 0.5, 0),
+                    BackgroundTransparency = 1,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    ZIndex = 2,
+                    TextSize = 14,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })  Items["Title"]:AddToTheme({TextColor3 = "Text"})
+
+                -- Text (Value / Max)
+                Items["Text"] = Instances:Create("TextLabel", {
+                    Parent = Items["TopFrame"].Instance,
+                    Name = "\0",
+                    FontFace = Library.Font,
+                    TextColor3 = FromRGB(180, 180, 180),
+                    TextTransparency = ProgressBar.ShowText and 0 or 1,
+                    Text = tostring(ProgressBar.Value) .. " / " .. tostring(ProgressBar.Max),
+                    AutomaticSize = Enum.AutomaticSize.X,
+                    Size = UDim2New(0, 0, 1, 0),
+                    AnchorPoint = Vector2New(1, 0.5),
+                    Position = UDim2New(1, -2, 0.5, 0),
+                    BackgroundTransparency = 1,
+                    TextXAlignment = Enum.TextXAlignment.Right,
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    ZIndex = 2,
+                    TextSize = 13,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })
+
+                -- Background Bar
+                Items["BackgroundBar"] = Instances:Create("Frame", {
+                    Parent = Items["Container"].Instance,
+                    Name = "\0",
+                    Size = UDim2New(1, 0, 0, ProgressBar.Height),
+                    BackgroundColor3 = ProgressBar.BackgroundColor,
+                    BorderSizePixel = 0,
+                    ZIndex = 2,
+                    ClipsDescendants = true
+                })
+
+                if ProgressBar.BackgroundColor == FromRGB(27, 26, 29) then
+                    Items["BackgroundBar"]:AddToTheme({BackgroundColor3 = "Element"})
+                end
+
+                if ProgressBar.Rounded then
+                    Instances:Create("UICorner", {
+                        Parent = Items["BackgroundBar"].Instance,
+                        CornerRadius = UDimNew(1, 0)
+                    })
+                end
+
+                Instances:Create("UIStroke", {
+                    Parent = Items["BackgroundBar"].Instance,
+                    Color = FromRGB(35, 33, 38),
+                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                }):AddToTheme({Color = "Outline"})
+
+                -- Fill Bar
+                local initialAlpha = (ProgressBar.Max > 0) and (ProgressBar.Value / ProgressBar.Max) or 0
+                Items["FillBar"] = Instances:Create("Frame", {
+                    Parent = Items["BackgroundBar"].Instance,
+                    Name = "\0",
+                    Size = UDim2New(initialAlpha, 0, 1, 0),
+                    BackgroundColor3 = ProgressBar.Color,
+                    BorderSizePixel = 0,
+                    ZIndex = 3
+                })
+
+                if ProgressBar.Color == Library.Theme.Accent then
+                    Instances:Create("UIGradient", {
+                        Parent = Items["FillBar"].Instance,
+                        Rotation = 0,
+                        Color = RGBSequence{RGBSequenceKeypoint(0, FromRGB(255, 255, 255)), RGBSequenceKeypoint(1, FromRGB(166, 166, 166))}
+                    }):AddToTheme({Color = function()
+                        return RGBSequence{RGBSequenceKeypoint(0, Library.Theme.Accent), RGBSequenceKeypoint(1, Library.Theme.AccentGradient)}
+                    end})
+                end
+
+                if ProgressBar.Rounded then
+                    Instances:Create("UICorner", {
+                        Parent = Items["FillBar"].Instance,
+                        CornerRadius = UDimNew(1, 0)
+                    })
+                end
+            end
+
+            -- Control Functions
+
+            function ProgressBar:UpdateVisuals()
+                ProgressBar.Value = math.clamp(ProgressBar.Value, 0, ProgressBar.Max)
+
+                local alpha = (ProgressBar.Max > 0) and (ProgressBar.Value / ProgressBar.Max) or 0
+
+                -- Smooth animate the bar width
+                Items["FillBar"]:Tween(TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2New(alpha, 0, 1, 0)})
+
+                -- Update text
+                if ProgressBar.ShowText then
+                    if ProgressBar.CustomText then
+                        Items["Text"].Instance.Text = tostring(ProgressBar.CustomText)
+                    else
+                        Items["Text"].Instance.Text = tostring(math.floor(ProgressBar.Value)) .. " / " .. tostring(math.floor(ProgressBar.Max))
+                    end
+                end
+            end
+
+            function ProgressBar:SetValue(val)
+                ProgressBar.Value = tonumber(val) or 0
+                ProgressBar:UpdateVisuals()
+            end
+
+            function ProgressBar:SetMax(val)
+                ProgressBar.Max = tonumber(val) or 1
+                ProgressBar:UpdateVisuals()
+            end
+
+            function ProgressBar:SetProgress(current, max)
+                ProgressBar.Value = tonumber(current) or 0
+                ProgressBar.Max = tonumber(max) or 1
+                ProgressBar:UpdateVisuals()
+            end
+
+            function ProgressBar:SetText(text)
+                ProgressBar.CustomText = text
+                ProgressBar:UpdateVisuals()
+            end
+
+            function ProgressBar:Increment(amount)
+                ProgressBar.Value = ProgressBar.Value + (tonumber(amount) or 0)
+                ProgressBar:UpdateVisuals()
+            end
+
+            function ProgressBar:SetVisibility(Bool)
+                Items["Container"].Instance.Visible = Bool
+            end
+
+            function ProgressBar:RefreshPosition(Bool)
+                if Bool then
+                    Items["Container"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 5)})
+                else
+                    Items["Container"].Instance.Position = UDim2New(0, 30, 0, 5)
+                end
+            end
+
+            if ProgressBar.Section.Page and ProgressBar.Section.Page.Active then
+                ProgressBar:RefreshPosition(true)
+            end
+
+            ProgressBar.Section.Elements[#ProgressBar.Section.Elements+1] = ProgressBar
+
+            if Data.ToolTip or Data.tooltip then
+                Library:AddTooltip(Data.ToolTip or Data.tooltip, Items["Container"].Instance)
+            end
+
+            return ProgressBar
+        end
+
         Library.Sections.Discord = function(self, Data)
             Data = Data or {}
 
