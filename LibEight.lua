@@ -10992,6 +10992,232 @@ local Library do
         end
     end
 
+        Library.Sections.AvatarPreview = function(self, Data)
+            Data = type(Data) == "table" and Data or {}
+
+            local AvatarPreview = {
+                Window = self.Window,
+                Page = self.Page,
+                Section = self,
+
+                Title = Data.Title or Data.title or "Avatar Preview",
+                Avatar = Data.Avatar or Data.avatar or { UserId = 1, Size = 80 },
+                RichText = Data.RichText or Data.richText or false,
+                Content = Data.Content or Data.content or {}
+            }
+
+            local Items = {} do
+                Items["AvatarPreview"] = Instances:Create("Frame", {
+                    Parent = AvatarPreview.Section.Items["Content"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, 0, 0, 0), -- Automatically sizes
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    ZIndex = 2,
+                    BorderSizePixel = 0,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })
+
+                -- Title
+                Items["Title"] = Instances:Create("TextLabel", {
+                    Parent = Items["AvatarPreview"].Instance,
+                    Name = "\0",
+                    FontFace = Library.Font,
+                    TextColor3 = FromRGB(240, 240, 240),
+                    TextTransparency = 0.3,
+                    Text = AvatarPreview.Title,
+                    AutomaticSize = Enum.AutomaticSize.X,
+                    Size = UDim2New(0, 0, 0, 15),
+                    AnchorPoint = Vector2New(0, 0),
+                    BorderSizePixel = 0,
+                    BackgroundTransparency = 1,
+                    Position = UDim2New(0, 30, 0, 5),
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    ZIndex = 2,
+                    TextSize = 14,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })  Items["Title"]:AddToTheme({TextColor3 = "Text"})
+
+                -- Card Background
+                Items["Card"] = Instances:Create("Frame", {
+                    Parent = Items["AvatarPreview"].Instance,
+                    Name = "\0",
+                    Size = UDim2New(1, 0, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    Position = UDim2New(0, 30, 0, 25),
+                    BackgroundColor3 = FromRGB(27, 26, 29),
+                    BorderSizePixel = 0,
+                    ZIndex = 2
+                })  Items["Card"]:AddToTheme({BackgroundColor3 = "Element"})
+
+                Instances:Create("UICorner", {
+                    Parent = Items["Card"].Instance,
+                    CornerRadius = UDimNew(0, 6)
+                })
+
+                Instances:Create("UIStroke", {
+                    Parent = Items["Card"].Instance,
+                    Color = FromRGB(35, 33, 38),
+                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                }):AddToTheme({Color = "Outline"})
+
+                -- Layout for Avatar and Content Side-by-Side
+                Items["CardLayout"] = Instances:Create("UIListLayout", {
+                    Parent = Items["Card"].Instance,
+                    FillDirection = Enum.FillDirection.Horizontal,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Padding = UDimNew(0, 10),
+                    VerticalAlignment = Enum.VerticalAlignment.Center
+                })
+
+                Instances:Create("UIPadding", {
+                    Parent = Items["Card"].Instance,
+                    PaddingTop = UDimNew(0, 10),
+                    PaddingBottom = UDimNew(0, 10),
+                    PaddingLeft = UDimNew(0, 10),
+                    PaddingRight = UDimNew(0, 10)
+                })
+
+                -- Avatar Image Container
+                local avatarSize = math.clamp(AvatarPreview.Avatar.Size or 80, 40, 150)
+                Items["AvatarImage"] = Instances:Create("ImageLabel", {
+                    Parent = Items["Card"].Instance,
+                    Name = "\0",
+                    Size = UDim2New(0, avatarSize, 0, avatarSize),
+                    BackgroundColor3 = FromRGB(20, 20, 23),
+                    ZIndex = 3,
+                    BorderSizePixel = 0,
+                    Image = "rbxthumb://type=AvatarHeadShot&id=" .. (AvatarPreview.Avatar.UserId or 1) .. "&w=150&h=150"
+                })
+                Instances:Create("UICorner", {
+                    Parent = Items["AvatarImage"].Instance,
+                    CornerRadius = UDimNew(0, 6)
+                })
+                Instances:Create("UIStroke", {
+                    Parent = Items["AvatarImage"].Instance,
+                    Color = FromRGB(40, 40, 43),
+                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                })
+
+                -- Stats Content Frame
+                Items["ContentFrame"] = Instances:Create("Frame", {
+                    Parent = Items["Card"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, -(avatarSize + 10), 0, 0), -- Takes remaining width
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    BorderSizePixel = 0,
+                    ZIndex = 2
+                })
+
+                Instances:Create("UIListLayout", {
+                    Parent = Items["ContentFrame"].Instance,
+                    FillDirection = Enum.FillDirection.Vertical,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Padding = UDimNew(0, 6)
+                })
+
+                for idx, stat in ipairs(AvatarPreview.Content) do
+                    local statRow = Instances:Create("Frame", {
+                        Parent = Items["ContentFrame"].Instance,
+                        Name = "\0",
+                        Size = UDim2New(1, 0, 0, 20),
+                        BackgroundTransparency = 1,
+                        BorderSizePixel = 0,
+                        ZIndex = 3
+                    })
+
+                    -- Left Side (Icon + Label)
+                    local leftFrame = Instances:Create("Frame", {
+                        Parent = statRow.Instance,
+                        Name = "Left",
+                        Size = UDim2New(0.5, 0, 1, 0),
+                        BackgroundTransparency = 1,
+                        BorderSizePixel = 0,
+                        ZIndex = 3
+                    })
+                    Instances:Create("UIListLayout", {
+                        Parent = leftFrame.Instance,
+                        FillDirection = Enum.FillDirection.Horizontal,
+                        SortOrder = Enum.SortOrder.LayoutOrder,
+                        Padding = UDimNew(0, 6),
+                        VerticalAlignment = Enum.VerticalAlignment.Center
+                    })
+
+                    if stat.Icon then
+                        local iconData = Library:GetCustomIcon(stat.Icon)
+                        Instances:Create("ImageLabel", {
+                            Parent = leftFrame.Instance,
+                            Size = UDim2New(0, 14, 0, 14),
+                            BackgroundTransparency = 1,
+                            ImageColor3 = FromRGB(150, 150, 150),
+                            Image = iconData and iconData.Url or "",
+                            ImageRectOffset = iconData and iconData.ImageRectOffset or Vector2New(0, 0),
+                            ImageRectSize = iconData and iconData.ImageRectSize or Vector2New(0, 0),
+                            ZIndex = 3
+                        })
+                    end
+
+                    Instances:Create("TextLabel", {
+                        Parent = leftFrame.Instance,
+                        Name = "Label",
+                        Text = stat.Label or "Label",
+                        FontFace = Library.Font,
+                        TextColor3 = FromRGB(180, 180, 180),
+                        TextSize = 13,
+                        Size = UDim2New(0, 0, 1, 0),
+                        AutomaticSize = Enum.AutomaticSize.X,
+                        BackgroundTransparency = 1,
+                        TextXAlignment = Enum.TextXAlignment.Left,
+                        ZIndex = 3
+                    })
+
+                    -- Right Side (Value)
+                    Instances:Create("TextLabel", {
+                        Parent = statRow.Instance,
+                        Name = "Value",
+                        Text = stat.Value or "Value",
+                        RichText = AvatarPreview.RichText,
+                        FontFace = Library.Font,
+                        TextColor3 = FromRGB(240, 240, 240),
+                        TextSize = 13,
+                        Size = UDim2New(0.5, 0, 1, 0),
+                        Position = UDim2New(0.5, 0, 0, 0),
+                        BackgroundTransparency = 1,
+                        TextXAlignment = Enum.TextXAlignment.Right,
+                        ZIndex = 3
+                    }):AddToTheme({TextColor3 = "Text"})
+                end
+            end
+
+            function AvatarPreview:SetVisibility(Bool)
+                Items["AvatarPreview"].Instance.Visible = Bool
+            end
+
+            function AvatarPreview:RefreshPosition(Bool)
+                if Bool then
+                    Items["Title"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 5)})
+                    Items["Card"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 25)})
+                else
+                    Items["Title"].Instance.Position = UDim2New(0, 30, 0, 5)
+                    Items["Card"].Instance.Position = UDim2New(0, 30, 0, 25)
+                end
+            end
+
+            if AvatarPreview.Section.Page and AvatarPreview.Section.Page.Active then
+                AvatarPreview:RefreshPosition(true)
+            end
+
+            AvatarPreview.Section.Elements[#AvatarPreview.Section.Elements+1] = AvatarPreview
+
+            if Data.ToolTip or Data.tooltip then
+                Library:AddTooltip(Data.ToolTip or Data.tooltip, Items["AvatarPreview"].Instance)
+            end
+
+            return AvatarPreview
+        end
+
         Library.Sections.Discord = function(self, Data)
             Data = Data or {}
 
