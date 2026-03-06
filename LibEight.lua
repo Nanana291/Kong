@@ -6533,46 +6533,43 @@ local Library do
                     child:Destroy()
                 end
 
-                local TickCount = 5
+                local range = Slider.Max - Slider.Min
+                if range <= 0 then return end
 
-                for i = 1, TickCount do
-                    local alpha = (i - 1) / (TickCount - 1)
-                    local val = Library:Round(Slider.Min + (Slider.Max - Slider.Min) * alpha, Slider.Decimals)
+                local maxTicks = 10
+                local rawStep = range / maxTicks
+                local mag = math.floor(math.log10(rawStep))
+                local magPow = 10^mag
+                local magMsd = rawStep / magPow
 
-                    local TickHolder = Instances:Create("Frame", {
-                        Parent = Items["Ticks"].Instance,
-                        Name = "Tick_" .. i,
-                        BackgroundTransparency = 1,
-                        Position = UDim2New(alpha, 0, 1, 0),
-                        Size = UDim2New(0, 2, 0, 3),
-                        AnchorPoint = Vector2New(0.5, 0),
-                        ZIndex = 1
-                    })
+                local step
+                if magMsd > 5.0 then
+                    step = 10.0 * magPow
+                elseif magMsd > 2.0 then
+                    step = 5.0 * magPow
+                elseif magMsd > 1.0 then
+                    step = 2.0 * magPow
+                else
+                    step = 1.0 * magPow
+                end
 
-                    Instances:Create("Frame", {
-                        Parent = TickHolder.Instance,
-                        Name = "TickLine",
-                        BackgroundColor3 = FromRGB(80, 80, 80), -- similar to track color
-                        BorderSizePixel = 0,
-                        Position = UDim2New(0.5, 0, 0, 0),
-                        AnchorPoint = Vector2New(0.5, 0),
-                        Size = UDim2New(0, 1, 0, 4), -- Tick separator bar
-                        ZIndex = 1
-                    })
+                local firstTick = math.ceil(Slider.Min / step) * step
+                local lastTick = math.floor(Slider.Max / step) * step
 
-                    Instances:Create("TextLabel", {
-                        Parent = TickHolder.Instance,
-                        Name = "TickValue",
-                        FontFace = Library.Font,
-                        TextColor3 = FromRGB(150, 150, 150), -- slightly dim
-                        Text = tostring(val) .. (Slider.Suffix or ""),
-                        BackgroundTransparency = 1,
-                        Position = UDim2New(0.5, 0, 0, 6),
-                        AnchorPoint = Vector2New(0.5, 0),
-                        AutomaticSize = Enum.AutomaticSize.XY,
-                        TextSize = 10,
-                        ZIndex = 1
-                    })
+                for val = firstTick, lastTick, step do
+                    local alpha = (val - Slider.Min) / range
+                    if alpha >= 0 and alpha <= 1 then
+                        Instances:Create("Frame", {
+                            Parent = Items["Ticks"].Instance,
+                            Name = "Tick_" .. val,
+                            BackgroundColor3 = FromRGB(60, 60, 60), -- Textless tick mark color matching the reference
+                            BorderSizePixel = 0,
+                            Position = UDim2New(alpha, 0, 0.5, 0),
+                            AnchorPoint = Vector2New(0.5, 0.5),
+                            Size = UDim2New(0, 2, 0, 5), -- Small vertical tick mark
+                            ZIndex = 3
+                        })
+                    end
                 end
             end
 
