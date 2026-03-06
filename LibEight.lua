@@ -11002,6 +11002,7 @@ local Library do
 
                 Title = Data.Title or Data.title or "Avatar Preview",
                 Avatar = Data.Avatar or Data.avatar or { UserId = 1, Size = 80 },
+                IsThreeD = Data.IsThreeD or Data.isThreeD or false,
                 RichText = Data.RichText or Data.richText or false,
                 Content = Data.Content or Data.content or {}
             }
@@ -11081,15 +11082,70 @@ local Library do
 
                 -- Avatar Image Container
                 local avatarSize = math.clamp(AvatarPreview.Avatar.Size or 80, 40, 150)
-                Items["AvatarImage"] = Instances:Create("ImageLabel", {
-                    Parent = Items["Card"].Instance,
-                    Name = "\0",
-                    Size = UDim2New(0, avatarSize, 0, avatarSize),
-                    BackgroundColor3 = FromRGB(20, 20, 23),
-                    ZIndex = 3,
-                    BorderSizePixel = 0,
-                    Image = "rbxthumb://type=AvatarHeadShot&id=" .. (AvatarPreview.Avatar.UserId or 1) .. "&w=150&h=150"
-                })
+                if AvatarPreview.IsThreeD then
+                    Items["AvatarImage"] = Instances:Create("ViewportFrame", {
+                        Parent = Items["Card"].Instance,
+                        Name = "\0",
+                        Size = UDim2New(0, avatarSize, 0, avatarSize),
+                        BackgroundColor3 = FromRGB(20, 20, 23),
+                        ZIndex = 3,
+                        BorderSizePixel = 0,
+                        BackgroundTransparency = 0,
+                        Ambient = FromRGB(200, 200, 200),
+                        LightColor = FromRGB(255, 255, 255),
+                        LightDirection = Vector3New(-1, -1, -1)
+                    })
+
+                    local ViewportCam = InstanceNew("Camera")
+                    ViewportCam.Parent = Items["AvatarImage"].Instance
+                    Items["AvatarImage"].Instance.CurrentCamera = ViewportCam
+
+                    Library:Thread(function()
+                        local success, model = pcall(function()
+                            return Players:CreateHumanoidModelFromUserId(AvatarPreview.Avatar.UserId or 1)
+                        end)
+
+                        if success and model then
+                            model.Parent = Items["AvatarImage"].Instance
+
+                            local rootPart = model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("Head")
+                            if rootPart then
+                                -- Position camera to look at upper body
+                                local hrpPos = rootPart.Position
+                                local camOffset = Vector3New(0, 1.5, -4) -- front-ish and slightly up
+                                ViewportCam.CFrame = CFrame.new(hrpPos + camOffset, hrpPos)
+
+                                -- Idle rotation
+                                local angle = math.pi -- start facing camera
+                                local connection = Library:Connect(RunService.RenderStepped, function(dt)
+                                    if not Items["AvatarImage"] or not Items["AvatarImage"].Instance.Parent then
+                                        return
+                                    end
+                                    angle = angle + (dt * 0.5)
+                                    model:SetPrimaryPartCFrame(CFrame.new(hrpPos) * CFrame.Angles(0, angle, 0))
+                                end)
+
+                                -- Clean up connection when the library unloads or frame destroyed
+                                Items["AvatarImage"].Instance.Destroying:Connect(function()
+                                    if connection and connection.Connection then
+                                        connection.Connection:Disconnect()
+                                    end
+                                end)
+                            end
+                        end
+                    end)
+                else
+                    Items["AvatarImage"] = Instances:Create("ImageLabel", {
+                        Parent = Items["Card"].Instance,
+                        Name = "\0",
+                        Size = UDim2New(0, avatarSize, 0, avatarSize),
+                        BackgroundColor3 = FromRGB(20, 20, 23),
+                        ZIndex = 3,
+                        BorderSizePixel = 0,
+                        Image = "rbxthumb://type=AvatarHeadShot&id=" .. (AvatarPreview.Avatar.UserId or 1) .. "&w=150&h=150"
+                    })
+                end
+
                 Instances:Create("UICorner", {
                     Parent = Items["AvatarImage"].Instance,
                     CornerRadius = UDimNew(0, 6)
