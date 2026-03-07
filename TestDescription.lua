@@ -1,4 +1,4 @@
-local Library = loadstring(readfile("LibSeven.lua"))()
+local Library = loadstring(readfile("LibEight.lua"))()
 
 local Window = Library:Window({
     Name = "Test Description",
@@ -24,3 +24,15 @@ Section:Toggle({
 })
 
 print("TestDescription.lua executed successfully")
+
+Section:Slider({
+    Name = "Test Slider",
+    Default = 50,
+    Min = 0,
+    Max = 100,
+    Suffix = "%",
+    Decimals = 1,
+    Callback = function(Value)
+        print("Slider value is now " .. tostring(Value))
+    end
+})
