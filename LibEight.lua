@@ -10992,6 +10992,380 @@ local Library do
         end
     end
 
+        Library.Sections.ProgressDropdown = function(self, Data)
+            Data = type(Data) == "table" and Data or {}
+
+            local ProgressDropdown = {
+                Window = self.Window,
+                Page = self.Page,
+                Section = self,
+                Title = Data.Title or Data.title or "Progress Dropdown",
+                Description = Data.Description or Data.description or nil,
+                Options = Data.Options or Data.options or {},
+                Callback = Data.Callback or Data.callback or function() end,
+                IsOpen = false
+            }
+
+            -- Sort Options initially by Order
+            table.sort(ProgressDropdown.Options, function(a, b) return a.Order < b.Order end)
+
+            local Items = {} do
+                Items["ProgressDropdown"] = Instances:Create("Frame", {
+                    Parent = ProgressDropdown.Section.Items["Content"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, 0, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    BorderColor3 = FromRGB(0, 0, 0),
+                    ZIndex = 2,
+                    BorderSizePixel = 0,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })
+
+                -- Title
+                Items["Title"] = Instances:Create("TextLabel", {
+                    Parent = Items["ProgressDropdown"].Instance,
+                    Name = "\0",
+                    FontFace = Library.Font,
+                    TextColor3 = FromRGB(240, 240, 240),
+                    TextTransparency = 0.3,
+                    Text = ProgressDropdown.Title,
+                    AutomaticSize = Enum.AutomaticSize.X,
+                    Size = UDim2New(0, 0, 0, 15),
+                    AnchorPoint = Vector2New(0, 0),
+                    BorderSizePixel = 0,
+                    BackgroundTransparency = 1,
+                    Position = UDim2New(0, 30, 0, 5),
+                    ZIndex = 3,
+                    TextSize = 13,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                }) Items["Title"]:AddToTheme({TextColor3 = "Text"})
+
+                if ProgressDropdown.Description then
+                    -- Description
+                    Items["Description"] = Instances:Create("TextLabel", {
+                        Parent = Items["ProgressDropdown"].Instance,
+                        Name = "\0",
+                        FontFace = Library.Font,
+                        TextColor3 = FromRGB(150, 150, 150),
+                        TextTransparency = 0.5,
+                        Text = ProgressDropdown.Description,
+                        AutomaticSize = Enum.AutomaticSize.X,
+                        Size = UDim2New(0, 0, 0, 15),
+                        AnchorPoint = Vector2New(0, 0),
+                        BorderSizePixel = 0,
+                        BackgroundTransparency = 1,
+                        Position = UDim2New(0, 30, 0, 20),
+                        ZIndex = 3,
+                        TextSize = 11,
+                        TextXAlignment = Enum.TextXAlignment.Left,
+                        BackgroundColor3 = FromRGB(255, 255, 255)
+                    }) Items["Description"]:AddToTheme({TextColor3 = "Text"})
+                end
+
+                -- Card Background for items
+                Items["Card"] = Instances:Create("Frame", {
+                    Parent = Items["ProgressDropdown"].Instance,
+                    Name = "\0",
+                    Size = UDim2New(1, -40, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    Position = UDim2New(0, 30, 0, ProgressDropdown.Description and 40 or 25),
+                    BackgroundColor3 = FromRGB(27, 26, 29),
+                    ZIndex = 2,
+                    BorderSizePixel = 0
+                }) Items["Card"]:AddToTheme({BackgroundColor3 = "Background"})
+
+                Instances:Create("UICorner", {
+                    Parent = Items["Card"].Instance,
+                    CornerRadius = UDimNew(0, 4)
+                })
+
+                Instances:Create("UIStroke", {
+                    Parent = Items["Card"].Instance,
+                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+                    Color = FromRGB(60, 60, 60),
+                    LineJoinMode = Enum.LineJoinMode.Round,
+                    Thickness = 1,
+                    Transparency = 0
+                }) Items["Card"]:AddToTheme({Color = "Outline", UIStroke = true})
+
+                Items["CardLayout"] = Instances:Create("UIListLayout", {
+                    Parent = Items["Card"].Instance,
+                    FillDirection = Enum.FillDirection.Vertical,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Padding = UDimNew(0, 0)
+                })
+
+                Instances:Create("UIPadding", {
+                    Parent = Items["Card"].Instance,
+                    PaddingTop = UDimNew(0, 5),
+                    PaddingBottom = UDimNew(0, 5)
+                })
+
+                -- Container to hold dynamic rows
+                Items["RowsContainer"] = Instances:Create("Frame", {
+                    Parent = Items["Card"].Instance,
+                    Name = "\0",
+                    Size = UDim2New(1, 0, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    BackgroundTransparency = 1,
+                    ZIndex = 3
+                })
+
+                Items["RowsLayout"] = Instances:Create("UIListLayout", {
+                    Parent = Items["RowsContainer"].Instance,
+                    FillDirection = Enum.FillDirection.Vertical,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Padding = UDimNew(0, 0)
+                })
+            end
+
+            function ProgressDropdown:RefreshPosition(Bool)
+                if Bool then
+                    Items["Title"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 5)})
+                    if Items["Description"] then
+                        Items["Description"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 20)})
+                    end
+                    Items["Card"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, ProgressDropdown.Description and 40 or 25)})
+                    Items["Card"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Size = UDim2New(1, 0, 0, 0)})
+                else
+                    Items["Title"].Instance.Position = UDim2New(0, 30, 0, 5)
+                    if Items["Description"] then
+                        Items["Description"].Instance.Position = UDim2New(0, 30, 0, 20)
+                    end
+                    Items["Card"].Instance.Position = UDim2New(0, 30, 0, ProgressDropdown.Description and 40 or 25)
+                    Items["Card"].Instance.Size = UDim2New(1, -40, 0, 0)
+                end
+            end
+
+            -- Update internal UI list
+            function ProgressDropdown:RenderList()
+                -- Clear previous
+                for _, child in ipairs(Items["RowsContainer"].Instance:GetChildren()) do
+                    if not child:IsA("UIListLayout") then
+                        child:Destroy()
+                    end
+                end
+
+                for i, opt in ipairs(ProgressDropdown.Options) do
+                    -- Main Row Frame
+                    local rowFrame = Instances:Create("TextButton", {
+                        Parent = Items["RowsContainer"].Instance,
+                        Name = "Row_" .. i,
+                        Size = UDim2New(1, 0, 0, 24),
+                        BackgroundTransparency = 1,
+                        AutoButtonColor = false,
+                        Text = "",
+                        ZIndex = 3,
+                        LayoutOrder = i * 2 -- Space out layout order for connectors
+                    })
+
+                    -- Order Label (Left)
+                    local orderLabel = Instances:Create("TextLabel", {
+                        Parent = rowFrame.Instance,
+                        Name = "OrderLabel",
+                        Text = "Order " .. opt.Order,
+                        FontFace = Library.Font,
+                        TextColor3 = FromRGB(200, 200, 200),
+                        TextSize = 13,
+                        Size = UDim2New(0, 60, 1, 0),
+                        Position = UDim2New(0, 15, 0, 0),
+                        BackgroundTransparency = 1,
+                        TextXAlignment = Enum.TextXAlignment.Left,
+                        ZIndex = 4
+                    }) orderLabel:AddToTheme({TextColor3 = "Text"})
+
+                    -- Name Label
+                    local nameLabel = Instances:Create("TextLabel", {
+                        Parent = rowFrame.Instance,
+                        Name = "NameLabel",
+                        Text = opt.Name,
+                        FontFace = Library.Font,
+                        TextColor3 = FromRGB(240, 240, 240),
+                        TextSize = 13,
+                        Size = UDim2New(1, -85, 1, 0),
+                        Position = UDim2New(0, 75, 0, 0),
+                        BackgroundTransparency = 1,
+                        TextXAlignment = Enum.TextXAlignment.Left,
+                        ZIndex = 4
+                    }) nameLabel:AddToTheme({TextColor3 = "Text"})
+
+                    -- Add connector visual below if not the last item
+                    if i < #ProgressDropdown.Options then
+                        local connectorFrame = Instances:Create("Frame", {
+                            Parent = Items["RowsContainer"].Instance,
+                            Name = "Connector_" .. i,
+                            Size = UDim2New(1, 0, 0, 14),
+                            BackgroundTransparency = 1,
+                            ZIndex = 3,
+                            LayoutOrder = (i * 2) + 1
+                        })
+
+                        local line = Instances:Create("Frame", {
+                            Parent = connectorFrame.Instance,
+                            Size = UDim2New(0, 2, 1, 0),
+                            Position = UDim2New(0, 30, 0, 0),
+                            BackgroundColor3 = FromRGB(80, 80, 80),
+                            BorderSizePixel = 0,
+                            ZIndex = 4
+                        }) line:AddToTheme({BackgroundColor3 = "Accent"})
+                    end
+
+                    -- Hover effects on row
+                    Library:Connect(rowFrame.Instance.MouseEnter, function()
+                        TweenService:Create(nameLabel.Instance, TweenInfo.new(0.2), {TextColor3 = Library.Theme.Accent}):Play()
+                    end)
+                    Library:Connect(rowFrame.Instance.MouseLeave, function()
+                        TweenService:Create(nameLabel.Instance, TweenInfo.new(0.2), {TextColor3 = Library.Theme.Text}):Play()
+                    end)
+
+                    -- Click to open order selector
+                    Library:Connect(rowFrame.Instance.MouseButton1Click, function()
+                        ProgressDropdown:OpenOrderSelector(i, rowFrame.Instance)
+                    end)
+                end
+            end
+
+            -- Selector logic
+            function ProgressDropdown:OpenOrderSelector(optionIndex, relativeTo)
+                -- If one is already open, destroy it
+                if Items["SelectorFrame"] and Items["SelectorFrame"].Instance.Parent then
+                    Items["SelectorFrame"].Instance:Destroy()
+                    Items["SelectorFrame"] = nil
+                end
+
+                local numOptions = #ProgressDropdown.Options
+                local height = numOptions * 20 + 10
+
+                local selectorFrame = Instances:Create("Frame", {
+                    Parent = Library.Holder.Instance, -- Parent to global holder so it overlays
+                    Name = "\0",
+                    Size = UDim2New(0, 40, 0, height),
+                    Position = UDim2New(0, relativeTo.AbsolutePosition.X + 15, 0, relativeTo.AbsolutePosition.Y + 24),
+                    BackgroundColor3 = FromRGB(27, 26, 29),
+                    ZIndex = 100,
+                    BorderSizePixel = 0
+                }) selectorFrame:AddToTheme({BackgroundColor3 = "Background"})
+                Items["SelectorFrame"] = selectorFrame
+
+                Instances:Create("UICorner", { Parent = selectorFrame.Instance, CornerRadius = UDimNew(0, 4) })
+                Instances:Create("UIStroke", {
+                    Parent = selectorFrame.Instance,
+                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+                    Color = FromRGB(60, 60, 60),
+                    Thickness = 1
+                }) selectorFrame:AddToTheme({Color = "Outline", UIStroke = true})
+
+                local listLayout = Instances:Create("UIListLayout", {
+                    Parent = selectorFrame.Instance,
+                    FillDirection = Enum.FillDirection.Vertical,
+                    SortOrder = Enum.SortOrder.LayoutOrder
+                })
+
+                Instances:Create("UIPadding", {
+                    Parent = selectorFrame.Instance,
+                    PaddingTop = UDimNew(0, 5), PaddingBottom = UDimNew(0, 5)
+                })
+
+                -- Add buttons for each possible order
+                for orderVal = 1, numOptions do
+                    local btn = Instances:Create("TextButton", {
+                        Parent = selectorFrame.Instance,
+                        Size = UDim2New(1, 0, 0, 20),
+                        BackgroundTransparency = 1,
+                        Text = tostring(orderVal),
+                        FontFace = Library.Font,
+                        TextColor3 = FromRGB(240, 240, 240),
+                        TextSize = 13,
+                        ZIndex = 101,
+                        AutoButtonColor = false
+                    }) btn:AddToTheme({TextColor3 = "Text"})
+
+                    Library:Connect(btn.Instance.MouseEnter, function()
+                        TweenService:Create(btn.Instance, TweenInfo.new(0.2), {TextColor3 = Library.Theme.Accent}):Play()
+                    end)
+                    Library:Connect(btn.Instance.MouseLeave, function()
+                        TweenService:Create(btn.Instance, TweenInfo.new(0.2), {TextColor3 = Library.Theme.Text}):Play()
+                    end)
+
+                    Library:Connect(btn.Instance.MouseButton1Click, function()
+                        ProgressDropdown:ChangeOrder(optionIndex, orderVal)
+                        selectorFrame.Instance:Destroy()
+                        Items["SelectorFrame"] = nil
+                    end)
+                end
+
+                -- Close selector when clicking outside
+                local closeConn
+                closeConn = Library:Connect(UserInputService.InputBegan, function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                        local mousePos = UserInputService:GetMouseLocation()
+                        local ap = selectorFrame.Instance.AbsolutePosition
+                        local as = selectorFrame.Instance.AbsoluteSize
+                        -- Fix for GUI offset
+                        if mousePos.X < ap.X or mousePos.X > ap.X + as.X or (mousePos.Y - 36) < ap.Y or (mousePos.Y - 36) > ap.Y + as.Y then
+                            selectorFrame.Instance:Destroy()
+                            Items["SelectorFrame"] = nil
+                            closeConn:Disconnect()
+                        end
+                    end
+                end)
+            end
+
+            -- Reorder logic
+            function ProgressDropdown:ChangeOrder(optionIndex, newOrder)
+                local currentOrder = ProgressDropdown.Options[optionIndex].Order
+                if currentOrder == newOrder then return end
+
+                local targetOption = ProgressDropdown.Options[optionIndex]
+
+                -- Adjust other options
+                for i, opt in ipairs(ProgressDropdown.Options) do
+                    if i ~= optionIndex then
+                        if currentOrder < newOrder then
+                            if opt.Order > currentOrder and opt.Order <= newOrder then
+                                opt.Order = opt.Order - 1
+                            end
+                        else
+                            if opt.Order >= newOrder and opt.Order < currentOrder then
+                                opt.Order = opt.Order + 1
+                            end
+                        end
+                    end
+                end
+
+                targetOption.Order = newOrder
+
+                -- Re-sort and re-render
+                table.sort(ProgressDropdown.Options, function(a, b) return a.Order < b.Order end)
+                ProgressDropdown:RenderList()
+                ProgressDropdown:SafeCallback(ProgressDropdown.Options)
+            end
+
+            function ProgressDropdown:SafeCallback(Val)
+                local success, err = pcall(ProgressDropdown.Callback, Val)
+                if not success then
+                    warn("ProgressDropdown Callback Error:", err)
+                end
+            end
+
+            -- Initialize Visuals
+            ProgressDropdown:RenderList()
+
+            if ProgressDropdown.Section.Page and ProgressDropdown.Section.Page.Active then
+                ProgressDropdown:RefreshPosition(true)
+            end
+
+            ProgressDropdown.Section.Elements[#ProgressDropdown.Section.Elements+1] = ProgressDropdown
+
+            if Data.ToolTip or Data.tooltip then
+                Library:AddTooltip(Data.ToolTip or Data.tooltip, Items["ProgressDropdown"].Instance)
+            end
+
+            return ProgressDropdown
+        end
+
         Library.Sections.AvatarPreview = function(self, Data)
             Data = type(Data) == "table" and Data or {}
 
