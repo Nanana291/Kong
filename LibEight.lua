@@ -11086,12 +11086,12 @@ local Library do
                     Items["AvatarImage"] = Instances:Create("ViewportFrame", {
                         Parent = Items["Card"].Instance,
                         Name = "\0",
-                        Size = UDim2New(0, avatarSize, 0, avatarSize),
+                        Size = UDim2New(0, avatarSize, 0, avatarSize * 1.5),
                         BackgroundColor3 = FromRGB(20, 20, 23),
                         ZIndex = 3,
                         BorderSizePixel = 0,
                         BackgroundTransparency = 0,
-                        Ambient = FromRGB(200, 200, 200),
+                        Ambient = FromRGB(150, 150, 150),
                         LightColor = FromRGB(255, 255, 255),
                         LightDirection = Vector3New(-1, -1, -1)
                     })
@@ -11102,36 +11102,39 @@ local Library do
 
                     Library:Thread(function()
                         local success, model = pcall(function()
-                            return Players:CreateHumanoidModelFromUserId(AvatarPreview.Avatar.UserId or 1)
+                            local desc = Players:GetHumanoidDescriptionFromUserId(AvatarPreview.Avatar.UserId or 1)
+                            return Players:CreateHumanoidModelFromDescription(desc, Enum.HumanoidRigType.R15)
                         end)
 
                         if success and model then
                             model.Parent = Items["AvatarImage"].Instance
 
-                            local rootPart = model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("Head")
-                            if rootPart then
-                                -- Position camera to look at upper body
-                                local hrpPos = rootPart.Position
-                                local camOffset = Vector3New(0, 1.5, -4) -- front-ish and slightly up
-                                ViewportCam.CFrame = CFrame.new(hrpPos + camOffset, hrpPos)
+                            local cframe, size = model:GetBoundingBox()
+                            local maxExtent = math.max(size.X, size.Y, size.Z)
+                            local camDistance = maxExtent * 1.2
 
-                                -- Idle rotation
-                                local angle = math.pi -- start facing camera
-                                local connection = Library:Connect(RunService.RenderStepped, function(dt)
-                                    if not Items["AvatarImage"] or not Items["AvatarImage"].Instance.Parent then
-                                        return
-                                    end
-                                    angle = angle + (dt * 0.5)
-                                    model:SetPrimaryPartCFrame(CFrame.new(hrpPos) * CFrame.Angles(0, angle, 0))
-                                end)
+                            local targetPos = cframe.Position
+                            -- Position camera slightly above center to frame the avatar nicely
+                            local camPos = targetPos + Vector3New(0, size.Y * 0.2, -camDistance)
 
-                                -- Clean up connection when the library unloads or frame destroyed
-                                Items["AvatarImage"].Instance.Destroying:Connect(function()
-                                    if connection and connection.Connection then
-                                        connection.Connection:Disconnect()
-                                    end
-                                end)
-                            end
+                            ViewportCam.CFrame = CFrame.new(camPos, targetPos)
+
+                            -- Idle rotation
+                            local angle = math.pi -- start facing camera
+                            local connection = Library:Connect(RunService.RenderStepped, function(dt)
+                                if not Items["AvatarImage"] or not Items["AvatarImage"].Instance.Parent then
+                                    return
+                                end
+                                angle = angle + (dt * 0.5)
+                                model:PivotTo(CFrame.new(targetPos) * CFrame.Angles(0, angle, 0))
+                            end)
+
+                            -- Clean up connection when the library unloads or frame destroyed
+                            Items["AvatarImage"].Instance.Destroying:Connect(function()
+                                if connection and connection.Connection then
+                                    connection.Connection:Disconnect()
+                                end
+                            end)
                         end
                     end)
                 else
