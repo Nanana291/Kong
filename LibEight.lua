@@ -11006,9 +11006,6 @@ local Library do
                 IsOpen = false
             }
 
-            -- Sort Options initially by Order
-            table.sort(ProgressDropdown.Options, function(a, b) return a.Order < b.Order end)
-
             local Items = {} do
                 Items["ProgressDropdown"] = Instances:Create("Frame", {
                     Parent = ProgressDropdown.Section.Items["Content"].Instance,
@@ -11158,25 +11155,10 @@ local Library do
                         AutoButtonColor = false,
                         Text = "",
                         ZIndex = 3,
-                        LayoutOrder = i * 2 -- Space out layout order for connectors
+                        LayoutOrder = i
                     })
 
-                    -- Order Label (Left)
-                    local orderLabel = Instances:Create("TextLabel", {
-                        Parent = rowFrame.Instance,
-                        Name = "OrderLabel",
-                        Text = "Order " .. opt.Order,
-                        FontFace = Library.Font,
-                        TextColor3 = FromRGB(200, 200, 200),
-                        TextSize = 13,
-                        Size = UDim2New(0, 60, 1, 0),
-                        Position = UDim2New(0, 15, 0, 0),
-                        BackgroundTransparency = 1,
-                        TextXAlignment = Enum.TextXAlignment.Left,
-                        ZIndex = 4
-                    }) orderLabel:AddToTheme({TextColor3 = "Text"})
-
-                    -- Name Label
+                    -- Name Label (Left)
                     local nameLabel = Instances:Create("TextLabel", {
                         Parent = rowFrame.Instance,
                         Name = "NameLabel",
@@ -11184,45 +11166,57 @@ local Library do
                         FontFace = Library.Font,
                         TextColor3 = FromRGB(240, 240, 240),
                         TextSize = 13,
-                        Size = UDim2New(1, -85, 1, 0),
-                        Position = UDim2New(0, 75, 0, 0),
+                        Size = UDim2New(1, -80, 1, 0),
+                        Position = UDim2New(0, 15, 0, 0),
                         BackgroundTransparency = 1,
                         TextXAlignment = Enum.TextXAlignment.Left,
                         ZIndex = 4
                     }) nameLabel:AddToTheme({TextColor3 = "Text"})
 
-                    -- Add connector visual below if not the last item
-                    if i < #ProgressDropdown.Options then
-                        local connectorFrame = Instances:Create("Frame", {
-                            Parent = Items["RowsContainer"].Instance,
-                            Name = "Connector_" .. i,
-                            Size = UDim2New(1, 0, 0, 14),
-                            BackgroundTransparency = 1,
-                            ZIndex = 3,
-                            LayoutOrder = (i * 2) + 1
-                        })
+                    -- Dropdown visual for the order (Right)
+                    local orderVisual = Instances:Create("Frame", {
+                        Parent = rowFrame.Instance,
+                        Name = "OrderVisual",
+                        Size = UDim2New(0, 45, 0, 18),
+                        Position = UDim2New(1, -60, 0, 3),
+                        BackgroundColor3 = FromRGB(35, 35, 40),
+                        ZIndex = 4,
+                        BorderSizePixel = 0
+                    }) orderVisual:AddToTheme({BackgroundColor3 = "Background"})
 
-                        local line = Instances:Create("Frame", {
-                            Parent = connectorFrame.Instance,
-                            Size = UDim2New(0, 2, 1, 0),
-                            Position = UDim2New(0, 30, 0, 0),
-                            BackgroundColor3 = FromRGB(80, 80, 80),
-                            BorderSizePixel = 0,
-                            ZIndex = 4
-                        }) line:AddToTheme({BackgroundColor3 = "Accent"})
-                    end
+                    Instances:Create("UICorner", { Parent = orderVisual.Instance, CornerRadius = UDimNew(0, 3) })
+                    Instances:Create("UIStroke", {
+                        Parent = orderVisual.Instance,
+                        ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+                        Color = FromRGB(60, 60, 60),
+                        Thickness = 1
+                    }) orderVisual:AddToTheme({Color = "Outline", UIStroke = true})
+
+                    local orderText = Instances:Create("TextLabel", {
+                        Parent = orderVisual.Instance,
+                        Name = "OrderText",
+                        Text = opt.Order .. " ▼",
+                        FontFace = Library.Font,
+                        TextColor3 = FromRGB(200, 200, 200),
+                        TextSize = 12,
+                        Size = UDim2New(1, 0, 1, 0),
+                        BackgroundTransparency = 1,
+                        ZIndex = 5
+                    }) orderText:AddToTheme({TextColor3 = "Text"})
 
                     -- Hover effects on row
                     Library:Connect(rowFrame.Instance.MouseEnter, function()
                         TweenService:Create(nameLabel.Instance, TweenInfo.new(0.2), {TextColor3 = Library.Theme.Accent}):Play()
+                        TweenService:Create(orderText.Instance, TweenInfo.new(0.2), {TextColor3 = Library.Theme.Accent}):Play()
                     end)
                     Library:Connect(rowFrame.Instance.MouseLeave, function()
                         TweenService:Create(nameLabel.Instance, TweenInfo.new(0.2), {TextColor3 = Library.Theme.Text}):Play()
+                        TweenService:Create(orderText.Instance, TweenInfo.new(0.2), {TextColor3 = Library.Theme.Text}):Play()
                     end)
 
                     -- Click to open order selector
                     Library:Connect(rowFrame.Instance.MouseButton1Click, function()
-                        ProgressDropdown:OpenOrderSelector(i, rowFrame.Instance)
+                        ProgressDropdown:OpenOrderSelector(i, orderVisual.Instance)
                     end)
                 end
             end
@@ -11241,8 +11235,8 @@ local Library do
                 local selectorFrame = Instances:Create("Frame", {
                     Parent = Library.Holder.Instance, -- Parent to global holder so it overlays
                     Name = "\0",
-                    Size = UDim2New(0, 40, 0, height),
-                    Position = UDim2New(0, relativeTo.AbsolutePosition.X + 15, 0, relativeTo.AbsolutePosition.Y + 24),
+                    Size = UDim2New(0, 45, 0, height),
+                    Position = UDim2New(0, relativeTo.AbsolutePosition.X, 0, relativeTo.AbsolutePosition.Y + 20),
                     BackgroundColor3 = FromRGB(27, 26, 29),
                     ZIndex = 100,
                     BorderSizePixel = 0
@@ -11318,29 +11312,29 @@ local Library do
                 local currentOrder = ProgressDropdown.Options[optionIndex].Order
                 if currentOrder == newOrder then return end
 
-                local targetOption = ProgressDropdown.Options[optionIndex]
-
-                -- Adjust other options
+                -- Find the stat that currently has newOrder and swap
+                local swapTargetIndex = nil
                 for i, opt in ipairs(ProgressDropdown.Options) do
-                    if i ~= optionIndex then
-                        if currentOrder < newOrder then
-                            if opt.Order > currentOrder and opt.Order <= newOrder then
-                                opt.Order = opt.Order - 1
-                            end
-                        else
-                            if opt.Order >= newOrder and opt.Order < currentOrder then
-                                opt.Order = opt.Order + 1
-                            end
-                        end
+                    if opt.Order == newOrder then
+                        swapTargetIndex = i
+                        break
                     end
                 end
 
-                targetOption.Order = newOrder
+                if swapTargetIndex then
+                    ProgressDropdown.Options[swapTargetIndex].Order = currentOrder
+                end
+                ProgressDropdown.Options[optionIndex].Order = newOrder
 
-                -- Re-sort and re-render
-                table.sort(ProgressDropdown.Options, function(a, b) return a.Order < b.Order end)
                 ProgressDropdown:RenderList()
-                ProgressDropdown:SafeCallback(ProgressDropdown.Options)
+
+                -- Convert to dictionary format
+                local outputTable = {}
+                for _, opt in ipairs(ProgressDropdown.Options) do
+                    outputTable[opt.Name] = opt.Order
+                end
+
+                ProgressDropdown:SafeCallback(outputTable)
             end
 
             function ProgressDropdown:SafeCallback(Val)
