@@ -11195,23 +11195,42 @@ local Library do
                     local orderText = Instances:Create("TextLabel", {
                         Parent = orderVisual.Instance,
                         Name = "OrderText",
-                        Text = opt.Order .. " ▼",
+                        Text = opt.Order,
                         FontFace = Library.Font,
                         TextColor3 = FromRGB(200, 200, 200),
                         TextSize = 12,
-                        Size = UDim2New(1, 0, 1, 0),
+                        Size = UDim2New(1, -15, 1, 0),
+                        Position = UDim2New(0, 5, 0, 0),
                         BackgroundTransparency = 1,
+                        TextXAlignment = Enum.TextXAlignment.Left,
                         ZIndex = 5
                     }) orderText:AddToTheme({TextColor3 = "Text"})
+
+                    local ChevronIconData = Library:GetCustomIcon("chevron-down")
+                    local chevronIcon = Instances:Create("ImageLabel", {
+                        Parent = orderVisual.Instance,
+                        Name = "ChevronIcon",
+                        Image = ChevronIconData and ChevronIconData.Url or "",
+                        ImageRectOffset = ChevronIconData and ChevronIconData.ImageRectOffset or Vector2New(0, 0),
+                        ImageRectSize = ChevronIconData and ChevronIconData.ImageRectSize or Vector2New(0, 0),
+                        ImageColor3 = FromRGB(200, 200, 200),
+                        Size = UDim2New(0, 12, 0, 12),
+                        Position = UDim2New(1, -17, 0.5, -6),
+                        BackgroundTransparency = 1,
+                        ZIndex = 5,
+                        BorderSizePixel = 0
+                    }) chevronIcon:AddToTheme({ImageColor3 = "Text"})
 
                     -- Hover effects on row
                     Library:Connect(rowFrame.Instance.MouseEnter, function()
                         TweenService:Create(nameLabel.Instance, TweenInfo.new(0.2), {TextColor3 = Library.Theme.Accent}):Play()
                         TweenService:Create(orderText.Instance, TweenInfo.new(0.2), {TextColor3 = Library.Theme.Accent}):Play()
+                        TweenService:Create(chevronIcon.Instance, TweenInfo.new(0.2), {ImageColor3 = Library.Theme.Accent}):Play()
                     end)
                     Library:Connect(rowFrame.Instance.MouseLeave, function()
                         TweenService:Create(nameLabel.Instance, TweenInfo.new(0.2), {TextColor3 = Library.Theme.Text}):Play()
                         TweenService:Create(orderText.Instance, TweenInfo.new(0.2), {TextColor3 = Library.Theme.Text}):Play()
+                        TweenService:Create(chevronIcon.Instance, TweenInfo.new(0.2), {ImageColor3 = Library.Theme.Text}):Play()
                     end)
 
                     -- Click to open order selector
