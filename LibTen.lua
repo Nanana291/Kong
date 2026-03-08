@@ -11255,7 +11255,6 @@ local Library do
                     AutomaticSize = Enum.AutomaticSize.X,
                     BackgroundTransparency = 1,
                     TextXAlignment = Enum.TextXAlignment.Left,
-                    LetterSpacing = 2,
                     ZIndex = 3,
                 })
 
