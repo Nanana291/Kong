@@ -5784,7 +5784,7 @@ local Library do
             if Toggle.Description and Toggle.Description ~= "" and tostring(Toggle.Description):match("%S") then
                 local Holder = GetAddonsHolder()
 
-                local HelpIconData = Library:GetCustomIcon("help-circle")
+                local HelpIconData = Library:GetCustomIcon("info")
                 Items["HelpIcon"] = Instances:Create("ImageButton", {
                     Parent = Holder.Instance,
                     Name = "HelpIcon",
@@ -5843,7 +5843,7 @@ local Library do
                         -- Small tween for color
                         TweenService:Create(Items["HelpIcon"].Instance, TweenInfo.new(0.2), {ImageColor3 = Library.Theme.Accent}):Play()
                     else
-                        local QIconData = Library:GetCustomIcon("help-circle")
+                        local QIconData = Library:GetCustomIcon("info")
                         Items["HelpIcon"].Instance.Image = QIconData and QIconData.Url or ""
                         Items["HelpIcon"].Instance.ImageRectOffset = QIconData and QIconData.ImageRectOffset or Vector2New(0, 0)
                         Items["HelpIcon"].Instance.ImageRectSize = QIconData and QIconData.ImageRectSize or Vector2New(0, 0)
