@@ -15239,7 +15239,7 @@ local Library do
         local footer = InstanceNew("TextLabel")
         footer.FontFace         = Library.Font
         footer.Text             = "Imp Hub © 2026"
-        footer.TextColor3       = FromRGB(80, 78, 95)
+        footer.TextColor3       = FromRGB(255, 255, 255)
         footer.TextTransparency = 0
         footer.TextSize         = 9
         footer.Size             = UDim2New(1, 0, 0, 14)
