@@ -5598,7 +5598,7 @@ local Library do
                 Flag = Data.Flag or Data.flag or Library:NextFlag(),
                 Default = Data.Default or Data.default or false,
                 Callback = Data.Callback or Data.callback or function() end,
-                Description = Data.Description or Data.description,
+                Description = Data.Description or Data.description or "",
 
                 Value = false
             }
@@ -5781,11 +5781,10 @@ local Library do
                 return Items["AddonsHolder"]
             end
 
-            -- Check if Description exists, is not nil, and has content (including multiline spaces/tabs)
-            if Toggle.Description and tostring(Toggle.Description):match("%S") then
+            if Toggle.Description and Toggle.Description ~= "" and tostring(Toggle.Description):match("%S") then
                 local Holder = GetAddonsHolder()
 
-                local HelpIconData = Library:GetCustomIcon("circle-question")
+                local HelpIconData = Library:GetCustomIcon("help-circle")
                 Items["HelpIcon"] = Instances:Create("ImageButton", {
                     Parent = Holder.Instance,
                     Name = "HelpIcon",
@@ -5797,7 +5796,7 @@ local Library do
                     BackgroundTransparency = 1,
                     AutoButtonColor = false,
                     BorderSizePixel = 0,
-                    ZIndex = 2,
+                    ZIndex = 10,
                     LayoutOrder = 100
                 }) Items["HelpIcon"]:AddToTheme({ImageColor3 = "Text"})
 
@@ -5844,7 +5843,7 @@ local Library do
                         -- Small tween for color
                         TweenService:Create(Items["HelpIcon"].Instance, TweenInfo.new(0.2), {ImageColor3 = Library.Theme.Accent}):Play()
                     else
-                        local QIconData = Library:GetCustomIcon("circle-question")
+                        local QIconData = Library:GetCustomIcon("help-circle")
                         Items["HelpIcon"].Instance.Image = QIconData and QIconData.Url or ""
                         Items["HelpIcon"].Instance.ImageRectOffset = QIconData and QIconData.ImageRectOffset or Vector2New(0, 0)
                         Items["HelpIcon"].Instance.ImageRectSize = QIconData and QIconData.ImageRectSize or Vector2New(0, 0)
@@ -5852,9 +5851,6 @@ local Library do
                         Items["DescriptionContainer"].Instance.Visible = false
                         TweenService:Create(Items["HelpIcon"].Instance, TweenInfo.new(0.2), {ImageColor3 = Library.Theme.Text}):Play()
                     end
-
-                    -- We re-trigger the container size update by firing layout change or just letting AutoSize handle it.
-                    -- Due to parent AutomaticSize = Y, everything correctly pushes down.
                 end)
             end
 
