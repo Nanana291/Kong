@@ -5805,7 +5805,6 @@ local Library do
                     Name = "DescriptionContainer",
                     Size = UDim2New(1, -24, 0, 0), -- Offset by left padding
                     Position = UDim2New(0, 24, 0, 0),
-                    AutomaticSize = Enum.AutomaticSize.Y,
                     BackgroundTransparency = 1,
                     ClipsDescendants = true,
                     Visible = false,
@@ -5823,7 +5822,6 @@ local Library do
                     TextXAlignment = Enum.TextXAlignment.Left,
                     TextYAlignment = Enum.TextYAlignment.Top,
                     BackgroundTransparency = 1,
-                    AutomaticSize = Enum.AutomaticSize.Y,
                     Size = UDim2New(1, 0, 0, 0),
                     ZIndex = 2
                 }) Items["DescriptionText"]:AddToTheme({TextColor3 = "Text"})
@@ -5839,8 +5837,15 @@ local Library do
                         Items["HelpIcon"].Instance.ImageRectOffset = CloseIconData and CloseIconData.ImageRectOffset or Vector2New(0, 0)
                         Items["HelpIcon"].Instance.ImageRectSize = CloseIconData and CloseIconData.ImageRectSize or Vector2New(0, 0)
 
+                        -- Set visible before tween to ensure TextBounds is calculated if not already
                         Items["DescriptionContainer"].Instance.Visible = true
-                        -- Small tween for color
+
+                        local targetHeight = Items["DescriptionText"].Instance.TextBounds.Y + 4
+                        Items["DescriptionText"].Instance.Size = UDim2New(1, 0, 0, targetHeight)
+
+                        -- Smooth accordion expand animation
+                        TweenService:Create(Items["DescriptionContainer"].Instance, TweenInfo.new(0.7, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2New(1, -24, 0, targetHeight)}):Play()
+
                         TweenService:Create(Items["HelpIcon"].Instance, TweenInfo.new(0.2), {ImageColor3 = Library.Theme.Accent}):Play()
                     else
                         local QIconData = Library:GetCustomIcon("info")
@@ -5848,7 +5853,18 @@ local Library do
                         Items["HelpIcon"].Instance.ImageRectOffset = QIconData and QIconData.ImageRectOffset or Vector2New(0, 0)
                         Items["HelpIcon"].Instance.ImageRectSize = QIconData and QIconData.ImageRectSize or Vector2New(0, 0)
 
-                        Items["DescriptionContainer"].Instance.Visible = false
+                        -- Smooth accordion collapse animation
+                        local collapseTween = TweenService:Create(Items["DescriptionContainer"].Instance, TweenInfo.new(0.7, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2New(1, -24, 0, 0)})
+                        collapseTween:Play()
+
+                        -- Hide the container visually once the animation completes so it doesn't break layout padding
+                        Library:Thread(function()
+                            task.wait(0.7)
+                            if not Toggle.HelpExpanded then
+                                Items["DescriptionContainer"].Instance.Visible = false
+                            end
+                        end)
+
                         TweenService:Create(Items["HelpIcon"].Instance, TweenInfo.new(0.2), {ImageColor3 = Library.Theme.Text}):Play()
                     end
                 end)
