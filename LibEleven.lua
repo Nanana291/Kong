@@ -14642,6 +14642,27 @@ local Library do
 
         local gameTitleY = PAD + 182
 
+        local gameTitleGlow = InstanceNew("Frame")
+        gameTitleGlow.Size             = UDim2New(1, -(PAD*2), 0, 48)
+        gameTitleGlow.Position         = UDim2New(0, PAD, 0, gameTitleY - 6)
+        gameTitleGlow.BackgroundColor3 = Accent()
+        gameTitleGlow.BackgroundTransparency = 0.82
+        gameTitleGlow.BorderSizePixel  = 0
+        gameTitleGlow.ZIndex           = 3
+        gameTitleGlow.Name             = "\0"
+        gameTitleGlow.Parent           = Left
+        do
+            local gg = InstanceNew("UIGradient")
+            gg.Transparency = NumSequence{
+                NumSequenceKeypoint(0, 1),
+                NumSequenceKeypoint(0.25, 0.4),
+                NumSequenceKeypoint(0.5, 0),
+                NumSequenceKeypoint(0.75, 0.4),
+                NumSequenceKeypoint(1, 1)
+            }
+            gg.Parent = gameTitleGlow
+        end
+
         local gameTitle = InstanceNew("TextLabel")
         gameTitle.FontFace         = BoldFont
         gameTitle.Text             = gameUpper
@@ -14660,9 +14681,10 @@ local Library do
             local tg = InstanceNew("UIGradient")
             tg.Color = RGBSequence{
                 RGBSequenceKeypoint(0, FromRGB(255, 255, 255)),
-                RGBSequenceKeypoint(1, FromRGB(210, 200, 235))
+                RGBSequenceKeypoint(0.55, FromRGB(235, 228, 255)),
+                RGBSequenceKeypoint(1, FromRGB(185, 155, 225))
             }
-            tg.Rotation = 10
+            tg.Rotation = 12
             tg.Parent = gameTitle
         end
 
@@ -15048,9 +15070,9 @@ local Library do
 
             -- Icon image (populated by RefreshCards)
             local cardIcon = InstanceNew("ImageLabel")
-            cardIcon.Size = UDim2New(0, 28, 0, 28)
+            cardIcon.Size = UDim2New(0, 33, 0, 33)
             cardIcon.AnchorPoint = Vector2New(0.5, 0)
-            cardIcon.Position = UDim2New(0.5, 0, 0, 18)
+            cardIcon.Position = UDim2New(0.5, 0, 0, 15)
             cardIcon.BackgroundTransparency = 1
             cardIcon.BorderSizePixel = 0
             cardIcon.ZIndex = 5
@@ -15075,7 +15097,7 @@ local Library do
             cardTitle.TextSize = 12
             cardTitle.Size = UDim2New(1, -8, 0, 16)
             cardTitle.AnchorPoint = Vector2New(0.5, 0)
-            cardTitle.Position = UDim2New(0.5, 0, 0, 52)
+            cardTitle.Position = UDim2New(0.5, 0, 0, 56)
             cardTitle.BackgroundTransparency = 1
             cardTitle.TextXAlignment = Enum.TextXAlignment.Center
             cardTitle.TextTruncate = Enum.TextTruncate.AtEnd
@@ -15091,7 +15113,7 @@ local Library do
             cardSubtitle.TextSize = 9
             cardSubtitle.Size = UDim2New(1, -10, 0, 22)
             cardSubtitle.AnchorPoint = Vector2New(0.5, 0)
-            cardSubtitle.Position = UDim2New(0.5, 0, 0, 70)
+            cardSubtitle.Position = UDim2New(0.5, 0, 0, 74)
             cardSubtitle.BackgroundTransparency = 1
             cardSubtitle.TextXAlignment = Enum.TextXAlignment.Center
             cardSubtitle.TextWrapped = true
@@ -15179,12 +15201,12 @@ local Library do
 
                     -- Animated reveal: icon slides up, title fades in
                     slot.icon.ImageTransparency = 1
-                    slot.icon.Position = UDim2New(0.5, 0, 0, 30)
+                    slot.icon.Position = UDim2New(0.5, 0, 0, 28)
                     slot.title.TextTransparency = 1
                     slot.subtitle.TextTransparency = 1
 
                     local revT = TweenInfo.new(0.35 + (i-1)*0.08, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
-                    TweenService:Create(slot.icon,     revT, {ImageTransparency = 0, Position = UDim2New(0.5, 0, 0, 18)}):Play()
+                    TweenService:Create(slot.icon,     revT, {ImageTransparency = 0, Position = UDim2New(0.5, 0, 0, 15)}):Play()
                     TweenService:Create(slot.title,    TweenInfo.new(0.3  + (i-1)*0.08, Enum.EasingStyle.Quad), {TextTransparency = 0.1}):Play()
                     TweenService:Create(slot.subtitle, TweenInfo.new(0.38 + (i-1)*0.08, Enum.EasingStyle.Quad), {TextTransparency = 0.1}):Play()
                 else
@@ -15213,6 +15235,21 @@ local Library do
         -- ── Initial card pass (for any pages already in Window.Pages) ─────────
         task.wait()
         if Library then RefreshCards() end
+
+        local footer = InstanceNew("TextLabel")
+        footer.FontFace         = Library.Font
+        footer.Text             = "Imp Hub © 2026"
+        footer.TextColor3       = FromRGB(80, 78, 95)
+        footer.TextTransparency = 0
+        footer.TextSize         = 9
+        footer.Size             = UDim2New(1, 0, 0, 14)
+        footer.AnchorPoint      = Vector2New(0.5, 1)
+        footer.Position         = UDim2New(0.5, 0, 1, -4)
+        footer.BackgroundTransparency = 1
+        footer.TextXAlignment   = Enum.TextXAlignment.Center
+        footer.ZIndex           = 3
+        footer.Name             = "\0"
+        footer.Parent           = Main
 
         return DashPage
     end
