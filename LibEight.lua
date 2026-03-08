@@ -5598,7 +5598,7 @@ local Library do
                 Flag = Data.Flag or Data.flag or Library:NextFlag(),
                 Default = Data.Default or Data.default or false,
                 Callback = Data.Callback or Data.callback or function() end,
-                Description = Data.Description or Data.description or "",
+                Description = Data.Description or Data.description,
 
                 Value = false
             }
@@ -5781,7 +5781,8 @@ local Library do
                 return Items["AddonsHolder"]
             end
 
-            if Toggle.Description ~= "" then
+            -- Check if Description exists, is not nil, and has content (including multiline spaces/tabs)
+            if Toggle.Description and tostring(Toggle.Description):match("%S") then
                 local Holder = GetAddonsHolder()
 
                 local HelpIconData = Library:GetCustomIcon("circle-question")
