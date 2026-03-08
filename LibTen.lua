@@ -13001,6 +13001,583 @@ local Library do
     end
     -- ─────────────────────────────────────────────────────────────────────────
 
+    -- TaskQueue: visual automation pipeline with animated active-task indicator
+    -- ─────────────────────────────────────────────────────────────────────────
+    Library.Sections.TaskQueue = function(self, Data)
+        Data = Data or {}
+
+        local TQ = {
+            Window  = self.Window,
+            Page    = self.Page,
+            Section = self,
+
+            Title       = Data.Title or Data.title or Data.Name or Data.name or "Task Queue",
+            Flag        = Data.Flag  or Data.flag  or Library:NextFlag(),
+            Callback    = Data.Callback or Data.callback or function() end,
+
+            Tasks       = {},
+            CurrentTask = 1,   -- 1-based index into sorted Tasks
+        }
+
+        -- Deep-copy and sort tasks
+        for _, t in ipairs(Data.Tasks or Data.tasks or {}) do
+            TableInsert(TQ.Tasks, {Name = t.Name or t.name, Order = t.Order or t.order or 1})
+        end
+        table.sort(TQ.Tasks, function(a, b) return a.Order < b.Order end)
+
+        -- Seed Library.Flags so SaveConfig works immediately
+        do
+            local seed = {}
+            for _, t in ipairs(TQ.Tasks) do seed[#seed + 1] = {Name = t.Name, Order = t.Order} end
+            Library.Flags[TQ.Flag] = seed
+        end
+
+        local ROW_H    = 30    -- px per task row
+        local HEADER_H = 25    -- px for title row
+
+        -- ── Static UI (header + task list shell) ──────────────────────────────
+        local Items = {} do
+
+            -- Outer container sits in section content
+            Items["Container"] = Instances:Create("Frame", {
+                Parent = TQ.Section.Items["Content"].Instance,
+                Name   = "\0",
+                BackgroundTransparency = 1,
+                Size   = UDim2New(1, 0, 0, HEADER_H + #TQ.Tasks * ROW_H),
+                BorderSizePixel = 0,
+                ZIndex = 2,
+                BackgroundColor3 = FromRGB(255, 255, 255),
+            })
+
+            -- Header row
+            Items["HeaderRow"] = Instances:Create("Frame", {
+                Parent = Items["Container"].Instance,
+                Name   = "\0",
+                BackgroundTransparency = 1,
+                Size   = UDim2New(1, 0, 0, HEADER_H),
+                Position = UDim2New(0, 0, 0, 0),
+                BorderSizePixel = 0,
+                ZIndex = 2,
+                BackgroundColor3 = FromRGB(255, 255, 255),
+            })
+
+            -- Title label (left)
+            Items["Text"] = Instances:Create("TextLabel", {
+                Parent = Items["HeaderRow"].Instance,
+                Name   = "\0",
+                FontFace = Library.Font,
+                TextColor3 = FromRGB(240, 240, 240),
+                TextTransparency = 0.30000001192092896,
+                Text = TQ.Title,
+                AutomaticSize = Enum.AutomaticSize.X,
+                Size = UDim2New(0, 0, 0, 15),
+                AnchorPoint = Vector2New(0, 0.5),
+                BorderSizePixel = 0,
+                BackgroundTransparency = 1,
+                Position = UDim2New(0, 0, 0.5, 0),
+                TextXAlignment = Enum.TextXAlignment.Left,
+                ZIndex = 2,
+                TextSize = 14,
+                BackgroundColor3 = FromRGB(255, 255, 255),
+            })  Items["Text"]:AddToTheme({TextColor3 = "Text"})
+
+            -- Task count pill (right)
+            Items["CountBadge"] = Instances:Create("Frame", {
+                Parent = Items["HeaderRow"].Instance,
+                Name   = "\0",
+                AnchorPoint = Vector2New(1, 0.5),
+                Position = UDim2New(1, 0, 0.5, 0),
+                AutomaticSize = Enum.AutomaticSize.X,
+                Size = UDim2New(0, 0, 0, 16),
+                BorderSizePixel = 0,
+                ZIndex = 2,
+                BackgroundColor3 = FromRGB(34, 32, 38),
+            })  Items["CountBadge"]:AddToTheme({BackgroundColor3 = "Element"})
+            Instances:Create("UICorner", {Parent = Items["CountBadge"].Instance, CornerRadius = UDimNew(0, 4)})
+            Instances:Create("UIPadding", {
+                Parent = Items["CountBadge"].Instance,
+                PaddingLeft = UDimNew(0, 6), PaddingRight = UDimNew(0, 6),
+            })
+            Items["CountLabel"] = Instances:Create("TextLabel", {
+                Parent = Items["CountBadge"].Instance,
+                Name   = "\0",
+                FontFace = Library.Font,
+                TextColor3 = FromRGB(240, 240, 240),
+                TextTransparency = 0.3,
+                Text = tostring(#TQ.Tasks) .. " tasks",
+                AutomaticSize = Enum.AutomaticSize.X,
+                Size = UDim2New(0, 0, 1, 0),
+                BackgroundTransparency = 1,
+                TextXAlignment = Enum.TextXAlignment.Center,
+                ZIndex = 3,
+                TextSize = 10,
+                BackgroundColor3 = FromRGB(255, 255, 255),
+            })  Items["CountLabel"]:AddToTheme({TextColor3 = "Text"})
+
+            -- Task list shell (rows rendered here dynamically)
+            Items["TaskList"] = Instances:Create("Frame", {
+                Parent = Items["Container"].Instance,
+                Name   = "\0",
+                BackgroundTransparency = 1,
+                Size   = UDim2New(1, 0, 0, #TQ.Tasks * ROW_H),
+                Position = UDim2New(0, 0, 0, HEADER_H),
+                BorderSizePixel = 0,
+                ClipsDescendants = false,
+                ZIndex = 2,
+                BackgroundColor3 = FromRGB(255, 255, 255),
+            })
+
+            -- Active task highlight (tweens vertically when active task changes)
+            Items["ActiveHighlight"] = Instances:Create("Frame", {
+                Parent = Items["TaskList"].Instance,
+                Name   = "\0",
+                BackgroundTransparency = 0.88,
+                Size   = UDim2New(1, 0, 0, ROW_H),
+                Position = UDim2New(0, 0, 0, 0),
+                BorderSizePixel = 0,
+                ZIndex = 2,
+                BackgroundColor3 = FromRGB(151, 69, 186),
+            })  Items["ActiveHighlight"]:AddToTheme({BackgroundColor3 = "Accent"})
+            Instances:Create("UICorner", {Parent = Items["ActiveHighlight"].Instance, CornerRadius = UDimNew(0, 4)})
+
+            -- Accent left-bar inside highlight
+            Items["ActiveBar"] = Instances:Create("Frame", {
+                Parent = Items["ActiveHighlight"].Instance,
+                Name   = "\0",
+                BackgroundTransparency = 0.2,
+                Size   = UDim2New(0, 2, 1, -8),
+                AnchorPoint = Vector2New(0, 0.5),
+                Position = UDim2New(0, 3, 0.5, 0),
+                BorderSizePixel = 0,
+                ZIndex = 3,
+                BackgroundColor3 = FromRGB(151, 69, 186),
+            })  Items["ActiveBar"]:AddToTheme({BackgroundColor3 = "Accent"})
+            Instances:Create("UICorner", {Parent = Items["ActiveBar"].Instance, CornerRadius = UDimNew(1, 0)})
+
+        end  -- end Items do
+
+        -- Pre-fetch icons once (shared by all rows)
+        local ConnIconData    = Library:GetCustomIcon("corner-down-right")
+        local ChevronIconData = Library:GetCustomIcon("chevron-right")
+
+        -- ── Mini-picker state ─────────────────────────────────────────────────
+        local MiniPicker = {Frame = nil, RS = nil, OwnerTask = nil}
+
+        local function CloseMiniPicker()
+            if MiniPicker.RS    then MiniPicker.RS:Disconnect(); MiniPicker.RS = nil end
+            if MiniPicker.Frame then MiniPicker.Frame:Destroy(); MiniPicker.Frame = nil end
+            MiniPicker.OwnerTask = nil
+        end
+
+        -- ── Callback helper ───────────────────────────────────────────────────
+        local function FireCallback()
+            local sorted = {}
+            for _, t in ipairs(TQ.Tasks) do sorted[#sorted + 1] = {Name = t.Name, Order = t.Order} end
+            table.sort(sorted, function(a, b) return a.Order < b.Order end)
+            Library.Flags[TQ.Flag] = sorted
+            Library:SafeCall(TQ.Callback, sorted)
+        end
+
+        -- ── Active indicator animation ─────────────────────────────────────────
+        local function AnimateHighlight(idx)
+            TQ.CurrentTask = math.clamp(idx, 1, math.max(1, #TQ.Tasks))
+            Items["ActiveHighlight"]:Tween(
+                TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+                {Position = UDim2New(0, 0, 0, (TQ.CurrentTask - 1) * ROW_H)}
+            )
+        end
+
+        -- ── Row rendering ──────────────────────────────────────────────────────
+        local RowInstances = {}  -- raw Instance refs for cleanup
+
+        local function RenderRows()
+            CloseMiniPicker()
+
+            -- Destroy old row instances
+            for _, inst in ipairs(RowInstances) do
+                if inst and inst.Parent then inst:Destroy() end
+            end
+            RowInstances = {}
+
+            table.sort(TQ.Tasks, function(a, b) return a.Order < b.Order end)
+            local count = #TQ.Tasks
+
+            -- Resize containers to match new count
+            Items["TaskList"].Instance.Size    = UDim2New(1, 0, 0, count * ROW_H)
+            Items["Container"].Instance.Size   = UDim2New(1, 0, 0, HEADER_H + count * ROW_H)
+            Items["CountLabel"].Instance.Text  = tostring(count) .. " tasks"
+
+            -- Clamp current task
+            TQ.CurrentTask = math.clamp(TQ.CurrentTask, 1, math.max(1, count))
+            -- Snap highlight (no tween during full re-render)
+            Items["ActiveHighlight"].Instance.Position = UDim2New(0, 0, 0, (TQ.CurrentTask - 1) * ROW_H)
+
+            for i, task in ipairs(TQ.Tasks) do
+                local rowY      = (i - 1) * ROW_H
+                local isActive  = (i == TQ.CurrentTask)
+
+                -- ── Row frame ─────────────────────────────────────────────────
+                local rowFrame = InstanceNew("Frame")
+                rowFrame.Name = "\0"
+                rowFrame.BackgroundTransparency = 1
+                rowFrame.BackgroundColor3 = Library.Theme["Accent"] or FromRGB(151, 69, 186)
+                rowFrame.Size = UDim2New(1, 0, 0, ROW_H)
+                rowFrame.Position = UDim2New(0, 0, 0, rowY)
+                rowFrame.BorderSizePixel = 0
+                rowFrame.ZIndex = 3
+                rowFrame.Parent = Items["TaskList"].Instance
+                RowInstances[#RowInstances + 1] = rowFrame
+
+                -- ── └─ connector icon ──────────────────────────────────────────
+                local connIcon = InstanceNew("ImageLabel")
+                connIcon.Name = "\0"
+                connIcon.BackgroundTransparency = 1
+                connIcon.AnchorPoint = Vector2New(0, 0.5)
+                connIcon.Position = UDim2New(0, 6, 0.5, 0)
+                connIcon.Size = UDim2New(0, 14, 0, 14)
+                connIcon.ZIndex = 4
+                connIcon.BorderSizePixel = 0
+                connIcon.BackgroundColor3 = FromRGB(255, 255, 255)
+                connIcon.ImageColor3 = isActive
+                    and (Library.Theme["Accent"] or FromRGB(151, 69, 186))
+                    or  FromRGB(85, 83, 95)
+                connIcon.ImageTransparency = isActive and 0.1 or 0.35
+                if ConnIconData then
+                    connIcon.Image           = ConnIconData.Url
+                    connIcon.ImageRectOffset = ConnIconData.ImageRectOffset
+                    connIcon.ImageRectSize   = ConnIconData.ImageRectSize
+                else
+                    -- Frame-based └─ fallback
+                    connIcon.Image = ""
+                    local vSeg = InstanceNew("Frame")
+                    vSeg.BackgroundColor3 = FromRGB(85, 83, 95)
+                    vSeg.BackgroundTransparency = 0.45
+                    vSeg.BorderSizePixel = 0
+                    vSeg.Size = UDim2New(0, 1, 0.5, 0)
+                    vSeg.Position = UDim2New(0, 4, 0, 0)
+                    vSeg.ZIndex = 5
+                    vSeg.Parent = connIcon
+                    local hSeg = InstanceNew("Frame")
+                    hSeg.BackgroundColor3 = FromRGB(85, 83, 95)
+                    hSeg.BackgroundTransparency = 0.45
+                    hSeg.BorderSizePixel = 0
+                    hSeg.Size = UDim2New(0.55, 0, 0, 1)
+                    hSeg.Position = UDim2New(0, 4, 0.5, 0)
+                    hSeg.ZIndex = 5
+                    hSeg.Parent = connIcon
+                end
+                connIcon.Parent = rowFrame
+
+                -- ── Order badge ────────────────────────────────────────────────
+                local badge = InstanceNew("Frame")
+                badge.Name = "\0"
+                badge.AnchorPoint = Vector2New(0, 0.5)
+                badge.Position = UDim2New(0, 24, 0.5, 0)
+                badge.Size = UDim2New(0, 18, 0, 18)
+                badge.BorderSizePixel = 0
+                badge.ZIndex = 4
+                badge.BackgroundColor3 = isActive
+                    and (Library.Theme["Accent"] or FromRGB(151, 69, 186))
+                    or  (Library.Theme["Element"] or FromRGB(34, 32, 38))
+                badge.Parent = rowFrame
+
+                local badgeCorner = InstanceNew("UICorner")
+                badgeCorner.CornerRadius = UDimNew(0, 4)
+                badgeCorner.Parent = badge
+
+                local badgeStroke = InstanceNew("UIStroke")
+                badgeStroke.Thickness = 1
+                badgeStroke.Transparency = isActive and 0.8 or 0.55
+                badgeStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                badgeStroke.Color = isActive
+                    and (Library.Theme["Accent"] or FromRGB(151, 69, 186))
+                    or  (Library.Theme["Outline"] or FromRGB(60, 58, 65))
+                badgeStroke.Parent = badge
+
+                local badgeNum = InstanceNew("TextLabel")
+                badgeNum.Name = "\0"
+                badgeNum.FontFace = Library.Font
+                badgeNum.TextColor3 = FromRGB(235, 235, 235)
+                badgeNum.TextTransparency = isActive and 0 or 0.1
+                badgeNum.Text = tostring(task.Order)
+                badgeNum.Size = UDim2New(1, 0, 1, 0)
+                badgeNum.BackgroundTransparency = 1
+                badgeNum.TextXAlignment = Enum.TextXAlignment.Center
+                badgeNum.ZIndex = 5
+                badgeNum.TextSize = 10
+                badgeNum.BackgroundColor3 = FromRGB(255, 255, 255)
+                badgeNum.Parent = badge
+
+                -- ── Task name ──────────────────────────────────────────────────
+                local nameLabel = InstanceNew("TextLabel")
+                nameLabel.Name = "\0"
+                nameLabel.FontFace = Library.Font
+                nameLabel.TextColor3 = isActive
+                    and (Library.Theme["Accent"] or FromRGB(151, 69, 186))
+                    or  (Library.Theme["Text"]   or FromRGB(240, 240, 240))
+                nameLabel.TextTransparency = isActive and 0 or 0.25
+                nameLabel.Text = task.Name
+                nameLabel.AnchorPoint = Vector2New(0, 0.5)
+                nameLabel.Position = UDim2New(0, 48, 0.5, 0)
+                nameLabel.Size = UDim2New(1, -68, 0, 15)
+                nameLabel.BackgroundTransparency = 1
+                nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+                nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+                nameLabel.ZIndex = 4
+                nameLabel.TextSize = 13
+                nameLabel.BackgroundColor3 = FromRGB(255, 255, 255)
+                nameLabel.Parent = rowFrame
+
+                -- ── Edit hint (chevron right) ──────────────────────────────────
+                local editIcon = InstanceNew("ImageLabel")
+                editIcon.Name = "\0"
+                editIcon.BackgroundTransparency = 1
+                editIcon.AnchorPoint = Vector2New(1, 0.5)
+                editIcon.Position = UDim2New(1, -4, 0.5, 0)
+                editIcon.Size = UDim2New(0, 8, 0, 12)
+                editIcon.ZIndex = 4
+                editIcon.BorderSizePixel = 0
+                editIcon.BackgroundColor3 = FromRGB(255, 255, 255)
+                editIcon.ImageColor3 = Library.Theme["Text"] or FromRGB(141, 141, 150)
+                editIcon.ImageTransparency = 0.55
+                editIcon.Image = ChevronIconData and ChevronIconData.Url or ""
+                editIcon.ImageRectOffset = ChevronIconData and ChevronIconData.ImageRectOffset or Vector2New(0, 0)
+                editIcon.ImageRectSize   = ChevronIconData and ChevronIconData.ImageRectSize   or Vector2New(0, 0)
+                editIcon.Parent = rowFrame
+
+                -- ── Invisible click overlay ────────────────────────────────────
+                local clickBtn = InstanceNew("TextButton")
+                clickBtn.Name = "\0"
+                clickBtn.Text = ""
+                clickBtn.AutoButtonColor = false
+                clickBtn.BackgroundTransparency = 1
+                clickBtn.Size = UDim2New(1, 0, 1, 0)
+                clickBtn.ZIndex = 6
+                clickBtn.BorderSizePixel = 0
+                clickBtn.BackgroundColor3 = FromRGB(255, 255, 255)
+                clickBtn.Parent = rowFrame
+
+                -- ── Hover feedback ─────────────────────────────────────────────
+                local capturedTask     = task
+                local capturedRowFrame = rowFrame
+                local capturedIdx      = i
+
+                rowFrame.MouseEnter:Connect(function()
+                    if not isActive then
+                        TweenService:Create(rowFrame, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {BackgroundTransparency = 0.93}):Play()
+                    end
+                    TweenService:Create(editIcon, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {ImageTransparency = 0.1}):Play()
+                end)
+                rowFrame.MouseLeave:Connect(function()
+                    TweenService:Create(rowFrame, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {BackgroundTransparency = 1}):Play()
+                    TweenService:Create(editIcon, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {ImageTransparency = 0.55}):Play()
+                end)
+
+                -- ── Mini-picker (order change popup) ───────────────────────────
+                clickBtn.MouseButton1Click:Connect(function()
+                    if MiniPicker.OwnerTask == capturedTask then
+                        CloseMiniPicker()
+                        return
+                    end
+                    CloseMiniPicker()
+
+                    local numTasks = #TQ.Tasks
+                    local itemH    = 22
+                    local padV     = 4
+                    local pickerH  = numTasks * itemH + padV * 2
+                    local pickerW  = 38
+
+                    local pickerFrame = InstanceNew("Frame")
+                    pickerFrame.Name = "\0"
+                    pickerFrame.BackgroundColor3 = Library.Theme["Background"] or FromRGB(27, 25, 29)
+                    pickerFrame.BorderSizePixel = 0
+                    pickerFrame.Size = UDim2New(0, pickerW, 0, pickerH)
+                    pickerFrame.ZIndex = 20
+                    pickerFrame.Parent = Library.Holder.Instance
+
+                    local pCornerOuter = InstanceNew("UICorner")
+                    pCornerOuter.CornerRadius = UDimNew(0, 5)
+                    pCornerOuter.Parent = pickerFrame
+
+                    local pStroke = InstanceNew("UIStroke")
+                    pStroke.Color = Library.Theme["Outline"] or FromRGB(35, 33, 38)
+                    pStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                    pStroke.Thickness = 1
+                    pStroke.Parent = pickerFrame
+
+                    local pList = InstanceNew("UIListLayout")
+                    pList.SortOrder = Enum.SortOrder.LayoutOrder
+                    pList.Padding = UDimNew(0, 0)
+                    pList.Parent = pickerFrame
+
+                    local pPad = InstanceNew("UIPadding")
+                    pPad.PaddingTop    = UDimNew(0, padV)
+                    pPad.PaddingBottom = UDimNew(0, padV)
+                    pPad.PaddingLeft   = UDimNew(0, 2)
+                    pPad.PaddingRight  = UDimNew(0, 2)
+                    pPad.Parent = pickerFrame
+
+                    for orderNum = 1, numTasks do
+                        local isCurrentOrder = (capturedTask.Order == orderNum)
+
+                        local pBtn = InstanceNew("TextButton")
+                        pBtn.Name = "\0"
+                        pBtn.Text = tostring(orderNum)
+                        pBtn.FontFace = Library.Font
+                        pBtn.TextSize = 11
+                        pBtn.TextColor3 = FromRGB(235, 235, 235)
+                        pBtn.AutoButtonColor = false
+                        pBtn.BackgroundColor3 = isCurrentOrder
+                            and (Library.Theme["Accent"]  or FromRGB(151, 69, 186))
+                            or  (Library.Theme["Element"] or FromRGB(34, 32, 38))
+                        pBtn.BorderSizePixel = 0
+                        pBtn.Size = UDim2New(1, 0, 0, itemH)
+                        pBtn.ZIndex = 21
+                        pBtn.LayoutOrder = orderNum
+                        pBtn.Parent = pickerFrame
+
+                        local pBtnCorner = InstanceNew("UICorner")
+                        pBtnCorner.CornerRadius = UDimNew(0, 3)
+                        pBtnCorner.Parent = pBtn
+
+                        local capturedOrder = orderNum
+                        pBtn.MouseButton1Click:Connect(function()
+                            if capturedTask.Order == capturedOrder then
+                                CloseMiniPicker(); return
+                            end
+                            -- Swap orders
+                            for _, t in ipairs(TQ.Tasks) do
+                                if t ~= capturedTask and t.Order == capturedOrder then
+                                    t.Order = capturedTask.Order
+                                    break
+                                end
+                            end
+                            capturedTask.Order = capturedOrder
+                            -- Re-normalise to 1..N
+                            table.sort(TQ.Tasks, function(a, b) return a.Order < b.Order end)
+                            for idx2, t in ipairs(TQ.Tasks) do t.Order = idx2 end
+                            CloseMiniPicker()
+                            RenderRows()
+                            FireCallback()
+                        end)
+
+                        if not isCurrentOrder then
+                            pBtn.MouseEnter:Connect(function()
+                                TweenService:Create(pBtn, TweenInfo.new(0.1), {BackgroundColor3 = Library.Theme["Accent"] or FromRGB(151, 69, 186)}):Play()
+                            end)
+                            pBtn.MouseLeave:Connect(function()
+                                TweenService:Create(pBtn, TweenInfo.new(0.1), {BackgroundColor3 = Library.Theme["Element"] or FromRGB(34, 32, 38)}):Play()
+                            end)
+                        end
+                    end
+
+                    -- Track position beside the row every frame
+                    MiniPicker.RS = RunService.RenderStepped:Connect(function()
+                        if not pickerFrame.Parent then
+                            MiniPicker.RS:Disconnect(); MiniPicker.RS = nil; return
+                        end
+                        local rp = capturedRowFrame.AbsolutePosition
+                        local rs = capturedRowFrame.AbsoluteSize
+                        pickerFrame.Position = UDim2New(0, rp.X + rs.X + 4, 0, rp.Y)
+                    end)
+
+                    MiniPicker.Frame     = pickerFrame
+                    MiniPicker.OwnerTask = capturedTask
+                end)
+            end
+        end  -- end RenderRows
+
+        -- Initial render
+        RenderRows()
+
+        -- ── Public API ────────────────────────────────────────────────────────
+
+        function TQ:SetTask(idx)
+            if #TQ.Tasks == 0 then return end
+            AnimateHighlight(idx)
+            RenderRows()
+        end
+
+        function TQ:GetCurrentTask()
+            if #TQ.Tasks == 0 then return nil end
+            local t = TQ.Tasks[TQ.CurrentTask]
+            return t and {Name = t.Name, Order = t.Order} or nil
+        end
+
+        function TQ:NextTask()
+            if #TQ.Tasks == 0 then return end
+            local next = TQ.CurrentTask + 1
+            if next > #TQ.Tasks then next = 1 end
+            AnimateHighlight(next)
+            RenderRows()
+        end
+
+        function TQ:ResetTasks()
+            AnimateHighlight(1)
+            RenderRows()
+        end
+
+        -- ── Slide-in offsets ──────────────────────────────────────────────────
+        Items["Text"].Instance.Position       = UDim2New(0, 30, 0.5, 0)
+        Items["CountBadge"].Instance.Position = UDim2New(1, 30, 0.5, 0)
+
+        function TQ:RefreshPosition(Bool)
+            if Bool then
+                Items["Text"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0.5, 0)})
+                Items["CountBadge"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(1, 0, 0.5, 0)})
+            else
+                Items["Text"].Instance.Position       = UDim2New(0, 30, 0.5, 0)
+                Items["CountBadge"].Instance.Position = UDim2New(1, 30, 0.5, 0)
+            end
+        end
+
+        -- ── Outside-click closes mini-picker ──────────────────────────────────
+        local function IsMouseOverRawFrame(Frame)
+            if not Frame then return false end
+            local mp = Vector2New(Mouse.X, Mouse.Y)
+            local ap = Frame.AbsolutePosition
+            local as = Frame.AbsoluteSize
+            return mp.X >= ap.X and mp.X <= ap.X + as.X
+               and mp.Y >= ap.Y and mp.Y <= ap.Y + as.Y
+        end
+
+        Library:Connect(UserInputService.InputBegan, function(Input)
+            if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
+                if not IsMouseOverRawFrame(MiniPicker.Frame) then
+                    CloseMiniPicker()
+                end
+            end
+        end)
+
+        if TQ.Section.Page and TQ.Section.Page.Active then
+            TQ:RefreshPosition(true)
+        end
+
+        TQ.Section.Elements[#TQ.Section.Elements + 1] = TQ
+
+        -- ── Config: save / load ───────────────────────────────────────────────
+        Library.SetFlags[TQ.Flag] = function(Value)
+            if type(Value) ~= "table" then return end
+            for _, v in ipairs(Value) do
+                for _, t in ipairs(TQ.Tasks) do
+                    if t.Name == (v.Name or v.name) then
+                        t.Order = v.Order or v.order or t.Order
+                    end
+                end
+            end
+            table.sort(TQ.Tasks, function(a, b) return a.Order < b.Order end)
+            for idx, t in ipairs(TQ.Tasks) do t.Order = idx end
+            RenderRows()
+        end
+
+        if Data.ToolTip or Data.tooltip then
+            Library:AddTooltip(Data.ToolTip or Data.tooltip, Items["Container"].Instance)
+        end
+
+        return TQ
+    end
+    -- ─────────────────────────────────────────────────────────────────────────
+
     Library.CreateSettingsPage = function(self, Window, KeybindList)
         local Page = Window:Page({Name = "Settings", Icon = "122669828593160"})
 
