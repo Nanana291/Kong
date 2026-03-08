@@ -14669,85 +14669,112 @@ local Library do
             rpTg.Parent = rpTop
         end
 
-        -- Decorative large glow circle (background)
-        local glowCirc = InstanceNew("Frame")
-        glowCirc.Size = UDim2New(0, 110, 0, 110)
-        glowCirc.AnchorPoint = Vector2New(0.5, 0.5)
-        glowCirc.Position = UDim2New(0.5, 0, 0.5, 0)
-        glowCirc.BackgroundColor3 = Accent()
-        glowCirc.BackgroundTransparency = 0.88
-        glowCirc.BorderSizePixel = 0
-        glowCirc.ZIndex = 3
-        glowCirc.Name = "\0"
-        glowCirc.Parent = RPanel
+        local LocalPlayer  = Players.LocalPlayer
+        local Stats        = game:GetService("Stats")
+
+        local rPad = 12
+
+        local avatarGlow = InstanceNew("Frame")
+        avatarGlow.Size             = UDim2New(0, 72, 0, 72)
+        avatarGlow.AnchorPoint      = Vector2New(0.5, 0)
+        avatarGlow.Position         = UDim2New(0.5, 0, 0, rPad + 8)
+        avatarGlow.BackgroundColor3 = Accent()
+        avatarGlow.BackgroundTransparency = 0.72
+        avatarGlow.BorderSizePixel  = 0
+        avatarGlow.ZIndex           = 3
+        avatarGlow.Name             = "\0"
+        avatarGlow.Parent           = RPanel
+        do local agc = InstanceNew("UICorner"); agc.CornerRadius = UDimNew(1,0); agc.Parent = avatarGlow end
+
+        local avatarRing = InstanceNew("Frame")
+        avatarRing.Size             = UDim2New(0, 64, 0, 64)
+        avatarRing.AnchorPoint      = Vector2New(0.5, 0)
+        avatarRing.Position         = UDim2New(0.5, 0, 0, rPad + 12)
+        avatarRing.BackgroundColor3 = Accent()
+        avatarRing.BackgroundTransparency = 0.45
+        avatarRing.BorderSizePixel  = 0
+        avatarRing.ZIndex           = 4
+        avatarRing.Name             = "\0"
+        avatarRing.Parent           = RPanel
         do
-            local gc = InstanceNew("UICorner"); gc.CornerRadius = UDimNew(1,0); gc.Parent = glowCirc
+            local arc = InstanceNew("UICorner"); arc.CornerRadius = UDimNew(1,0); arc.Parent = avatarRing
+            local ars = InstanceNew("UIStroke")
+            ars.Color = Accent(); ars.Thickness = 1.5; ars.Transparency = 0.3
+            ars.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; ars.Parent = avatarRing
         end
 
-        -- Inner accent ring
-        local innerRing = InstanceNew("Frame")
-        innerRing.Size = UDim2New(0, 70, 0, 70)
-        innerRing.AnchorPoint = Vector2New(0.5, 0.5)
-        innerRing.Position = UDim2New(0.5, 0, 0.5, 0)
-        innerRing.BackgroundColor3 = Accent()
-        innerRing.BackgroundTransparency = 0.78
-        innerRing.BorderSizePixel = 0
-        innerRing.ZIndex = 3
-        innerRing.Name = "\0"
-        innerRing.Parent = RPanel
-        do
-            local ir = InstanceNew("UICorner"); ir.CornerRadius = UDimNew(1,0); ir.Parent = innerRing
+        local avatarImg = InstanceNew("ImageLabel")
+        avatarImg.Size             = UDim2New(0, 56, 0, 56)
+        avatarImg.AnchorPoint      = Vector2New(0.5, 0)
+        avatarImg.Position         = UDim2New(0.5, 0, 0, rPad + 16)
+        avatarImg.BackgroundColor3 = Bg()
+        avatarImg.BackgroundTransparency = 0
+        avatarImg.BorderSizePixel  = 0
+        avatarImg.ZIndex           = 5
+        avatarImg.Image            = ""
+        avatarImg.Name             = "\0"
+        avatarImg.Parent           = RPanel
+        do local aic = InstanceNew("UICorner"); aic.CornerRadius = UDimNew(1,0); aic.Parent = avatarImg end
+
+        Library:Thread(function()
+            local ok, thumb = pcall(function()
+                return Players:GetUserThumbnailAsync(
+                    LocalPlayer.UserId,
+                    Enum.ThumbnailType.HeadShot,
+                    Enum.ThumbnailSize.Size60x60
+                )
+            end)
+            if ok and thumb then avatarImg.Image = thumb end
+        end)
+
+        local nameLabel = InstanceNew("TextLabel")
+        nameLabel.FontFace         = BoldFont
+        nameLabel.Text             = LocalPlayer.Name
+        nameLabel.TextColor3       = Txt()
+        nameLabel.TextTransparency = 0
+        nameLabel.TextSize         = 14
+        nameLabel.Size             = UDim2New(1, -(rPad*2), 0, 18)
+        nameLabel.AnchorPoint      = Vector2New(0.5, 0)
+        nameLabel.Position         = UDim2New(0.5, 0, 0, rPad + 78)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.TextXAlignment   = Enum.TextXAlignment.Center
+        nameLabel.TextTruncate     = Enum.TextTruncate.AtEnd
+        nameLabel.ZIndex           = 5
+        nameLabel.Name             = "\0"
+        nameLabel.Parent           = RPanel
+
+        local displayName = LocalPlayer.DisplayName
+        local hasDisplay  = displayName ~= LocalPlayer.Name and displayName ~= ""
+        if hasDisplay then
+            nameLabel.TextSize    = 12
+            nameLabel.TextColor3  = FromRGB(165, 163, 185)
+            local dispLabel = InstanceNew("TextLabel")
+            dispLabel.FontFace    = BoldFont
+            dispLabel.Text        = displayName
+            dispLabel.TextColor3  = Txt()
+            dispLabel.TextSize    = 15
+            dispLabel.Size        = UDim2New(1, -(rPad*2), 0, 19)
+            dispLabel.AnchorPoint = Vector2New(0.5, 0)
+            dispLabel.Position    = UDim2New(0.5, 0, 0, rPad + 76)
+            dispLabel.BackgroundTransparency = 1
+            dispLabel.TextXAlignment = Enum.TextXAlignment.Center
+            dispLabel.TextTruncate   = Enum.TextTruncate.AtEnd
+            dispLabel.ZIndex      = 5
+            dispLabel.Name        = "\0"
+            dispLabel.Parent      = RPanel
+            nameLabel.Position    = UDim2New(0.5, 0, 0, rPad + 95)
         end
 
-        -- Hub logo icon (uses Window logo)
-        local hubIconData = Library:GetCustomIcon(Window.Logo)
-        local hubIcon = InstanceNew("ImageLabel")
-        hubIcon.Size = UDim2New(0, 44, 0, 44)
-        hubIcon.AnchorPoint = Vector2New(0.5, 0)
-        hubIcon.Position = UDim2New(0.5, 0, 0, 18)
-        hubIcon.BackgroundTransparency = 1
-        hubIcon.BorderSizePixel = 0
-        hubIcon.ZIndex = 5
-        hubIcon.Name = "\0"
-        hubIcon.Image = hubIconData and hubIconData.Url or ""
-        hubIcon.ImageRectOffset = hubIconData and hubIconData.ImageRectOffset or Vector2New(0,0)
-        hubIcon.ImageRectSize   = hubIconData and hubIconData.ImageRectSize   or Vector2New(0,0)
-        hubIcon.ImageColor3 = FromRGB(255,255,255)
-        hubIcon.Parent = RPanel
-        do
-            local hig = InstanceNew("UIGradient")
-            hig.Color = RGBSequence{RGBSequenceKeypoint(0, Accent()), RGBSequenceKeypoint(1, AccGrad())}
-            hig.Rotation = -115
-            hig.Parent = hubIcon
-        end
-
-        -- "IMP HUB" title on panel
-        local hubTitle = InstanceNew("TextLabel")
-        hubTitle.FontFace = BoldFont
-        hubTitle.Text = "IMP HUB"
-        hubTitle.TextColor3 = FromRGB(225, 223, 238)
-        hubTitle.TextTransparency = 0
-        hubTitle.TextSize = 19
-        hubTitle.Size = UDim2New(1, 0, 0, 24)
-        hubTitle.AnchorPoint = Vector2New(0.5, 0)
-        hubTitle.Position = UDim2New(0.5, 0, 0, 66)
-        hubTitle.BackgroundTransparency = 1
-        hubTitle.TextXAlignment = Enum.TextXAlignment.Center
-        hubTitle.ZIndex = 5
-        hubTitle.Name = "\0"
-        hubTitle.Parent = RPanel
-
-        -- "FREE" badge pill
         local freeBadge = InstanceNew("Frame")
-        freeBadge.Size = UDim2New(0, 46, 0, 17)
-        freeBadge.AnchorPoint = Vector2New(0.5, 0)
-        freeBadge.Position = UDim2New(0.5, 0, 0, 93)
+        freeBadge.Size             = UDim2New(0, 46, 0, 16)
+        freeBadge.AnchorPoint      = Vector2New(0.5, 0)
+        freeBadge.Position         = UDim2New(0.5, 0, 0, hasDisplay and (rPad + 116) or (rPad + 99))
         freeBadge.BackgroundColor3 = Accent()
         freeBadge.BackgroundTransparency = 0.15
-        freeBadge.BorderSizePixel = 0
-        freeBadge.ZIndex = 5
-        freeBadge.Name = "\0"
-        freeBadge.Parent = RPanel
+        freeBadge.BorderSizePixel  = 0
+        freeBadge.ZIndex           = 5
+        freeBadge.Name             = "\0"
+        freeBadge.Parent           = RPanel
         do
             local fbc = InstanceNew("UICorner"); fbc.CornerRadius = UDimNew(0, 4); fbc.Parent = freeBadge
             local fbg = InstanceNew("UIGradient")
@@ -14755,30 +14782,134 @@ local Library do
             fbg.Parent = freeBadge
             local fbl = InstanceNew("TextLabel")
             fbl.FontFace = BoldFont; fbl.Text = "FREE"
-            fbl.TextColor3 = FromRGB(255,255,255); fbl.TextSize = 10
+            fbl.TextColor3 = FromRGB(255,255,255); fbl.TextSize = 9
             fbl.Size = UDim2New(1,0,1,0); fbl.BackgroundTransparency = 1
             fbl.TextXAlignment = Enum.TextXAlignment.Center
             fbl.ZIndex = 6; fbl.Name = "\0"; fbl.Parent = freeBadge
         end
 
-        -- Corner accent dots (decorative)
-        local function MakeDot(xf, yf, sz, tr)
-            local d = InstanceNew("Frame")
-            d.Size = UDim2New(0,sz,0,sz)
-            d.AnchorPoint = Vector2New(xf,yf)
-            d.Position = UDim2New(xf, xf==0 and 8 or -8, yf, yf==0 and 8 or -8)
-            d.BackgroundColor3 = Accent()
-            d.BackgroundTransparency = tr
-            d.BorderSizePixel = 0
-            d.ZIndex = 4
-            d.Name = "\0"
-            d.Parent = RPanel
-            local dc = InstanceNew("UICorner"); dc.CornerRadius = UDimNew(1,0); dc.Parent = d
+        local infoDivY = hasDisplay and (rPad + 140) or (rPad + 122)
+
+        local infoDiv = InstanceNew("Frame")
+        infoDiv.Size             = UDim2New(1, -(rPad*2), 0, 1)
+        infoDiv.AnchorPoint      = Vector2New(0.5, 0)
+        infoDiv.Position         = UDim2New(0.5, 0, 0, infoDivY)
+        infoDiv.BackgroundColor3 = Outline()
+        infoDiv.BackgroundTransparency = 0.5
+        infoDiv.BorderSizePixel  = 0
+        infoDiv.ZIndex           = 4
+        infoDiv.Name             = "\0"
+        infoDiv.Parent           = RPanel
+        do
+            local idg = InstanceNew("UIGradient")
+            idg.Transparency = NumSequence{
+                NumSequenceKeypoint(0, 1),
+                NumSequenceKeypoint(0.2, 0),
+                NumSequenceKeypoint(0.8, 0),
+                NumSequenceKeypoint(1, 1)
+            }
+            idg.Parent = infoDiv
         end
-        MakeDot(0,0,5,0.35)  -- top-left
-        MakeDot(1,0,4,0.55)  -- top-right
-        MakeDot(0,1,4,0.55)  -- bot-left
-        MakeDot(1,1,5,0.35)  -- bot-right
+
+        local function MakeInfoRow(yOff, iconName, valueText, labelText)
+            local row = InstanceNew("Frame")
+            row.Size             = UDim2New(1, -(rPad*2), 0, 28)
+            row.AnchorPoint      = Vector2New(0.5, 0)
+            row.Position         = UDim2New(0.5, 0, 0, yOff)
+            row.BackgroundColor3 = Elem()
+            row.BackgroundTransparency = 0.35
+            row.BorderSizePixel  = 0
+            row.ZIndex           = 4
+            row.Name             = "\0"
+            row.Parent           = RPanel
+            do
+                local rc = InstanceNew("UICorner"); rc.CornerRadius = UDimNew(0, 6); rc.Parent = row
+                local rs = InstanceNew("UIStroke")
+                rs.Color = Outline(); rs.Thickness = 1; rs.Transparency = 0.6
+                rs.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; rs.Parent = row
+            end
+
+            local iconData = Library:GetCustomIcon(iconName)
+            local iconEl = InstanceNew("ImageLabel")
+            iconEl.Size             = UDim2New(0, 13, 0, 13)
+            iconEl.AnchorPoint      = Vector2New(0, 0.5)
+            iconEl.Position         = UDim2New(0, 8, 0.5, 0)
+            iconEl.BackgroundTransparency = 1
+            iconEl.BorderSizePixel  = 0
+            iconEl.ZIndex           = 5
+            iconEl.ImageColor3      = Accent()
+            iconEl.ImageTransparency = 0
+            iconEl.Name             = "\0"
+            if iconData then
+                iconEl.Image           = iconData.Url
+                iconEl.ImageRectOffset = iconData.ImageRectOffset
+                iconEl.ImageRectSize   = iconData.ImageRectSize
+            end
+            iconEl.Parent = row
+
+            local capLbl = InstanceNew("TextLabel")
+            capLbl.FontFace = Library.Font
+            capLbl.Text     = labelText
+            capLbl.TextColor3 = FromRGB(130, 128, 150)
+            capLbl.TextTransparency = 0
+            capLbl.TextSize = 9
+            capLbl.Size     = UDim2New(0, 50, 1, 0)
+            capLbl.AnchorPoint = Vector2New(0, 0)
+            capLbl.Position = UDim2New(0, 25, 0, 0)
+            capLbl.BackgroundTransparency = 1
+            capLbl.TextXAlignment = Enum.TextXAlignment.Left
+            capLbl.TextYAlignment = Enum.TextYAlignment.Center
+            capLbl.ZIndex = 5
+            capLbl.Name   = "\0"
+            capLbl.Parent = row
+
+            local valLbl = InstanceNew("TextLabel")
+            valLbl.FontFace = BoldFont
+            valLbl.Text     = valueText
+            valLbl.TextColor3 = Txt()
+            valLbl.TextTransparency = 0
+            valLbl.TextSize = 11
+            valLbl.Size     = UDim2New(1, -80, 1, 0)
+            valLbl.AnchorPoint = Vector2New(1, 0)
+            valLbl.Position = UDim2New(1, -8, 0, 0)
+            valLbl.BackgroundTransparency = 1
+            valLbl.TextXAlignment = Enum.TextXAlignment.Right
+            valLbl.TextYAlignment = Enum.TextYAlignment.Center
+            valLbl.TextTruncate   = Enum.TextTruncate.AtEnd
+            valLbl.ZIndex = 5
+            valLbl.Name   = "\0"
+            valLbl.Parent = row
+
+            return valLbl
+        end
+
+        local rowBaseY = infoDivY + 10
+
+        local timeVal = MakeInfoRow(rowBaseY,      "clock",        "--:--:--",  "SERVER")
+        local pingVal = MakeInfoRow(rowBaseY + 34, "wifi",         "-- ms",     "PING")
+
+        Library:Thread(function()
+            while Library do
+                local h, m, s = math.floor(tick() / 3600) % 24, math.floor(tick() / 60) % 60, math.floor(tick()) % 60
+                pcall(function()
+                    local st = workspace:GetServerTimeNow()
+                    h = math.floor(st / 3600) % 24
+                    m = math.floor(st / 60) % 60
+                    s = math.floor(st) % 60
+                end)
+                timeVal.Text = string.format("%02d:%02d:%02d", h, m, s)
+
+                local ping = 0
+                pcall(function()
+                    ping = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue())
+                end)
+                local pingColor = ping < 80 and FromRGB(100, 220, 140) or ping < 160 and FromRGB(220, 190, 80) or FromRGB(220, 90, 90)
+                pingVal.Text       = ping .. " ms"
+                pingVal.TextColor3 = pingColor
+
+                task.wait(1)
+            end
+        end)
 
         -- ── Horizontal divider between top section and cards ──────────────────
         local HDiv = InstanceNew("Frame")
