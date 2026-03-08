@@ -11173,110 +11173,240 @@ local Library do
                 TargetServerID = Data.TargetServerID or Data.id or nil,
             }
 
+            -- Chat preview messages: user-supplied or built-in defaults
+            local Messages = Data.Messages or Data.messages or {
+                {User = "Member",  Text = "Welcome to the server!"},
+                {User = "Support", Text = "Ask us anything, anytime."},
+                {User = "Dev",     Text = "New update just dropped! 🎉"},
+            }
+            local MSG_COUNT = math.min(#Messages, 3)
+
+            -- Layout constants (absolute heights, no UIListLayout on outer frame)
+            local BADGE_H  = 18   -- "JOIN OUR COMMUNITY" pill row
+            local GAP_H    = 6    -- gap between badge and card
+            local CARD_H   = 90   -- main server info card
+            local SEP_H    = 10   -- thin separator before chat
+            local MSG_H    = 28   -- height per message row
+            local CHAT_H   = SEP_H + (MSG_COUNT * MSG_H)
+
+            -- Absolute Y origins for each child (used in RefreshPosition)
+            local Y_BADGE  = 0
+            local Y_CARD   = BADGE_H + GAP_H               -- 24
+            local Y_CHAT   = Y_CARD  + CARD_H + GAP_H      -- 120
+
+            local TOTAL_H  = Y_CHAT + CHAT_H               -- 208 with 3 msgs
+
             local InviteCode = Discord.InviteLink:gsub("https://discord.gg/", ""):gsub("https://discord.com/invite/", ""):gsub("discord.gg/", "")
 
             local Items = {} do
+
+                -- ── Outer container ──────────────────────────────────────────
                 Items["Discord"] = Instances:Create("Frame", {
                     Parent = Discord.Section.Items["Content"].Instance,
                     Name = "\0",
                     BackgroundTransparency = 1,
-                    Size = UDim2New(1, 0, 0, 110),
-                    BorderColor3 = FromRGB(0, 0, 0),
-                    ZIndex = 2,
+                    Size = UDim2New(1, 0, 0, TOTAL_H),
                     BorderSizePixel = 0,
-                    BackgroundColor3 = FromRGB(255, 255, 255)
+                    ZIndex = 2,
+                    BackgroundColor3 = FromRGB(255, 255, 255),
                 })
 
-                -- Header Text
-                Items["Header"] = Instances:Create("TextLabel", {
+                -- ── "JOIN OUR COMMUNITY" badge ────────────────────────────────
+                Items["BadgeRow"] = Instances:Create("Frame", {
                     Parent = Items["Discord"].Instance,
                     Name = "\0",
-                    Text = "You've been invited to join",
-                    FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal),
-                    TextColor3 = FromRGB(181, 186, 193),
-                    TextSize = 12,
-                    TextXAlignment = Enum.TextXAlignment.Left,
-                    Size = UDim2New(1, 0, 0, 15),
-                    Position = UDim2New(0, 2, 0, 0),
                     BackgroundTransparency = 1,
-                    ZIndex = 2
+                    Position = UDim2New(0, 0, 0, Y_BADGE),
+                    Size = UDim2New(1, 0, 0, BADGE_H),
+                    BorderSizePixel = 0,
+                    ZIndex = 2,
+                    BackgroundColor3 = FromRGB(255, 255, 255),
                 })
 
-                -- Card Background
+                Items["BadgePill"] = Instances:Create("Frame", {
+                    Parent = Items["BadgeRow"].Instance,
+                    Name = "\0",
+                    AutomaticSize = Enum.AutomaticSize.X,
+                    Size = UDim2New(0, 0, 0, BADGE_H),
+                    BackgroundTransparency = 0.72,
+                    BorderSizePixel = 0,
+                    ZIndex = 2,
+                    BackgroundColor3 = FromRGB(151, 69, 186),
+                })  Items["BadgePill"]:AddToTheme({BackgroundColor3 = "Accent"})
+
+                Instances:Create("UICorner", {
+                    Parent = Items["BadgePill"].Instance,
+                    CornerRadius = UDimNew(1, 0),
+                })
+                Instances:Create("UIPadding", {
+                    Parent = Items["BadgePill"].Instance,
+                    PaddingLeft  = UDimNew(0, 7),
+                    PaddingRight = UDimNew(0, 7),
+                })
+
+                Instances:Create("TextLabel", {
+                    Parent = Items["BadgePill"].Instance,
+                    Name = "\0",
+                    FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal),
+                    TextColor3 = FromRGB(255, 255, 255),
+                    Text = "JOIN OUR COMMUNITY",
+                    TextSize = 9,
+                    Size = UDim2New(0, 0, 1, 0),
+                    AutomaticSize = Enum.AutomaticSize.X,
+                    BackgroundTransparency = 1,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    LetterSpacing = 2,
+                    ZIndex = 3,
+                })
+
+                -- ── Main info card ────────────────────────────────────────────
                 Items["Card"] = Instances:Create("Frame", {
                     Parent = Items["Discord"].Instance,
                     Name = "\0",
-                    Size = UDim2New(1, 0, 0, 90),
-                    Position = UDim2New(0, 0, 0, 20),
-                    BackgroundColor3 = FromRGB(43, 45, 49),
+                    Position = UDim2New(0, 0, 0, Y_CARD),
+                    Size = UDim2New(1, 0, 0, CARD_H),
                     BorderSizePixel = 0,
-                    ZIndex = 2
-                })
+                    ZIndex = 2,
+                    BackgroundColor3 = FromRGB(22, 21, 25),
+                })  Items["Card"]:AddToTheme({BackgroundColor3 = "Element"})
+
                 Instances:Create("UICorner", {
                     Parent = Items["Card"].Instance,
-                    CornerRadius = UDimNew(0, 4)
+                    CornerRadius = UDimNew(0, 6),
+                })
+                Instances:Create("UIStroke", {
+                    Parent = Items["Card"].Instance,
+                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+                    Thickness = 1,
+                    Transparency = 0.35,
+                    Color = FromRGB(60, 58, 65),
+                }):AddToTheme({Color = "Outline"})
+
+                -- Purple accent strip across the top of the card
+                Items["AccentBar"] = Instances:Create("Frame", {
+                    Parent = Items["Card"].Instance,
+                    Name = "\0",
+                    Size = UDim2New(1, 0, 0, 2),
+                    Position = UDim2New(0, 0, 0, 0),
+                    BorderSizePixel = 0,
+                    ZIndex = 3,
+                    BackgroundColor3 = FromRGB(151, 69, 186),
+                })  Items["AccentBar"]:AddToTheme({BackgroundColor3 = "Accent"})
+                -- Soft gradient so the bar fades toward the edges
+                Instances:Create("UIGradient", {
+                    Parent = Items["AccentBar"].Instance,
+                    Transparency = NumSequence{
+                        NumSequenceKeypoint(0, 0.6),
+                        NumSequenceKeypoint(0.5, 0),
+                        NumSequenceKeypoint(1, 0.6),
+                    },
                 })
 
-                -- Server Icon
+                -- ── Server icon ───────────────────────────────────────────────
                 Items["Icon"] = Instances:Create("ImageLabel", {
                     Parent = Items["Card"].Instance,
                     Name = "\0",
-                    Size = UDim2New(0, 50, 0, 50),
+                    Size = UDim2New(0, 46, 0, 46),
                     AnchorPoint = Vector2New(0, 0.5),
-                    Position = UDim2New(0, 15, 0.5, 0),
-                    BackgroundColor3 = FromRGB(49, 51, 56),
+                    Position = UDim2New(0, 14, 0.5, 1),
+                    BackgroundColor3 = FromRGB(28, 26, 32),
                     ZIndex = 3,
                     BorderSizePixel = 0,
-                    Image = ""
-                })
+                    Image = "",
+                })  Items["Icon"]:AddToTheme({BackgroundColor3 = "Background"})
                 Instances:Create("UICorner", {
                     Parent = Items["Icon"].Instance,
-                    CornerRadius = UDimNew(0, 14)
+                    CornerRadius = UDimNew(0, 10),
                 })
+                -- Accent ring around icon
+                Instances:Create("UIStroke", {
+                    Parent = Items["Icon"].Instance,
+                    Color = FromRGB(151, 69, 186),
+                    Thickness = 2,
+                    Transparency = 0.35,
+                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+                }):AddToTheme({Color = "Accent"})
+                -- Gradient overlay on icon background
+                Instances:Create("UIGradient", {
+                    Parent = Items["Icon"].Instance,
+                    Rotation = -115,
+                    Enabled = true,
+                    Color = RGBSequence{
+                        RGBSequenceKeypoint(0, FromRGB(255, 255, 255)),
+                        RGBSequenceKeypoint(1, FromRGB(143, 143, 143)),
+                    },
+                }):AddToTheme({Color = function()
+                    return RGBSequence{
+                        RGBSequenceKeypoint(0, Library.Theme.Accent),
+                        RGBSequenceKeypoint(1, Library.Theme.AccentGradient),
+                    }
+                end})
 
                 Items["IconText"] = Instances:Create("TextLabel", {
                     Parent = Items["Icon"].Instance,
                     Name = "\0",
                     Size = UDim2New(1, 0, 1, 0),
                     BackgroundTransparency = 1,
-                    Text = string.sub(Discord.Name, 1, 1),
-                    TextColor3 = FromRGB(220, 221, 222),
-                    TextSize = 18,
-                    FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal),
-                    ZIndex = 4
+                    Text = string.sub(Discord.Name, 1, 1):upper(),
+                    TextColor3 = FromRGB(255, 255, 255),
+                    TextTransparency = 0.05,
+                    TextSize = 20,
+                    FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal),
+                    ZIndex = 4,
                 })
 
-                -- Server Title
+                -- ── Server name ───────────────────────────────────────────────
                 Items["Title"] = Instances:Create("TextLabel", {
                     Parent = Items["Card"].Instance,
                     Name = "\0",
                     FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal),
-                    TextColor3 = FromRGB(255, 255, 255),
+                    TextColor3 = FromRGB(235, 235, 235),
                     Text = Discord.Name,
-                    TextSize = 15,
+                    TextSize = 13,
                     TextXAlignment = Enum.TextXAlignment.Left,
-                    Size = UDim2New(1, -165, 0, 20),
-                    Position = UDim2New(0, 78, 0, 15),
+                    Size = UDim2New(1, -158, 0, 16),
+                    Position = UDim2New(0, 70, 0, 18),
                     BackgroundTransparency = 1,
                     TextTruncate = Enum.TextTruncate.AtEnd,
-                    ZIndex = 3
-                })
+                    ZIndex = 3,
+                })  Items["Title"]:AddToTheme({TextColor3 = "Text"})
 
-                -- Online Members (Green)
-                Items["OnlineContainer"] = Instances:Create("Frame", {
+                -- Thin divider under server name
+                Instances:Create("Frame", {
                     Parent = Items["Card"].Instance,
+                    Name = "\0",
+                    Position = UDim2New(0, 70, 0, 37),
+                    Size = UDim2New(1, -160, 0, 1),
+                    BorderSizePixel = 0,
+                    BackgroundTransparency = 0.7,
+                    ZIndex = 3,
+                    BackgroundColor3 = FromRGB(60, 58, 65),
+                }):AddToTheme({BackgroundColor3 = "Outline"})
+
+                -- ── Online stat ───────────────────────────────────────────────
+                local OnlineRow = Instances:Create("Frame", {
+                    Parent = Items["Card"].Instance,
+                    Name = "\0",
                     BackgroundTransparency = 1,
-                    Position = UDim2New(0, 78, 0, 38),
-                    Size = UDim2New(1, -165, 0, 16),
-                    ZIndex = 3
+                    Position = UDim2New(0, 70, 0, 44),
+                    Size = UDim2New(1, -158, 0, 14),
+                    BorderSizePixel = 0,
+                    ZIndex = 3,
+                })
+                Instances:Create("UIListLayout", {
+                    Parent = OnlineRow.Instance,
+                    FillDirection = Enum.FillDirection.Horizontal,
+                    VerticalAlignment = Enum.VerticalAlignment.Center,
+                    Padding = UDimNew(0, 5),
                 })
 
                 Items["OnlineDot"] = Instances:Create("Frame", {
-                    Parent = Items["OnlineContainer"].Instance,
-                    Size = UDim2New(0, 8, 0, 8),
+                    Parent = OnlineRow.Instance,
+                    Name = "\0",
+                    Size = UDim2New(0, 7, 0, 7),
                     BackgroundColor3 = FromRGB(35, 165, 89),
-                    Position = UDim2New(0, 0, 0.5, -4),
-                    ZIndex = 3
+                    BorderSizePixel = 0,
+                    ZIndex = 4,
                 })
                 Instances:Create("UICorner", {Parent = Items["OnlineDot"].Instance, CornerRadius = UDimNew(1, 0)})
 
@@ -11285,109 +11415,276 @@ local Library do
                     Name = "Pulse",
                     Size = UDim2New(1, 0, 1, 0),
                     BackgroundColor3 = FromRGB(35, 165, 89),
-                    BackgroundTransparency = 0.6,
-                    ZIndex = 2
+                    BackgroundTransparency = 0.55,
+                    ZIndex = 3,
                 })
                 Instances:Create("UICorner", {Parent = Pulse.Instance, CornerRadius = UDimNew(1, 0)})
 
                 Library:Thread(function()
-                    local TweenInfoPulse = TweenInfo.new(1.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, -1)
-                    local TweenPulse = TweenService:Create(Pulse.Instance, TweenInfoPulse, {Size = UDim2New(2, 0, 2, 0), BackgroundTransparency = 1})
-                    TweenPulse:Play()
+                    TweenService:Create(Pulse.Instance,
+                        TweenInfo.new(1.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, -1),
+                        {Size = UDim2New(2.2, 0, 2.2, 0), BackgroundTransparency = 1}
+                    ):Play()
                 end)
 
                 Items["OnlineText"] = Instances:Create("TextLabel", {
-                    Parent = Items["OnlineContainer"].Instance,
-                    FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal),
+                    Parent = OnlineRow.Instance,
+                    Name = "\0",
+                    FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal),
                     TextColor3 = FromRGB(35, 165, 89),
                     Text = "Loading...",
                     TextSize = 10,
                     TextXAlignment = Enum.TextXAlignment.Left,
                     AutomaticSize = Enum.AutomaticSize.X,
                     Size = UDim2New(0, 0, 1, 0),
-                    Position = UDim2New(0, 14, 0, 0),
                     BackgroundTransparency = 1,
-                    ZIndex = 3
+                    ZIndex = 4,
                 })
 
-                -- Total Members (Gray)
-                Items["TotalContainer"] = Instances:Create("Frame", {
+                -- ── Total stat ────────────────────────────────────────────────
+                local TotalRow = Instances:Create("Frame", {
                     Parent = Items["Card"].Instance,
+                    Name = "\0",
                     BackgroundTransparency = 1,
-                    Position = UDim2New(0, 78, 0, 56),
-                    Size = UDim2New(1, -165, 0, 16),
-                    ZIndex = 3
+                    Position = UDim2New(0, 70, 0, 62),
+                    Size = UDim2New(1, -158, 0, 14),
+                    BorderSizePixel = 0,
+                    ZIndex = 3,
+                })
+                Instances:Create("UIListLayout", {
+                    Parent = TotalRow.Instance,
+                    FillDirection = Enum.FillDirection.Horizontal,
+                    VerticalAlignment = Enum.VerticalAlignment.Center,
+                    Padding = UDimNew(0, 5),
                 })
 
                 Items["TotalDot"] = Instances:Create("Frame", {
-                    Parent = Items["TotalContainer"].Instance,
-                    Size = UDim2New(0, 8, 0, 8),
-                    BackgroundColor3 = FromRGB(128, 132, 142),
-                    Position = UDim2New(0, 0, 0.5, -4),
-                    ZIndex = 3
+                    Parent = TotalRow.Instance,
+                    Name = "\0",
+                    Size = UDim2New(0, 7, 0, 7),
+                    BackgroundColor3 = FromRGB(110, 110, 120),
+                    BorderSizePixel = 0,
+                    ZIndex = 4,
                 })
                 Instances:Create("UICorner", {Parent = Items["TotalDot"].Instance, CornerRadius = UDimNew(1, 0)})
 
                 Items["TotalText"] = Instances:Create("TextLabel", {
-                    Parent = Items["TotalContainer"].Instance,
-                    FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal),
-                    TextColor3 = FromRGB(128, 132, 142),
+                    Parent = TotalRow.Instance,
+                    Name = "\0",
+                    FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal),
+                    TextColor3 = FromRGB(110, 110, 120),
                     Text = "Loading...",
                     TextSize = 10,
                     TextXAlignment = Enum.TextXAlignment.Left,
                     AutomaticSize = Enum.AutomaticSize.X,
                     Size = UDim2New(0, 0, 1, 0),
-                    Position = UDim2New(0, 14, 0, 0),
                     BackgroundTransparency = 1,
-                    ZIndex = 3
+                    ZIndex = 4,
                 })
 
-                -- Join Button
+                -- ── Join button ───────────────────────────────────────────────
                 Items["JoinButton"] = Instances:Create("TextButton", {
                     Parent = Items["Card"].Instance,
                     Name = "\0",
                     Text = "Join",
                     FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal),
                     TextColor3 = FromRGB(255, 255, 255),
-                    BackgroundColor3 = FromRGB(36, 128, 70),
-                    Size = UDim2New(0, 75, 0, 35),
+                    BackgroundColor3 = FromRGB(151, 69, 186),
+                    Size = UDim2New(0, 60, 0, 28),
                     AnchorPoint = Vector2New(1, 0.5),
-                    Position = UDim2New(1, -20, 0.5, 0),
-                    AutoButtonColor = true,
-                    TextSize = 14,
-                    ZIndex = 3
-                })
+                    Position = UDim2New(1, -13, 0.5, 1),
+                    AutoButtonColor = false,
+                    TextSize = 12,
+                    ZIndex = 3,
+                    BorderSizePixel = 0,
+                })  Items["JoinButton"]:AddToTheme({BackgroundColor3 = "Accent"})
                 Instances:Create("UICorner", {
                     Parent = Items["JoinButton"].Instance,
-                    CornerRadius = UDimNew(0, 4)
+                    CornerRadius = UDimNew(0, 5),
+                })
+                -- Subtle shine overlay on button
+                Instances:Create("UIGradient", {
+                    Parent = Items["JoinButton"].Instance,
+                    Rotation = -90,
+                    Color = RGBSequence{
+                        RGBSequenceKeypoint(0, FromRGB(255, 255, 255)),
+                        RGBSequenceKeypoint(1, FromRGB(200, 200, 200)),
+                    },
+                    Transparency = NumSequence{
+                        NumSequenceKeypoint(0, 0.5),
+                        NumSequenceKeypoint(1, 0.82),
+                    },
                 })
 
                 Items["JoinButton"]:OnHover(function()
-                    Items["JoinButton"]:Tween(TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = FromRGB(31, 111, 61)})
+                    Items["JoinButton"]:Tween(TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                        BackgroundColor3 = Library.Theme.AccentGradient or FromRGB(109, 43, 139)
+                    })
                 end)
-
                 Items["JoinButton"]:OnHoverLeave(function()
-                     Items["JoinButton"]:Tween(TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = FromRGB(36, 128, 70)})
+                    Items["JoinButton"]:Tween(TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                        BackgroundColor3 = Library.Theme.Accent or FromRGB(151, 69, 186)
+                    })
                 end)
-            end
 
+                -- ── Chat preview ──────────────────────────────────────────────
+                if MSG_COUNT > 0 then
+                    Items["ChatCard"] = Instances:Create("Frame", {
+                        Parent = Items["Discord"].Instance,
+                        Name = "\0",
+                        Position = UDim2New(0, 0, 0, Y_CHAT),
+                        Size = UDim2New(1, 0, 0, CHAT_H),
+                        BackgroundTransparency = 1,
+                        BorderSizePixel = 0,
+                        ZIndex = 2,
+                        BackgroundColor3 = FromRGB(255, 255, 255),
+                    })
+
+                    -- Separator
+                    Instances:Create("Frame", {
+                        Parent = Items["ChatCard"].Instance,
+                        Name = "\0",
+                        AnchorPoint = Vector2New(0, 0),
+                        Position = UDim2New(0, 0, 0, 4),
+                        Size = UDim2New(1, 0, 0, 1),
+                        BackgroundTransparency = 0.65,
+                        BorderSizePixel = 0,
+                        ZIndex = 3,
+                        BackgroundColor3 = FromRGB(55, 53, 60),
+                    }):AddToTheme({BackgroundColor3 = "Outline"})
+
+                    for i = 1, MSG_COUNT do
+                        local msg = Messages[i]
+                        local yOff = SEP_H + (i - 1) * MSG_H
+
+                        local MsgRow = Instances:Create("Frame", {
+                            Parent = Items["ChatCard"].Instance,
+                            Name = "\0",
+                            BackgroundTransparency = 1,
+                            Position = UDim2New(0, 0, 0, yOff),
+                            Size = UDim2New(1, 0, 0, MSG_H),
+                            BorderSizePixel = 0,
+                            ZIndex = 2,
+                        })
+
+                        -- Avatar circle with accent gradient
+                        local Avatar = Instances:Create("Frame", {
+                            Parent = MsgRow.Instance,
+                            Name = "\0",
+                            AnchorPoint = Vector2New(0, 0.5),
+                            Position = UDim2New(0, 2, 0.5, 0),
+                            Size = UDim2New(0, 17, 0, 17),
+                            BorderSizePixel = 0,
+                            ZIndex = 3,
+                            BackgroundColor3 = FromRGB(151, 69, 186),
+                        })  Avatar:AddToTheme({BackgroundColor3 = "Accent"})
+                        Instances:Create("UICorner", {Parent = Avatar.Instance, CornerRadius = UDimNew(1, 0)})
+                        Instances:Create("UIGradient", {
+                            Parent = Avatar.Instance,
+                            Rotation = -115,
+                            Color = RGBSequence{
+                                RGBSequenceKeypoint(0, FromRGB(255, 255, 255)),
+                                RGBSequenceKeypoint(1, FromRGB(143, 143, 143)),
+                            },
+                        }):AddToTheme({Color = function()
+                            return RGBSequence{
+                                RGBSequenceKeypoint(0, Library.Theme.Accent),
+                                RGBSequenceKeypoint(1, Library.Theme.AccentGradient),
+                            }
+                        end})
+                        Instances:Create("TextLabel", {
+                            Parent = Avatar.Instance,
+                            Name = "\0",
+                            Size = UDim2New(1, 0, 1, 0),
+                            BackgroundTransparency = 1,
+                            Text = string.sub(msg.User or "?", 1, 1):upper(),
+                            TextColor3 = FromRGB(255, 255, 255),
+                            TextSize = 9,
+                            FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal),
+                            ZIndex = 4,
+                        })
+
+                        -- Username (accent color, small + bold)
+                        Instances:Create("TextLabel", {
+                            Parent = MsgRow.Instance,
+                            Name = "\0",
+                            AnchorPoint = Vector2New(0, 0.5),
+                            Position = UDim2New(0, 25, 0.5, -6),
+                            Size = UDim2New(0, 80, 0, 11),
+                            BackgroundTransparency = 1,
+                            Text = msg.User or "User",
+                            TextColor3 = FromRGB(151, 69, 186),
+                            TextSize = 10,
+                            TextXAlignment = Enum.TextXAlignment.Left,
+                            TextTruncate = Enum.TextTruncate.AtEnd,
+                            FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal),
+                            ZIndex = 3,
+                        }):AddToTheme({TextColor3 = "Accent"})
+
+                        -- Message text
+                        Instances:Create("TextLabel", {
+                            Parent = MsgRow.Instance,
+                            Name = "\0",
+                            AnchorPoint = Vector2New(0, 0.5),
+                            Position = UDim2New(0, 25, 0.5, 6),
+                            Size = UDim2New(1, -30, 0, 11),
+                            BackgroundTransparency = 1,
+                            Text = msg.Text or "",
+                            TextColor3 = FromRGB(160, 158, 168),
+                            TextSize = 10,
+                            TextXAlignment = Enum.TextXAlignment.Left,
+                            TextTruncate = Enum.TextTruncate.AtEnd,
+                            FontFace = Library.Font,
+                            ZIndex = 3,
+                        })
+                    end
+                end
+
+            end  -- end Items do
+
+            -- ── Slide-in animation ────────────────────────────────────────────
             function Discord:RefreshPosition(Bool)
+                local TInfo = TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
                 if Bool then
-                    Items["Header"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 2, 0, 0)})
-                    Items["Card"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 20)})
+                    Items["BadgeRow"]:Tween(TInfo, {Position = UDim2New(0, 0, 0, Y_BADGE)})
+                    Items["Card"]:Tween(TInfo, {Position = UDim2New(0, 0, 0, Y_CARD)})
+                    if Items["ChatCard"] then
+                        Items["ChatCard"]:Tween(TInfo, {Position = UDim2New(0, 0, 0, Y_CHAT)})
+                    end
                 else
-                    Items["Header"].Instance.Position = UDim2New(0, 32, 0, 0)
-                    Items["Card"].Instance.Position = UDim2New(0, 30, 0, 20)
+                    Items["BadgeRow"].Instance.Position  = UDim2New(0, 32, 0, Y_BADGE)
+                    Items["Card"].Instance.Position      = UDim2New(0, 30, 0, Y_CARD)
+                    if Items["ChatCard"] then
+                        Items["ChatCard"].Instance.Position = UDim2New(0, 30, 0, Y_CHAT)
+                    end
                 end
             end
 
+            -- ── Icon resolution (window logo > fallback letter) ───────────────
+            local WindowIcon = Discord.Window and Discord.Window.Logo and Library:GetCustomIcon(Discord.Window.Logo) or nil
+            local function ApplyWidgetIcon(fallbackName)
+                if WindowIcon and WindowIcon.Url and WindowIcon.Url ~= "" then
+                    Items["Icon"].Instance.Image = WindowIcon.Url
+                    Items["Icon"].Instance.ImageRectOffset = WindowIcon.ImageRectOffset or Vector2New(0, 0)
+                    Items["Icon"].Instance.ImageRectSize   = WindowIcon.ImageRectSize   or Vector2New(0, 0)
+                    -- Disable the gradient when showing a real image
+                    for _, child in Items["Icon"].Instance:GetChildren() do
+                        if child:IsA("UIGradient") then child.Enabled = false end
+                    end
+                    Items["IconText"].Instance.Visible = false
+                else
+                    Items["IconText"].Instance.Text    = string.sub(fallbackName or Discord.Name, 1, 1):upper()
+                    Items["IconText"].Instance.Visible = true
+                end
+            end
+
+            ApplyWidgetIcon(Discord.Name)
+
+            -- ── HTTP fetch (member counts + server name) ──────────────────────
             Library:Thread(function()
                 if httpRequest and InviteCode ~= "" then
                     local Url = "https://discord.com/api/v9/invites/" .. InviteCode .. "?with_counts=true"
-                    local response = httpRequest({
-                        Url = Url,
-                        Method = "GET"
-                    })
+                    local response = httpRequest({ Url = Url, Method = "GET" })
 
                     if response.StatusCode == 200 then
                         local Success, data = pcall(function()
@@ -11400,22 +11697,13 @@ local Library do
                                 warn("Invitation ID: " .. (data.guild and data.guild.id or "N/A"))
                             else
                                 local online = data.approximate_presence_count
-                                local total = data.approximate_member_count
-                                local name = data.guild.name
+                                local total  = data.approximate_member_count
+                                local name   = data.guild.name
 
                                 Items["Title"].Instance.Text = name or Discord.Name
-
-                                if data.guild.icon then
-                                    local iconUrl = "https://cdn.discordapp.com/icons/" .. data.guild.id .. "/" .. data.guild.icon .. ".png"
-                                    Items["Icon"].Instance.Image = iconUrl
-                                    Items["IconText"].Instance.Visible = false
-                                else
-                                    Items["IconText"].Instance.Text = string.sub(name or Discord.Name, 1, 1)
-                                    Items["IconText"].Instance.Visible = true
-                                end
-
+                                ApplyWidgetIcon(name)
                                 Items["OnlineText"].Instance.Text = online .. " Online"
-                                Items["TotalText"].Instance.Text = total .. " Members"
+                                Items["TotalText"].Instance.Text  = total  .. " Members"
 
                                 print("--------------------------------")
                                 print("✅ Server Verified: " .. (name or "Unknown"))
@@ -11427,14 +11715,15 @@ local Library do
                         end
                     else
                         Items["OnlineText"].Instance.Text = "Error"
-                        Items["TotalText"].Instance.Text = "Error"
+                        Items["TotalText"].Instance.Text  = "Error"
                     end
                 else
                     Items["OnlineText"].Instance.Text = "N/A"
-                    Items["TotalText"].Instance.Text = "N/A"
+                    Items["TotalText"].Instance.Text  = "N/A"
                 end
             end)
 
+            -- ── Join button click ─────────────────────────────────────────────
             Items["JoinButton"]:Connect("MouseButton1Click", function()
                 if setclipboard then
                     setclipboard(Discord.InviteLink)
