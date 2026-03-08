@@ -858,6 +858,7 @@ local Library do
 
         Tween.Create = function(self, Item, Info, Goal, IsRawItem)
             if not Item then return end
+            if not Library then return end  -- Library was unloaded; discard stale callbacks
             Item = IsRawItem and Item or Item.Instance
             Info = Info or TweenInfo.new(Library.Tween.Time, Library.Tween.Style, Library.Tween.Direction)
 
