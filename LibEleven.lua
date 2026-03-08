@@ -14637,6 +14637,54 @@ local Library do
         MakeSocialBtn(0,  "D", "https://discord.gg/vRXFYAtH5z",                           "message-circle")
         MakeSocialBtn(36, "▶", "https://youtube.com/@imphubscripts?si=nvhL4z5EuuBjCtWK",  "play-circle")
 
+        local gameRaw   = tostring(Window.SubName or "")
+        local gameUpper = string.upper(gameRaw)
+
+        local gameTitleY = PAD + 182
+
+        local gameTitle = InstanceNew("TextLabel")
+        gameTitle.FontFace         = BoldFont
+        gameTitle.Text             = gameUpper
+        gameTitle.TextColor3       = FromRGB(255, 255, 255)
+        gameTitle.TextTransparency = 0
+        gameTitle.TextSize         = 26
+        gameTitle.Size             = UDim2New(1, -(PAD*2), 0, 34)
+        gameTitle.Position         = UDim2New(0, PAD, 0, gameTitleY)
+        gameTitle.BackgroundTransparency = 1
+        gameTitle.TextXAlignment   = Enum.TextXAlignment.Left
+        gameTitle.TextTruncate     = Enum.TextTruncate.AtEnd
+        gameTitle.ZIndex           = 4
+        gameTitle.Name             = "\0"
+        gameTitle.Parent           = Left
+        do
+            local tg = InstanceNew("UIGradient")
+            tg.Color = RGBSequence{
+                RGBSequenceKeypoint(0, FromRGB(255, 255, 255)),
+                RGBSequenceKeypoint(1, FromRGB(210, 200, 235))
+            }
+            tg.Rotation = 10
+            tg.Parent = gameTitle
+        end
+
+        local gameDesc = InstanceNew("TextLabel")
+        gameDesc.FontFace         = Library.Font
+        gameDesc.Text             = string.format(
+            "Welcome to one of the best %s scripts you can find out!\nEnjoy this script with tons of features that are waiting for you.",
+            gameRaw
+        )
+        gameDesc.TextColor3       = FromRGB(140, 138, 158)
+        gameDesc.TextTransparency = 0
+        gameDesc.TextSize         = 11
+        gameDesc.Size             = UDim2New(1, -(PAD*2), 0, 42)
+        gameDesc.Position         = UDim2New(0, PAD, 0, gameTitleY + 37)
+        gameDesc.BackgroundTransparency = 1
+        gameDesc.TextXAlignment   = Enum.TextXAlignment.Left
+        gameDesc.TextYAlignment   = Enum.TextYAlignment.Top
+        gameDesc.TextWrapped      = true
+        gameDesc.ZIndex           = 4
+        gameDesc.Name             = "\0"
+        gameDesc.Parent           = Left
+
         -- ── RIGHT BRANDING PANEL ───────────────────────────────────────────────
         local RPanel = InstanceNew("Frame")
         RPanel.Size = UDim2New(0.40, -10, TOP_FRAC - 0.06, 0)
@@ -15035,6 +15083,23 @@ local Library do
             cardTitle.Name = "CardTitle"
             cardTitle.Parent = cardBtn
 
+            local cardSubtitle = InstanceNew("TextLabel")
+            cardSubtitle.FontFace = Library.Font
+            cardSubtitle.Text = ""
+            cardSubtitle.TextColor3 = FromRGB(110, 108, 130)
+            cardSubtitle.TextTransparency = 1
+            cardSubtitle.TextSize = 9
+            cardSubtitle.Size = UDim2New(1, -10, 0, 22)
+            cardSubtitle.AnchorPoint = Vector2New(0.5, 0)
+            cardSubtitle.Position = UDim2New(0.5, 0, 0, 70)
+            cardSubtitle.BackgroundTransparency = 1
+            cardSubtitle.TextXAlignment = Enum.TextXAlignment.Center
+            cardSubtitle.TextWrapped = true
+            cardSubtitle.RichText = true
+            cardSubtitle.ZIndex = 5
+            cardSubtitle.Name = "CardSubtitle"
+            cardSubtitle.Parent = cardBtn
+
             -- UIScale for click bounce
             local cardScale = InstanceNew("UIScale")
             cardScale.Scale = 1
@@ -15073,7 +15138,7 @@ local Library do
                 end)
             end)
 
-            cardSlots[idx] = {btn=cardBtn, icon=cardIcon, title=cardTitle, stroke=cbs, top=cbTop}
+            cardSlots[idx] = {btn=cardBtn, icon=cardIcon, title=cardTitle, subtitle=cardSubtitle, stroke=cbs, top=cbTop}
         end
 
         for i = 1, 3 do MakeCard(i) end
@@ -15105,20 +15170,30 @@ local Library do
                     -- Populate title
                     slot.title.Text = string.upper(devPages[i].Name)
 
+                    local pageName = devPages[i].Name
+                    local titleCased = pageName:sub(1,1):upper() .. pageName:sub(2):lower()
+                    slot.subtitle.Text = string.format(
+                        'This will redirect you to the <font color="#FFFFFF">%s</font> tab.',
+                        titleCased
+                    )
+
                     -- Animated reveal: icon slides up, title fades in
                     slot.icon.ImageTransparency = 1
                     slot.icon.Position = UDim2New(0.5, 0, 0, 30)
                     slot.title.TextTransparency = 1
+                    slot.subtitle.TextTransparency = 1
 
                     local revT = TweenInfo.new(0.35 + (i-1)*0.08, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
-                    TweenService:Create(slot.icon,  revT, {ImageTransparency = 0, Position = UDim2New(0.5, 0, 0, 18)}):Play()
-                    TweenService:Create(slot.title, TweenInfo.new(0.3 + (i-1)*0.08, Enum.EasingStyle.Quad),
-                        {TextTransparency = 0.1}):Play()
+                    TweenService:Create(slot.icon,     revT, {ImageTransparency = 0, Position = UDim2New(0.5, 0, 0, 18)}):Play()
+                    TweenService:Create(slot.title,    TweenInfo.new(0.3  + (i-1)*0.08, Enum.EasingStyle.Quad), {TextTransparency = 0.1}):Play()
+                    TweenService:Create(slot.subtitle, TweenInfo.new(0.38 + (i-1)*0.08, Enum.EasingStyle.Quad), {TextTransparency = 0.1}):Play()
                 else
                     slot.icon.Image = ""
                     slot.icon.ImageTransparency = 1
                     slot.title.Text = "—"
                     slot.title.TextTransparency = 0.55
+                    slot.subtitle.Text = ""
+                    slot.subtitle.TextTransparency = 1
                 end
             end
         end
