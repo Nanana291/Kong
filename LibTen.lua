@@ -13584,6 +13584,786 @@ local Library do
     end
     -- ─────────────────────────────────────────────────────────────────────────
 
+    -- ConditionBuilder: visual condition assistant panel
+    -- ─────────────────────────────────────────────────────────────────────────
+    Library.Sections.ConditionBuilder = function(self, Data)
+        Data = Data or {}
+
+        local CB = {
+            Window  = self.Window,
+            Page    = self.Page,
+            Section = self,
+
+            Title    = Data.Title    or Data.title    or "Conditions",
+            Flag     = Data.Flag     or Data.flag     or Library:NextFlag(),
+            Callback = Data.Callback or Data.callback or function() end,
+
+            Conditions = {},
+        }
+
+        -- ── Variable / operator options ───────────────────────────────────────
+        local VARIABLES = {
+            "Mob Health", "Player Health", "Distance",
+            "Enemy Count", "Player Level", "Energy", "Boss Spawned",
+        }
+        local OPERATORS = { "<", ">", "<=", ">=", "==", "!=" }
+
+        -- ── Layout constants ──────────────────────────────────────────────────
+        local HEADER_H = 26
+        local COND_H   = 32   -- height of each condition row
+        local ANIM_T   = TweenInfo.new(0.25, Enum.EasingStyle.Quad,  Enum.EasingDirection.Out)
+        local COLL_T   = TweenInfo.new(0.20, Enum.EasingStyle.Sine,  Enum.EasingDirection.In)
+        local SLIDE_T  = TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+
+        -- Row layout: connector@4 | var-btn@22 w70 | op-btn@96 w36 | val-bg@136 w50 | remove@right-4
+        local VAR_X, VAR_W = 22, 70
+        local OP_X,  OP_W  = 96, 36
+        local VAL_X, VAL_W = 136, 50
+
+        -- ── Deep-copy DefaultConditions ───────────────────────────────────────
+        for _, c in ipairs(Data.DefaultConditions or Data.defaultConditions or {}) do
+            TableInsert(CB.Conditions, {
+                Variable = c.Variable or c.variable or VARIABLES[1],
+                Operator = c.Operator or c.operator or "<",
+                Value    = tostring(tonumber(c.Value  or c.value) or 0),
+            })
+        end
+
+        -- Seed Flags
+        do
+            local seed = {}
+            for _, c in ipairs(CB.Conditions) do
+                seed[#seed + 1] = {Variable = c.Variable, Operator = c.Operator, Value = tonumber(c.Value) or 0}
+            end
+            Library.Flags[CB.Flag] = seed
+        end
+
+        -- ── Callback helper ───────────────────────────────────────────────────
+        local function FireCallback()
+            local out = {}
+            for _, c in ipairs(CB.Conditions) do
+                out[#out + 1] = {Variable = c.Variable, Operator = c.Operator, Value = tonumber(c.Value) or 0}
+            end
+            Library.Flags[CB.Flag] = out
+            Library:SafeCall(CB.Callback, out)
+        end
+
+        -- ── Shared mini-dropdown state ────────────────────────────────────────
+        local MiniDrop = {Frame = nil, RS = nil, OwnerBtn = nil}
+
+        local function CloseMiniDrop()
+            if MiniDrop.RS    then MiniDrop.RS:Disconnect(); MiniDrop.RS = nil end
+            if MiniDrop.Frame then MiniDrop.Frame:Destroy(); MiniDrop.Frame = nil end
+            MiniDrop.OwnerBtn = nil
+        end
+
+        -- ── Static container (header + row layer) ─────────────────────────────
+        local Items = {}
+
+        Items["Container"] = Instances:Create("Frame", {
+            Parent = CB.Section.Items["Content"].Instance,
+            Name   = "\0",
+            BackgroundTransparency = 1,
+            Size   = UDim2New(1, 0, 0, HEADER_H + #CB.Conditions * COND_H),
+            BorderSizePixel = 0,
+            ZIndex = 2,
+            BackgroundColor3 = FromRGB(255, 255, 255),
+        })
+
+        -- Header row
+        local headerRow = Instances:Create("Frame", {
+            Parent = Items["Container"].Instance,
+            Name   = "\0",
+            BackgroundTransparency = 1,
+            Size   = UDim2New(1, 0, 0, HEADER_H),
+            Position = UDim2New(0, 0, 0, 0),
+            BorderSizePixel = 0,
+            ZIndex = 2,
+            BackgroundColor3 = FromRGB(255, 255, 255),
+        })
+
+        -- Title label
+        Items["Text"] = Instances:Create("TextLabel", {
+            Parent = headerRow.Instance,
+            Name   = "\0",
+            FontFace = Library.Font,
+            TextColor3 = FromRGB(240, 240, 240),
+            TextTransparency = 0.30000001192092896,
+            Text = CB.Title,
+            AutomaticSize = Enum.AutomaticSize.X,
+            Size = UDim2New(0, 0, 0, 15),
+            AnchorPoint = Vector2New(0, 0.5),
+            BorderSizePixel = 0,
+            BackgroundTransparency = 1,
+            Position = UDim2New(0, 0, 0.5, 0),
+            TextXAlignment = Enum.TextXAlignment.Left,
+            ZIndex = 2,
+            TextSize = 14,
+            BackgroundColor3 = FromRGB(255, 255, 255),
+        })  Items["Text"]:AddToTheme({TextColor3 = "Text"})
+
+        -- "＋ Add" button (right of header)
+        Items["AddButton"] = Instances:Create("TextButton", {
+            Parent = headerRow.Instance,
+            Name   = "\0",
+            Text   = "",
+            AutoButtonColor = false,
+            AnchorPoint = Vector2New(1, 0.5),
+            Position = UDim2New(1, 0, 0.5, 0),
+            Size = UDim2New(0, 58, 0, 20),
+            BorderSizePixel = 0,
+            ZIndex = 2,
+            BackgroundColor3 = FromRGB(22, 21, 25),
+        })  Items["AddButton"]:AddToTheme({BackgroundColor3 = "Element"})
+        Instances:Create("UICorner", {Parent = Items["AddButton"].Instance, CornerRadius = UDimNew(0, 5)})
+        Instances:Create("UIStroke", {
+            Parent = Items["AddButton"].Instance,
+            Color  = FromRGB(60, 58, 65),
+            Thickness = 1,
+            Transparency = 0.45,
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+        }):AddToTheme({Color = "Outline"})
+        Items["AddLabel"] = Instances:Create("TextLabel", {
+            Parent = Items["AddButton"].Instance,
+            Name   = "\0",
+            Text   = "+ Add",
+            FontFace = Library.Font,
+            TextColor3 = Library.Theme["Accent"] or FromRGB(151, 69, 186),
+            TextSize = 11,
+            Size = UDim2New(1, 0, 1, 0),
+            BackgroundTransparency = 1,
+            ZIndex = 3,
+        })  Items["AddLabel"]:AddToTheme({TextColor3 = "Accent"})
+
+        Items["AddButton"]:OnHover(function()
+            Items["AddButton"]:Tween(ANIM_T, {BackgroundColor3 = Library.Theme["Accent"] or FromRGB(151, 69, 186)})
+            Items["AddLabel"]:Tween(ANIM_T, {TextColor3 = FromRGB(255, 255, 255)})
+        end)
+        Items["AddButton"]:OnHoverLeave(function()
+            Items["AddButton"]:Tween(ANIM_T, {BackgroundColor3 = Library.Theme["Element"] or FromRGB(22, 21, 25)})
+            Items["AddLabel"]:Tween(ANIM_T, {TextColor3 = Library.Theme["Accent"] or FromRGB(151, 69, 186)})
+        end)
+
+        -- Row layer (conditions live here)
+        Items["RowLayer"] = Instances:Create("Frame", {
+            Parent = Items["Container"].Instance,
+            Name   = "\0",
+            BackgroundTransparency = 1,
+            Size   = UDim2New(1, 0, 0, #CB.Conditions * COND_H),
+            Position = UDim2New(0, 0, 0, HEADER_H),
+            BorderSizePixel = 0,
+            ClipsDescendants = false,
+            ZIndex = 2,
+            BackgroundColor3 = FromRGB(255, 255, 255),
+        })
+
+        -- Subtle left-edge track line (shows the condition chain)
+        Items["TrackLine"] = Instances:Create("Frame", {
+            Parent = Items["RowLayer"].Instance,
+            Name   = "\0",
+            BackgroundTransparency = 0.72,
+            Size   = UDim2New(0, 1, 1, -4),
+            AnchorPoint = Vector2New(0, 0),
+            Position = UDim2New(0, 10, 0, 2),
+            BorderSizePixel = 0,
+            ZIndex = 2,
+            BackgroundColor3 = FromRGB(80, 78, 90),
+        })  Items["TrackLine"]:AddToTheme({BackgroundColor3 = "Outline"})
+        -- Gradient: solid top → fade bottom
+        Instances:Create("UIGradient", {
+            Parent = Items["TrackLine"].Instance,
+            Rotation = 90,
+            Transparency = NumSequence{
+                NumSequenceKeypoint(0, 0),
+                NumSequenceKeypoint(0.85, 0),
+                NumSequenceKeypoint(1, 1),
+            },
+        })
+
+        -- ── Row management ────────────────────────────────────────────────────
+        local ConditionRows = {}  -- {cond=table, frame=Instance, remove=fn}
+
+        -- Resize container to current row count (animated)
+        local function ResizeContainer(animate)
+            local newH = #CB.Conditions * COND_H
+            if animate then
+                TweenService:Create(Items["RowLayer"].Instance, ANIM_T, {Size = UDim2New(1, 0, 0, newH)}):Play()
+                TweenService:Create(Items["TrackLine"].Instance, ANIM_T, {Size = UDim2New(0, 1, 1, -4)}):Play()
+                TweenService:Create(Items["Container"].Instance, ANIM_T, {Size = UDim2New(1, 0, 0, HEADER_H + newH)}):Play()
+            else
+                Items["RowLayer"].Instance.Size    = UDim2New(1, 0, 0, newH)
+                Items["Container"].Instance.Size   = UDim2New(1, 0, 0, HEADER_H + newH)
+            end
+        end
+
+        -- Reposition all existing row frames to their correct Y (no tween, used after removal)
+        local function RepositionRows(startIdx, animate)
+            for i = startIdx, #ConditionRows do
+                local entry = ConditionRows[i]
+                local targetY = (i - 1) * COND_H
+                if animate then
+                    TweenService:Create(entry.frame, SLIDE_T, {Position = UDim2New(0, 0, 0, targetY)}):Play()
+                else
+                    entry.frame.Position = UDim2New(0, 0, 0, targetY)
+                end
+            end
+        end
+
+        -- Build a small floating picker (variable or operator selector)
+        local function OpenMiniDrop(anchorBtn, options, currentValue, onSelect)
+            if MiniDrop.OwnerBtn == anchorBtn then
+                CloseMiniDrop(); return
+            end
+            CloseMiniDrop()
+
+            local itemH  = 22
+            local padV   = 4
+            local pickerW = 90
+            local pickerH = #options * itemH + padV * 2
+
+            local pickerFrame = InstanceNew("Frame")
+            pickerFrame.Name = "\0"
+            pickerFrame.BackgroundColor3 = Library.Theme["Background"] or FromRGB(27, 25, 29)
+            pickerFrame.BorderSizePixel = 0
+            pickerFrame.Size = UDim2New(0, pickerW, 0, pickerH)
+            pickerFrame.ZIndex = 20
+            pickerFrame.Parent = Library.Holder.Instance
+
+            local pCorner = InstanceNew("UICorner")
+            pCorner.CornerRadius = UDimNew(0, 5)
+            pCorner.Parent = pickerFrame
+
+            local pStroke = InstanceNew("UIStroke")
+            pStroke.Color = Library.Theme["Outline"] or FromRGB(35, 33, 38)
+            pStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+            pStroke.Thickness = 1
+            pStroke.Parent = pickerFrame
+
+            local pList = InstanceNew("UIListLayout")
+            pList.SortOrder = Enum.SortOrder.LayoutOrder
+            pList.Padding = UDimNew(0, 0)
+            pList.Parent = pickerFrame
+
+            local pPad = InstanceNew("UIPadding")
+            pPad.PaddingTop    = UDimNew(0, padV)
+            pPad.PaddingBottom = UDimNew(0, padV)
+            pPad.PaddingLeft   = UDimNew(0, 3)
+            pPad.PaddingRight  = UDimNew(0, 3)
+            pPad.Parent = pickerFrame
+
+            for order, opt in ipairs(options) do
+                local isCurrent = (opt == currentValue)
+
+                local pBtn = InstanceNew("TextButton")
+                pBtn.Name = "\0"
+                pBtn.Text = opt
+                pBtn.FontFace = Library.Font
+                pBtn.TextSize = 11
+                pBtn.TextXAlignment = Enum.TextXAlignment.Left
+                pBtn.TextColor3 = isCurrent
+                    and (Library.Theme["Accent"]  or FromRGB(151, 69, 186))
+                    or  (Library.Theme["Text"]    or FromRGB(220, 220, 220))
+                pBtn.TextTransparency = isCurrent and 0 or 0.1
+                pBtn.AutoButtonColor = false
+                pBtn.BackgroundColor3 = isCurrent
+                    and (Library.Theme["Element"] or FromRGB(34, 32, 38))
+                    or  FromRGB(0, 0, 0)
+                pBtn.BackgroundTransparency = isCurrent and 0.55 or 1
+                pBtn.BorderSizePixel = 0
+                pBtn.Size = UDim2New(1, 0, 0, itemH)
+                pBtn.ZIndex = 21
+                pBtn.LayoutOrder = order
+                pBtn.Parent = pickerFrame
+
+                local pBtnCorner = InstanceNew("UICorner")
+                pBtnCorner.CornerRadius = UDimNew(0, 3)
+                pBtnCorner.Parent = pBtn
+
+                local pBtnPad = InstanceNew("UIPadding")
+                pBtnPad.PaddingLeft = UDimNew(0, 6)
+                pBtnPad.Parent = pBtn
+
+                local capturedOpt = opt
+                pBtn.MouseButton1Click:Connect(function()
+                    onSelect(capturedOpt)
+                    CloseMiniDrop()
+                end)
+
+                if not isCurrent then
+                    pBtn.MouseEnter:Connect(function()
+                        TweenService:Create(pBtn, TweenInfo.new(0.12), {
+                            BackgroundTransparency = 0.7,
+                            BackgroundColor3 = Library.Theme["Element"] or FromRGB(34, 32, 38)
+                        }):Play()
+                    end)
+                    pBtn.MouseLeave:Connect(function()
+                        TweenService:Create(pBtn, TweenInfo.new(0.12), {BackgroundTransparency = 1}):Play()
+                    end)
+                end
+            end
+
+            -- Position picker below anchor button via RenderStepped
+            MiniDrop.RS = RunService.RenderStepped:Connect(function()
+                if not pickerFrame.Parent then
+                    MiniDrop.RS:Disconnect(); MiniDrop.RS = nil; return
+                end
+                local ap = anchorBtn.AbsolutePosition
+                local as = anchorBtn.AbsoluteSize
+                -- Clamp so picker doesn't go off-screen vertically
+                local screenH = Workspace.CurrentCamera and Workspace.CurrentCamera.ViewportSize.Y or 600
+                local yBelow  = ap.Y + as.Y + 3
+                local yAbove  = ap.Y - pickerH - 3
+                local yFinal  = (yBelow + pickerH < screenH) and yBelow or yAbove
+                pickerFrame.Position = UDim2New(0, ap.X, 0, yFinal)
+                pickerFrame.Size     = UDim2New(0, math.max(pickerW, as.X), 0, pickerH)
+            end)
+
+            MiniDrop.Frame    = pickerFrame
+            MiniDrop.OwnerBtn = anchorBtn
+        end
+
+        -- Build one condition row frame (raw Instances, not tracked by theme)
+        local ConnIconData = Library:GetCustomIcon("corner-down-right")
+
+        local function BuildConditionRow(condData, rowIndex)
+            local rowFrame = InstanceNew("Frame")
+            rowFrame.Name = "\0"
+            rowFrame.BackgroundTransparency = 1
+            rowFrame.Size = UDim2New(1, 0, 0, COND_H)
+            rowFrame.Position = UDim2New(0, 0, 0, (rowIndex - 1) * COND_H)
+            rowFrame.BorderSizePixel = 0
+            rowFrame.ZIndex = 3
+            rowFrame.BackgroundColor3 = FromRGB(255, 255, 255)
+            rowFrame.Parent = Items["RowLayer"].Instance
+
+            -- ── └─ connector icon ──────────────────────────────────────────────
+            local connIcon = InstanceNew("ImageLabel")
+            connIcon.Name = "\0"
+            connIcon.BackgroundTransparency = 1
+            connIcon.AnchorPoint = Vector2New(0, 0.5)
+            connIcon.Position = UDim2New(0, 4, 0.5, 0)
+            connIcon.Size = UDim2New(0, 13, 0, 13)
+            connIcon.ZIndex = 4
+            connIcon.BorderSizePixel = 0
+            connIcon.BackgroundColor3 = FromRGB(255, 255, 255)
+            connIcon.ImageColor3 = Library.Theme["Accent"] or FromRGB(151, 69, 186)
+            connIcon.ImageTransparency = 0.45
+            if ConnIconData then
+                connIcon.Image           = ConnIconData.Url
+                connIcon.ImageRectOffset = ConnIconData.ImageRectOffset
+                connIcon.ImageRectSize   = ConnIconData.ImageRectSize
+            else
+                -- Frame-based └─ fallback
+                connIcon.Image = ""
+                local vSeg = InstanceNew("Frame")
+                vSeg.BackgroundColor3 = Library.Theme["Outline"] or FromRGB(85, 83, 95)
+                vSeg.BackgroundTransparency = 0.4
+                vSeg.BorderSizePixel = 0
+                vSeg.Size = UDim2New(0, 1, 0.5, 0)
+                vSeg.Position = UDim2New(0, 4, 0, 0)
+                vSeg.ZIndex = 5
+                vSeg.Parent = connIcon
+                local hSeg = InstanceNew("Frame")
+                hSeg.BackgroundColor3 = Library.Theme["Outline"] or FromRGB(85, 83, 95)
+                hSeg.BackgroundTransparency = 0.4
+                hSeg.BorderSizePixel = 0
+                hSeg.Size = UDim2New(0.6, 0, 0, 1)
+                hSeg.Position = UDim2New(0, 4, 0.5, 0)
+                hSeg.ZIndex = 5
+                hSeg.Parent = connIcon
+            end
+            connIcon.Parent = rowFrame
+
+            -- ── Shared button builder helper ───────────────────────────────────
+            local function MakeFieldBtn(x, w, labelText)
+                local bg = InstanceNew("TextButton")
+                bg.Name = "\0"
+                bg.Text = ""
+                bg.AutoButtonColor = false
+                bg.AnchorPoint = Vector2New(0, 0.5)
+                bg.Position = UDim2New(0, x, 0.5, 0)
+                bg.Size = UDim2New(0, w, 0, 22)
+                bg.BackgroundColor3 = Library.Theme["Element"] or FromRGB(22, 21, 25)
+                bg.BorderSizePixel = 0
+                bg.ZIndex = 4
+                bg.Parent = rowFrame
+
+                local bgCorner = InstanceNew("UICorner")
+                bgCorner.CornerRadius = UDimNew(0, 4)
+                bgCorner.Parent = bg
+
+                local bgStroke = InstanceNew("UIStroke")
+                bgStroke.Color = Library.Theme["Outline"] or FromRGB(60, 58, 65)
+                bgStroke.Thickness = 1
+                bgStroke.Transparency = 0.55
+                bgStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                bgStroke.Parent = bg
+
+                local label = InstanceNew("TextLabel")
+                label.Name = "\0"
+                label.FontFace = Library.Font
+                label.Text = labelText
+                label.TextColor3 = Library.Theme["Text"] or FromRGB(220, 220, 220)
+                label.TextTransparency = 0.15
+                label.TextSize = 11
+                label.Size = UDim2New(1, -8, 1, 0)
+                label.Position = UDim2New(0, 4, 0, 0)
+                label.BackgroundTransparency = 1
+                label.TextXAlignment = Enum.TextXAlignment.Left
+                label.TextTruncate = Enum.TextTruncate.AtEnd
+                label.ZIndex = 5
+                label.Parent = bg
+
+                -- Chevron hint
+                local ChevronData = Library:GetCustomIcon("chevron-down")
+                local chevron = InstanceNew("ImageLabel")
+                chevron.BackgroundTransparency = 1
+                chevron.AnchorPoint = Vector2New(1, 0.5)
+                chevron.Position = UDim2New(1, -2, 0.5, 0)
+                chevron.Size = UDim2New(0, 8, 0, 5)
+                chevron.ZIndex = 5
+                chevron.BorderSizePixel = 0
+                chevron.BackgroundColor3 = FromRGB(255, 255, 255)
+                chevron.ImageColor3 = Library.Theme["Text"] or FromRGB(160, 158, 168)
+                chevron.ImageTransparency = 0.5
+                chevron.Image = ChevronData and ChevronData.Url or ""
+                chevron.ImageRectOffset = ChevronData and ChevronData.ImageRectOffset or Vector2New(0,0)
+                chevron.ImageRectSize   = ChevronData and ChevronData.ImageRectSize   or Vector2New(0,0)
+                chevron.Parent = bg
+
+                -- Hover feedback
+                bg.MouseEnter:Connect(function()
+                    TweenService:Create(bgStroke, TweenInfo.new(0.15), {Transparency = 0.15, Color = Library.Theme["Accent"] or FromRGB(151,69,186)}):Play()
+                end)
+                bg.MouseLeave:Connect(function()
+                    TweenService:Create(bgStroke, TweenInfo.new(0.15), {Transparency = 0.55, Color = Library.Theme["Outline"] or FromRGB(60,58,65)}):Play()
+                end)
+
+                return bg, label
+            end
+
+            -- ── Variable selector button ───────────────────────────────────────
+            local varBtn, varLabel = MakeFieldBtn(VAR_X, VAR_W, condData.Variable)
+            varBtn.MouseButton1Click:Connect(function()
+                OpenMiniDrop(varBtn, VARIABLES, condData.Variable, function(selected)
+                    condData.Variable = selected
+                    varLabel.Text = selected
+                    FireCallback()
+                end)
+            end)
+
+            -- ── Operator selector button ───────────────────────────────────────
+            local opBtn, opLabel = MakeFieldBtn(OP_X, OP_W, condData.Operator)
+            opBtn.MouseButton1Click:Connect(function()
+                OpenMiniDrop(opBtn, OPERATORS, condData.Operator, function(selected)
+                    condData.Operator = selected
+                    opLabel.Text = selected
+                    FireCallback()
+                end)
+            end)
+
+            -- ── Value textbox ──────────────────────────────────────────────────
+            local valBg = InstanceNew("Frame")
+            valBg.Name = "\0"
+            valBg.AnchorPoint = Vector2New(0, 0.5)
+            valBg.Position = UDim2New(0, VAL_X, 0.5, 0)
+            valBg.Size = UDim2New(0, VAL_W, 0, 22)
+            valBg.BackgroundColor3 = Library.Theme["Element"] or FromRGB(22, 21, 25)
+            valBg.BorderSizePixel = 0
+            valBg.ZIndex = 4
+            valBg.ClipsDescendants = true
+            valBg.Parent = rowFrame
+
+            local valCorner = InstanceNew("UICorner")
+            valCorner.CornerRadius = UDimNew(0, 4)
+            valCorner.Parent = valBg
+
+            local valStroke = InstanceNew("UIStroke")
+            valStroke.Color = Library.Theme["Outline"] or FromRGB(60, 58, 65)
+            valStroke.Thickness = 1
+            valStroke.Transparency = 0.55
+            valStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+            valStroke.Parent = valBg
+
+            local valInput = InstanceNew("TextBox")
+            valInput.Name = "\0"
+            valInput.FontFace = Library.Font
+            valInput.Text = condData.Value
+            valInput.PlaceholderText = "0"
+            valInput.PlaceholderColor3 = FromRGB(120, 118, 130)
+            valInput.TextColor3 = Library.Theme["Text"] or FromRGB(220, 220, 220)
+            valInput.TextTransparency = 0.1
+            valInput.TextSize = 11
+            valInput.Size = UDim2New(1, -8, 1, 0)
+            valInput.Position = UDim2New(0, 4, 0, 0)
+            valInput.BackgroundTransparency = 1
+            valInput.BorderSizePixel = 0
+            valInput.ZIndex = 5
+            valInput.ClearTextOnFocus = false
+            valInput.Parent = valBg
+
+            -- Focus glow
+            valInput.Focused:Connect(function()
+                TweenService:Create(valStroke, TweenInfo.new(0.15), {
+                    Transparency = 0,
+                    Color = Library.Theme["Accent"] or FromRGB(151, 69, 186)
+                }):Play()
+            end)
+            valInput.FocusLost:Connect(function(enterPressed)
+                TweenService:Create(valStroke, TweenInfo.new(0.15), {
+                    Transparency = 0.55,
+                    Color = Library.Theme["Outline"] or FromRGB(60, 58, 65)
+                }):Play()
+                -- Enforce numeric, keep last valid
+                local cleaned = valInput.Text:gsub("[^%d%.%-]", "")
+                if cleaned == "" then cleaned = "0" end
+                valInput.Text = cleaned
+                condData.Value = cleaned
+                FireCallback()
+            end)
+            valInput:GetPropertyChangedSignal("Text"):Connect(function()
+                -- Live strip non-numerics
+                local t = valInput.Text:gsub("[^%d%.%-]", "")
+                if t ~= valInput.Text then valInput.Text = t end
+                condData.Value = t
+            end)
+
+            -- ── Remove button (×) ──────────────────────────────────────────────
+            local removeBtn = InstanceNew("TextButton")
+            removeBtn.Name = "\0"
+            removeBtn.Text = "×"
+            removeBtn.FontFace = Library.Font
+            removeBtn.TextSize = 14
+            removeBtn.TextColor3 = FromRGB(160, 158, 168)
+            removeBtn.TextTransparency = 0.3
+            removeBtn.AutoButtonColor = false
+            removeBtn.AnchorPoint = Vector2New(1, 0.5)
+            removeBtn.Position = UDim2New(1, -2, 0.5, 0)
+            removeBtn.Size = UDim2New(0, 18, 0, 18)
+            removeBtn.BackgroundTransparency = 1
+            removeBtn.BorderSizePixel = 0
+            removeBtn.ZIndex = 4
+            removeBtn.Parent = rowFrame
+
+            removeBtn.MouseEnter:Connect(function()
+                TweenService:Create(removeBtn, TweenInfo.new(0.12), {
+                    TextColor3 = Library.Theme["Accent"] or FromRGB(151, 69, 186),
+                    TextTransparency = 0,
+                }):Play()
+            end)
+            removeBtn.MouseLeave:Connect(function()
+                TweenService:Create(removeBtn, TweenInfo.new(0.12), {
+                    TextColor3 = FromRGB(160, 158, 168),
+                    TextTransparency = 0.3,
+                }):Play()
+            end)
+
+            -- Removal logic: animate out, shift rows, resize
+            removeBtn.MouseButton1Click:Connect(function()
+                -- Find the index of this condition in CB.Conditions
+                local removeIdx = nil
+                for i2, entry in ipairs(ConditionRows) do
+                    if entry.frame == rowFrame then
+                        removeIdx = i2
+                        break
+                    end
+                end
+                if not removeIdx then return end
+                if MiniDrop.OwnerBtn == varBtn or MiniDrop.OwnerBtn == opBtn then
+                    CloseMiniDrop()
+                end
+
+                -- Fade out + slide slightly down
+                TweenService:Create(rowFrame, COLL_T, {
+                    BackgroundTransparency = 1,
+                    Position = UDim2New(0, 0, 0, rowFrame.Position.Y.Offset + 6),
+                }):Play()
+                -- Fade all children
+                for _, child in ipairs(rowFrame:GetDescendants()) do
+                    if child:IsA("Frame") or child:IsA("TextButton") or child:IsA("TextLabel") or child:IsA("ImageLabel") then
+                        local tt = child:IsA("TextLabel") or child:IsA("TextButton")
+                        local it = child:IsA("ImageLabel")
+                        if tt then TweenService:Create(child, COLL_T, {TextTransparency=1, BackgroundTransparency=1}):Play()
+                        elseif it then TweenService:Create(child, COLL_T, {ImageTransparency=1, BackgroundTransparency=1}):Play()
+                        else TweenService:Create(child, COLL_T, {BackgroundTransparency=1}):Play()
+                        end
+                    elseif child:IsA("TextBox") then
+                        TweenService:Create(child, COLL_T, {TextTransparency=1}):Play()
+                    elseif child:IsA("UIStroke") then
+                        TweenService:Create(child, COLL_T, {Transparency=1}):Play()
+                    end
+                end
+
+                task.delay(COLL_T.Time + 0.02, function()
+                    if not Library then return end
+                    rowFrame:Destroy()
+                    TableRemove(CB.Conditions, removeIdx)
+                    TableRemove(ConditionRows, removeIdx)
+                    -- Slide remaining rows upward
+                    RepositionRows(removeIdx, true)
+                    ResizeContainer(true)
+                    FireCallback()
+                end)
+            end)
+
+            return rowFrame
+        end
+
+        -- ── Add a new condition (with fade-in slide-up animation) ─────────────
+        local function AddCondition(condData, animate)
+            local idx = #CB.Conditions
+            local newFrame = BuildConditionRow(condData, idx)
+
+            if animate then
+                -- Start offset down + transparent, tween to target
+                local targetY = (idx - 1) * COND_H
+                newFrame.Position = UDim2New(0, 0, 0, targetY + 10)
+                -- Fade in all children
+                for _, child in ipairs(newFrame:GetDescendants()) do
+                    if child:IsA("Frame") then child.BackgroundTransparency = 1
+                    elseif child:IsA("TextLabel") or child:IsA("TextButton") then
+                        child.TextTransparency = 1; child.BackgroundTransparency = 1
+                    elseif child:IsA("ImageLabel") then
+                        child.ImageTransparency = 1; child.BackgroundTransparency = 1
+                    elseif child:IsA("TextBox") then
+                        child.TextTransparency = 1
+                    elseif child:IsA("UIStroke") then
+                        child.Transparency = 1
+                    end
+                end
+
+                -- Slide into position
+                TweenService:Create(newFrame, ANIM_T, {Position = UDim2New(0, 0, 0, targetY)}):Play()
+
+                -- Fade in children with slight delay per type
+                Library:Thread(function()
+                    task.wait(0.04)
+                    for _, child in ipairs(newFrame:GetDescendants()) do
+                        if child:IsA("Frame") then
+                            TweenService:Create(child, ANIM_T, {BackgroundTransparency = child.BackgroundTransparency == 1 and 0 or child.BackgroundTransparency}):Play()
+                        end
+                    end
+                    for _, child in ipairs(newFrame:GetDescendants()) do
+                        if child:IsA("TextLabel") or child:IsA("TextButton") then
+                            -- only restore labels that should be visible
+                            TweenService:Create(child, ANIM_T, {TextTransparency = 0.1, BackgroundTransparency = child:IsA("TextButton") and 0 or 1}):Play()
+                        elseif child:IsA("ImageLabel") then
+                            TweenService:Create(child, ANIM_T, {ImageTransparency = 0.45}):Play()
+                        elseif child:IsA("TextBox") then
+                            TweenService:Create(child, ANIM_T, {TextTransparency = 0.1}):Play()
+                        elseif child:IsA("UIStroke") then
+                            TweenService:Create(child, ANIM_T, {Transparency = 0.55}):Play()
+                        end
+                    end
+                end)
+            end
+
+            ConditionRows[#ConditionRows + 1] = {cond = condData, frame = newFrame}
+        end
+
+        -- ── Spawn default conditions (no animation, instant) ─────────────────
+        for _, c in ipairs(CB.Conditions) do
+            AddCondition(c, false)
+        end
+        ResizeContainer(false)
+
+        -- ── Add button handler ────────────────────────────────────────────────
+        Items["AddButton"]:Connect("MouseButton1Click", function()
+            local newCond = {Variable = VARIABLES[1], Operator = "<", Value = "0"}
+            TableInsert(CB.Conditions, newCond)
+            ResizeContainer(true)
+            AddCondition(newCond, true)
+            FireCallback()
+        end)
+
+        -- ── Close mini-drop on outside click ─────────────────────────────────
+        local function IsMouseOverRawFrame(Frame)
+            if not Frame then return false end
+            local mp = Vector2New(Mouse.X, Mouse.Y)
+            local ap = Frame.AbsolutePosition
+            local as = Frame.AbsoluteSize
+            return mp.X >= ap.X and mp.X <= ap.X + as.X
+               and mp.Y >= ap.Y and mp.Y <= ap.Y + as.Y
+        end
+
+        Library:Connect(UserInputService.InputBegan, function(Input)
+            if Input.UserInputType == Enum.UserInputType.MouseButton1 or
+               Input.UserInputType == Enum.UserInputType.Touch then
+                if not IsMouseOverRawFrame(MiniDrop.Frame) then
+                    CloseMiniDrop()
+                end
+            end
+        end)
+
+        -- ── Slide-in offsets for page transitions ─────────────────────────────
+        Items["Text"].Instance.Position      = UDim2New(0, 30, 0.5, 0)
+        Items["AddButton"].Instance.Position = UDim2New(1, 30, 0.5, 0)
+
+        function CB:RefreshPosition(Bool)
+            if Bool then
+                Items["Text"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0.5, 0)})
+                Items["AddButton"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(1, 0, 0.5, 0)})
+            else
+                Items["Text"].Instance.Position      = UDim2New(0, 30, 0.5, 0)
+                Items["AddButton"].Instance.Position = UDim2New(1, 30, 0.5, 0)
+            end
+        end
+
+        -- ── Public API ────────────────────────────────────────────────────────
+        function CB:Get()
+            local out = {}
+            for _, c in ipairs(CB.Conditions) do
+                out[#out + 1] = {Variable = c.Variable, Operator = c.Operator, Value = tonumber(c.Value) or 0}
+            end
+            return out
+        end
+
+        function CB:Clear()
+            for _, entry in ipairs(ConditionRows) do
+                if entry.frame and entry.frame.Parent then entry.frame:Destroy() end
+            end
+            ConditionRows = {}
+            CB.Conditions = {}
+            ResizeContainer(true)
+            FireCallback()
+        end
+
+        -- ── Config: save / load ───────────────────────────────────────────────
+        if CB.Section.Page and CB.Section.Page.Active then
+            CB:RefreshPosition(true)
+        end
+
+        CB.Section.Elements[#CB.Section.Elements + 1] = CB
+
+        Library.SetFlags[CB.Flag] = function(Value)
+            if type(Value) ~= "table" then return end
+            -- Clear current rows
+            for _, entry in ipairs(ConditionRows) do
+                if entry.frame and entry.frame.Parent then entry.frame:Destroy() end
+            end
+            ConditionRows = {}
+            CB.Conditions = {}
+            -- Restore from saved value
+            for _, c in ipairs(Value) do
+                local newCond = {
+                    Variable = c.Variable or c.variable or VARIABLES[1],
+                    Operator = c.Operator or c.operator or "<",
+                    Value    = tostring(tonumber(c.Value  or c.value) or 0),
+                }
+                TableInsert(CB.Conditions, newCond)
+                AddCondition(newCond, false)
+            end
+            ResizeContainer(false)
+        end
+
+        if Data.ToolTip or Data.tooltip then
+            Library:AddTooltip(Data.ToolTip or Data.tooltip, Items["Container"].Instance)
+        end
+
+        return CB
+    end
+    -- ─────────────────────────────────────────────────────────────────────────
+
     Library.CreateSettingsPage = function(self, Window, KeybindList)
         local Page = Window:Page({Name = "Settings", Icon = "122669828593160"})
 
