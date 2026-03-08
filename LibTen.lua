@@ -13207,10 +13207,9 @@ local Library do
             Items["Container"].Instance.Size   = UDim2New(1, 0, 0, HEADER_H + count * ROW_H)
             Items["CountLabel"].Instance.Text  = tostring(count) .. " tasks"
 
-            -- Clamp current task
+            -- Clamp current task index (never touches ActiveHighlight position;
+            -- AnimateHighlight owns all position changes after initial placement)
             TQ.CurrentTask = math.clamp(TQ.CurrentTask, 1, math.max(1, count))
-            -- Snap highlight (no tween during full re-render)
-            Items["ActiveHighlight"].Instance.Position = UDim2New(0, 0, 0, (TQ.CurrentTask - 1) * ROW_H)
 
             for i, task in ipairs(TQ.Tasks) do
                 local rowY      = (i - 1) * ROW_H
@@ -13487,15 +13486,20 @@ local Library do
             end
         end  -- end RenderRows
 
-        -- Initial render
+        -- Initial render + place highlight without animation
         RenderRows()
+        Items["ActiveHighlight"].Instance.Position = UDim2New(0, 0, 0, 0)
 
         -- ── Public API ────────────────────────────────────────────────────────
 
         function TQ:SetTask(idx)
             if #TQ.Tasks == 0 then return end
-            AnimateHighlight(idx)
+            -- Rebuild rows first (rows reflect new active state), THEN tween the
+            -- highlight so the animation plays over the already-updated row visuals
+            local target = math.clamp(idx, 1, #TQ.Tasks)
+            TQ.CurrentTask = target
             RenderRows()
+            AnimateHighlight(target)
         end
 
         function TQ:GetCurrentTask()
@@ -13508,13 +13512,15 @@ local Library do
             if #TQ.Tasks == 0 then return end
             local next = TQ.CurrentTask + 1
             if next > #TQ.Tasks then next = 1 end
-            AnimateHighlight(next)
+            TQ.CurrentTask = next
             RenderRows()
+            AnimateHighlight(next)
         end
 
         function TQ:ResetTasks()
-            AnimateHighlight(1)
+            TQ.CurrentTask = 1
             RenderRows()
+            AnimateHighlight(1)
         end
 
         -- ── Slide-in offsets ──────────────────────────────────────────────────
