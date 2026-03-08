@@ -5788,10 +5788,13 @@ local Library do
             if Toggle.HasSettings then
                 -- Chevron arrow added to the addons holder (rotates on expand/collapse)
                 local AddonsHolder = GetAddonsHolder()
+                local ChevronIcon = Library:GetCustomIcon("chevron-down")
                 Items["SettingsChevron"] = Instances:Create("ImageLabel", {
                     Parent = AddonsHolder.Instance,
                     Name = "\0",
-                    Image = Library:GetIcon("chevron-down") or "rbxassetid://6034818375",
+                    Image = ChevronIcon and ChevronIcon.Url or "rbxassetid://6034818375",
+                    ImageRectOffset = ChevronIcon and ChevronIcon.ImageRectOffset or Vector2New(0, 0),
+                    ImageRectSize = ChevronIcon and ChevronIcon.ImageRectSize or Vector2New(0, 0),
                     ImageColor3 = FromRGB(141, 141, 150),
                     BackgroundTransparency = 1,
                     BorderSizePixel = 0,
