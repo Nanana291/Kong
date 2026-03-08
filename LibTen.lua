@@ -5635,10 +5635,14 @@ local Library do
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })
                 
+                -- PC users get a ~15% larger indicator (21px vs 18px) for easier clicking
+                local _IndicatorSize = IsMobile and 18 or 21
+
                 Items["Indicator"] = Instances:Create("Frame", {
                     Parent = Items["Toggle"].Instance,
                     Name = "\0",
-                    Size = UDim2New(0, 18, 0, 18),
+                    Size = UDim2New(0, _IndicatorSize, 0, _IndicatorSize),
+                    Position = UDim2New(0, 0, 0.5, -math.floor(_IndicatorSize / 2)),
                     BorderColor3 = FromRGB(0, 0, 0),
                     ZIndex = 2,
                     BorderSizePixel = 0,
@@ -5713,16 +5717,21 @@ local Library do
                 end)
             end
 
-            Items["Indicator"].Instance.Position = UDim2New(0, 30, 0, 0)
-            Items["Text"].Instance.Position = UDim2New(0, 54, 0, 0)
+            local _IndicatorSize = IsMobile and 18 or 21
+            local _TextXOffset   = _IndicatorSize + 6  -- 24 mobile, 27 PC
+
+            Items["Indicator"].Instance.Position = UDim2New(0, 30, 0.5, -math.floor(_IndicatorSize / 2))
+            Items["Text"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, 0)
 
             function Toggle:RefreshPosition(Bool)
+                local _IndicatorSize = IsMobile and 18 or 21
+                local _TextXOffset   = _IndicatorSize + 6
                 if Bool then
-                    Items["Indicator"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 0)})
-                    Items["Text"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 24, 0, 0)})
+                    Items["Indicator"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0.5, -math.floor(_IndicatorSize / 2))})
+                    Items["Text"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, _TextXOffset, 0, 0)})
                 else
-                    Items["Indicator"].Instance.Position = UDim2New(0, 30, 0, 0)
-                    Items["Text"].Instance.Position = UDim2New(0, 54, 0, 0)
+                    Items["Indicator"].Instance.Position = UDim2New(0, 30, 0.5, -math.floor(_IndicatorSize / 2))
+                    Items["Text"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, 0)
                 end
             end
 
@@ -5734,10 +5743,11 @@ local Library do
                 Toggle.Value = Value 
                 Library.Flags[Toggle.Flag] = Value 
 
+                local _CheckSize = IsMobile and 12 or 14
                 if Toggle.Value then
                     Items["IndicatorGradient"].Instance.Enabled = true
                     Items["Indicator"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = FromRGB(255, 255, 255)})
-                    Items["CheckImage"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {ImageTransparency = 0, Size = UDim2New(0, 12, 0, 12)})
+                    Items["CheckImage"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {ImageTransparency = 0, Size = UDim2New(0, _CheckSize, 0, _CheckSize)})
                     Items["IndicatorStroke"]:Tween(nil, {Transparency = 1})
                 else
                     Items["IndicatorGradient"].Instance.Enabled = false
@@ -12316,6 +12326,13 @@ local Library do
         end
         table.sort(PD.Options, function(a, b) return a.Order < b.Order end)
 
+        -- Seed Flags so SaveConfig captures the initial order immediately
+        do
+            local seed = {}
+            for _, opt in ipairs(PD.Options) do seed[#seed + 1] = {Name = opt.Name, Order = opt.Order} end
+            Library.Flags[PD.Flag] = seed
+        end
+
         -- ── UI Items ──────────────────────────────────────────────────────────
         local Items = {} do
             -- Container row (sits in section content list)
@@ -12508,6 +12525,7 @@ local Library do
                 sorted[#sorted + 1] = {Name = opt.Name, Order = opt.Order}
             end
             table.sort(sorted, function(a, b) return a.Order < b.Order end)
+            Library.Flags[PD.Flag] = sorted
             Library:SafeCall(PD.Callback, sorted)
         end
 
