@@ -14410,12 +14410,24 @@ local Library do
         local cardPages  = {nil, nil, nil}
 
         -- ── Auto-assign LayoutOrder to dev tabs as they are created ───────────
+        -- Every child that isn't the Dashboard button or the separator must land
+        -- at LayoutOrder >= 100 so it sorts AFTER Dashboard (1) and separator (5).
+        -- This covers: TextButton page-tab buttons, TextLabel category labels,
+        -- and Frame collapsible-category containers.
         local devTabSeq = 0
         Window.Items["LeftTabs"].Instance.ChildAdded:Connect(function(child)
-            if child:IsA("TextButton") and child ~= DashBtn then
-                devTabSeq = devTabSeq + 1
-                child.LayoutOrder = 100 + devTabSeq
-                task.wait()         -- let Library.Page finish TableInsert to Window.Pages
+            if child == DashBtn or child == SepFr then return end
+            -- Skip pure layout helpers (UIListLayout, UIPadding, etc.)
+            if child:IsA("UIListLayout") or child:IsA("UIPadding") or
+               child:IsA("UICorner")     or child:IsA("UIStroke")  or
+               child:IsA("UIGradient")   or child:IsA("UIScale") then return end
+
+            devTabSeq = devTabSeq + 1
+            child.LayoutOrder = 100 + devTabSeq
+
+            -- Only trigger card refresh for actual page tab buttons
+            if child:IsA("TextButton") then
+                task.wait()     -- let Library.Page finish TableInsert to Window.Pages
                 if Library and RefreshCards then RefreshCards() end
             end
         end)
