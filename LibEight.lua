@@ -5598,13 +5598,32 @@ local Library do
                 Flag = Data.Flag or Data.flag or Library:NextFlag(),
                 Default = Data.Default or Data.default or false,
                 Callback = Data.Callback or Data.callback or function() end,
+                Description = Data.Description or Data.description or "",
 
                 Value = false
             }
 
             local Items = { } do 
-                Items["Toggle"] = Instances:Create("TextButton", {
+                Items["ToggleContainer"] = Instances:Create("Frame", {
                     Parent = Toggle.Section.Items["Content"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    Size = UDim2New(1, 0, 0, 18),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    BorderSizePixel = 0,
+                    ZIndex = 2,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })
+
+                local containerLayout = Instances:Create("UIListLayout", {
+                    Parent = Items["ToggleContainer"].Instance,
+                    FillDirection = Enum.FillDirection.Vertical,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Padding = UDimNew(0, 5)
+                })
+
+                Items["Toggle"] = Instances:Create("TextButton", {
+                    Parent = Items["ToggleContainer"].Instance,
                     Name = "\0",
                     FontFace = Library.Font,
                     TextColor3 = FromRGB(0, 0, 0),
@@ -5616,6 +5635,7 @@ local Library do
                     Size = UDim2New(1, 0, 0, 18),
                     ZIndex = 2,
                     TextSize = 14,
+                    LayoutOrder = 1,
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })
                 
@@ -5759,6 +5779,82 @@ local Library do
                 })
 
                 return Items["AddonsHolder"]
+            end
+
+            if Toggle.Description ~= "" then
+                local Holder = GetAddonsHolder()
+
+                local HelpIconData = Library:GetCustomIcon("circle-question")
+                Items["HelpIcon"] = Instances:Create("ImageButton", {
+                    Parent = Holder.Instance,
+                    Name = "HelpIcon",
+                    Image = HelpIconData and HelpIconData.Url or "",
+                    ImageRectOffset = HelpIconData and HelpIconData.ImageRectOffset or Vector2New(0, 0),
+                    ImageRectSize = HelpIconData and HelpIconData.ImageRectSize or Vector2New(0, 0),
+                    ImageColor3 = FromRGB(141, 141, 150),
+                    Size = UDim2New(0, 14, 0, 14),
+                    BackgroundTransparency = 1,
+                    AutoButtonColor = false,
+                    BorderSizePixel = 0,
+                    ZIndex = 2,
+                    LayoutOrder = 100
+                }) Items["HelpIcon"]:AddToTheme({ImageColor3 = "Text"})
+
+                Items["DescriptionContainer"] = Instances:Create("Frame", {
+                    Parent = Items["ToggleContainer"].Instance,
+                    Name = "DescriptionContainer",
+                    Size = UDim2New(1, -24, 0, 0), -- Offset by left padding
+                    Position = UDim2New(0, 24, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    BackgroundTransparency = 1,
+                    ClipsDescendants = true,
+                    Visible = false,
+                    LayoutOrder = 2
+                })
+
+                Items["DescriptionText"] = Instances:Create("TextLabel", {
+                    Parent = Items["DescriptionContainer"].Instance,
+                    Name = "Text",
+                    Text = Toggle.Description,
+                    FontFace = Library.Font,
+                    TextColor3 = FromRGB(141, 141, 150),
+                    TextSize = 12,
+                    TextWrapped = true,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    TextYAlignment = Enum.TextYAlignment.Top,
+                    BackgroundTransparency = 1,
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    Size = UDim2New(1, 0, 0, 0),
+                    ZIndex = 2
+                }) Items["DescriptionText"]:AddToTheme({TextColor3 = "Text"})
+
+                Toggle.HelpExpanded = false
+
+                Library:Connect(Items["HelpIcon"].Instance.MouseButton1Click, function()
+                    Toggle.HelpExpanded = not Toggle.HelpExpanded
+
+                    if Toggle.HelpExpanded then
+                        local CloseIconData = Library:GetCustomIcon("x")
+                        Items["HelpIcon"].Instance.Image = CloseIconData and CloseIconData.Url or ""
+                        Items["HelpIcon"].Instance.ImageRectOffset = CloseIconData and CloseIconData.ImageRectOffset or Vector2New(0, 0)
+                        Items["HelpIcon"].Instance.ImageRectSize = CloseIconData and CloseIconData.ImageRectSize or Vector2New(0, 0)
+
+                        Items["DescriptionContainer"].Instance.Visible = true
+                        -- Small tween for color
+                        TweenService:Create(Items["HelpIcon"].Instance, TweenInfo.new(0.2), {ImageColor3 = Library.Theme.Accent}):Play()
+                    else
+                        local QIconData = Library:GetCustomIcon("circle-question")
+                        Items["HelpIcon"].Instance.Image = QIconData and QIconData.Url or ""
+                        Items["HelpIcon"].Instance.ImageRectOffset = QIconData and QIconData.ImageRectOffset or Vector2New(0, 0)
+                        Items["HelpIcon"].Instance.ImageRectSize = QIconData and QIconData.ImageRectSize or Vector2New(0, 0)
+
+                        Items["DescriptionContainer"].Instance.Visible = false
+                        TweenService:Create(Items["HelpIcon"].Instance, TweenInfo.new(0.2), {ImageColor3 = Library.Theme.Text}):Play()
+                    end
+
+                    -- We re-trigger the container size update by firing layout change or just letting AutoSize handle it.
+                    -- Due to parent AutomaticSize = Y, everything correctly pushes down.
+                end)
             end
 
             function Toggle:Keybind(Data)
