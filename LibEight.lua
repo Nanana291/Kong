@@ -11429,7 +11429,9 @@ local Library do
                         if mousePos.X < ap.X or mousePos.X > ap.X + as.X or (mousePos.Y - 36) < ap.Y or (mousePos.Y - 36) > ap.Y + as.Y then
                             selectorFrame.Instance:Destroy()
                             Items["SelectorFrame"] = nil
-                            closeConn:Disconnect()
+                            if closeConn and closeConn.Connection then
+                                closeConn.Connection:Disconnect()
+                            end
                         end
                     end
                 end)
