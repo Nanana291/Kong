@@ -12397,7 +12397,7 @@ local Library do
                     pickerFrame.Size = UDim2New(0, pickerW, 0, pickerH)
                     pickerFrame.BackgroundColor3 = Library.Theme["Background"] or FromRGB(27, 25, 29)
                     pickerFrame.BorderSizePixel  = 0
-                    pickerFrame.ZIndex = 10
+                    pickerFrame.ZIndex = 20
                     pickerFrame.Parent = Library.Holder.Instance
 
                     local pStroke = InstanceNew("UIStroke")
@@ -12435,7 +12435,7 @@ local Library do
                         pBtn.AutoButtonColor = false
                         pBtn.BorderSizePixel = 0
                         pBtn.TextSize = 12
-                        pBtn.ZIndex   = 11
+                        pBtn.ZIndex   = 21
                         pBtn.LayoutOrder = orderNum
                         pBtn.Parent   = pickerFrame
 
@@ -12625,17 +12625,35 @@ local Library do
         end)
 
         -- Close on outside click
+        local function IsMouseOverRawFrame(Frame)
+            if not Frame then return false end
+            local mp = Vector2New(Mouse.X, Mouse.Y)
+            local ap = Frame.AbsolutePosition
+            local as = Frame.AbsoluteSize
+            return mp.X >= ap.X and mp.X <= ap.X + as.X
+               and mp.Y >= ap.Y and mp.Y <= ap.Y + as.Y
+        end
+
         Library:Connect(UserInputService.InputBegan, function(Input)
             if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
-                if PD.IsOpen and not Library:IsMouseOverFrame(Items["OptionHolder"]) then
-                    PD:SetOpen(false)
-                end
-                if MiniPicker.Frame and not Library:IsMouseOverFrame(Items["OptionHolder"]) then
+                local overMain = Library:IsMouseOverFrame(Items["OptionHolder"])
+                local overMini = IsMouseOverRawFrame(MiniPicker.Frame)
+
+                -- Click inside mini-picker: let the button handler run, touch nothing
+                if overMini then return end
+
+                -- Click outside both panels: close mini then main
+                if not overMain then
+                    CloseMiniPicker()
+                    if PD.IsOpen then
+                        PD:SetOpen(false)
+                    end
+                else
+                    -- Click inside main panel but outside mini: only close mini
                     CloseMiniPicker()
                 end
             end
         end)
-
         -- Hover effects
         Items["TriggerButton"]:OnHover(function()
             if PD.IsOpen then return end
