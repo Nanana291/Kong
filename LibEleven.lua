@@ -4906,7 +4906,7 @@ local Library do
                     Name = "\0",
                     BorderColor3 = FromRGB(0, 0, 0),
                     BackgroundTransparency = 0.6499999761581421,
-                    ClipsDescendants = false,
+                    ClipsDescendants = true,
                     BorderSizePixel = 0,
                     Size = UDim2New(1, 0, 0, 0),
                     ZIndex = 2,
@@ -5376,7 +5376,7 @@ local Library do
                     Name = "\0",
                     BorderColor3 = FromRGB(0, 0, 0),
                     BackgroundTransparency = 1,
-                    ClipsDescendants = false,
+                    ClipsDescendants = true,
                     BorderSizePixel = 0,
                     Size = UDim2New(1, 0, 0, 0),
                     ZIndex = 2,
@@ -5613,7 +5613,7 @@ local Library do
                         Name = "\0",
                         BackgroundTransparency = 1,
                         BorderSizePixel = 0,
-                        Size = UDim2New(1, 0, 0, 20),
+                        Size = UDim2New(1, 0, 0, 18),
                         ZIndex = 2,
                         BackgroundColor3 = FromRGB(255, 255, 255)
                     })
@@ -5898,10 +5898,24 @@ local Library do
                 -- Track expand state separately (Toggle.Value drives this)
                 Toggle._settingsExpanded = false
 
-                -- Helper: target height of the settings content (layout + padding)
                 local function _GetSettingsHeight()
-                    local h = Items["SettingsContent"].Instance.AbsoluteSize.Y
-                    return h > 0 and h or (SettingsLayout.Instance.AbsoluteContentSize.Y + 10)
+                    local contentSize = SettingsLayout.Instance.AbsoluteContentSize.Y
+                    if contentSize > 0 then
+                        return contentSize + 10
+                    end
+                    local totalH = 10
+                    local count = 0
+                    for _, child in ipairs(Items["SettingsContent"].Instance:GetChildren()) do
+                        if child:IsA("GuiObject") and child.Visible then
+                            local h = child.AbsoluteSize.Y > 0 and child.AbsoluteSize.Y or child.Size.Y.Offset
+                            totalH = totalH + math.max(h, 0)
+                            count = count + 1
+                        end
+                    end
+                    if count > 1 then
+                        totalH = totalH + (count - 1) * 5
+                    end
+                    return totalH
                 end
 
                 -- Core expand/collapse animation
@@ -5918,21 +5932,19 @@ local Library do
                         Sep.Visible = true
                         -- Rotate chevron upward
                         TweenService:Create(Chevron, TInfo, { Rotation = 180 }):Play()
-                        -- Wait one frame so Roblox layout engine computes heights
                         task.spawn(function()
-                            task.wait()
-                            task.wait()
+                            local elapsed = 0
+                            repeat
+                                task.wait()
+                                elapsed = elapsed + 1
+                            until SettingsLayout.Instance.AbsoluteContentSize.Y > 0 or elapsed >= 10
                             if not Library then return end
                             local targetH = _GetSettingsHeight()
-                            if targetH <= 0 then
-                                task.wait(0.05)
-                                targetH = _GetSettingsHeight()
-                            end
                             TweenService:Create(Clipper, TInfo, {
                                 Size = UDim2New(1, 0, 0, targetH)
                             }):Play()
                             TweenService:Create(Wrapper, TInfo, {
-                                Size = UDim2New(1, 0, 0, 24 + targetH)
+                                Size = UDim2New(1, 0, 0, 23 + targetH)
                             }):Play()
                         end)
                     else
@@ -5943,7 +5955,7 @@ local Library do
                         })
                         collapseClipper:Play()
                         TweenService:Create(Wrapper, TInfo, {
-                            Size = UDim2New(1, 0, 0, 20)
+                            Size = UDim2New(1, 0, 0, 18)
                         }):Play()
                         collapseClipper.Completed:Connect(function()
                             if not Library then return end
@@ -5957,6 +5969,7 @@ local Library do
                     if not Toggle._settingsExpanded or not Library then return end
                     task.spawn(function()
                         task.wait()
+                        task.wait()
                         if not Library then return end
                         local targetH = _GetSettingsHeight()
                         local ResizeInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
@@ -5964,7 +5977,7 @@ local Library do
                             Size = UDim2New(1, 0, 0, targetH)
                         }):Play()
                         TweenService:Create(Items["Wrapper"].Instance, ResizeInfo, {
-                            Size = UDim2New(1, 0, 0, 24 + targetH)
+                            Size = UDim2New(1, 0, 0, 23 + targetH)
                         }):Play()
                     end)
                 end)
