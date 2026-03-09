@@ -5898,24 +5898,35 @@ local Library do
                 -- Track expand state separately (Toggle.Value drives this)
                 Toggle._settingsExpanded = false
 
-                local function _GetSettingsHeight()
-                    local contentSize = SettingsLayout.Instance.AbsoluteContentSize.Y
-                    if contentSize > 0 then
-                        return contentSize + 10
-                    end
-                    local totalH = 10
-                    local count = 0
-                    for _, child in ipairs(Items["SettingsContent"].Instance:GetChildren()) do
-                        if child:IsA("GuiObject") and child.Visible then
-                            local h = child.AbsoluteSize.Y > 0 and child.AbsoluteSize.Y or child.Size.Y.Offset
-                            totalH = totalH + math.max(h, 0)
-                            count = count + 1
+                local function _MeasureSettingsHeight()
+                    local Clipper = Items["SettingsClipper"].Instance
+                    local Content = Items["SettingsContent"].Instance
+                    local wasClipping = Clipper.ClipsDescendants
+                    Clipper.ClipsDescendants = false
+                    Clipper.Size = UDim2New(1, 0, 1, 0)
+                    task.wait()
+                    task.wait()
+                    local h = Content.AbsoluteSize.Y
+                    Clipper.ClipsDescendants = wasClipping
+                    Clipper.Size = UDim2New(1, 0, 0, 0)
+                    if h <= 0 then
+                        local totalH = 10
+                        local count = 0
+                        for _, child in ipairs(Content:GetChildren()) do
+                            if child:IsA("GuiObject") and child.Visible then
+                                totalH = totalH + math.max(child.Size.Y.Offset, 18)
+                                count = count + 1
+                            end
                         end
+                        if count > 1 then totalH = totalH + (count - 1) * 5 end
+                        return totalH
                     end
-                    if count > 1 then
-                        totalH = totalH + (count - 1) * 5
-                    end
-                    return totalH
+                    return h
+                end
+
+                local function _GetSettingsHeight()
+                    local h = SettingsLayout.Instance.AbsoluteContentSize.Y
+                    return (h > 0 and h or 0) + 10
                 end
 
                 -- Core expand/collapse animation
@@ -5930,16 +5941,10 @@ local Library do
 
                     if Expanded then
                         Sep.Visible = true
-                        -- Rotate chevron upward
                         TweenService:Create(Chevron, TInfo, { Rotation = 180 }):Play()
                         task.spawn(function()
-                            local elapsed = 0
-                            repeat
-                                task.wait()
-                                elapsed = elapsed + 1
-                            until SettingsLayout.Instance.AbsoluteContentSize.Y > 0 or elapsed >= 10
                             if not Library then return end
-                            local targetH = _GetSettingsHeight()
+                            local targetH = _MeasureSettingsHeight()
                             TweenService:Create(Clipper, TInfo, {
                                 Size = UDim2New(1, 0, 0, targetH)
                             }):Play()
@@ -5972,6 +5977,7 @@ local Library do
                         task.wait()
                         if not Library then return end
                         local targetH = _GetSettingsHeight()
+                        if targetH <= 10 then return end
                         local ResizeInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
                         TweenService:Create(Items["SettingsClipper"].Instance, ResizeInfo, {
                             Size = UDim2New(1, 0, 0, targetH)
