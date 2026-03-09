@@ -5900,7 +5900,7 @@ local Library do
 
                 -- Helper: target height of the settings content (layout + padding)
                 local function _GetSettingsHeight()
-                    local h = SettingsContent.Instance.AbsoluteSize.Y
+                    local h = Items["SettingsContent"].Instance.AbsoluteSize.Y
                     return h > 0 and h or (SettingsLayout.Instance.AbsoluteContentSize.Y + 10)
                 end
 
