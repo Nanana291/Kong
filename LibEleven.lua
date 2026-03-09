@@ -4901,12 +4901,12 @@ local Library do
             }
 
             local Items = { } do
-                Items["Section"] = Instances:Create("Frame", {
+                Items[\"Section\"] = Instances:Create(\"Frame\", {
                     Parent = Section.Page.ColumnsData[Section.Side].Instance,
                     Name = "\0",
                     BorderColor3 = FromRGB(0, 0, 0),
                     BackgroundTransparency = 0.6499999761581421,
-                    ClipsDescendants = true,
+                    ClipsDescendants = false,
                     BorderSizePixel = 0,
                     Size = UDim2New(1, 0, 0, 0),
                     ZIndex = 2,
@@ -5376,7 +5376,7 @@ local Library do
                     Name = "\0",
                     BorderColor3 = FromRGB(0, 0, 0),
                     BackgroundTransparency = 1,
-                    ClipsDescendants = true,
+                    ClipsDescendants = false,
                     BorderSizePixel = 0,
                     Size = UDim2New(1, 0, 0, 0),
                     ZIndex = 2,
@@ -5685,7 +5685,7 @@ local Library do
                     Name = "\0",
                     FontFace = Library.Font,
                     TextColor3 = FromRGB(240, 240, 240),
-                    TextTransparency = 0.30000001192092896,
+                    TextTransparency = Toggle.Section.IsSettings and 0.42 or 0.15,
                     Text = Toggle.Name,
                     AutomaticSize = Enum.AutomaticSize.X,
                     Size = UDim2New(0, 0, 0, 15),
@@ -5695,7 +5695,7 @@ local Library do
                     TextXAlignment = Enum.TextXAlignment.Left,
                     BorderColor3 = FromRGB(0, 0, 0),
                     ZIndex = 2,
-                    TextSize = 14,
+                    TextSize = Toggle.Section.IsSettings and 13 or 14,
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })  Items["Text"]:AddToTheme({TextColor3 = "Text"})
 
@@ -5915,22 +5915,21 @@ local Library do
 
                     if Expanded then
                         Sep.Visible = true
-                        -- Rotate chevron upward
                         TweenService:Create(Chevron, TInfo, { Rotation = 180 }):Play()
-                        -- Wait one frame so Roblox layout engine computes heights
                         task.spawn(function()
+                            task.wait()
                             task.wait()
                             if not Library then return end
                             local targetH = _GetSettingsHeight()
-                            TweenService:Create(Clipper, TInfo, {
-                                Size = UDim2New(1, 0, 0, targetH)
-                            }):Play()
-                            TweenService:Create(Wrapper, TInfo, {
-                                Size = UDim2New(1, 0, 0, 23 + targetH)
-                            }):Play()
+                            if targetH <= 10 then
+                                task.wait(0.1)
+                                if not Library then return end
+                                targetH = _GetSettingsHeight()
+                            end
+                            Clipper.Size = UDim2New(1, 0, 0, targetH)
+                            Wrapper.Size = UDim2New(1, 0, 0, 23 + targetH)
                         end)
                     else
-                        -- Rotate chevron back down
                         TweenService:Create(Chevron, TInfo, { Rotation = 0 }):Play()
                         local collapseClipper = TweenService:Create(Clipper, TInfo, {
                             Size = UDim2New(1, 0, 0, 0)
@@ -5946,14 +5945,14 @@ local Library do
                     end
                 end
 
-                -- Auto-resize when child elements are added/removed while panel is open
-                SettingsLayout.Instance:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+                -- Auto-resize whenever child layout changes while panel is expanded
+                local function _DoAutoResize()
                     if not Toggle._settingsExpanded or not Library then return end
                     task.spawn(function()
                         task.wait()
                         if not Library then return end
                         local targetH = _GetSettingsHeight()
-                        local ResizeInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+                        local ResizeInfo = TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
                         TweenService:Create(Items["SettingsClipper"].Instance, ResizeInfo, {
                             Size = UDim2New(1, 0, 0, targetH)
                         }):Play()
@@ -5961,7 +5960,10 @@ local Library do
                             Size = UDim2New(1, 0, 0, 23 + targetH)
                         }):Play()
                     end)
-                end)
+                end
+
+                SettingsLayout.Instance:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(_DoAutoResize)
+                Items["SettingsContent"].Instance:GetPropertyChangedSignal("AbsoluteSize"):Connect(_DoAutoResize)
 
                 -- ── Child element factories ──────────────────────────────
                 -- Each method proxies through the SettingsSection so child
