@@ -5680,12 +5680,14 @@ local Library do
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })
                 
+                local _isChildSettings = Toggle.Section ~= nil and Toggle.Section.IsSettings == true
+
                 Items["Text"] = Instances:Create("TextLabel", {
                     Parent = Items["Toggle"].Instance,
                     Name = "\0",
                     FontFace = Library.Font,
                     TextColor3 = FromRGB(240, 240, 240),
-                    TextTransparency = Toggle.Section.IsSettings and 0.42 or 0.15,
+                    TextTransparency = _isChildSettings and 0.42 or 0.15,
                     Text = Toggle.Name,
                     AutomaticSize = Enum.AutomaticSize.X,
                     Size = UDim2New(0, 0, 0, 15),
@@ -5695,7 +5697,7 @@ local Library do
                     TextXAlignment = Enum.TextXAlignment.Left,
                     BorderColor3 = FromRGB(0, 0, 0),
                     ZIndex = 2,
-                    TextSize = Toggle.Section.IsSettings and 13 or 14,
+                    TextSize = _isChildSettings and 13 or 14,
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })  Items["Text"]:AddToTheme({TextColor3 = "Text"})
 
