@@ -4901,7 +4901,7 @@ local Library do
             }
 
             local Items = { } do
-                Items[\"Section\"] = Instances:Create(\"Frame\", {
+                Items["Section"] = Instances:Create("Frame", {
                     Parent = Section.Page.ColumnsData[Section.Side].Instance,
                     Name = "\0",
                     BorderColor3 = FromRGB(0, 0, 0),
@@ -5613,7 +5613,7 @@ local Library do
                         Name = "\0",
                         BackgroundTransparency = 1,
                         BorderSizePixel = 0,
-                        Size = UDim2New(1, 0, 0, 18),
+                        Size = UDim2New(1, 0, 0, 20),
                         ZIndex = 2,
                         BackgroundColor3 = FromRGB(255, 255, 255)
                     })
@@ -5900,7 +5900,8 @@ local Library do
 
                 -- Helper: target height of the settings content (layout + padding)
                 local function _GetSettingsHeight()
-                    return SettingsLayout.Instance.AbsoluteContentSize.Y + 10  -- 5 top + 5 bottom padding
+                    local h = SettingsContent.Instance.AbsoluteSize.Y
+                    return h > 0 and h or (SettingsLayout.Instance.AbsoluteContentSize.Y + 10)
                 end
 
                 -- Core expand/collapse animation
@@ -5915,26 +5916,34 @@ local Library do
 
                     if Expanded then
                         Sep.Visible = true
+                        -- Rotate chevron upward
                         TweenService:Create(Chevron, TInfo, { Rotation = 180 }):Play()
+                        -- Wait one frame so Roblox layout engine computes heights
                         task.spawn(function()
+                            task.wait()
                             task.wait()
                             if not Library then return end
                             local targetH = _GetSettingsHeight()
+                            if targetH <= 0 then
+                                task.wait(0.05)
+                                targetH = _GetSettingsHeight()
+                            end
                             TweenService:Create(Clipper, TInfo, {
                                 Size = UDim2New(1, 0, 0, targetH)
                             }):Play()
                             TweenService:Create(Wrapper, TInfo, {
-                                Size = UDim2New(1, 0, 0, 23 + targetH)
+                                Size = UDim2New(1, 0, 0, 24 + targetH)
                             }):Play()
                         end)
                     else
+                        -- Rotate chevron back down
                         TweenService:Create(Chevron, TInfo, { Rotation = 0 }):Play()
                         local collapseClipper = TweenService:Create(Clipper, TInfo, {
                             Size = UDim2New(1, 0, 0, 0)
                         })
                         collapseClipper:Play()
                         TweenService:Create(Wrapper, TInfo, {
-                            Size = UDim2New(1, 0, 0, 18)
+                            Size = UDim2New(1, 0, 0, 20)
                         }):Play()
                         collapseClipper.Completed:Connect(function()
                             if not Library then return end
@@ -5955,7 +5964,7 @@ local Library do
                             Size = UDim2New(1, 0, 0, targetH)
                         }):Play()
                         TweenService:Create(Items["Wrapper"].Instance, ResizeInfo, {
-                            Size = UDim2New(1, 0, 0, 23 + targetH)
+                            Size = UDim2New(1, 0, 0, 24 + targetH)
                         }):Play()
                     end)
                 end)
