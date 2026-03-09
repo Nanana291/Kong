@@ -5899,33 +5899,21 @@ local Library do
                 Toggle._settingsExpanded = false
 
                 local function _MeasureSettingsHeight()
-                    local Clipper = Items["SettingsClipper"].Instance
-                    local Wrapper = Items["Wrapper"].Instance
-                    local wasClipping = Clipper.ClipsDescendants
-                    local prevClipSize = Clipper.Size
-                    local prevWrapSize = Wrapper.Size
-                    Clipper.ClipsDescendants = false
-                    Clipper.Size = UDim2New(1, 0, 0, 9999)
-                    Wrapper.Size = UDim2New(1, 0, 0, 9999)
-                    task.wait()
-                    task.wait()
-                    local h = SettingsLayout.Instance.AbsoluteContentSize.Y + 10
-                    Clipper.ClipsDescendants = wasClipping
-                    Clipper.Size = UDim2New(1, 0, 0, 0)
-                    Wrapper.Size = UDim2New(1, 0, 0, 18)
-                    if h <= 10 then
-                        local totalH = 10
-                        local count = 0
-                        for _, child in ipairs(Items["SettingsContent"].Instance:GetChildren()) do
-                            if child:IsA("GuiObject") and child.Visible then
-                                totalH = totalH + math.max(child.Size.Y.Offset, 18)
-                                count = count + 1
-                            end
+                    local Content = Items["SettingsContent"].Instance
+                    local totalH = 10
+                    local count = 0
+                    for _, child in ipairs(Content:GetChildren()) do
+                        if child:IsA("GuiObject") and child.Visible then
+                            local h = child.Size.Y.Offset
+                            if h <= 0 then h = 18 end
+                            totalH = totalH + h
+                            count = count + 1
                         end
-                        if count > 1 then totalH = totalH + (count - 1) * 5 end
-                        return totalH
                     end
-                    return h
+                    if count > 1 then
+                        totalH = totalH + (count - 1) * 5
+                    end
+                    return totalH
                 end
 
                 local function _GetSettingsHeight()
@@ -5946,16 +5934,13 @@ local Library do
                     if Expanded then
                         Sep.Visible = true
                         TweenService:Create(Chevron, TInfo, { Rotation = 180 }):Play()
-                        task.spawn(function()
-                            if not Library then return end
-                            local targetH = _MeasureSettingsHeight()
-                            TweenService:Create(Clipper, TInfo, {
-                                Size = UDim2New(1, 0, 0, targetH)
-                            }):Play()
-                            TweenService:Create(Wrapper, TInfo, {
-                                Size = UDim2New(1, 0, 0, 23 + targetH)
-                            }):Play()
-                        end)
+                        local targetH = _MeasureSettingsHeight()
+                        TweenService:Create(Clipper, TInfo, {
+                            Size = UDim2New(1, 0, 0, targetH)
+                        }):Play()
+                        TweenService:Create(Wrapper, TInfo, {
+                            Size = UDim2New(1, 0, 0, 23 + targetH)
+                        }):Play()
                     else
                         -- Rotate chevron back down
                         TweenService:Create(Chevron, TInfo, { Rotation = 0 }):Play()
@@ -5976,20 +5961,15 @@ local Library do
                 -- Auto-resize when child elements are added/removed while panel is open
                 SettingsLayout.Instance:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
                     if not Toggle._settingsExpanded or not Library then return end
-                    task.spawn(function()
-                        task.wait()
-                        task.wait()
-                        if not Library then return end
-                        local targetH = _GetSettingsHeight()
-                        if targetH <= 10 then return end
-                        local ResizeInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
-                        TweenService:Create(Items["SettingsClipper"].Instance, ResizeInfo, {
-                            Size = UDim2New(1, 0, 0, targetH)
-                        }):Play()
-                        TweenService:Create(Items["Wrapper"].Instance, ResizeInfo, {
-                            Size = UDim2New(1, 0, 0, 23 + targetH)
-                        }):Play()
-                    end)
+                    local targetH = _MeasureSettingsHeight()
+                    if targetH <= 10 then return end
+                    local ResizeInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+                    TweenService:Create(Items["SettingsClipper"].Instance, ResizeInfo, {
+                        Size = UDim2New(1, 0, 0, targetH)
+                    }):Play()
+                    TweenService:Create(Items["Wrapper"].Instance, ResizeInfo, {
+                        Size = UDim2New(1, 0, 0, 23 + targetH)
+                    }):Play()
                 end)
 
                 -- ── Child element factories ──────────────────────────────
