@@ -5900,19 +5900,23 @@ local Library do
 
                 local function _MeasureSettingsHeight()
                     local Clipper = Items["SettingsClipper"].Instance
-                    local Content = Items["SettingsContent"].Instance
+                    local Wrapper = Items["Wrapper"].Instance
                     local wasClipping = Clipper.ClipsDescendants
+                    local prevClipSize = Clipper.Size
+                    local prevWrapSize = Wrapper.Size
                     Clipper.ClipsDescendants = false
-                    Clipper.Size = UDim2New(1, 0, 1, 0)
+                    Clipper.Size = UDim2New(1, 0, 0, 9999)
+                    Wrapper.Size = UDim2New(1, 0, 0, 9999)
                     task.wait()
                     task.wait()
-                    local h = Content.AbsoluteSize.Y
+                    local h = SettingsLayout.Instance.AbsoluteContentSize.Y + 10
                     Clipper.ClipsDescendants = wasClipping
                     Clipper.Size = UDim2New(1, 0, 0, 0)
-                    if h <= 0 then
+                    Wrapper.Size = UDim2New(1, 0, 0, 18)
+                    if h <= 10 then
                         local totalH = 10
                         local count = 0
-                        for _, child in ipairs(Content:GetChildren()) do
+                        for _, child in ipairs(Items["SettingsContent"].Instance:GetChildren()) do
                             if child:IsA("GuiObject") and child.Visible then
                                 totalH = totalH + math.max(child.Size.Y.Offset, 18)
                                 count = count + 1
