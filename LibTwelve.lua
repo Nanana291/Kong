@@ -6007,6 +6007,9 @@ local Library do
                 local _CheckSize = IsMobile and 12 or 14
                 if Toggle.Value then
                     Items["IndicatorGradient"].Instance.Enabled = true
+                    Items["Indicator"]:ChangeItemTheme({BackgroundColor3 = function()
+                        return FromRGB(255, 255, 255)
+                    end})
                     if Instant then
                         Items["Indicator"].Instance.BackgroundColor3 = FromRGB(255, 255, 255)
                         Items["CheckImage"].Instance.ImageTransparency = 0
@@ -6019,6 +6022,7 @@ local Library do
                     end
                 else
                     Items["IndicatorGradient"].Instance.Enabled = false
+                    Items["Indicator"]:ChangeItemTheme({BackgroundColor3 = "Element"})
                     if Instant then
                         Items["Indicator"].Instance.BackgroundColor3 = Library.Theme.Element
                         Items["CheckImage"].Instance.ImageTransparency = 1
@@ -6031,10 +6035,7 @@ local Library do
                     end
                 end
 
-                if not Instant and Toggle.Callback then 
-                    Library:SafeCall(Toggle.Callback, Toggle.Value)
-                elseif Instant and Toggle.Callback then
-                    -- still fire callback so flags are consistent, just no animation
+                if Toggle.Callback then 
                     Library:SafeCall(Toggle.Callback, Toggle.Value)
                 end
 
