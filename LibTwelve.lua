@@ -2579,10 +2579,8 @@ local Library do
             local PROG_H      = 3
             local CORNER      = 13
 
-            local _ok1, TitleFont = pcall(Font.new, "rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold,    Enum.FontStyle.Normal)
-            if not _ok1 then TitleFont = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold,    Enum.FontStyle.Normal) end
-            local _ok2, BodyFont  = pcall(Font.new, "rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal)
-            if not _ok2 then BodyFont  = Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal) end
+            local TitleFont = Font.fromEnum(Enum.Font.GothamBold)
+            local BodyFont  = Font.fromEnum(Enum.Font.Gotham)
 
             local TI_In  = TweenInfo.new(0.55, Enum.EasingStyle.Back,  Enum.EasingDirection.Out)
             local TI_Out = TweenInfo.new(0.30, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
@@ -11529,7 +11527,7 @@ local Library do
                 Instances:Create("TextLabel", {
                     Parent = Items["BadgePill"].Instance,
                     Name = "\0",
-                    FontFace = (function() local ok, f = pcall(Font.new, "rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal) return ok and f or (function() local _ok, _f = pcall(Font.new, "rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal); return _ok and _f or Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal) end)() end)(),
+                    FontFace = Font.fromEnum(Enum.Font.GothamBold),
                     TextColor3 = FromRGB(255, 255, 255),
                     Text = "JOIN OUR COMMUNITY",
                     TextSize = 9,
@@ -11632,7 +11630,7 @@ local Library do
                     TextColor3 = FromRGB(255, 255, 255),
                     TextTransparency = 0.05,
                     TextSize = 20,
-                    FontFace = (function() local ok, f = pcall(Font.new, "rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal) return ok and f or (function() local _ok, _f = pcall(Font.new, "rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal); return _ok and _f or Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal) end)() end)(),
+                    FontFace = Font.fromEnum(Enum.Font.GothamBold),
                     ZIndex = 4,
                 })
 
@@ -11640,7 +11638,7 @@ local Library do
                 Items["Title"] = Instances:Create("TextLabel", {
                     Parent = Items["Card"].Instance,
                     Name = "\0",
-                    FontFace = (function() local ok, f = pcall(Font.new, "rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal) return ok and f or (function() local _ok, _f = pcall(Font.new, "rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal); return _ok and _f or Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal) end)() end)(),
+                    FontFace = Font.fromEnum(Enum.Font.GothamBold),
                     TextColor3 = FromRGB(235, 235, 235),
                     Text = Discord.Name,
                     TextSize = 13,
@@ -11711,7 +11709,7 @@ local Library do
                 Items["OnlineText"] = Instances:Create("TextLabel", {
                     Parent = OnlineRow.Instance,
                     Name = "\0",
-                    FontFace = (function() local ok, f = pcall(Font.new, "rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal) return ok and f or (function() local _ok, _f = pcall(Font.new, "rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal); return _ok and _f or Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal) end)() end)(),
+                    FontFace = Font.fromEnum(Enum.Font.GothamMedium),
                     TextColor3 = FromRGB(35, 165, 89),
                     Text = "Loading...",
                     TextSize = 10,
@@ -11752,7 +11750,7 @@ local Library do
                 Items["TotalText"] = Instances:Create("TextLabel", {
                     Parent = TotalRow.Instance,
                     Name = "\0",
-                    FontFace = (function() local ok, f = pcall(Font.new, "rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal) return ok and f or (function() local _ok, _f = pcall(Font.new, "rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal); return _ok and _f or Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Medium, Enum.FontStyle.Normal) end)() end)(),
+                    FontFace = Font.fromEnum(Enum.Font.GothamMedium),
                     TextColor3 = FromRGB(110, 110, 120),
                     Text = "Loading...",
                     TextSize = 10,
@@ -11768,7 +11766,7 @@ local Library do
                     Parent = Items["Card"].Instance,
                     Name = "\0",
                     Text = "Join",
-                    FontFace = (function() local ok, f = pcall(Font.new, "rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal) return ok and f or (function() local _ok, _f = pcall(Font.new, "rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal); return _ok and _f or Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal) end)() end)(),
+                    FontFace = Font.fromEnum(Enum.Font.GothamBold),
                     TextColor3 = FromRGB(255, 255, 255),
                     BackgroundColor3 = FromRGB(151, 69, 186),
                     Size = UDim2New(0, 60, 0, 28),
@@ -11881,7 +11879,7 @@ local Library do
                             Text = string.sub(msg.User or "?", 1, 1):upper(),
                             TextColor3 = FromRGB(255, 255, 255),
                             TextSize = 9,
-                            FontFace = (function() local ok, f = pcall(Font.new, "rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal) return ok and f or (function() local _ok, _f = pcall(Font.new, "rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal); return _ok and _f or Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal) end)() end)(),
+                            FontFace = Font.fromEnum(Enum.Font.GothamBold),
                             ZIndex = 4,
                         })
 
@@ -11898,7 +11896,7 @@ local Library do
                             TextSize = 10,
                             TextXAlignment = Enum.TextXAlignment.Left,
                             TextTruncate = Enum.TextTruncate.AtEnd,
-                            FontFace = (function() local ok, f = pcall(Font.new, "rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal) return ok and f or (function() local _ok, _f = pcall(Font.new, "rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal); return _ok and _f or Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal) end)() end)(),
+                            FontFace = Font.fromEnum(Enum.Font.GothamBold),
                             ZIndex = 3,
                         }):AddToTheme({TextColor3 = "Accent"})
 
@@ -12498,7 +12496,7 @@ local Library do
                 Instances:Create("TextLabel", {
                     Parent = TextContainer.Instance,
                     Text = string.upper(Title),
-                    FontFace = (function() local ok, f = pcall(Font.new, "rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal) return ok and f or (function() local _ok, _f = pcall(Font.new, "rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal); return _ok and _f or Font.new("rbxasset://fonts/families/BuilderSans.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal) end)() end)(),
+                    FontFace = Font.fromEnum(Enum.Font.GothamBold),
                     TextColor3 = FromRGB(255, 255, 255),
                     TextSize = 13,
                     Size = UDim2New(1, 0, 0, 15),
