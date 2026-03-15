@@ -359,20 +359,82 @@ local Library do
 
     local Themes = {
         ["Preset"] = {
-            ["AccentGradient"] = FromRGB(109, 43, 139),  -- Darker purple
-            ["Background 2"] = FromRGB(10, 10, 12),      -- Very dark gray
-            ["Background"] = FromRGB(12, 12, 14),        -- Main near-black background
-            ["Text"] = FromRGB(235, 235, 235),           -- Slightly dimmed light text
-            ["Outline"] = FromRGB(25, 25, 28),           -- Subtle outline, almost invisible
-            ["Section Top"] = FromRGB(28, 27, 31),       -- Dark section header
-            ["Section Background"] = FromRGB(10, 10, 12),-- Deep black section background
-            ["Section Background 2"] = FromRGB(14, 14, 16),-- Alternate section, minimal difference
-            ["Accent"] = FromRGB(151, 69, 186),          -- Purple (#9745ba)
-            ["Element"] = FromRGB(16, 16, 18)            -- Deep gray for UI elements
-        }
+            ["AccentGradient"] = FromRGB(109, 43, 139),
+            ["Background 2"] = FromRGB(10, 10, 12),
+            ["Background"] = FromRGB(12, 12, 14),
+            ["Text"] = FromRGB(235, 235, 235),
+            ["Outline"] = FromRGB(25, 25, 28),
+            ["Section Top"] = FromRGB(28, 27, 31),
+            ["Section Background"] = FromRGB(10, 10, 12),
+            ["Section Background 2"] = FromRGB(14, 14, 16),
+            ["Accent"] = FromRGB(151, 69, 186),
+            ["Element"] = FromRGB(16, 16, 18)
+        },
+        ["Dark"] = {
+            ["AccentGradient"] = FromRGB(50, 50, 55),
+            ["Background 2"] = FromRGB(6, 6, 8),
+            ["Background"] = FromRGB(9, 9, 11),
+            ["Text"] = FromRGB(220, 220, 220),
+            ["Outline"] = FromRGB(22, 22, 24),
+            ["Section Top"] = FromRGB(22, 22, 25),
+            ["Section Background"] = FromRGB(8, 8, 10),
+            ["Section Background 2"] = FromRGB(12, 12, 14),
+            ["Accent"] = FromRGB(90, 90, 100),
+            ["Element"] = FromRGB(14, 14, 16)
+        },
+        ["Flame"] = {
+            ["AccentGradient"] = FromRGB(160, 50, 10),
+            ["Background 2"] = FromRGB(8, 6, 6),
+            ["Background"] = FromRGB(10, 8, 8),
+            ["Text"] = FromRGB(235, 225, 215),
+            ["Outline"] = FromRGB(30, 18, 14),
+            ["Section Top"] = FromRGB(28, 18, 14),
+            ["Section Background"] = FromRGB(8, 6, 6),
+            ["Section Background 2"] = FromRGB(14, 10, 9),
+            ["Accent"] = FromRGB(220, 75, 20),
+            ["Element"] = FromRGB(18, 12, 10)
+        },
+        ["Plasma"] = {
+            ["AccentGradient"] = FromRGB(130, 10, 130),
+            ["Background 2"] = FromRGB(8, 6, 10),
+            ["Background"] = FromRGB(10, 8, 13),
+            ["Text"] = FromRGB(235, 220, 240),
+            ["Outline"] = FromRGB(28, 18, 34),
+            ["Section Top"] = FromRGB(26, 18, 32),
+            ["Section Background"] = FromRGB(8, 6, 10),
+            ["Section Background 2"] = FromRGB(14, 10, 17),
+            ["Accent"] = FromRGB(190, 50, 210),
+            ["Element"] = FromRGB(16, 12, 20)
+        },
+        ["Forest"] = {
+            ["AccentGradient"] = FromRGB(18, 100, 30),
+            ["Background 2"] = FromRGB(6, 9, 6),
+            ["Background"] = FromRGB(8, 11, 8),
+            ["Text"] = FromRGB(215, 235, 215),
+            ["Outline"] = FromRGB(16, 26, 16),
+            ["Section Top"] = FromRGB(18, 28, 18),
+            ["Section Background"] = FromRGB(6, 9, 6),
+            ["Section Background 2"] = FromRGB(10, 14, 10),
+            ["Accent"] = FromRGB(45, 175, 65),
+            ["Element"] = FromRGB(12, 17, 12)
+        },
+        ["Aqua"] = {
+            ["AccentGradient"] = FromRGB(10, 110, 140),
+            ["Background 2"] = FromRGB(6, 8, 10),
+            ["Background"] = FromRGB(8, 10, 13),
+            ["Text"] = FromRGB(215, 235, 240),
+            ["Outline"] = FromRGB(14, 24, 30),
+            ["Section Top"] = FromRGB(16, 26, 32),
+            ["Section Background"] = FromRGB(6, 8, 10),
+            ["Section Background 2"] = FromRGB(10, 13, 17),
+            ["Accent"] = FromRGB(30, 190, 220),
+            ["Element"] = FromRGB(11, 15, 19)
+        },
     }
 
     Library.Theme = TableClone(Themes["Preset"])
+    Library.Themes = Themes
+    Library.ActiveThemePreset = "Default"
 
     -- Folders
     Library.SetFolder = function(self, Folder)
@@ -637,6 +699,34 @@ local Library do
                     pcall(function()
                         Item.Item[Property] = Value()
                     end)
+                end
+            end
+        end
+    end
+
+    Library.ApplyThemePreset = function(self, PresetName)
+        local Key = PresetName == "Default" and "Preset" or PresetName
+        local ThemeData = self.Themes[Key]
+        if not ThemeData then return end
+        self.ActiveThemePreset = PresetName
+        local TInfo = TweenInfo.new(0.45, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+        for ThemeKey, Color in ThemeData do
+            self.Theme[ThemeKey] = Color
+            for _, Item in self.ThemeItems do
+                for Property, Value in Item.Properties do
+                    if type(Value) == "string" and Value == ThemeKey then
+                        pcall(function()
+                            if Item.Item:IsA("Frame") or Item.Item:IsA("ScrollingFrame") or Item.Item:IsA("TextButton") or Item.Item:IsA("TextLabel") or Item.Item:IsA("ImageLabel") then
+                                TweenService:Create(Item.Item, TInfo, { [Property] = Color }):Play()
+                            else
+                                Item.Item[Property] = Color
+                            end
+                        end)
+                    elseif type(Value) == "function" then
+                        pcall(function()
+                            Item.Item[Property] = Value()
+                        end)
+                    end
                 end
             end
         end
@@ -1362,9 +1452,8 @@ local Library do
         Name = "\0",
         BackgroundTransparency = 1,
         AnchorPoint = Vector2New(1, 1),
-        Position = UDim2New(1, -10, 1, -10),
-        Size = UDim2New(0, 270, 1, -20),
-        BorderColor3 = FromRGB(0, 0, 0),
+        Position = UDim2New(1, -20, 1, -20),
+        Size = UDim2New(0, 280, 1, -40),
         BorderSizePixel = 0,
         BackgroundColor3 = FromRGB(255, 255, 255),
         ClipsDescendants = false,
@@ -1373,7 +1462,7 @@ local Library do
     Instances:Create("UIListLayout", {
         Parent = Library.NotifHolder.Instance,
         Name = "\0",
-        Padding = UDimNew(0, 8),
+        Padding = UDimNew(0, 10),
         SortOrder = Enum.SortOrder.LayoutOrder,
         VerticalAlignment = Enum.VerticalAlignment.Bottom,
         HorizontalAlignment = Enum.HorizontalAlignment.Right,
@@ -2484,14 +2573,19 @@ local Library do
             local Icon        = Data.Icon or "check"
             local Duration    = Data.Duration or 5
 
-            local NotifWidth  = 260
-            local TweenInfo_In  = TweenInfo.new(0.45, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
-            local TweenInfo_Out = TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+            local NotifWidth  = 268
+            local BAR_H       = 3
+
+            local TitleFont = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Bold, Enum.FontStyle.Normal)
+            local BodyFont  = Font.new("rbxasset://fonts/families/Gotham.json",    Enum.FontWeight.Regular, Enum.FontStyle.Normal)
+
+            local TInfo_In  = TweenInfo.new(0.5,  Enum.EasingStyle.Back,  Enum.EasingDirection.Out)
+            local TInfo_Out = TweenInfo.new(0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
 
             local Root = Instances:Create("Frame", {
                 Parent              = Library.NotifHolder.Instance,
                 Name                = "\0",
-                BackgroundColor3    = FromRGB(15, 15, 18),
+                BackgroundColor3    = FromRGB(13, 13, 17),
                 BorderSizePixel     = 0,
                 Size                = UDim2New(0, NotifWidth, 0, 0),
                 AutomaticSize       = Enum.AutomaticSize.Y,
@@ -2501,45 +2595,52 @@ local Library do
 
             Instances:Create("UICorner", {
                 Parent       = Root.Instance,
-                CornerRadius = UDimNew(0, 10),
+                CornerRadius = UDimNew(0, 12),
             })
 
             Instances:Create("UIStroke", {
                 Parent      = Root.Instance,
-                Color       = FromRGB(30, 30, 38),
+                Color       = FromRGB(38, 34, 52),
                 Thickness   = 1,
                 Transparency = 0,
             })
 
-            local AccentBar = Instances:Create("Frame", {
+            local LeftBar = Instances:Create("Frame", {
                 Parent           = Root.Instance,
                 Name             = "\0",
-                BackgroundColor3 = FromRGB(100, 40, 200),
+                BackgroundColor3 = FromRGB(106, 13, 173),
                 BorderSizePixel  = 0,
+                AnchorPoint      = Vector2New(0, 0),
                 Position         = UDim2New(0, 0, 0, 0),
                 Size             = UDim2New(0, 3, 1, 0),
+                ZIndex           = 3,
             })
-            AccentBar:AddToTheme({BackgroundColor3 = "Accent"})
+            LeftBar:AddToTheme({BackgroundColor3 = "Accent"})
 
             Instances:Create("UICorner", {
-                Parent       = AccentBar.Instance,
-                CornerRadius = UDimNew(0, 10),
+                Parent       = LeftBar.Instance,
+                CornerRadius = UDimNew(0, 12),
             })
 
             local IconData = Library:GetCustomIcon(Icon)
             local IconBg = Instances:Create("Frame", {
                 Parent           = Root.Instance,
                 Name             = "\0",
-                BackgroundColor3 = FromRGB(40, 20, 70),
+                BackgroundColor3 = FromRGB(35, 18, 62),
                 BorderSizePixel  = 0,
+                AnchorPoint      = Vector2New(0, 0),
                 Position         = UDim2New(0, 14, 0, 14),
-                Size             = UDim2New(0, 34, 0, 34),
+                Size             = UDim2New(0, 36, 0, 36),
+                ZIndex           = 2,
             })
-            IconBg:AddToTheme({BackgroundColor3 = function() return FromRGB(
-                math.clamp(math.floor(Library.Theme.Accent.R * 255 * 0.18), 0, 255),
-                math.clamp(math.floor(Library.Theme.Accent.G * 255 * 0.10), 0, 255),
-                math.clamp(math.floor(Library.Theme.Accent.B * 255 * 0.30), 0, 255)
-            ) end})
+            IconBg:AddToTheme({BackgroundColor3 = function()
+                local A = Library.Theme.Accent
+                return FromRGB(
+                    math.clamp(math.floor(A.R * 255 * 0.20), 0, 255),
+                    math.clamp(math.floor(A.G * 255 * 0.08), 0, 255),
+                    math.clamp(math.floor(A.B * 255 * 0.32), 0, 255)
+                )
+            end})
 
             Instances:Create("UICorner", {
                 Parent       = IconBg.Instance,
@@ -2556,8 +2657,9 @@ local Library do
                 BackgroundTransparency = 1,
                 AnchorPoint         = Vector2New(0.5, 0.5),
                 Position            = UDim2New(0.5, 0, 0.5, 0),
-                Size                = UDim2New(0, 18, 0, 18),
+                Size                = UDim2New(0, 19, 0, 19),
                 BorderSizePixel     = 0,
+                ZIndex              = 3,
             }):AddToTheme({ImageColor3 = "Accent"})
 
             local TextBlock = Instances:Create("Frame", {
@@ -2565,40 +2667,46 @@ local Library do
                 Name                = "\0",
                 BackgroundTransparency = 1,
                 BorderSizePixel     = 0,
-                Position            = UDim2New(0, 58, 0, 10),
-                Size                = UDim2New(1, -70, 0, 0),
+                AnchorPoint         = Vector2New(0, 0),
+                Position            = UDim2New(0, 60, 0, 12),
+                Size                = UDim2New(1, -76, 0, 0),
                 AutomaticSize       = Enum.AutomaticSize.Y,
+                ZIndex              = 2,
             })
 
             Instances:Create("UIListLayout", {
                 Parent    = TextBlock.Instance,
-                Padding   = UDimNew(0, 3),
+                Padding   = UDimNew(0, 4),
                 SortOrder = Enum.SortOrder.LayoutOrder,
+                FillDirection = Enum.FillDirection.Vertical,
+                HorizontalAlignment = Enum.HorizontalAlignment.Left,
             })
 
             Instances:Create("TextLabel", {
                 Parent              = TextBlock.Instance,
                 Name                = "\0",
-                FontFace            = Font.new(Library.Font.Family, Enum.FontWeight.Bold),
+                FontFace            = TitleFont,
                 Text                = Title,
-                TextColor3          = FromRGB(240, 240, 245),
-                TextSize            = 14,
+                TextColor3          = FromRGB(242, 242, 248),
+                TextSize            = 15,
                 TextXAlignment      = Enum.TextXAlignment.Left,
                 TextWrapped         = true,
+                RichText            = false,
                 BackgroundTransparency = 1,
                 BorderSizePixel     = 0,
                 Size                = UDim2New(1, 0, 0, 0),
                 AutomaticSize       = Enum.AutomaticSize.Y,
                 LayoutOrder         = 1,
+                ZIndex              = 2,
             }):AddToTheme({TextColor3 = "Text"})
 
             if SubText ~= "" then
                 Instances:Create("TextLabel", {
                     Parent              = TextBlock.Instance,
                     Name                = "\0",
-                    FontFace            = Library.Font,
+                    FontFace            = BodyFont,
                     Text                = SubText,
-                    TextColor3          = FromRGB(130, 130, 145),
+                    TextColor3          = FromRGB(120, 118, 138),
                     TextSize            = 11,
                     TextXAlignment      = Enum.TextXAlignment.Left,
                     TextWrapped         = true,
@@ -2607,6 +2715,7 @@ local Library do
                     Size                = UDim2New(1, 0, 0, 0),
                     AutomaticSize       = Enum.AutomaticSize.Y,
                     LayoutOrder         = 2,
+                    ZIndex              = 2,
                 })
             end
 
@@ -2614,17 +2723,19 @@ local Library do
                 Instances:Create("TextLabel", {
                     Parent              = TextBlock.Instance,
                     Name                = "\0",
-                    FontFace            = Library.Font,
+                    FontFace            = BodyFont,
                     Text                = Description,
-                    TextColor3          = FromRGB(175, 175, 190),
-                    TextSize            = 13,
+                    TextColor3          = FromRGB(170, 168, 188),
+                    TextSize            = 12,
                     TextXAlignment      = Enum.TextXAlignment.Left,
                     TextWrapped         = true,
+                    LineHeight          = 1.25,
                     BackgroundTransparency = 1,
                     BorderSizePixel     = 0,
                     Size                = UDim2New(1, 0, 0, 0),
                     AutomaticSize       = Enum.AutomaticSize.Y,
                     LayoutOrder         = 3,
+                    ZIndex              = 2,
                 }):AddToTheme({TextColor3 = "Text"})
             end
 
@@ -2632,76 +2743,92 @@ local Library do
                 Parent              = Root.Instance,
                 Name                = "\0",
                 Text                = "×",
-                FontFace            = Library.Font,
-                TextSize            = 16,
-                TextColor3          = FromRGB(130, 130, 145),
+                FontFace            = TitleFont,
+                TextSize            = 17,
+                TextColor3          = FromRGB(100, 98, 118),
                 BackgroundTransparency = 1,
                 BorderSizePixel     = 0,
                 AnchorPoint         = Vector2New(1, 0),
-                Position            = UDim2New(1, -6, 0, 4),
+                Position            = UDim2New(1, -10, 0, 8),
                 Size                = UDim2New(0, 18, 0, 18),
                 AutoButtonColor     = false,
                 ZIndex              = 5,
             })
 
+            Instances:Create("UIPadding", {
+                Parent        = Root.Instance,
+                Name          = "\0",
+                PaddingTop    = UDimNew(0, 0),
+                PaddingBottom = UDimNew(0, BAR_H + 10),
+                PaddingLeft   = UDimNew(0, 0),
+                PaddingRight  = UDimNew(0, 0),
+            })
+
             local ProgressBg = Instances:Create("Frame", {
                 Parent           = Root.Instance,
                 Name             = "\0",
-                BackgroundColor3 = FromRGB(30, 30, 38),
+                BackgroundColor3 = FromRGB(28, 26, 38),
                 BorderSizePixel  = 0,
                 AnchorPoint      = Vector2New(0, 1),
                 Position         = UDim2New(0, 0, 1, 0),
-                Size             = UDim2New(1, 0, 0, 2),
+                Size             = UDim2New(1, 0, 0, BAR_H),
+                ZIndex           = 2,
             })
 
             Instances:Create("UICorner", {
                 Parent       = ProgressBg.Instance,
-                CornerRadius = UDimNew(0, 10),
+                CornerRadius = UDimNew(1, 0),
             })
 
-            local ProgressBar = Instances:Create("Frame", {
+            local ProgressFill = Instances:Create("Frame", {
                 Parent           = ProgressBg.Instance,
                 Name             = "\0",
-                BackgroundColor3 = FromRGB(100, 40, 200),
+                BackgroundColor3 = FromRGB(106, 13, 173),
                 BorderSizePixel  = 0,
                 Size             = UDim2New(1, 0, 1, 0),
+                ZIndex           = 3,
             })
-            ProgressBar:AddToTheme({BackgroundColor3 = "Accent"})
+            ProgressFill:AddToTheme({BackgroundColor3 = "Accent"})
 
             Instances:Create("UICorner", {
-                Parent       = ProgressBar.Instance,
-                CornerRadius = UDimNew(0, 10),
+                Parent       = ProgressFill.Instance,
+                CornerRadius = UDimNew(1, 0),
             })
 
-            local UIPad = Instances:Create("UIPadding", {
-                Parent        = Root.Instance,
-                Name          = "\0",
-                PaddingTop    = UDimNew(0, 10),
-                PaddingBottom = UDimNew(0, 14),
-                PaddingLeft   = UDimNew(0, 0),
-                PaddingRight  = UDimNew(0, 4),
-            })
+            Root.Instance.Position = UDim2New(0, NotifWidth + 30, 0, 0)
 
-            Root.Instance.Position = UDim2New(0, NotifWidth + 20, 0, 0)
-
-            TweenService:Create(Root.Instance, TweenInfo_In, {
-                Position = UDim2New(0, 0, 0, 0)
+            TweenService:Create(Root.Instance, TInfo_In, {
+                Position = UDim2New(0, 0, 0, 0),
             }):Play()
 
-            TweenService:Create(ProgressBar.Instance, TweenInfo.new(Duration, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), {
-                Size = UDim2New(0, 0, 1, 0)
+            TweenService:Create(ProgressFill.Instance,
+                TweenInfo.new(Duration, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), {
+                Size = UDim2New(0, 0, 1, 0),
             }):Play()
 
             local dismissed = false
             local function Dismiss()
                 if dismissed then return end
                 dismissed = true
-                local out = TweenService:Create(Root.Instance, TweenInfo_Out, {
-                    Position = UDim2New(0, NotifWidth + 20, 0, 0),
+
+                TweenService:Create(Root.Instance, TInfo_Out, {
+                    Position            = UDim2New(0, NotifWidth + 30, 0, 0),
                     BackgroundTransparency = 1,
-                })
-                out:Play()
-                out.Completed:Connect(function()
+                }):Play()
+
+                for _, obj in ipairs(Root.Instance:GetDescendants()) do
+                    if obj:IsA("TextLabel") or obj:IsA("TextButton") then
+                        TweenService:Create(obj, TInfo_Out, { TextTransparency = 1 }):Play()
+                    elseif obj:IsA("ImageLabel") then
+                        TweenService:Create(obj, TInfo_Out, { ImageTransparency = 1 }):Play()
+                    elseif obj:IsA("Frame") or obj:IsA("ScrollingFrame") then
+                        TweenService:Create(obj, TInfo_Out, { BackgroundTransparency = 1 }):Play()
+                    elseif obj:IsA("UIStroke") then
+                        TweenService:Create(obj, TInfo_Out, { Transparency = 1 }):Play()
+                    end
+                end
+
+                task.delay(TInfo_Out.Time + 0.05, function()
                     if Root and Root.Instance and Root.Instance.Parent then
                         Root:Clean()
                     end
@@ -2709,9 +2836,9 @@ local Library do
             end
 
             CloseBtn:Connect("MouseButton1Click", Dismiss)
-
             task.delay(Duration, Dismiss)
         end
+
 
 
         Library.Window = function(self, Data)
@@ -3720,6 +3847,17 @@ local Library do
                     Default = Enum.KeyCode.Z,
                     Callback = function(Value)
                         Window:SetOpen(Value)
+                    end
+                })
+
+                Settings:Dropdown({
+                    Name = "UI Theme",
+                    Flag = "UIThemePreset",
+                    Icon = "palette",
+                    Default = "Default",
+                    Items = {"Default", "Dark", "Flame", "Plasma", "Forest", "Aqua"},
+                    Callback = function(Value)
+                        Library:ApplyThemePreset(Value)
                     end
                 })
 
