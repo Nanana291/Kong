@@ -6000,24 +6000,41 @@ local Library do
                 return Toggle.Value 
             end
 
-            function Toggle:Set(Value)
+            function Toggle:Set(Value, Instant)
                 Toggle.Value = Value 
                 Library.Flags[Toggle.Flag] = Value 
 
                 local _CheckSize = IsMobile and 12 or 14
                 if Toggle.Value then
                     Items["IndicatorGradient"].Instance.Enabled = true
-                    Items["Indicator"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = FromRGB(255, 255, 255)})
-                    Items["CheckImage"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {ImageTransparency = 0, Size = UDim2New(0, _CheckSize, 0, _CheckSize)})
-                    Items["IndicatorStroke"]:Tween(nil, {Transparency = 1})
+                    if Instant then
+                        Items["Indicator"].Instance.BackgroundColor3 = FromRGB(255, 255, 255)
+                        Items["CheckImage"].Instance.ImageTransparency = 0
+                        Items["CheckImage"].Instance.Size = UDim2New(0, _CheckSize, 0, _CheckSize)
+                        Items["IndicatorStroke"].Instance.Transparency = 1
+                    else
+                        Items["Indicator"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = FromRGB(255, 255, 255)})
+                        Items["CheckImage"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {ImageTransparency = 0, Size = UDim2New(0, _CheckSize, 0, _CheckSize)})
+                        Items["IndicatorStroke"]:Tween(nil, {Transparency = 1})
+                    end
                 else
                     Items["IndicatorGradient"].Instance.Enabled = false
-                    Items["Indicator"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = Library.Theme.Element})
-                    Items["CheckImage"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {ImageTransparency = 1, Size = UDim2New(0, 0, 0, 0)})
-                    Items["IndicatorStroke"]:Tween(nil, {Transparency = 0.5})
+                    if Instant then
+                        Items["Indicator"].Instance.BackgroundColor3 = Library.Theme.Element
+                        Items["CheckImage"].Instance.ImageTransparency = 1
+                        Items["CheckImage"].Instance.Size = UDim2New(0, 0, 0, 0)
+                        Items["IndicatorStroke"].Instance.Transparency = 0.5
+                    else
+                        Items["Indicator"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = Library.Theme.Element})
+                        Items["CheckImage"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {ImageTransparency = 1, Size = UDim2New(0, 0, 0, 0)})
+                        Items["IndicatorStroke"]:Tween(nil, {Transparency = 0.5})
+                    end
                 end
 
-                if Toggle.Callback then 
+                if not Instant and Toggle.Callback then 
+                    Library:SafeCall(Toggle.Callback, Toggle.Value)
+                elseif Instant and Toggle.Callback then
+                    -- still fire callback so flags are consistent, just no animation
                     Library:SafeCall(Toggle.Callback, Toggle.Value)
                 end
 
@@ -6675,7 +6692,7 @@ local Library do
                 end
             end)
 
-            Toggle:Set(Toggle.Default)
+            Toggle:Set(Toggle.Default, true)
 
             Library.SetFlags[Toggle.Flag] = function(Value)
                 Toggle:Set(Value)
