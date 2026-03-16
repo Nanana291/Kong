@@ -16354,15 +16354,16 @@ local Library do
         -- We iterate RPanel & Left descendants once and tag by name/type
         local function gatherDashRefs(root)
             for _, d in ipairs(root:GetDescendants()) do
-                -- social button icons (UIGradient children of ImageLabels inside social row buttons)
-                if d:IsA("UIGradient") and d.Parent and d.Parent:IsA("ImageLabel") 
+                -- social button icons: UIGradient children of ImageLabels inside TextButtons
+                if d:IsA("UIGradient") and d.Parent and d.Parent:IsA("ImageLabel")
                    and d.Parent.Parent and d.Parent.Parent:IsA("TextButton") then
                     socialIcons[#socialIcons+1] = { img = d.Parent, grad = d }
                 end
-                -- info row icons: ImageLabels at Position (0,8, 0.5,0) inside rows
-                if d:IsA("ImageLabel") and d.Position == UDim2New(0,8,0.5,0)
+                -- info row icons: ImageLabels with ZIndex=5 inside Frames that are direct children of RPanel
+                if d:IsA("ImageLabel") and d.ZIndex == 5
                    and d.Parent and d.Parent:IsA("Frame")
-                   and d.Parent.Parent == RPanel then
+                   and d.Parent.Parent == RPanel
+                   and d.Size == UDim2New(0,13,0,13) then
                     infoRowIcons[#infoRowIcons+1] = d
                 end
             end
@@ -16474,9 +16475,9 @@ local Library do
             -- Card slots: top-bar, icon, icon gradient, stroke
             for _, slot in ipairs(cardSlots) do
                 pcall(function()
-                    if slot.glow then
-                        TweenService:Create(slot.glow, TInfo, {BackgroundColor3 = accent}):Play()
-                        local cig = slot.glow:FindFirstChildOfClass("UIGradient")
+                    if slot.top then
+                        TweenService:Create(slot.top, TInfo, {BackgroundColor3 = accent}):Play()
+                        local cig = slot.top:FindFirstChildOfClass("UIGradient")
                         if cig then cig.Color = seq end
                     end
                     if slot.icon then
