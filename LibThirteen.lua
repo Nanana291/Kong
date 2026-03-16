@@ -12107,27 +12107,40 @@ local Library do
                     Size             = UDim2New(0, 28, 0, 28),
                     AnchorPoint      = Vector2New(0, 0.5),
                     Position         = UDim2New(0, 10, 0.5, 0),
-                    BackgroundColor3 = FromRGB(88, 101, 242),
+                    BackgroundColor3 = FromRGB(
+                        math.clamp(math.floor(Library.Theme.Accent.R * 255 * 0.28), 0, 255),
+                        math.clamp(math.floor(Library.Theme.Accent.G * 255 * 0.12), 0, 255),
+                        math.clamp(math.floor(Library.Theme.Accent.B * 255 * 0.40), 0, 255)
+                    ),
                     BorderSizePixel  = 0,
                     ZIndex           = 3,
                 })
                 Instances:Create("UICorner", { Parent = IconBubble.Instance, CornerRadius = UDimNew(0, 7) })
+                IconBubble:AddToTheme({BackgroundColor3 = function()
+                    local A = Library.Theme.Accent
+                    return FromRGB(
+                        math.clamp(math.floor(A.R * 255 * 0.28), 0, 255),
+                        math.clamp(math.floor(A.G * 255 * 0.12), 0, 255),
+                        math.clamp(math.floor(A.B * 255 * 0.40), 0, 255)
+                    )
+                end})
 
-                local WebhookIconData = Library:GetCustomIcon("webhook")
-                if not WebhookIconData then WebhookIconData = Library:GetCustomIcon("send") end
-                Instances:Create("ImageLabel", {
+                local WebhookIconData = Library:GetCustomIcon("bell-ring")
+                if not WebhookIconData then WebhookIconData = Library:GetCustomIcon("bell") end
+                local _whIcon = Instances:Create("ImageLabel", {
                     Parent              = IconBubble.Instance,
                     Name                = "\0",
                     Image               = WebhookIconData and WebhookIconData.Url or "",
                     ImageRectOffset     = WebhookIconData and WebhookIconData.ImageRectOffset or Vector2New(0,0),
                     ImageRectSize       = WebhookIconData and WebhookIconData.ImageRectSize   or Vector2New(0,0),
-                    ImageColor3         = FromRGB(255, 255, 255),
+                    ImageColor3         = Library.Theme.Accent,
                     BackgroundTransparency = 1,
                     AnchorPoint         = Vector2New(0.5, 0.5),
                     Position            = UDim2New(0.5, 0, 0.5, 0),
                     Size                = UDim2New(0, 16, 0, 16),
                     ZIndex              = 4,
                 })
+                _whIcon:AddToTheme({ImageColor3 = "Accent"})
 
                 -- Header title + subtitle
                 Instances:Create("TextLabel", {
@@ -12223,9 +12236,11 @@ local Library do
                     BackgroundTransparency = 1,
                     BorderSizePixel     = 0,
                     ClearTextOnFocus    = false,
+                    ClipsDescendants    = true,
+                    TextTruncate        = Enum.TextTruncate.AtEnd,
                     AnchorPoint         = Vector2New(0, 0.5),
                     Position            = UDim2New(0, 26, 0.5, 0),
-                    Size                = UDim2New(1, -32, 0, 20),
+                    Size                = UDim2New(1, -34, 0, 20),
                     ZIndex              = 3,
                 })
 
@@ -12507,7 +12522,7 @@ local Library do
                 Instances:Create("UICorner", { Parent = TestAccentBg.Instance, CornerRadius = UDimNew(0, 7) })
 
                 local SendIconData = Library:GetCustomIcon("send")
-                Items["TestIcon"] = Instances:Create("ImageLabel", {
+                local _testIcon = Instances:Create("ImageLabel", {
                     Parent              = Items["TestBtn"].Instance,
                     Image               = SendIconData and SendIconData.Url or "",
                     ImageRectOffset     = SendIconData and SendIconData.ImageRectOffset or Vector2New(0,0),
@@ -12518,9 +12533,11 @@ local Library do
                     Position            = UDim2New(0.5, -22, 0.5, 0),
                     Size                = UDim2New(0, 13, 0, 13),
                     ZIndex              = 3,
-                }):AddToTheme({ImageColor3 = "Accent"})
+                })
+                _testIcon:AddToTheme({ImageColor3 = "Accent"})
+                Items["TestIcon"] = _testIcon
 
-                Items["TestLabel"] = Instances:Create("TextLabel", {
+                local _testLabel = Instances:Create("TextLabel", {
                     Parent              = Items["TestBtn"].Instance,
                     FontFace            = GothamBold,
                     Text                = "Send Test",
@@ -12532,7 +12549,9 @@ local Library do
                     Position            = UDim2New(0.5, 8, 0.5, 0),
                     Size                = UDim2New(0, 80, 0, 14),
                     ZIndex              = 3,
-                }):AddToTheme({TextColor3 = "Accent"})
+                })
+                _testLabel:AddToTheme({TextColor3 = "Accent"})
+                Items["TestLabel"] = _testLabel
 
                 local TI_btn = TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
                 local TI_slow = TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
