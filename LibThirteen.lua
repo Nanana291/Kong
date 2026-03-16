@@ -12030,8 +12030,6 @@ local Library do
                 OnSend   = Data.OnSend   or Data.onSend   or nil,
             }
 
-            local GothamBold = Font.fromEnum(Enum.Font.GothamBold)
-            local Gotham     = Font.fromEnum(Enum.Font.Gotham)
 
             local currentURL    = Webhook.URL
             local testStatus    = "idle"
@@ -12147,7 +12145,7 @@ local Library do
                 Instances:Create("TextLabel", {
                     Parent              = HeaderCard.Instance,
                     Name                = "\0",
-                    FontFace            = GothamBold,
+                    FontFace            = Library.Font,
                     Text                = Webhook.Name,
                     TextColor3          = FromRGB(240, 238, 252),
                     TextSize            = 13,
@@ -12163,7 +12161,7 @@ local Library do
                 Items["StatusLabel"] = Instances:Create("TextLabel", {
                     Parent              = HeaderCard.Instance,
                     Name                = "\0",
-                    FontFace            = Gotham,
+                    FontFace            = Library.Font,
                     Text                = "No URL configured",
                     TextColor3          = FromRGB(100, 97, 120),
                     TextSize            = 11,
@@ -12227,7 +12225,7 @@ local Library do
                 Items["URLBox"] = Instances:Create("TextBox", {
                     Parent              = URLRow.Instance,
                     Name                = "\0",
-                    FontFace            = Gotham,
+                    FontFace            = Library.Font,
                     Text                = currentURL,
                     PlaceholderText     = "https://discord.com/api/webhooks/...",
                     PlaceholderColor3   = FromRGB(70, 67, 90),
@@ -12332,7 +12330,7 @@ local Library do
                     })
                     Instances:Create("TextLabel", {
                         Parent              = EvHeader.Instance,
-                        FontFace            = GothamBold,
+                        FontFace            = Library.Font,
                         Text                = "NOTIFY ON",
                         TextColor3          = FromRGB(110, 108, 130),
                         TextSize            = 9,
@@ -12385,7 +12383,7 @@ local Library do
                         local iconOffset = evData.Icon and 20 or 0
                         Instances:Create("TextLabel", {
                             Parent              = EvRow.Instance,
-                            FontFace            = Gotham,
+                            FontFace            = Library.Font,
                             Text                = evData.Name or "Event",
                             TextColor3          = evEnabled and FromRGB(235, 235, 235) or FromRGB(160, 158, 178),
                             TextSize            = 12,
@@ -12540,7 +12538,7 @@ local Library do
 
                 Instances:Create("TextLabel", {
                     Parent              = PingCard.Instance,
-                    FontFace            = Gotham,
+                    FontFace            = Library.Font,
                     Text                = "Ping",
                     TextColor3          = FromRGB(175, 173, 190),
                     TextSize            = 12,
@@ -12556,7 +12554,7 @@ local Library do
                 -- value label (right side)
                 local PingValueLabel = Instances:Create("TextLabel", {
                     Parent              = PingCard.Instance,
-                    FontFace            = GothamBold,
+                    FontFace            = Library.Font,
                     Text                = "No ping",
                     TextColor3          = FromRGB(175, 173, 190),
                     TextSize            = 12,
