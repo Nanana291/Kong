@@ -5936,7 +5936,7 @@ local Library do
                     Name = "\0",
                     Enabled = false,
                     Rotation = -115,
-                    Color = RGBSequence{RGBSequenceKeypoint(0, FromRGB(255, 255, 255)), RGBSequenceKeypoint(1, FromRGB(143, 143, 143))}
+                    Color = RGBSequence{RGBSequenceKeypoint(0, Library.Theme.Accent), RGBSequenceKeypoint(1, Library.Theme.AccentGradient)}
                 })  Items["IndicatorGradient"]:AddToTheme({Color = function()
                     return RGBSequence{RGBSequenceKeypoint(0, Library.Theme.Accent), RGBSequenceKeypoint(1, Library.Theme.AccentGradient)}
                 end})
