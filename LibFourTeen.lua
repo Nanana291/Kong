@@ -7080,18 +7080,16 @@ local Library do
             end
 
             function Slider:Set(Value)
-                local step = (Slider.Decimals == 0) and 1 or Slider.Decimals
-                Slider.Value = Library:Round(MathClamp(Value, Slider.Min, Slider.Max), step)
+                local places = math.max(0, math.floor(Slider.Decimals + 0.5))
+                local step    = places == 0 and 1 or (10 ^ -places)
+                Slider.Value  = Library:Round(MathClamp(Value, Slider.Min, Slider.Max), step)
                 Library.Flags[Slider.Flag] = Slider.Value
 
                 local displayValue
-                if Slider.Decimals == 0 then
-                    displayValue = tostring(math.floor(Slider.Value))
-                elseif Slider.Decimals < 1 then
-                    local places = math.max(0, -math.floor(math.log10(Slider.Decimals) - 0.0001))
-                    displayValue = StringFormat("%." .. places .. "f", Slider.Value)
+                if places == 0 then
+                    displayValue = tostring(math.floor(Slider.Value + 0.5))
                 else
-                    displayValue = tostring(Slider.Value)
+                    displayValue = StringFormat("%." .. places .. "f", Slider.Value)
                 end
 
                 Items["Accent"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2New((Slider.Value - Slider.Min) / (Slider.Max - Slider.Min), 0, 1, 0)})
@@ -7108,14 +7106,17 @@ local Library do
                 end
             end
 
-            local _step = (Slider.Decimals == 0) and 1 or Slider.Decimals
+            local function _getStep()
+                local places = math.max(0, math.floor(Slider.Decimals + 0.5))
+                return places == 0 and 1 or (10 ^ -places)
+            end
 
             Items["Plus"]:Connect("MouseButton1Click", function()
-                Slider:Set(Slider.Value + _step)
+                Slider:Set(Slider.Value + _getStep())
             end)
 
             Items["Minus"]:Connect("MouseButton1Click", function()
-                Slider:Set(Slider.Value - _step)
+                Slider:Set(Slider.Value - _getStep())
             end)
 
             local InputChanged 
