@@ -12027,6 +12027,7 @@ local Library do
                 URL      = Data.URL      or Data.url      or "",
                 Events   = Data.Events   or Data.events   or {},
                 Callback = Data.Callback or Data.callback or function() end,
+                OnSend   = Data.OnSend   or Data.onSend   or nil,
             }
 
             local GothamBold = Font.fromEnum(Enum.Font.GothamBold)
@@ -12350,24 +12351,12 @@ local Library do
                         local EvRow = Instances:Create("Frame", {
                             Parent           = EventsInner.Instance,
                             Name             = "\0",
-                            Size             = UDim2New(1, 0, 0, 30),
+                            Size             = UDim2New(1, 0, 0, 22),
                             BackgroundTransparency = 1,
                             BorderSizePixel  = 0,
                             ZIndex           = 3,
                             LayoutOrder      = idx,
                         })
-
-                        -- row hover bg
-                        local EvHoverBg = Instances:Create("Frame", {
-                            Parent           = EvRow.Instance,
-                            Name             = "\0",
-                            Size             = UDim2New(1, 0, 1, 0),
-                            BackgroundColor3 = Library.Theme.Accent,
-                            BackgroundTransparency = 1,
-                            BorderSizePixel  = 0,
-                            ZIndex           = 2,
-                        })
-                        Instances:Create("UICorner", { Parent = EvHoverBg.Instance, CornerRadius = UDimNew(0, 5) })
 
                         Instances:Create("UIPadding", {
                             Parent       = EvRow.Instance,
@@ -12405,38 +12394,67 @@ local Library do
                             BorderSizePixel     = 0,
                             AnchorPoint         = Vector2New(0, 0.5),
                             Position            = UDim2New(0, iconOffset, 0.5, 0),
-                            Size                = UDim2New(1, -(iconOffset + 32), 0, 14),
+                            Size                = UDim2New(1, -(iconOffset + 26), 0, 14),
                             ZIndex              = 4,
                             Name                = "evLabel" .. idx,
                         })
 
-                        -- toggle pill
-                        local Pill = Instances:Create("Frame", {
+                        -- ── Indicator (matches Section Toggle design) ──────────
+                        local indSize = 16
+                        local Indicator = Instances:Create("Frame", {
                             Parent           = EvRow.Instance,
-                            Name             = "pill" .. idx,
+                            Name             = "evInd" .. idx,
                             AnchorPoint      = Vector2New(1, 0.5),
                             Position         = UDim2New(1, 0, 0.5, 0),
-                            Size             = UDim2New(0, 26, 0, 14),
-                            BackgroundColor3 = evEnabled and Library.Theme.Accent or FromRGB(40, 38, 52),
+                            Size             = UDim2New(0, indSize, 0, indSize),
                             BorderSizePixel  = 0,
                             ZIndex           = 4,
+                            BackgroundColor3 = evEnabled and Library.Theme.Accent or Library.Theme.Element,
                         })
-                        Instances:Create("UICorner", { Parent = Pill.Instance, CornerRadius = UDimNew(1, 0) })
                         if evEnabled then
-                            Pill:AddToTheme({BackgroundColor3 = "Accent"})
+                            Indicator:ChangeItemTheme({BackgroundColor3 = function() return FromRGB(255,255,255) end})
+                        else
+                            Indicator:AddToTheme({BackgroundColor3 = "Element"})
                         end
+                        Instances:Create("UICorner", { Parent = Indicator.Instance, CornerRadius = UDimNew(0, 3) })
 
-                        local Knob = Instances:Create("Frame", {
-                            Parent           = Pill.Instance,
-                            Name             = "\0",
-                            Size             = UDim2New(0, 10, 0, 10),
-                            AnchorPoint      = Vector2New(0.5, 0.5),
-                            Position         = evEnabled and UDim2New(0.72, 0, 0.5, 0) or UDim2New(0.28, 0, 0.5, 0),
-                            BackgroundColor3 = FromRGB(255, 255, 255),
-                            BorderSizePixel  = 0,
-                            ZIndex           = 5,
+                        local IndStroke = Instances:Create("UIStroke", {
+                            Parent          = Indicator.Instance,
+                            ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+                            Color           = Library.Theme.Outline,
+                            Thickness       = 1,
+                            Transparency    = evEnabled and 1 or 0.5,
                         })
-                        Instances:Create("UICorner", { Parent = Knob.Instance, CornerRadius = UDimNew(1, 0) })
+                        IndStroke:AddToTheme({Color = "Outline"})
+
+                        local IndGradient = Instances:Create("UIGradient", {
+                            Parent   = Indicator.Instance,
+                            Enabled  = evEnabled,
+                            Rotation = -115,
+                            Color    = RGBSequence{
+                                RGBSequenceKeypoint(0, FromRGB(255,255,255)),
+                                RGBSequenceKeypoint(1, FromRGB(143,143,143)),
+                            },
+                        })
+                        IndGradient:AddToTheme({Color = function()
+                            return RGBSequence{
+                                RGBSequenceKeypoint(0, Library.Theme.Accent),
+                                RGBSequenceKeypoint(1, Library.Theme.AccentGradient),
+                            }
+                        end})
+
+                        local _chkSz = 11
+                        local CheckImg = Instances:Create("ImageLabel", {
+                            Parent              = Indicator.Instance,
+                            Image               = "rbxassetid://121760666525660",
+                            BackgroundTransparency = 1,
+                            AnchorPoint         = Vector2New(0.5, 0.5),
+                            Position            = UDim2New(0.5, 0, 0.5, 0),
+                            Size                = evEnabled and UDim2New(0, _chkSz, 0, _chkSz) or UDim2New(0, 0, 0, 0),
+                            ImageTransparency   = evEnabled and 0 or 1,
+                            ZIndex              = 5,
+                            BorderSizePixel     = 0,
+                        })
 
                         local evBtn = Instances:Create("TextButton", {
                             Parent              = EvRow.Instance,
@@ -12449,44 +12467,153 @@ local Library do
                         })
 
                         local TI = TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+                        local TI_back = TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 
                         evBtn:Connect("MouseButton1Click", function()
                             evEnabled = not evEnabled
                             savedEvents[evData.Flag] = evEnabled
                             Library.Flags[evData.Flag] = evEnabled
 
-                            local kn    = Knob
-                            local pl    = Pill
                             local label = EvRow.Instance:FindFirstChild("evLabel" .. idx)
-                            local icon  = EvRow.Instance:FindFirstChild("evIcon" .. idx)
+                            local icon  = EvRow.Instance:FindFirstChild("evIcon"  .. idx)
 
                             if evEnabled then
-                                TweenService:Create(pl.Instance, TI, { BackgroundColor3 = Library.Theme.Accent }):Play()
-                                TweenService:Create(kn.Instance, TI, { Position = UDim2New(0.72, 0, 0.5, 0) }):Play()
-                                if label then TweenService:Create(label, TI, { TextColor3 = FromRGB(210, 208, 228) }):Play() end
-                                if icon  then TweenService:Create(icon,  TI, { ImageColor3 = Library.Theme.Accent }):Play() end
-                                pl:ChangeItemTheme({BackgroundColor3 = "Accent"})
+                                IndGradient.Instance.Enabled = true
+                                Indicator:ChangeItemTheme({BackgroundColor3 = function() return FromRGB(255,255,255) end})
+                                TweenService:Create(Indicator.Instance, TI, { BackgroundColor3 = FromRGB(255,255,255) }):Play()
+                                TweenService:Create(IndStroke.Instance,  TI, { Transparency = 1 }):Play()
+                                TweenService:Create(CheckImg.Instance,   TI_back, { ImageTransparency = 0, Size = UDim2New(0, _chkSz, 0, _chkSz) }):Play()
+                                if label then TweenService:Create(label, TI, { TextColor3  = FromRGB(210, 208, 228) }):Play() end
+                                if icon  then TweenService:Create(icon,  TI, { ImageColor3 = Library.Theme.Accent   }):Play() end
                             else
-                                TweenService:Create(pl.Instance, TI, { BackgroundColor3 = FromRGB(40, 38, 52) }):Play()
-                                TweenService:Create(kn.Instance, TI, { Position = UDim2New(0.28, 0, 0.5, 0) }):Play()
-                                if label then TweenService:Create(label, TI, { TextColor3 = FromRGB(110, 107, 130) }):Play() end
-                                if icon  then TweenService:Create(icon,  TI, { ImageColor3 = FromRGB(75, 72, 95) }):Play() end
-                                pl:ChangeItemTheme({BackgroundColor3 = "Element"})
+                                IndGradient.Instance.Enabled = false
+                                Indicator:ChangeItemTheme({BackgroundColor3 = "Element"})
+                                TweenService:Create(Indicator.Instance, TI, { BackgroundColor3 = Library.Theme.Element }):Play()
+                                TweenService:Create(IndStroke.Instance,  TI, { Transparency = 0.5 }):Play()
+                                TweenService:Create(CheckImg.Instance,   TI_back, { ImageTransparency = 1, Size = UDim2New(0, 0, 0, 0) }):Play()
+                                if label then TweenService:Create(label, TI, { TextColor3  = FromRGB(110, 107, 130) }):Play() end
+                                if icon  then TweenService:Create(icon,  TI, { ImageColor3 = FromRGB(75, 72, 95)    }):Play() end
                             end
 
                             Webhook.Callback("event_toggled", evData.Flag, evEnabled)
                         end)
-
-                        evBtn:OnHover(function()
-                            TweenService:Create(EvHoverBg.Instance, TI, { BackgroundTransparency = 0.92 }):Play()
-                        end)
-                        evBtn:OnHoverLeave(function()
-                            TweenService:Create(EvHoverBg.Instance, TI, { BackgroundTransparency = 1 }):Play()
-                        end)
                     end
                 end
 
-                -- ── Test button ──────────────────────────────────────────────
+                -- ── Ping dropdown ────────────────────────────────────────────
+                local pingSelected = "No ping"
+
+                local PingCard = Instances:Create("Frame", {
+                    Parent           = Items["Webhook"].Instance,
+                    Name             = "\0",
+                    Size             = UDim2New(1, 0, 0, 32),
+                    BackgroundColor3 = FromRGB(16, 14, 20),
+                    BorderSizePixel  = 0,
+                    ZIndex           = 2,
+                    LayoutOrder      = 4,
+                })
+                PingCard:AddToTheme({BackgroundColor3 = "Background 2"})
+                Instances:Create("UICorner", { Parent = PingCard.Instance, CornerRadius = UDimNew(0, 7) })
+                Instances:Create("UIStroke", {
+                    Parent       = PingCard.Instance,
+                    Color        = FromRGB(45, 42, 58),
+                    Thickness    = 1,
+                    Transparency = 0.4,
+                }):AddToTheme({Color = "Outline"})
+
+                -- left label
+                local AtIconData = Library:GetCustomIcon("at-sign")
+                if AtIconData then
+                    Instances:Create("ImageLabel", {
+                        Parent              = PingCard.Instance,
+                        Image               = AtIconData.Url or "",
+                        ImageRectOffset     = AtIconData.ImageRectOffset or Vector2New(0,0),
+                        ImageRectSize       = AtIconData.ImageRectSize   or Vector2New(0,0),
+                        ImageColor3         = FromRGB(75, 72, 95),
+                        BackgroundTransparency = 1,
+                        AnchorPoint         = Vector2New(0, 0.5),
+                        Position            = UDim2New(0, 10, 0.5, 0),
+                        Size                = UDim2New(0, 12, 0, 12),
+                        ZIndex              = 3,
+                    })
+                end
+
+                Instances:Create("TextLabel", {
+                    Parent              = PingCard.Instance,
+                    FontFace            = Gotham,
+                    Text                = "Ping",
+                    TextColor3          = FromRGB(140, 138, 162),
+                    TextSize            = 12,
+                    TextXAlignment      = Enum.TextXAlignment.Left,
+                    BackgroundTransparency = 1,
+                    BorderSizePixel     = 0,
+                    AnchorPoint         = Vector2New(0, 0.5),
+                    Position            = UDim2New(0, 26, 0.5, 0),
+                    Size                = UDim2New(0, 60, 0, 14),
+                    ZIndex              = 3,
+                })
+
+                -- value label (right side)
+                local PingValueLabel = Instances:Create("TextLabel", {
+                    Parent              = PingCard.Instance,
+                    FontFace            = GothamBold,
+                    Text                = "No ping",
+                    TextColor3          = Library.Theme.Accent,
+                    TextSize            = 12,
+                    TextXAlignment      = Enum.TextXAlignment.Right,
+                    BackgroundTransparency = 1,
+                    BorderSizePixel     = 0,
+                    AnchorPoint         = Vector2New(1, 0.5),
+                    Position            = UDim2New(1, -28, 0.5, 0),
+                    Size                = UDim2New(0.6, -36, 0, 14),
+                    ZIndex              = 3,
+                })
+                PingValueLabel:AddToTheme({TextColor3 = "Accent"})
+
+                -- chevron
+                local PingChevronData = Library:GetCustomIcon("chevron-down")
+                local PingChevron = Instances:Create("ImageLabel", {
+                    Parent              = PingCard.Instance,
+                    Image               = PingChevronData and PingChevronData.Url or "",
+                    ImageRectOffset     = PingChevronData and PingChevronData.ImageRectOffset or Vector2New(0,0),
+                    ImageRectSize       = PingChevronData and PingChevronData.ImageRectSize   or Vector2New(0,0),
+                    ImageColor3         = FromRGB(100, 97, 120),
+                    BackgroundTransparency = 1,
+                    AnchorPoint         = Vector2New(1, 0.5),
+                    Position            = UDim2New(1, -10, 0.5, 0),
+                    Size                = UDim2New(0, 12, 0, 12),
+                    ZIndex              = 3,
+                })
+
+                -- click button + option cycling
+                local PING_OPTIONS = { "No ping", "@everyone", "@here" }
+                local pingIndex    = 1
+                local TI_ping      = TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+
+                local PingBtn = Instances:Create("TextButton", {
+                    Parent              = PingCard.Instance,
+                    Text                = "",
+                    BackgroundTransparency = 1,
+                    BorderSizePixel     = 0,
+                    Size                = UDim2New(1, 0, 1, 0),
+                    ZIndex              = 5,
+                    AutoButtonColor     = false,
+                })
+
+                PingBtn:Connect("MouseButton1Click", function()
+                    pingIndex    = (pingIndex % #PING_OPTIONS) + 1
+                    pingSelected = PING_OPTIONS[pingIndex]
+                    PingValueLabel.Instance.Text = pingSelected
+
+                    TweenService:Create(PingChevron.Instance, TI_ping, { Rotation = 180 }):Play()
+                    task.delay(0.15, function()
+                        PingChevron.Instance.Rotation = 0
+                    end)
+
+                    Webhook.Callback("ping_changed", pingSelected)
+                end)
+
+                -- ── Test / Send button ───────────────────────────────────────
                 Items["TestBtn"] = Instances:Create("TextButton", {
                     Parent           = Items["Webhook"].Instance,
                     Name             = "\0",
@@ -12496,7 +12623,7 @@ local Library do
                     BackgroundColor3 = FromRGB(22, 20, 28),
                     BorderSizePixel  = 0,
                     ZIndex           = 2,
-                    LayoutOrder      = 4,
+                    LayoutOrder      = 5,
                 })
                 Items["TestBtn"]:AddToTheme({BackgroundColor3 = "Element"})
                 Instances:Create("UICorner", { Parent = Items["TestBtn"].Instance, CornerRadius = UDimNew(0, 7) })
@@ -12569,6 +12696,15 @@ local Library do
 
                 Items["TestBtn"]:Connect("MouseButton1Click", function()
                     if isSending then return end
+
+                    -- OnSend callback: if provided, user handles sending entirely
+                    if Webhook.OnSend then
+                        Webhook.OnSend(currentURL, pingSelected, savedEvents)
+                        Items["TestLabel"].Instance.Text = "✓ Sent"
+                        task.delay(2, function() Items["TestLabel"].Instance.Text = "Send Test" end)
+                        return
+                    end
+
                     if currentURL == "" or not currentURL:find("discord") then
                         Items["StatusLabel"].Instance.Text = "⚠ Invalid URL"
                         Items["StatusLabel"].Instance.TextColor3 = FromRGB(234, 179, 8)
@@ -12654,6 +12790,9 @@ local Library do
                 local httpRequest = (syn and syn.request)
                     or (http and http.request) or http_request or request or nil
                 if not httpRequest then return false end
+                local pingStr = pingSelected == "@everyone" and "@everyone "
+                             or pingSelected == "@here"     and "@here "
+                             or ""
                 local ok = pcall(httpRequest, {
                     Url     = currentURL,
                     Method  = "POST",
@@ -12661,15 +12800,31 @@ local Library do
                     Body    = game:GetService("HttpService"):JSONEncode({
                         username   = "Imp Hub X",
                         avatar_url = "https://i.imgur.com/JnkWLXc.png",
-                        content    = content or nil,
+                        content    = content and (pingStr .. content) or (pingStr ~= "" and pingStr or nil),
                         embeds     = embeds  or nil,
                     })
                 })
                 return ok
             end
 
+            function Webhook:GetEveryone()
+                return pingSelected == "@everyone"
+            end
+
+            function Webhook:GetHere()
+                return pingSelected == "@here"
+            end
+
+            function Webhook:GetPing()
+                return pingSelected
+            end
+
             function Webhook:IsEventEnabled(flag)
                 return savedEvents[flag] == true
+            end
+
+            function Webhook:SetOnSend(fn)
+                Webhook.OnSend = fn
             end
 
             function Webhook:RefreshPosition(Bool)
