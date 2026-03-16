@@ -15706,6 +15706,7 @@ local Library do
                 ig.Color = RGBSequence{RGBSequenceKeypoint(0, Accent()), RGBSequenceKeypoint(1, AccGrad())}
                 ig.Rotation = -115
                 ig.Parent = img
+                socialIcons[#socialIcons+1] = { img = img, grad = ig }
             else
                 local lbl = InstanceNew("TextLabel")
                 lbl.Text = label
@@ -16354,11 +16355,6 @@ local Library do
         -- We iterate RPanel & Left descendants once and tag by name/type
         local function gatherDashRefs(root)
             for _, d in ipairs(root:GetDescendants()) do
-                -- social button icons: UIGradient children of ImageLabels inside TextButtons
-                if d:IsA("UIGradient") and d.Parent and d.Parent:IsA("ImageLabel")
-                   and d.Parent.Parent and d.Parent.Parent:IsA("TextButton") then
-                    socialIcons[#socialIcons+1] = { img = d.Parent, grad = d }
-                end
                 -- info row icons: ImageLabels with ZIndex=5 inside Frames that are direct children of RPanel
                 if d:IsA("ImageLabel") and d.ZIndex == 5
                    and d.Parent and d.Parent:IsA("Frame")
