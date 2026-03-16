@@ -15703,11 +15703,7 @@ local Library do
                 img.ImageColor3 = Accent()
                 img.Name = "\0"
                 img.Parent = btn
-                local ig = InstanceNew("UIGradient")
-                ig.Color = RGBSequence{RGBSequenceKeypoint(0, Accent()), RGBSequenceKeypoint(1, AccGrad())}
-                ig.Rotation = -115
-                ig.Parent = img
-                socialIcons[#socialIcons+1] = { img = img, grad = ig }
+                socialIcons[#socialIcons+1] = img
             else
                 local lbl = InstanceNew("TextLabel")
                 lbl.Text = label
@@ -16453,11 +16449,10 @@ local Library do
                 end
             end)
 
-            -- Social button icons + their gradients
-            for _, pair in ipairs(socialIcons) do
+            -- Social button icons
+            for _, img in ipairs(socialIcons) do
                 pcall(function()
-                    TweenService:Create(pair.img, TInfo, {ImageColor3 = accent}):Play()
-                    pair.grad.Color = seq
+                    TweenService:Create(img, TInfo, {ImageColor3 = accent}):Play()
                 end)
             end
 
