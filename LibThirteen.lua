@@ -213,6 +213,7 @@ local Library do
 
         ThemeMap = { },
         ThemeItems = { },
+        ThemeCallbacks = { },
 
         OpenFrames = { },
 
@@ -737,6 +738,9 @@ local Library do
                     end
                 end
             end
+        end
+        for _, cb in ipairs(self.ThemeCallbacks) do
+            pcall(cb, self.Theme, TInfo)
         end
     end
 
@@ -12373,7 +12377,7 @@ local Library do
                         -- event icon
                         if evData.Icon then
                             local evIconD = Library:GetCustomIcon(evData.Icon)
-                            Instances:Create("ImageLabel", {
+                            local evIconInst = Instances:Create("ImageLabel", {
                                 Parent              = EvRow.Instance,
                                 Image               = evIconD and evIconD.Url or "",
                                 ImageRectOffset     = evIconD and evIconD.ImageRectOffset or Vector2New(0,0),
@@ -12386,6 +12390,9 @@ local Library do
                                 ZIndex              = 4,
                                 Name                = "evIcon" .. idx,
                             })
+                            if evEnabled then
+                                evIconInst:AddToTheme({ImageColor3 = "Accent"})
+                            end
                         end
 
                         local iconOffset = evData.Icon and 20 or 0
@@ -12490,7 +12497,12 @@ local Library do
                                 TweenService:Create(IndStroke.Instance,  TI, { Transparency = 1 }):Play()
                                 TweenService:Create(CheckImg.Instance,   TI_back, { ImageTransparency = 0, Size = UDim2New(0, _chkSz, 0, _chkSz) }):Play()
                                 if label then TweenService:Create(label, TI, { TextColor3  = FromRGB(235, 235, 235) }):Play() end
-                                if icon  then TweenService:Create(icon,  TI, { ImageColor3 = Library.Theme.Accent   }):Play() end
+                                if icon  then
+                                    TweenService:Create(icon, TI, { ImageColor3 = Library.Theme.Accent }):Play()
+                                    pcall(function() Instances.ChangeItemTheme(icon, {ImageColor3 = "Accent"}) end)
+                                    local w = Library.ThemeMap and Library.ThemeMap[icon]
+                                    if w then w.Properties = {ImageColor3 = "Accent"} end
+                                end
                             else
                                 IndGradient.Instance.Enabled = false
                                 Indicator:ChangeItemTheme({BackgroundColor3 = "Element"})
@@ -12498,7 +12510,11 @@ local Library do
                                 TweenService:Create(IndStroke.Instance,  TI, { Transparency = 0.5 }):Play()
                                 TweenService:Create(CheckImg.Instance,   TI_back, { ImageTransparency = 1, Size = UDim2New(0, 0, 0, 0) }):Play()
                                 if label then TweenService:Create(label, TI, { TextColor3  = FromRGB(160, 158, 178) }):Play() end
-                                if icon  then TweenService:Create(icon,  TI, { ImageColor3 = FromRGB(75, 72, 95)    }):Play() end
+                                if icon  then
+                                    TweenService:Create(icon, TI, { ImageColor3 = FromRGB(75, 72, 95) }):Play()
+                                    local w = Library.ThemeMap and Library.ThemeMap[icon]
+                                    if w then w.Properties = {ImageColor3 = function() return FromRGB(75, 72, 95) end} end
+                                end
                             end
 
                             Webhook.Callback("event_toggled", evData.Flag, evEnabled)
@@ -16328,6 +16344,158 @@ local Library do
         -- ── Initial card pass (for any pages already in Window.Pages) ─────────
         task.wait()
         if Library then RefreshCards() end
+
+        -- ── Collect all accent-reactive Dashboard instances for theme updates ──
+        local dashAccentFrames  = {}   -- BackgroundColor3 = Accent
+        local dashAccentGrads   = {}   -- UIGradient Color = Accent→AccGrad
+        local dashAccentIcons   = {}   -- ImageColor3 = Accent
+        local dashOutlineFrames = {}   -- BackgroundColor3 = Outline
+        local dashElemFrames    = {}   -- BackgroundColor3 = Element
+
+        local function collectDash(inst)
+            if not inst or not inst.Parent then return end
+            for _, child in ipairs(inst:GetDescendants()) do
+                pcall(function()
+                    local tag = child:GetAttribute("DashTheme")
+                    if tag == "Accent"   then dashAccentFrames[#dashAccentFrames+1]  = child
+                    elseif tag == "AccGrad" then dashAccentGrads[#dashAccentGrads+1] = child
+                    elseif tag == "Icon"    then dashAccentIcons[#dashAccentIcons+1]  = child
+                    elseif tag == "Outline" then dashOutlineFrames[#dashOutlineFrames+1] = child
+                    elseif tag == "Elem"    then dashElemFrames[#dashElemFrames+1]    = child
+                    end
+                end)
+            end
+        end
+
+        local function tagDashInst(inst, tag)
+            pcall(function() inst:SetAttribute("DashTheme", tag) end)
+        end
+
+        -- Tag every accent-colored element we built
+        tagDashInst(TopGlow,      "Accent")
+        tagDashInst(divFr,        "Accent")
+        tagDashInst(gameTitleGlow,"Accent")
+        tagDashInst(rpTop,        "Accent")
+        tagDashInst(avatarGlow,   "Accent")
+        tagDashInst(avatarRing,   "Accent")
+        tagDashInst(freeBadge,    "Accent")
+        tagDashInst(HDiv,         "Outline")
+
+        -- Tag gradients
+        tagDashInst(g2,    "AccGrad")
+        tagDashInst(dg,    "AccGrad")
+
+        -- Tag card slots
+        for _, slot in ipairs(cardSlots) do
+            tagDashInst(slot.stroke,  "Outline")
+            tagDashInst(slot.glow,    "Accent")
+            tagDashInst(slot.icon,    "Icon")
+        end
+
+        collectDash(Main)
+        collectDash(SepFr)
+
+        -- Register the theme callback
+        Library.ThemeCallbacks[#Library.ThemeCallbacks + 1] = function(theme, TInfo)
+            local accent  = theme.Accent        or FromRGB(151, 69, 186)
+            local accGrad = theme.AccentGradient or FromRGB(109, 43, 139)
+            local outline = theme.Outline       or FromRGB(25, 25, 28)
+            local elem    = theme.Element       or FromRGB(16, 16, 18)
+
+            for _, fr in ipairs(dashAccentFrames) do
+                pcall(function()
+                    TweenService:Create(fr, TInfo, { BackgroundColor3 = accent }):Play()
+                end)
+            end
+            for _, gr in ipairs(dashAccentGrads) do
+                pcall(function()
+                    gr.Color = RGBSequence{
+                        RGBSequenceKeypoint(0, accent),
+                        RGBSequenceKeypoint(1, accGrad),
+                    }
+                end)
+            end
+            for _, ic in ipairs(dashAccentIcons) do
+                pcall(function()
+                    TweenService:Create(ic, TInfo, { ImageColor3 = accent }):Play()
+                end)
+            end
+            for _, fr in ipairs(dashOutlineFrames) do
+                pcall(function()
+                    TweenService:Create(fr, TInfo, { BackgroundColor3 = outline }):Play()
+                end)
+            end
+            for _, fr in ipairs(dashElemFrames) do
+                pcall(function()
+                    TweenService:Create(fr, TInfo, { BackgroundColor3 = elem }):Play()
+                end)
+            end
+
+            -- Update card slot top-bars and icon gradients directly
+            for _, slot in ipairs(cardSlots) do
+                pcall(function()
+                    if slot.glow then
+                        TweenService:Create(slot.glow, TInfo, { BackgroundColor3 = accent }):Play()
+                        local cig = slot.glow:FindFirstChildOfClass("UIGradient")
+                        if cig then
+                            cig.Color = RGBSequence{
+                                RGBSequenceKeypoint(0, accent),
+                                RGBSequenceKeypoint(1, accGrad),
+                            }
+                        end
+                    end
+                    if slot.icon then
+                        TweenService:Create(slot.icon, TInfo, { ImageColor3 = accent }):Play()
+                        local cig = slot.icon:FindFirstChildOfClass("UIGradient")
+                        if cig then
+                            cig.Color = RGBSequence{
+                                RGBSequenceKeypoint(0, accent),
+                                RGBSequenceKeypoint(1, accGrad),
+                            }
+                        end
+                    end
+                    if slot.stroke then
+                        TweenService:Create(slot.stroke, TInfo, { Color = outline }):Play()
+                    end
+                end)
+            end
+
+            -- Update gradients inside Main that reference accent
+            pcall(function()
+                local rpTopGrad = rpTop:FindFirstChildOfClass("UIGradient")
+                if rpTopGrad then
+                    rpTopGrad.Color = RGBSequence{
+                        RGBSequenceKeypoint(0, accent),
+                        RGBSequenceKeypoint(1, accGrad),
+                    }
+                end
+                local divGrad = divFr:FindFirstChildOfClass("UIGradient")
+                if divGrad then
+                    divGrad.Color = RGBSequence{
+                        RGBSequenceKeypoint(0, accent),
+                        RGBSequenceKeypoint(1, accGrad),
+                    }
+                end
+                local fbGrad = freeBadge:FindFirstChildOfClass("UIGradient")
+                if fbGrad then
+                    fbGrad.Color = RGBSequence{
+                        RGBSequenceKeypoint(0, accent),
+                        RGBSequenceKeypoint(1, accGrad),
+                    }
+                end
+                if g2 then
+                    g2.Color = RGBSequence{
+                        RGBSequenceKeypoint(0, accent),
+                        RGBSequenceKeypoint(1, FromRGB(210, 130, 255)),
+                    }
+                end
+                TweenService:Create(TopGlow,       TInfo, { BackgroundColor3 = accent }):Play()
+                TweenService:Create(avatarGlow,    TInfo, { BackgroundColor3 = accent }):Play()
+                TweenService:Create(avatarRing,    TInfo, { BackgroundColor3 = accent }):Play()
+                TweenService:Create(gameTitleGlow, TInfo, { BackgroundColor3 = accent }):Play()
+                TweenService:Create(freeBadge,     TInfo, { BackgroundColor3 = accent }):Play()
+            end)
+        end
 
         local footer = InstanceNew("TextLabel")
         footer.FontFace         = Library.Font
