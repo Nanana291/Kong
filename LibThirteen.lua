@@ -15690,20 +15690,22 @@ local Library do
             -- Icon (try library icon; fall back to text initial)
             local iconData = Library:GetCustomIcon(iconName)
             if iconData and iconData.Url ~= "" then
-                local img = InstanceNew("ImageLabel")
-                img.Size = UDim2New(0, 16, 0, 16)
-                img.AnchorPoint = Vector2New(0.5,0.5)
-                img.Position = UDim2New(0.5,0,0.5,0)
-                img.BackgroundTransparency = 1
-                img.BorderSizePixel = 0
-                img.ZIndex = 6
-                img.Image = iconData.Url
-                img.ImageRectOffset = iconData.ImageRectOffset
-                img.ImageRectSize   = iconData.ImageRectSize
-                img.ImageColor3 = Accent()
-                img.Name = "\0"
-                img.Parent = btn
-                socialIcons[#socialIcons+1] = img
+                local img = Instances:Create("ImageLabel", {
+                    Parent              = btn,
+                    Name                = "\0",
+                    Size                = UDim2New(0, 16, 0, 16),
+                    AnchorPoint         = Vector2New(0.5, 0.5),
+                    Position            = UDim2New(0.5, 0, 0.5, 0),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel     = 0,
+                    ZIndex              = 6,
+                    Image               = iconData.Url,
+                    ImageRectOffset     = iconData.ImageRectOffset,
+                    ImageRectSize       = iconData.ImageRectSize,
+                    ImageColor3         = Library.Theme.Accent,
+                })
+                img:AddToTheme({ImageColor3 = "Accent"})
+                socialIcons[#socialIcons+1] = img.Instance
             else
                 local lbl = InstanceNew("TextLabel")
                 lbl.Text = label
