@@ -12334,7 +12334,7 @@ local Library do
                         Parent              = EvHeader.Instance,
                         FontFace            = GothamBold,
                         Text                = "NOTIFY ON",
-                        TextColor3          = FromRGB(90, 87, 112),
+                        TextColor3          = FromRGB(110, 108, 130),
                         TextSize            = 9,
                         TextXAlignment      = Enum.TextXAlignment.Left,
                         BackgroundTransparency = 1,
@@ -12387,7 +12387,7 @@ local Library do
                             Parent              = EvRow.Instance,
                             FontFace            = Gotham,
                             Text                = evData.Name or "Event",
-                            TextColor3          = evEnabled and FromRGB(210, 208, 228) or FromRGB(110, 107, 130),
+                            TextColor3          = evEnabled and FromRGB(235, 235, 235) or FromRGB(160, 158, 178),
                             TextSize            = 12,
                             TextXAlignment      = Enum.TextXAlignment.Left,
                             BackgroundTransparency = 1,
@@ -12432,8 +12432,8 @@ local Library do
                             Enabled  = evEnabled,
                             Rotation = -115,
                             Color    = RGBSequence{
-                                RGBSequenceKeypoint(0, FromRGB(255,255,255)),
-                                RGBSequenceKeypoint(1, FromRGB(143,143,143)),
+                                RGBSequenceKeypoint(0, Library.Theme.Accent),
+                                RGBSequenceKeypoint(1, Library.Theme.AccentGradient),
                             },
                         })
                         IndGradient:AddToTheme({Color = function()
@@ -12483,7 +12483,7 @@ local Library do
                                 TweenService:Create(Indicator.Instance, TI, { BackgroundColor3 = FromRGB(255,255,255) }):Play()
                                 TweenService:Create(IndStroke.Instance,  TI, { Transparency = 1 }):Play()
                                 TweenService:Create(CheckImg.Instance,   TI_back, { ImageTransparency = 0, Size = UDim2New(0, _chkSz, 0, _chkSz) }):Play()
-                                if label then TweenService:Create(label, TI, { TextColor3  = FromRGB(210, 208, 228) }):Play() end
+                                if label then TweenService:Create(label, TI, { TextColor3  = FromRGB(235, 235, 235) }):Play() end
                                 if icon  then TweenService:Create(icon,  TI, { ImageColor3 = Library.Theme.Accent   }):Play() end
                             else
                                 IndGradient.Instance.Enabled = false
@@ -12491,7 +12491,7 @@ local Library do
                                 TweenService:Create(Indicator.Instance, TI, { BackgroundColor3 = Library.Theme.Element }):Play()
                                 TweenService:Create(IndStroke.Instance,  TI, { Transparency = 0.5 }):Play()
                                 TweenService:Create(CheckImg.Instance,   TI_back, { ImageTransparency = 1, Size = UDim2New(0, 0, 0, 0) }):Play()
-                                if label then TweenService:Create(label, TI, { TextColor3  = FromRGB(110, 107, 130) }):Play() end
+                                if label then TweenService:Create(label, TI, { TextColor3  = FromRGB(160, 158, 178) }):Play() end
                                 if icon  then TweenService:Create(icon,  TI, { ImageColor3 = FromRGB(75, 72, 95)    }):Play() end
                             end
 
@@ -12542,7 +12542,7 @@ local Library do
                     Parent              = PingCard.Instance,
                     FontFace            = Gotham,
                     Text                = "Ping",
-                    TextColor3          = FromRGB(140, 138, 162),
+                    TextColor3          = FromRGB(175, 173, 190),
                     TextSize            = 12,
                     TextXAlignment      = Enum.TextXAlignment.Left,
                     BackgroundTransparency = 1,
@@ -12558,7 +12558,7 @@ local Library do
                     Parent              = PingCard.Instance,
                     FontFace            = GothamBold,
                     Text                = "No ping",
-                    TextColor3          = Library.Theme.Accent,
+                    TextColor3          = FromRGB(175, 173, 190),
                     TextSize            = 12,
                     TextXAlignment      = Enum.TextXAlignment.Right,
                     BackgroundTransparency = 1,
@@ -12568,7 +12568,7 @@ local Library do
                     Size                = UDim2New(0.6, -36, 0, 14),
                     ZIndex              = 3,
                 })
-                PingValueLabel:AddToTheme({TextColor3 = "Accent"})
+                PingValueLabel:AddToTheme({TextColor3 = "Text"})
 
                 -- chevron
                 local PingChevronData = Library:GetCustomIcon("chevron-down")
@@ -12654,30 +12654,31 @@ local Library do
                     Image               = SendIconData and SendIconData.Url or "",
                     ImageRectOffset     = SendIconData and SendIconData.ImageRectOffset or Vector2New(0,0),
                     ImageRectSize       = SendIconData and SendIconData.ImageRectSize   or Vector2New(0,0),
-                    ImageColor3         = Library.Theme.Accent,
+                    ImageColor3         = FromRGB(235, 235, 235),
                     BackgroundTransparency = 1,
                     AnchorPoint         = Vector2New(0.5, 0.5),
-                    Position            = UDim2New(0.5, -22, 0.5, 0),
+                    Position            = UDim2New(0.5, -32, 0.5, 0),
                     Size                = UDim2New(0, 13, 0, 13),
                     ZIndex              = 3,
                 })
-                _testIcon:AddToTheme({ImageColor3 = "Accent"})
+                _testIcon:AddToTheme({ImageColor3 = "Text"})
                 Items["TestIcon"] = _testIcon
 
                 local _testLabel = Instances:Create("TextLabel", {
                     Parent              = Items["TestBtn"].Instance,
-                    FontFace            = GothamBold,
+                    FontFace            = Library.Font,
                     Text                = "Send Test",
-                    TextColor3          = Library.Theme.Accent,
-                    TextSize            = 12,
+                    TextColor3          = FromRGB(235, 235, 235),
+                    TextTransparency    = 0.15,
+                    TextSize            = 13,
                     BackgroundTransparency = 1,
                     BorderSizePixel     = 0,
                     AnchorPoint         = Vector2New(0.5, 0.5),
-                    Position            = UDim2New(0.5, 8, 0.5, 0),
-                    Size                = UDim2New(0, 80, 0, 14),
+                    Position            = UDim2New(0.5, 2, 0.5, 0),
+                    Size                = UDim2New(0, 90, 0, 14),
                     ZIndex              = 3,
                 })
-                _testLabel:AddToTheme({TextColor3 = "Accent"})
+                _testLabel:AddToTheme({TextColor3 = "Text"})
                 Items["TestLabel"] = _testLabel
 
                 local TI_btn = TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
