@@ -7092,11 +7092,14 @@ local Library do
                     displayValue = StringFormat("%." .. places .. "f", Slider.Value)
                 end
 
-                Items["Accent"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2New((Slider.Value - Slider.Min) / (Slider.Max - Slider.Min), 0, 1, 0)})
+                local fillPct = math.clamp((Slider.Value - Slider.Min) / (Slider.Max - Slider.Min), 0, 1)
+                Items["Accent"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = UDim2New(fillPct, 0, 1, 0)})
                 Items["Value"].Instance.Text = displayValue .. Slider.Suffix
 
-                if Slider.Value >= Slider.Max then
-                    Items["Icon"].Instance.Position = UDim2New(1, -5, 0.5, 0)
+                if fillPct >= 1 then
+                    Items["Icon"].Instance.Position = UDim2New(1, -12, 0.5, 0)
+                elseif fillPct <= 0 then
+                    Items["Icon"].Instance.Position = UDim2New(0, 5, 0.5, 0)
                 else
                     Items["Icon"].Instance.Position = UDim2New(1, 5, 0.5, 0)
                 end
