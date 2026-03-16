@@ -551,7 +551,8 @@ local Library do
     end
 
     Library.AddToTheme = function(self, Item, Properties)
-        Item = Item.Instance or Item 
+        local ok, inst = pcall(function() return Item.Instance end)
+        Item = (ok and inst) or Item
 
         local ThemeData = {
             Item = Item,
