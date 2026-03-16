@@ -12016,6 +12016,659 @@ local Library do
             return Discord
         end
 
+        Library.Sections.Webhook = function(self, Data)
+            Data = Data or {}
+
+            local Webhook = {
+                Window   = self.Window,
+                Page     = self.Page,
+                Section  = self,
+                Name     = Data.Name     or Data.name     or "Webhook",
+                URL      = Data.URL      or Data.url      or "",
+                Events   = Data.Events   or Data.events   or {},
+                Callback = Data.Callback or Data.callback or function() end,
+            }
+
+            local GothamBold = Font.fromEnum(Enum.Font.GothamBold)
+            local Gotham     = Font.fromEnum(Enum.Font.Gotham)
+
+            local currentURL    = Webhook.URL
+            local testStatus    = "idle"
+            local savedEvents   = {}
+            local isSending     = false
+
+            for _, ev in ipairs(Webhook.Events) do
+                savedEvents[ev.Flag] = ev.Default ~= nil and ev.Default or false
+            end
+
+            local Items = {} do
+                -- ── Root container ──────────────────────────────────────────
+                Items["Webhook"] = Instances:Create("Frame", {
+                    Parent              = Webhook.Section.Items["Content"].Instance,
+                    Name                = "\0",
+                    BackgroundTransparency = 1,
+                    Size                = UDim2New(1, 0, 0, 0),
+                    AutomaticSize       = Enum.AutomaticSize.Y,
+                    BorderSizePixel     = 0,
+                    ZIndex              = 2,
+                    BackgroundColor3    = FromRGB(255, 255, 255),
+                })
+
+                Instances:Create("UIListLayout", {
+                    Parent    = Items["Webhook"].Instance,
+                    Name      = "\0",
+                    Padding   = UDimNew(0, 8),
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                })
+
+                -- ── Header card ─────────────────────────────────────────────
+                local HeaderCard = Instances:Create("Frame", {
+                    Parent           = Items["Webhook"].Instance,
+                    Name             = "\0",
+                    Size             = UDim2New(1, 0, 0, 44),
+                    BackgroundColor3 = FromRGB(20, 18, 24),
+                    BorderSizePixel  = 0,
+                    ZIndex           = 2,
+                    LayoutOrder      = 1,
+                })
+                HeaderCard:AddToTheme({BackgroundColor3 = "Element"})
+                Instances:Create("UICorner",  { Parent = HeaderCard.Instance, CornerRadius = UDimNew(0, 8) })
+                Instances:Create("UIStroke",  {
+                    Parent       = HeaderCard.Instance,
+                    Color        = FromRGB(50, 45, 62),
+                    Thickness    = 1,
+                    Transparency = 0.3,
+                }):AddToTheme({Color = "Outline"})
+
+                -- Accent top strip
+                local HeaderAccent = Instances:Create("Frame", {
+                    Parent           = HeaderCard.Instance,
+                    Name             = "\0",
+                    Size             = UDim2New(1, 0, 0, 2),
+                    BackgroundColor3 = Library.Theme.Accent,
+                    BorderSizePixel  = 0,
+                    ZIndex           = 4,
+                })
+                HeaderAccent:AddToTheme({BackgroundColor3 = "Accent"})
+                Instances:Create("UICorner", { Parent = HeaderAccent.Instance, CornerRadius = UDimNew(0, 8) })
+                Instances:Create("UIGradient", {
+                    Parent       = HeaderAccent.Instance,
+                    Transparency = NumSequence{
+                        NumSequenceKeypoint(0, 0.65),
+                        NumSequenceKeypoint(0.5, 0),
+                        NumSequenceKeypoint(1, 0.65),
+                    },
+                })
+
+                -- Discord icon bubble
+                local IconBubble = Instances:Create("Frame", {
+                    Parent           = HeaderCard.Instance,
+                    Name             = "\0",
+                    Size             = UDim2New(0, 28, 0, 28),
+                    AnchorPoint      = Vector2New(0, 0.5),
+                    Position         = UDim2New(0, 10, 0.5, 0),
+                    BackgroundColor3 = FromRGB(88, 101, 242),
+                    BorderSizePixel  = 0,
+                    ZIndex           = 3,
+                })
+                Instances:Create("UICorner", { Parent = IconBubble.Instance, CornerRadius = UDimNew(0, 7) })
+
+                local WebhookIconData = Library:GetCustomIcon("webhook")
+                if not WebhookIconData then WebhookIconData = Library:GetCustomIcon("send") end
+                Instances:Create("ImageLabel", {
+                    Parent              = IconBubble.Instance,
+                    Name                = "\0",
+                    Image               = WebhookIconData and WebhookIconData.Url or "",
+                    ImageRectOffset     = WebhookIconData and WebhookIconData.ImageRectOffset or Vector2New(0,0),
+                    ImageRectSize       = WebhookIconData and WebhookIconData.ImageRectSize   or Vector2New(0,0),
+                    ImageColor3         = FromRGB(255, 255, 255),
+                    BackgroundTransparency = 1,
+                    AnchorPoint         = Vector2New(0.5, 0.5),
+                    Position            = UDim2New(0.5, 0, 0.5, 0),
+                    Size                = UDim2New(0, 16, 0, 16),
+                    ZIndex              = 4,
+                })
+
+                -- Header title + subtitle
+                Instances:Create("TextLabel", {
+                    Parent              = HeaderCard.Instance,
+                    Name                = "\0",
+                    FontFace            = GothamBold,
+                    Text                = Webhook.Name,
+                    TextColor3          = FromRGB(240, 238, 252),
+                    TextSize            = 13,
+                    TextXAlignment      = Enum.TextXAlignment.Left,
+                    BackgroundTransparency = 1,
+                    BorderSizePixel     = 0,
+                    AnchorPoint         = Vector2New(0, 0.5),
+                    Position            = UDim2New(0, 47, 0.5, -7),
+                    Size                = UDim2New(1, -90, 0, 14),
+                    ZIndex              = 3,
+                }):AddToTheme({TextColor3 = "Text"})
+
+                Items["StatusLabel"] = Instances:Create("TextLabel", {
+                    Parent              = HeaderCard.Instance,
+                    Name                = "\0",
+                    FontFace            = Gotham,
+                    Text                = "No URL configured",
+                    TextColor3          = FromRGB(100, 97, 120),
+                    TextSize            = 11,
+                    TextXAlignment      = Enum.TextXAlignment.Left,
+                    BackgroundTransparency = 1,
+                    BorderSizePixel     = 0,
+                    AnchorPoint         = Vector2New(0, 0.5),
+                    Position            = UDim2New(0, 47, 0.5, 7),
+                    Size                = UDim2New(1, -90, 0, 12),
+                    ZIndex              = 3,
+                })
+
+                -- Status dot
+                Items["StatusDot"] = Instances:Create("Frame", {
+                    Parent           = HeaderCard.Instance,
+                    Name             = "\0",
+                    Size             = UDim2New(0, 7, 0, 7),
+                    AnchorPoint      = Vector2New(1, 0.5),
+                    Position         = UDim2New(1, -12, 0.5, 0),
+                    BackgroundColor3 = FromRGB(80, 78, 98),
+                    BorderSizePixel  = 0,
+                    ZIndex           = 3,
+                })
+                Instances:Create("UICorner", { Parent = Items["StatusDot"].Instance, CornerRadius = UDimNew(1, 0) })
+
+                -- ── URL input row ────────────────────────────────────────────
+                local URLRow = Instances:Create("Frame", {
+                    Parent           = Items["Webhook"].Instance,
+                    Name             = "\0",
+                    Size             = UDim2New(1, 0, 0, 32),
+                    BackgroundColor3 = FromRGB(16, 14, 20),
+                    BorderSizePixel  = 0,
+                    ZIndex           = 2,
+                    LayoutOrder      = 2,
+                })
+                URLRow:AddToTheme({BackgroundColor3 = "Background 2"})
+                Instances:Create("UICorner", { Parent = URLRow.Instance, CornerRadius = UDimNew(0, 7) })
+                Instances:Create("UIStroke", {
+                    Parent       = URLRow.Instance,
+                    Color        = FromRGB(45, 42, 58),
+                    Thickness    = 1,
+                    Transparency = 0.4,
+                }):AddToTheme({Color = "Outline"})
+
+                -- Lock icon
+                local LockIconData = Library:GetCustomIcon("lock")
+                Instances:Create("ImageLabel", {
+                    Parent              = URLRow.Instance,
+                    Name                = "\0",
+                    Image               = LockIconData and LockIconData.Url or "",
+                    ImageRectOffset     = LockIconData and LockIconData.ImageRectOffset or Vector2New(0,0),
+                    ImageRectSize       = LockIconData and LockIconData.ImageRectSize   or Vector2New(0,0),
+                    ImageColor3         = FromRGB(75, 72, 95),
+                    BackgroundTransparency = 1,
+                    AnchorPoint         = Vector2New(0, 0.5),
+                    Position            = UDim2New(0, 8, 0.5, 0),
+                    Size                = UDim2New(0, 12, 0, 12),
+                    ZIndex              = 3,
+                })
+
+                Items["URLBox"] = Instances:Create("TextBox", {
+                    Parent              = URLRow.Instance,
+                    Name                = "\0",
+                    FontFace            = Gotham,
+                    Text                = currentURL,
+                    PlaceholderText     = "https://discord.com/api/webhooks/...",
+                    PlaceholderColor3   = FromRGB(70, 67, 90),
+                    TextColor3          = FromRGB(200, 198, 218),
+                    TextSize            = 11,
+                    TextXAlignment      = Enum.TextXAlignment.Left,
+                    BackgroundTransparency = 1,
+                    BorderSizePixel     = 0,
+                    ClearTextOnFocus    = false,
+                    AnchorPoint         = Vector2New(0, 0.5),
+                    Position            = UDim2New(0, 26, 0.5, 0),
+                    Size                = UDim2New(1, -32, 0, 20),
+                    ZIndex              = 3,
+                })
+
+                Items["URLBox"].Instance.FocusLost:Connect(function()
+                    currentURL = Items["URLBox"].Instance.Text
+                    Library.Flags[Webhook.Name .. "_URL"] = currentURL
+                    local hasURL = currentURL ~= "" and currentURL:find("discord") ~= nil
+                    Items["StatusDot"].Instance.BackgroundColor3 = hasURL
+                        and FromRGB(34, 197, 94)
+                        or  FromRGB(80, 78, 98)
+                    Items["StatusLabel"].Instance.Text = hasURL
+                        and "URL configured"
+                        or  "No URL configured"
+                    Webhook.Callback("url_changed", currentURL)
+                end)
+
+                -- ── Events list ──────────────────────────────────────────────
+                if #Webhook.Events > 0 then
+                    local EventsCard = Instances:Create("Frame", {
+                        Parent           = Items["Webhook"].Instance,
+                        Name             = "\0",
+                        Size             = UDim2New(1, 0, 0, 0),
+                        AutomaticSize    = Enum.AutomaticSize.Y,
+                        BackgroundColor3 = FromRGB(16, 14, 20),
+                        BorderSizePixel  = 0,
+                        ZIndex           = 2,
+                        LayoutOrder      = 3,
+                    })
+                    EventsCard:AddToTheme({BackgroundColor3 = "Background 2"})
+                    Instances:Create("UICorner", { Parent = EventsCard.Instance, CornerRadius = UDimNew(0, 7) })
+                    Instances:Create("UIStroke", {
+                        Parent       = EventsCard.Instance,
+                        Color        = FromRGB(45, 42, 58),
+                        Thickness    = 1,
+                        Transparency = 0.4,
+                    }):AddToTheme({Color = "Outline"})
+
+                    local EventsInner = Instances:Create("Frame", {
+                        Parent           = EventsCard.Instance,
+                        Name             = "\0",
+                        Size             = UDim2New(1, 0, 0, 0),
+                        AutomaticSize    = Enum.AutomaticSize.Y,
+                        BackgroundTransparency = 1,
+                        BorderSizePixel  = 0,
+                        ZIndex           = 3,
+                    })
+                    Instances:Create("UIListLayout", {
+                        Parent    = EventsInner.Instance,
+                        Name      = "\0",
+                        Padding   = UDimNew(0, 0),
+                        SortOrder = Enum.SortOrder.LayoutOrder,
+                    })
+                    Instances:Create("UIPadding", {
+                        Parent        = EventsInner.Instance,
+                        Name          = "\0",
+                        PaddingTop    = UDimNew(0, 6),
+                        PaddingBottom = UDimNew(0, 6),
+                        PaddingLeft   = UDimNew(0, 0),
+                        PaddingRight  = UDimNew(0, 0),
+                    })
+
+                    -- Events section header
+                    local EvHeader = Instances:Create("Frame", {
+                        Parent           = EventsInner.Instance,
+                        Name             = "\0",
+                        Size             = UDim2New(1, 0, 0, 22),
+                        BackgroundTransparency = 1,
+                        BorderSizePixel  = 0,
+                        ZIndex           = 3,
+                        LayoutOrder      = 0,
+                    })
+                    Instances:Create("UIPadding", {
+                        Parent      = EvHeader.Instance,
+                        PaddingLeft = UDimNew(0, 10),
+                    })
+                    local BellIconData = Library:GetCustomIcon("bell")
+                    Instances:Create("ImageLabel", {
+                        Parent              = EvHeader.Instance,
+                        Image               = BellIconData and BellIconData.Url or "",
+                        ImageRectOffset     = BellIconData and BellIconData.ImageRectOffset or Vector2New(0,0),
+                        ImageRectSize       = BellIconData and BellIconData.ImageRectSize   or Vector2New(0,0),
+                        ImageColor3         = FromRGB(100, 97, 120),
+                        BackgroundTransparency = 1,
+                        AnchorPoint         = Vector2New(0, 0.5),
+                        Position            = UDim2New(0, 0, 0.5, 0),
+                        Size                = UDim2New(0, 11, 0, 11),
+                        ZIndex              = 4,
+                    })
+                    Instances:Create("TextLabel", {
+                        Parent              = EvHeader.Instance,
+                        FontFace            = GothamBold,
+                        Text                = "NOTIFY ON",
+                        TextColor3          = FromRGB(90, 87, 112),
+                        TextSize            = 9,
+                        TextXAlignment      = Enum.TextXAlignment.Left,
+                        BackgroundTransparency = 1,
+                        BorderSizePixel     = 0,
+                        AnchorPoint         = Vector2New(0, 0.5),
+                        Position            = UDim2New(0, 16, 0.5, 0),
+                        Size                = UDim2New(1, -16, 0, 12),
+                        ZIndex              = 4,
+                    })
+
+                    for idx, evData in ipairs(Webhook.Events) do
+                        local evEnabled  = savedEvents[evData.Flag] == true
+
+                        local EvRow = Instances:Create("Frame", {
+                            Parent           = EventsInner.Instance,
+                            Name             = "\0",
+                            Size             = UDim2New(1, 0, 0, 30),
+                            BackgroundTransparency = 1,
+                            BorderSizePixel  = 0,
+                            ZIndex           = 3,
+                            LayoutOrder      = idx,
+                        })
+
+                        -- row hover bg
+                        local EvHoverBg = Instances:Create("Frame", {
+                            Parent           = EvRow.Instance,
+                            Name             = "\0",
+                            Size             = UDim2New(1, 0, 1, 0),
+                            BackgroundColor3 = Library.Theme.Accent,
+                            BackgroundTransparency = 1,
+                            BorderSizePixel  = 0,
+                            ZIndex           = 2,
+                        })
+                        Instances:Create("UICorner", { Parent = EvHoverBg.Instance, CornerRadius = UDimNew(0, 5) })
+
+                        Instances:Create("UIPadding", {
+                            Parent       = EvRow.Instance,
+                            PaddingLeft  = UDimNew(0, 10),
+                            PaddingRight = UDimNew(0, 10),
+                        })
+
+                        -- event icon
+                        if evData.Icon then
+                            local evIconD = Library:GetCustomIcon(evData.Icon)
+                            Instances:Create("ImageLabel", {
+                                Parent              = EvRow.Instance,
+                                Image               = evIconD and evIconD.Url or "",
+                                ImageRectOffset     = evIconD and evIconD.ImageRectOffset or Vector2New(0,0),
+                                ImageRectSize       = evIconD and evIconD.ImageRectSize   or Vector2New(0,0),
+                                ImageColor3         = evEnabled and Library.Theme.Accent or FromRGB(75, 72, 95),
+                                BackgroundTransparency = 1,
+                                AnchorPoint         = Vector2New(0, 0.5),
+                                Position            = UDim2New(0, 0, 0.5, 0),
+                                Size                = UDim2New(0, 13, 0, 13),
+                                ZIndex              = 4,
+                                Name                = "evIcon" .. idx,
+                            })
+                        end
+
+                        local iconOffset = evData.Icon and 20 or 0
+                        Instances:Create("TextLabel", {
+                            Parent              = EvRow.Instance,
+                            FontFace            = Gotham,
+                            Text                = evData.Name or "Event",
+                            TextColor3          = evEnabled and FromRGB(210, 208, 228) or FromRGB(110, 107, 130),
+                            TextSize            = 12,
+                            TextXAlignment      = Enum.TextXAlignment.Left,
+                            BackgroundTransparency = 1,
+                            BorderSizePixel     = 0,
+                            AnchorPoint         = Vector2New(0, 0.5),
+                            Position            = UDim2New(0, iconOffset, 0.5, 0),
+                            Size                = UDim2New(1, -(iconOffset + 32), 0, 14),
+                            ZIndex              = 4,
+                            Name                = "evLabel" .. idx,
+                        })
+
+                        -- toggle pill
+                        local Pill = Instances:Create("Frame", {
+                            Parent           = EvRow.Instance,
+                            Name             = "pill" .. idx,
+                            AnchorPoint      = Vector2New(1, 0.5),
+                            Position         = UDim2New(1, 0, 0.5, 0),
+                            Size             = UDim2New(0, 26, 0, 14),
+                            BackgroundColor3 = evEnabled and Library.Theme.Accent or FromRGB(40, 38, 52),
+                            BorderSizePixel  = 0,
+                            ZIndex           = 4,
+                        })
+                        Instances:Create("UICorner", { Parent = Pill.Instance, CornerRadius = UDimNew(1, 0) })
+                        if evEnabled then
+                            Pill:AddToTheme({BackgroundColor3 = "Accent"})
+                        end
+
+                        local Knob = Instances:Create("Frame", {
+                            Parent           = Pill.Instance,
+                            Name             = "\0",
+                            Size             = UDim2New(0, 10, 0, 10),
+                            AnchorPoint      = Vector2New(0.5, 0.5),
+                            Position         = evEnabled and UDim2New(0.72, 0, 0.5, 0) or UDim2New(0.28, 0, 0.5, 0),
+                            BackgroundColor3 = FromRGB(255, 255, 255),
+                            BorderSizePixel  = 0,
+                            ZIndex           = 5,
+                        })
+                        Instances:Create("UICorner", { Parent = Knob.Instance, CornerRadius = UDimNew(1, 0) })
+
+                        local evBtn = Instances:Create("TextButton", {
+                            Parent              = EvRow.Instance,
+                            Text                = "",
+                            BackgroundTransparency = 1,
+                            BorderSizePixel     = 0,
+                            Size                = UDim2New(1, 0, 1, 0),
+                            ZIndex              = 6,
+                            AutoButtonColor     = false,
+                        })
+
+                        local TI = TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+
+                        evBtn:Connect("MouseButton1Click", function()
+                            evEnabled = not evEnabled
+                            savedEvents[evData.Flag] = evEnabled
+                            Library.Flags[evData.Flag] = evEnabled
+
+                            local kn    = Knob
+                            local pl    = Pill
+                            local label = EvRow.Instance:FindFirstChild("evLabel" .. idx)
+                            local icon  = EvRow.Instance:FindFirstChild("evIcon" .. idx)
+
+                            if evEnabled then
+                                TweenService:Create(pl.Instance, TI, { BackgroundColor3 = Library.Theme.Accent }):Play()
+                                TweenService:Create(kn.Instance, TI, { Position = UDim2New(0.72, 0, 0.5, 0) }):Play()
+                                if label then TweenService:Create(label, TI, { TextColor3 = FromRGB(210, 208, 228) }):Play() end
+                                if icon  then TweenService:Create(icon,  TI, { ImageColor3 = Library.Theme.Accent }):Play() end
+                                pl:ChangeItemTheme({BackgroundColor3 = "Accent"})
+                            else
+                                TweenService:Create(pl.Instance, TI, { BackgroundColor3 = FromRGB(40, 38, 52) }):Play()
+                                TweenService:Create(kn.Instance, TI, { Position = UDim2New(0.28, 0, 0.5, 0) }):Play()
+                                if label then TweenService:Create(label, TI, { TextColor3 = FromRGB(110, 107, 130) }):Play() end
+                                if icon  then TweenService:Create(icon,  TI, { ImageColor3 = FromRGB(75, 72, 95) }):Play() end
+                                pl:ChangeItemTheme({BackgroundColor3 = "Element"})
+                            end
+
+                            Webhook.Callback("event_toggled", evData.Flag, evEnabled)
+                        end)
+
+                        evBtn:OnHover(function()
+                            TweenService:Create(EvHoverBg.Instance, TI, { BackgroundTransparency = 0.92 }):Play()
+                        end)
+                        evBtn:OnHoverLeave(function()
+                            TweenService:Create(EvHoverBg.Instance, TI, { BackgroundTransparency = 1 }):Play()
+                        end)
+                    end
+                end
+
+                -- ── Test button ──────────────────────────────────────────────
+                Items["TestBtn"] = Instances:Create("TextButton", {
+                    Parent           = Items["Webhook"].Instance,
+                    Name             = "\0",
+                    Text             = "",
+                    AutoButtonColor  = false,
+                    Size             = UDim2New(1, 0, 0, 32),
+                    BackgroundColor3 = FromRGB(22, 20, 28),
+                    BorderSizePixel  = 0,
+                    ZIndex           = 2,
+                    LayoutOrder      = 4,
+                })
+                Items["TestBtn"]:AddToTheme({BackgroundColor3 = "Element"})
+                Instances:Create("UICorner", { Parent = Items["TestBtn"].Instance, CornerRadius = UDimNew(0, 7) })
+                Instances:Create("UIStroke", {
+                    Parent       = Items["TestBtn"].Instance,
+                    Color        = Library.Theme.Accent,
+                    Thickness    = 1,
+                    Transparency = 0.65,
+                }):AddToTheme({Color = "Accent"})
+
+                local TestAccentBg = Instances:Create("Frame", {
+                    Parent           = Items["TestBtn"].Instance,
+                    Name             = "\0",
+                    Size             = UDim2New(0, 0, 1, 0),
+                    AnchorPoint      = Vector2New(0.5, 0.5),
+                    Position         = UDim2New(0.5, 0, 0.5, 0),
+                    BackgroundColor3 = Library.Theme.Accent,
+                    BackgroundTransparency = 1,
+                    BorderSizePixel  = 0,
+                    ZIndex           = 2,
+                })
+                TestAccentBg:AddToTheme({BackgroundColor3 = "Accent"})
+                Instances:Create("UICorner", { Parent = TestAccentBg.Instance, CornerRadius = UDimNew(0, 7) })
+
+                local SendIconData = Library:GetCustomIcon("send")
+                Items["TestIcon"] = Instances:Create("ImageLabel", {
+                    Parent              = Items["TestBtn"].Instance,
+                    Image               = SendIconData and SendIconData.Url or "",
+                    ImageRectOffset     = SendIconData and SendIconData.ImageRectOffset or Vector2New(0,0),
+                    ImageRectSize       = SendIconData and SendIconData.ImageRectSize   or Vector2New(0,0),
+                    ImageColor3         = Library.Theme.Accent,
+                    BackgroundTransparency = 1,
+                    AnchorPoint         = Vector2New(0.5, 0.5),
+                    Position            = UDim2New(0.5, -22, 0.5, 0),
+                    Size                = UDim2New(0, 13, 0, 13),
+                    ZIndex              = 3,
+                }):AddToTheme({ImageColor3 = "Accent"})
+
+                Items["TestLabel"] = Instances:Create("TextLabel", {
+                    Parent              = Items["TestBtn"].Instance,
+                    FontFace            = GothamBold,
+                    Text                = "Send Test",
+                    TextColor3          = Library.Theme.Accent,
+                    TextSize            = 12,
+                    BackgroundTransparency = 1,
+                    BorderSizePixel     = 0,
+                    AnchorPoint         = Vector2New(0.5, 0.5),
+                    Position            = UDim2New(0.5, 8, 0.5, 0),
+                    Size                = UDim2New(0, 80, 0, 14),
+                    ZIndex              = 3,
+                }):AddToTheme({TextColor3 = "Accent"})
+
+                local TI_btn = TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+                local TI_slow = TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+
+                Items["TestBtn"]:OnHover(function()
+                    TweenService:Create(TestAccentBg.Instance, TI_btn, {
+                        Size = UDim2New(1, 0, 1, 0), BackgroundTransparency = 0.88
+                    }):Play()
+                end)
+                Items["TestBtn"]:OnHoverLeave(function()
+                    TweenService:Create(TestAccentBg.Instance, TI_btn, {
+                        Size = UDim2New(0, 0, 1, 0), BackgroundTransparency = 1
+                    }):Play()
+                end)
+
+                Items["TestBtn"]:Connect("MouseButton1Click", function()
+                    if isSending then return end
+                    if currentURL == "" or not currentURL:find("discord") then
+                        Items["StatusLabel"].Instance.Text = "⚠ Invalid URL"
+                        Items["StatusLabel"].Instance.TextColor3 = FromRGB(234, 179, 8)
+                        task.delay(2, function()
+                            Items["StatusLabel"].Instance.Text = "No URL configured"
+                            Items["StatusLabel"].Instance.TextColor3 = FromRGB(100, 97, 120)
+                        end)
+                        return
+                    end
+
+                    isSending = true
+                    Items["TestLabel"].Instance.Text = "Sending..."
+                    Items["StatusLabel"].Instance.Text = "Sending test..."
+                    Items["StatusLabel"].Instance.TextColor3 = FromRGB(100, 97, 120)
+                    Items["StatusDot"].Instance.BackgroundColor3 = FromRGB(234, 179, 8)
+
+                    local httpRequest = (syn and syn.request)
+                        or (http and http.request) or http_request or request or nil
+
+                    if httpRequest then
+                        local ok, res = pcall(httpRequest, {
+                            Url     = currentURL,
+                            Method  = "POST",
+                            Headers = { ["Content-Type"] = "application/json" },
+                            Body    = game:GetService("HttpService"):JSONEncode({
+                                username   = "Imp Hub X",
+                                avatar_url = "https://i.imgur.com/JnkWLXc.png",
+                                embeds = {{
+                                    title       = "✅ Webhook Test",
+                                    description = "Connection successful! Your webhook is configured correctly.",
+                                    color       = 9699539,
+                                    footer      = { text = "Imp Hub X • " .. os.date("%H:%M:%S") },
+                                }}
+                            })
+                        })
+
+                        if ok and res and (res.StatusCode == 204 or res.StatusCode == 200) then
+                            Items["StatusDot"].Instance.BackgroundColor3  = FromRGB(34, 197, 94)
+                            Items["StatusLabel"].Instance.Text             = "✓ Test sent successfully"
+                            Items["StatusLabel"].Instance.TextColor3       = FromRGB(34, 197, 94)
+                            Items["TestLabel"].Instance.Text               = "✓ Sent"
+                        else
+                            local code = (ok and res and res.StatusCode) or "err"
+                            Items["StatusDot"].Instance.BackgroundColor3  = FromRGB(239, 68, 68)
+                            Items["StatusLabel"].Instance.Text             = "✗ Failed (" .. tostring(code) .. ")"
+                            Items["StatusLabel"].Instance.TextColor3       = FromRGB(239, 68, 68)
+                            Items["TestLabel"].Instance.Text               = "✗ Failed"
+                        end
+                    else
+                        Items["StatusLabel"].Instance.Text       = "✗ No HTTP executor"
+                        Items["StatusLabel"].Instance.TextColor3 = FromRGB(239, 68, 68)
+                        Items["TestLabel"].Instance.Text         = "✗ Failed"
+                    end
+
+                    task.delay(3, function()
+                        isSending = false
+                        Items["TestLabel"].Instance.Text         = "Send Test"
+                        local hasURL = currentURL ~= "" and currentURL:find("discord") ~= nil
+                        Items["StatusLabel"].Instance.Text       = hasURL and "URL configured" or "No URL configured"
+                        Items["StatusLabel"].Instance.TextColor3 = FromRGB(100, 97, 120)
+                    end)
+                end)
+            end
+
+            -- init URL state
+            if currentURL ~= "" and currentURL:find("discord") then
+                Items["StatusDot"].Instance.BackgroundColor3 = FromRGB(34, 197, 94)
+                Items["StatusLabel"].Instance.Text           = "URL configured"
+            end
+
+            function Webhook:SetURL(url)
+                currentURL = url
+                Items["URLBox"].Instance.Text = url
+                Library.Flags[Webhook.Name .. "_URL"] = url
+                local hasURL = url ~= "" and url:find("discord") ~= nil
+                Items["StatusDot"].Instance.BackgroundColor3 = hasURL
+                    and FromRGB(34, 197, 94) or FromRGB(80, 78, 98)
+                Items["StatusLabel"].Instance.Text = hasURL and "URL configured" or "No URL configured"
+            end
+
+            function Webhook:Send(content, embeds)
+                if currentURL == "" then return false end
+                local httpRequest = (syn and syn.request)
+                    or (http and http.request) or http_request or request or nil
+                if not httpRequest then return false end
+                local ok = pcall(httpRequest, {
+                    Url     = currentURL,
+                    Method  = "POST",
+                    Headers = { ["Content-Type"] = "application/json" },
+                    Body    = game:GetService("HttpService"):JSONEncode({
+                        username   = "Imp Hub X",
+                        avatar_url = "https://i.imgur.com/JnkWLXc.png",
+                        content    = content or nil,
+                        embeds     = embeds  or nil,
+                    })
+                })
+                return ok
+            end
+
+            function Webhook:IsEventEnabled(flag)
+                return savedEvents[flag] == true
+            end
+
+            function Webhook:RefreshPosition(Bool)
+            end
+
+            if Webhook.Section.Page and Webhook.Section.Page.Active then
+                Webhook:RefreshPosition(true)
+            end
+
+            Webhook.Section.Elements[#Webhook.Section.Elements + 1] = Webhook
+
+            if Data.ToolTip or Data.tooltip then
+                Library:AddTooltip(Data.ToolTip or Data.tooltip, Items["Webhook"].Instance)
+            end
+
+            return Webhook
+        end
+
         Library.Sections.Divider = function(self, Data)
             Data = Data or {}
 
