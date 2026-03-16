@@ -12407,7 +12407,7 @@ local Library do
                             Size             = UDim2New(0, indSize, 0, indSize),
                             BorderSizePixel  = 0,
                             ZIndex           = 4,
-                            BackgroundColor3 = evEnabled and Library.Theme.Accent or Library.Theme.Element,
+                            BackgroundColor3 = evEnabled and FromRGB(255, 255, 255) or Library.Theme.Element,
                         })
                         if evEnabled then
                             Indicator:ChangeItemTheme({BackgroundColor3 = function() return FromRGB(255,255,255) end})
