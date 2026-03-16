@@ -15659,6 +15659,7 @@ local Library do
         subTxt.Parent = Left
 
         -- ── Social buttons ────────────────────────────────────────────────────
+        local socialIcons = {}   -- populated inside MakeSocialBtn for theme updates
         local SocialRow = InstanceNew("Frame")
         SocialRow.Size = UDim2New(0, 80, 0, 30)
         SocialRow.Position = UDim2New(0, PAD, 0, PAD + 138)
@@ -16346,8 +16347,7 @@ local Library do
 
         -- ── Theme callback: update every accent element in the Dashboard ────────
         -- Collect references to everything accent/outline-reactive at build time.
-        -- social button icon images + gradients
-        local socialIcons = {}   -- {img, ig} pairs
+        -- social button icon images + gradients populated above during MakeSocialBtn
         local infoRowIcons = {}  -- ImageLabel instances from MakeInfoRow
 
         -- patch MakeSocialBtn and MakeInfoRow to expose their inner elements
