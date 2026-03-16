@@ -590,6 +590,7 @@ local Library do
                     Config[Index] = Value
                 end
             end
+            Config["__ThemePreset"] = Library.ActiveThemePreset or "Default"
         end)
 
         return HttpService:JSONEncode(Config)
@@ -599,7 +600,14 @@ local Library do
         local Decoded = HttpService:JSONDecode(Config)
 
         local Success, Result = Library:SafeCall(function()
-            for Index, Value in Decoded do 
+            for Index, Value in Decoded do
+                if Index == "__ThemePreset" then
+                    if type(Value) == "string" then
+                        Library:ApplyThemePreset(Value)
+                    end
+                    continue
+                end
+
                 local SetFunction = Library.SetFlags[Index]
 
                 if not SetFunction then
