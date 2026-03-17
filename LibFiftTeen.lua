@@ -7110,11 +7110,7 @@ local Library do
                 end
             end
 
-            -- Click on the value label to open edit
-            Items["Value"]:Connect("MouseButton1Click", function()
-                openEdit()
-            end)
-            -- Make Value a button to catch clicks (already a TextLabel, wrap with button)
+            -- Click on the value label to open edit (handled by ValClickBtn overlay)
             local ValClickBtn = Instances:Create("TextButton", {
                 Parent              = Items["Slider"].Instance,
                 Name                = "\0",
