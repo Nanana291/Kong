@@ -6743,16 +6743,16 @@ local Library do
                     Parent              = TimerRow.Instance,
                     Name                = "\0",
                     FontFace            = Library.Font,
-                    Text                = "Waiting for enable...",
+                    Text                = "[ Waiting for enable... ]",
                     TextColor3          = FromRGB(100, 97, 120),
                     TextTransparency    = 0,
                     TextSize            = 11,
-                    TextXAlignment      = Enum.TextXAlignment.Right,
+                    TextXAlignment      = Enum.TextXAlignment.Left,
                     BackgroundTransparency = 1,
                     BorderSizePixel     = 0,
-                    AnchorPoint         = Vector2New(1, 0.5),
-                    Position            = UDim2New(1, 0, 0.5, 0),
-                    Size                = UDim2New(1, -30, 0, 13),
+                    AnchorPoint         = Vector2New(0, 0),
+                    Position            = UDim2New(0, 33, 0, 0),
+                    Size                = UDim2New(1, -33, 0, 13),
                     ZIndex              = 3,
                 })
 
@@ -6769,7 +6769,7 @@ local Library do
                                     Library:SafeCall(Toggle.TimerCallback)
                                 end
                             end
-                            TimerLabel.Instance.Text      = string.format("%.1f", timerRemaining) .. timerSuffix
+                            TimerLabel.Instance.Text       = "[ " .. string.format("%.2f", timerRemaining) .. timerSuffix .. " ]"
                             TimerLabel.Instance.TextColor3 = Library.Theme.Accent
                             task.wait(step)
                         end
@@ -6779,7 +6779,7 @@ local Library do
                 local function stopTimer()
                     if timerThread then task.cancel(timerThread) timerThread = nil end
                     timerRemaining = timerTime
-                    TimerLabel.Instance.Text       = "Waiting for enable..."
+                    TimerLabel.Instance.Text       = "[ Waiting for enable... ]"
                     TimerLabel.Instance.TextColor3 = FromRGB(100, 97, 120)
                 end
 
