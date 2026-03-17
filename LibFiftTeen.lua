@@ -9154,7 +9154,7 @@ local Library do
                     TextSize            = 11,
                     TextXAlignment      = Enum.TextXAlignment.Center,
                     BackgroundColor3    = FromRGB(255, 255, 255),
-                    ClipDescendants     = false,
+                    ClipsDescendants    = false,
                 })
 
                 local function UpdateBadgeColor(num)
