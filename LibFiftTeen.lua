@@ -6719,14 +6719,14 @@ local Library do
             end)
 
             -- ── Timer feature ──────────────────────────────────────────────
-            local timerEnabled = Data.Timer or Data.timer or false
-            local timerTime    = Data.Time   or Data.time   or 60
-            local timerSuffix  = Data.TimerSuffix or Data.timerSuffix or " s"
-            local timerThread  = nil
+            local timerEnabled   = Data.Timer       or Data.timer       or false
+            local timerTime      = Data.Time        or Data.time        or 60
+            local timerSuffix    = Data.TimerSuffix or Data.timerSuffix or " s"
+            local timerThread    = nil
             local timerRemaining = timerTime
 
             if timerEnabled then
-                -- Timer bar: sits below the Toggle row, same width
+                -- Single text label that sits right-aligned on its own row below the toggle
                 local TimerRow = Instances:Create("Frame", {
                     Parent           = Toggle.HasSettings
                         and Items["Wrapper"].Instance
@@ -6736,55 +6736,15 @@ local Library do
                     BorderSizePixel  = 0,
                     Size             = UDim2New(1, 0, 0, 14),
                     ZIndex           = 2,
-                    Visible          = Toggle.Default == true,
+                    Visible          = true,
                 })
 
-                -- Progress track
-                local TimerTrack = Instances:Create("Frame", {
-                    Parent           = TimerRow.Instance,
-                    Name             = "\0",
-                    BackgroundColor3 = Library.Theme.Element,
-                    BorderSizePixel  = 0,
-                    AnchorPoint      = Vector2New(0, 0.5),
-                    Position         = UDim2New(0, 30, 0.5, 0),
-                    Size             = UDim2New(1, -30, 0, 4),
-                    ZIndex           = 2,
-                })
-                TimerTrack:AddToTheme({BackgroundColor3 = "Element"})
-                Instances:Create("UICorner", { Parent = TimerTrack.Instance, CornerRadius = UDimNew(1, 0) })
-
-                -- Progress fill
-                local TimerFill = Instances:Create("Frame", {
-                    Parent           = TimerTrack.Instance,
-                    Name             = "\0",
-                    BackgroundColor3 = Library.Theme.Accent,
-                    BorderSizePixel  = 0,
-                    Size             = UDim2New(1, 0, 1, 0),
-                    ZIndex           = 3,
-                })
-                TimerFill:AddToTheme({BackgroundColor3 = "Accent"})
-                Instances:Create("UICorner", { Parent = TimerFill.Instance, CornerRadius = UDimNew(1, 0) })
-                Instances:Create("UIGradient", {
-                    Parent   = TimerFill.Instance,
-                    Rotation = -102,
-                    Color    = RGBSequence{
-                        RGBSequenceKeypoint(0, FromRGB(255, 255, 255)),
-                        RGBSequenceKeypoint(1, FromRGB(166, 166, 166)),
-                    },
-                }):AddToTheme({Color = function()
-                    return RGBSequence{
-                        RGBSequenceKeypoint(0, Library.Theme.Accent),
-                        RGBSequenceKeypoint(1, Library.Theme.AccentGradient),
-                    }
-                end})
-
-                -- Time label
                 local TimerLabel = Instances:Create("TextLabel", {
                     Parent              = TimerRow.Instance,
                     Name                = "\0",
                     FontFace            = Library.Font,
-                    Text                = string.format("%.1f", timerTime) .. timerSuffix,
-                    TextColor3          = Library.Theme.Accent,
+                    Text                = "Waiting for enable...",
+                    TextColor3          = FromRGB(100, 97, 120),
                     TextTransparency    = 0,
                     TextSize            = 11,
                     TextXAlignment      = Enum.TextXAlignment.Right,
@@ -6792,13 +6752,9 @@ local Library do
                     BorderSizePixel     = 0,
                     AnchorPoint         = Vector2New(1, 0.5),
                     Position            = UDim2New(1, 0, 0.5, 0),
-                    Size                = UDim2New(0, 45, 0, 13),
+                    Size                = UDim2New(1, -30, 0, 13),
                     ZIndex              = 3,
                 })
-                TimerLabel:AddToTheme({TextColor3 = "Accent"})
-
-                -- Resize track to leave room for label
-                TimerTrack.Instance.Size = UDim2New(1, -80, 0, 4)
 
                 local function startTimer()
                     if timerThread then task.cancel(timerThread) end
@@ -6813,10 +6769,8 @@ local Library do
                                     Library:SafeCall(Toggle.TimerCallback)
                                 end
                             end
-                            local pct = math.clamp(timerRemaining / timerTime, 0, 1)
-                            -- update fill and label on main thread
-                            TimerFill.Instance.Size = UDim2New(pct, 0, 1, 0)
-                            TimerLabel.Instance.Text = string.format("%.1f", timerRemaining) .. timerSuffix
+                            TimerLabel.Instance.Text      = string.format("%.1f", timerRemaining) .. timerSuffix
+                            TimerLabel.Instance.TextColor3 = Library.Theme.Accent
                             task.wait(step)
                         end
                     end)
@@ -6825,15 +6779,13 @@ local Library do
                 local function stopTimer()
                     if timerThread then task.cancel(timerThread) timerThread = nil end
                     timerRemaining = timerTime
-                    TimerFill.Instance.Size   = UDim2New(1, 0, 1, 0)
-                    TimerLabel.Instance.Text  = string.format("%.1f", timerTime) .. timerSuffix
+                    TimerLabel.Instance.Text       = "Waiting for enable..."
+                    TimerLabel.Instance.TextColor3 = FromRGB(100, 97, 120)
                 end
 
-                -- Wire into Toggle state
                 local _origSet = Toggle.Set
                 function Toggle:Set(Value, Instant)
                     _origSet(self, Value, Instant)
-                    TimerRow.Instance.Visible = Value == true
                     if Value then
                         startTimer()
                     else
@@ -6841,7 +6793,6 @@ local Library do
                     end
                 end
 
-                -- Timer API
                 function Toggle:ResetTimer()
                     timerRemaining = timerTime
                 end
