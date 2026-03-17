@@ -16075,7 +16075,7 @@ local Library do
 
         -- ── RIGHT BRANDING PANEL ───────────────────────────────────────────────
         local RPanel = InstanceNew("Frame")
-        RPanel.Size = UDim2New(0.40, -10, TOP_FRAC - 0.06, 0)
+        RPanel.Size = UDim2New(0.40, -10, TOP_FRAC + 0.02, 0)
         RPanel.Position = UDim2New(0.59, 5, 0.025, 0)
         RPanel.BackgroundColor3 = Elem()
         RPanel.BackgroundTransparency = 0.1
@@ -16321,8 +16321,28 @@ local Library do
 
         local rowBaseY = infoDivY + 10
 
-        local timeVal = MakeInfoRow(rowBaseY,      "clock",        "--:--:--",  "SERVER")
-        local pingVal = MakeInfoRow(rowBaseY + 34, "wifi",         "-- ms",     "PING")
+        -- ── Total Executions tracking (per game) ──────────────────────────────
+        local totalExecs = 1
+        pcall(function()
+            if writefile and readfile and isfile and makefolder then
+                local execDir  = Library.Folders.Directory .. "/executions"
+                local gameKey  = gameRaw:lower():gsub("[^%w]", "_")
+                if gameKey == "" then gameKey = "unknown" end
+                local execFile = execDir .. "/" .. gameKey .. ".txt"
+
+                pcall(function() makefolder(execDir) end)
+
+                if isfile(execFile) then
+                    local stored = tonumber(readfile(execFile)) or 0
+                    totalExecs = stored + 1
+                end
+                pcall(function() writefile(execFile, tostring(totalExecs)) end)
+            end
+        end)
+
+        local timeVal  = MakeInfoRow(rowBaseY,      "clock",   "--:--:--",             "SERVER")
+        local pingVal  = MakeInfoRow(rowBaseY + 34, "wifi",    "-- ms",                "PING")
+        local execVal  = MakeInfoRow(rowBaseY + 68, "play",    tostring(totalExecs),   "EXECS")
 
         Library:Thread(function()
             while Library do
@@ -16603,17 +16623,23 @@ local Library do
         if Library then RefreshCards() end
 
         -- ── Tab memory: restore last active page ─────────────────────────────
-        task.defer(function()
+        -- Use task.delay to run after LoadAutoloadConfig and all page Turn() calls settle
+        task.delay(0.1, function()
             if not Library then return end
             local ok, savedName = pcall(function()
                 if isfile and isfile(Library.Folders.Directory .. "/lastpage.txt") then
                     return readfile(Library.Folders.Directory .. "/lastpage.txt")
                 end
             end)
-            if ok and savedName and savedName ~= "" then
+            if ok and savedName and savedName ~= "" and savedName ~= "Dashboard" then
                 for _, page in ipairs(Window.Pages) do
-                    if page.Name == savedName and page.Name ~= "Dashboard" then
-                        Window:SelectTab(page)
+                    if page.Name == savedName then
+                        -- turn off dashboard first, then turn on saved page
+                        for _, p in ipairs(Window.Pages) do
+                            if p.Active then p:Turn(false) end
+                        end
+                        task.wait(0.05)
+                        if Library then page:Turn(true) end
                         return
                     end
                 end
