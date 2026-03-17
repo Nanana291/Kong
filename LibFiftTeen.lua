@@ -12192,7 +12192,7 @@ local Library do
                 Instances:Create("UIListLayout", {
                     Parent    = Items["Webhook"].Instance,
                     Name      = "\0",
-                    Padding   = UDimNew(0, 0),
+                    Padding   = UDimNew(0, 4),
                     SortOrder = Enum.SortOrder.LayoutOrder,
                 })
 
@@ -12349,7 +12349,7 @@ local Library do
                         FontFace            = Library.Font,
                         Text                = "NOTIFY ON",
                         TextColor3          = FromRGB(100, 97, 120),
-                        TextSize            = 9,
+                        TextSize            = 11,
                         TextXAlignment      = Enum.TextXAlignment.Left,
                         BackgroundTransparency = 1,
                         BorderSizePixel     = 0,
@@ -12368,7 +12368,7 @@ local Library do
                             Name             = "\0",
                             BackgroundTransparency = 1,
                             BorderSizePixel  = 0,
-                            Size             = UDim2New(1, 0, 0, 18),
+                            Size             = UDim2New(1, 0, 0, 22),
                             ZIndex           = 2,
                             LayoutOrder      = 10 + idx,
                         })
@@ -12521,6 +12521,16 @@ local Library do
                 end
 
                 -- ── Ping row (same style as a Label row with right value) ─────
+                -- Spacer before ping
+                Instances:Create("Frame", {
+                    Parent           = Items["Webhook"].Instance,
+                    Name             = "\0",
+                    Size             = UDim2New(1, 0, 0, 4),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel  = 0,
+                    ZIndex           = 1,
+                    LayoutOrder      = 49,
+                })
                 local PingRow = Instances:Create("Frame", {
                     Parent           = Items["Webhook"].Instance,
                     Name             = "\0",
@@ -12610,6 +12620,16 @@ local Library do
                 end)
 
                 -- ── Send Test button (same style as Button element) ───────────
+                -- Spacer before Send button
+                Instances:Create("Frame", {
+                    Parent           = Items["Webhook"].Instance,
+                    Name             = "\0",
+                    Size             = UDim2New(1, 0, 0, 4),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel  = 0,
+                    ZIndex           = 1,
+                    LayoutOrder      = 98,
+                })
                 Items["TestBtn"] = Instances:Create("TextButton", {
                     Parent           = Items["Webhook"].Instance,
                     Name             = "\0",
