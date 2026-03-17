@@ -4484,6 +4484,15 @@ local Library do
                 Items["Page"].Instance.Visible = Bool 
                 Items["Page"].Instance.Parent = Bool and Page.Window.Items["Content"].Instance or Library.UnusedHolder.Instance
 
+                -- Tab memory: save active page name to file
+                if Page.Active and Page.Name ~= "Dashboard" then
+                    pcall(function()
+                        if writefile and Library.Folders then
+                            writefile(Library.Folders.Directory .. "/lastpage.txt", tostring(Page.Name))
+                        end
+                    end)
+                end
+
                 if Page.Active then
                     Items["Inactive"]:Tween(nil, {BackgroundTransparency = 0.25})
                     Items["SelectedIndicator"]:Tween(TweenInfo.new(0.6, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {BackgroundTransparency = 0, Size = UDim2New(0, 4, 0, 18)})
@@ -6293,6 +6302,10 @@ local Library do
                 function Toggle:Divider()
                     return Library.Sections.Divider(SettingsSection, {})
                 end
+
+                function Toggle:QuickPresets(Data)
+                    return Library.Sections.QuickPresets(SettingsSection, Data)
+                end
             end
             -- ─────────────────────────────────────────────────────────────
 
@@ -7272,6 +7285,8 @@ local Library do
                 Size = Data.Size or Data.size or 125,
                 OptionHolderSize = Data.OptionHolderSize or Data.optionholder or 125,
                 Multi = Data.Multi or Data.multi or false,
+                Priority = Data.Priority or Data.priority or false,
+                PriorityMap = Data.PriorityMap or Data.priorityMap or {},
                 MaxOptionWidth = 0,
 
                 Value = { },
@@ -7734,6 +7749,46 @@ local Library do
                     TextSize = 14,
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })  OptionText:AddToTheme({TextColor3 = "Text"})
+
+                -- Priority badge (shown when Dropdown.Priority = true)
+                if Dropdown.Priority then
+                    local priorityNum = Dropdown.PriorityMap[Option]
+                    if priorityNum then
+                        local badgeColors = {
+                            [1] = FromRGB(239, 68, 68),    -- red   #1
+                            [2] = FromRGB(249, 115, 22),   -- orange #2
+                            [3] = FromRGB(234, 179, 8),    -- yellow #3
+                            [4] = FromRGB(34, 197, 94),    -- green  #4
+                            [5] = FromRGB(59, 130, 246),   -- blue   #5
+                        }
+                        local badgeColor = badgeColors[priorityNum] or FromRGB(100, 97, 120)
+                        local Badge = Instances:Create("Frame", {
+                            Parent = OptionButton.Instance,
+                            Name = "\0",
+                            AnchorPoint = Vector2New(1, 0.5),
+                            Position = UDim2New(1, -4, 0.5, 0),
+                            Size = UDim2New(0, 16, 0, 14),
+                            BackgroundColor3 = badgeColor,
+                            BackgroundTransparency = 0.35,
+                            BorderSizePixel = 0,
+                            ZIndex = 3,
+                        })
+                        Instances:Create("UICorner", { Parent = Badge.Instance, CornerRadius = UDimNew(0, 3) })
+                        Instances:Create("TextLabel", {
+                            Parent = Badge.Instance,
+                            Name = "\0",
+                            FontFace = Library.Font,
+                            Text = tostring(priorityNum),
+                            TextColor3 = badgeColor,
+                            TextSize = 9,
+                            BackgroundTransparency = 1,
+                            BorderSizePixel = 0,
+                            Size = UDim2New(1, 0, 1, 0),
+                            TextXAlignment = Enum.TextXAlignment.Center,
+                            ZIndex = 4,
+                        })
+                    end
+                end
                 
                 local TextSize = OptionText.Instance.TextBounds
                 if TextSize.X > Dropdown.MaxOptionWidth then
@@ -8967,6 +9022,21 @@ local Library do
                                  if Data.Priority ~= nil then
                                      Opt.Priority = Data.Priority
                                      Opt.PriorityBox.Instance.Text = tostring(Data.Priority)
+                                     -- Update badge color to match loaded priority
+                                     local PCOLORS = {
+                                         [1]=FromRGB(239,68,68),[2]=FromRGB(249,115,22),
+                                         [3]=FromRGB(234,179,8),[4]=FromRGB(34,197,94),
+                                         [5]=FromRGB(59,130,246),[6]=FromRGB(168,85,247),
+                                         [7]=FromRGB(236,72,153),
+                                     }
+                                     local c = PCOLORS[Data.Priority] or FromRGB(100,97,120)
+                                     if Opt.PriorityBox.Instance.Parent then
+                                         local badge = Opt.PriorityBox.Instance.Parent
+                                         if badge and badge:IsA("Frame") then
+                                             badge.BackgroundColor3 = c
+                                         end
+                                     end
+                                     Opt.PriorityBox.Instance.TextColor3 = c
                                  end
                              end
                          end
@@ -9041,24 +9111,60 @@ local Library do
                     Dropdown.MaxOptionWidth = TextSize.X
                 end
 
-                local PriorityBox = Instances:Create("TextBox", {
-                    Parent = OptionButton.Instance,
-                    Name = "\0",
-                    FontFace = Library.Font,
-                    Text = "1",
-                    PlaceholderText = "#",
-                    TextColor3 = FromHex("116ac2"),
-                    PlaceholderColor3 = FromRGB(180, 180, 180),
-                    BackgroundTransparency = 1,
-                    BorderSizePixel = 0,
-                    Size = UDim2New(0, 40, 1, 0),
-                    Position = UDim2New(1, -10, 0, 0),
-                    AnchorPoint = Vector2New(1, 0),
-                    ZIndex = 4,
-                    TextSize = 13,
-                    TextXAlignment = Enum.TextXAlignment.Right,
-                    BackgroundColor3 = FromRGB(255, 255, 255)
+                -- Priority badge wrapper
+                local PRIORITY_COLORS = {
+                    [1] = FromRGB(239, 68,  68),   -- red
+                    [2] = FromRGB(249, 115, 22),   -- orange
+                    [3] = FromRGB(234, 179, 8),    -- yellow
+                    [4] = FromRGB(34,  197, 94),   -- green
+                    [5] = FromRGB(59,  130, 246),  -- blue
+                    [6] = FromRGB(168, 85,  247),  -- purple
+                    [7] = FromRGB(236, 72,  153),  -- pink
+                }
+                local function GetPriorityColor(n)
+                    return PRIORITY_COLORS[n] or FromRGB(100, 97, 120)
+                end
+
+                local PrioBadge = Instances:Create("Frame", {
+                    Parent           = OptionButton.Instance,
+                    Name             = "\0",
+                    AnchorPoint      = Vector2New(1, 0.5),
+                    Position         = UDim2New(1, -4, 0.5, 0),
+                    Size             = UDim2New(0, 30, 0, 16),
+                    BackgroundColor3 = GetPriorityColor(1),
+                    BackgroundTransparency = 0.55,
+                    BorderSizePixel  = 0,
+                    ZIndex           = 4,
                 })
+                Instances:Create("UICorner", { Parent = PrioBadge.Instance, CornerRadius = UDimNew(0, 4) })
+
+                local PriorityBox = Instances:Create("TextBox", {
+                    Parent              = PrioBadge.Instance,
+                    Name                = "\0",
+                    FontFace            = Library.Font,
+                    Text                = "1",
+                    PlaceholderText     = "#",
+                    TextColor3          = GetPriorityColor(1),
+                    PlaceholderColor3   = FromRGB(180, 180, 180),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel     = 0,
+                    Size                = UDim2New(1, 0, 1, 0),
+                    Position            = UDim2New(0, 0, 0, 0),
+                    ZIndex              = 5,
+                    TextSize            = 11,
+                    TextXAlignment      = Enum.TextXAlignment.Center,
+                    BackgroundColor3    = FromRGB(255, 255, 255),
+                    ClipDescendants     = false,
+                })
+
+                local function UpdateBadgeColor(num)
+                    local c = GetPriorityColor(num)
+                    TweenService:Create(PrioBadge.Instance,
+                        TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+                        { BackgroundColor3 = c }
+                    ):Play()
+                    PriorityBox.Instance.TextColor3 = c
+                end
 
                 local OptionData = {
                     Button = OptionButton,
@@ -9115,7 +9221,9 @@ local Library do
                 OptionData.PriorityBox:Connect("FocusLost", function(Enter)
                     local Num = tonumber(OptionData.PriorityBox.Instance.Text)
                     if Num then
-                        OptionData.Priority = Num
+                        OptionData.Priority = math.max(1, math.floor(Num + 0.5))
+                        OptionData.PriorityBox.Instance.Text = tostring(OptionData.Priority)
+                        UpdateBadgeColor(OptionData.Priority)
                     else
                         OptionData.PriorityBox.Instance.Text = tostring(OptionData.Priority)
                     end
@@ -12819,6 +12927,198 @@ local Library do
             return Webhook
         end
 
+        Library.Sections.QuickPresets = function(self, Data)
+            Data = Data or {}
+
+            local QP = {
+                Window   = self.Window,
+                Page     = self.Page,
+                Section  = self,
+                Name     = Data.Name     or Data.name     or "Quick Presets",
+                Presets  = Data.Presets  or Data.presets  or {},
+                ToolTip  = Data.ToolTip  or Data.tooltip  or nil,
+            }
+
+            local Items = {} do
+                Items["QP"] = Instances:Create("Frame", {
+                    Parent              = QP.Section.Items["Content"].Instance,
+                    Name                = "\0",
+                    BackgroundTransparency = 1,
+                    Size                = UDim2New(1, 0, 0, 0),
+                    AutomaticSize       = Enum.AutomaticSize.Y,
+                    BorderSizePixel     = 0,
+                    ZIndex              = 2,
+                })
+
+                Instances:Create("UIListLayout", {
+                    Parent    = Items["QP"].Instance,
+                    Name      = "\0",
+                    Padding   = UDimNew(0, 4),
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                })
+
+                -- Label row
+                if QP.Name ~= "" then
+                    local LabelRow = Instances:Create("Frame", {
+                        Parent           = Items["QP"].Instance,
+                        Name             = "\0",
+                        BackgroundTransparency = 1,
+                        BorderSizePixel  = 0,
+                        Size             = UDim2New(1, 0, 0, 15),
+                        ZIndex           = 2,
+                        LayoutOrder      = 1,
+                    })
+                    Instances:Create("TextLabel", {
+                        Parent              = LabelRow.Instance,
+                        Name                = "\0",
+                        FontFace            = Library.Font,
+                        Text                = QP.Name,
+                        TextColor3          = FromRGB(235, 235, 235),
+                        TextTransparency    = 0.3,
+                        TextSize            = 14,
+                        TextXAlignment      = Enum.TextXAlignment.Left,
+                        BackgroundTransparency = 1,
+                        BorderSizePixel     = 0,
+                        AnchorPoint         = Vector2New(0, 0.5),
+                        Position            = UDim2New(0, 0, 0.5, 0),
+                        Size                = UDim2New(1, 0, 0, 15),
+                        ZIndex              = 3,
+                    }):AddToTheme({TextColor3 = "Text"})
+                end
+
+                -- Buttons row
+                local BtnRow = Instances:Create("Frame", {
+                    Parent           = Items["QP"].Instance,
+                    Name             = "\0",
+                    BackgroundTransparency = 1,
+                    BorderSizePixel  = 0,
+                    Size             = UDim2New(1, 0, 0, 26),
+                    ZIndex           = 2,
+                    LayoutOrder      = 2,
+                })
+
+                Instances:Create("UIListLayout", {
+                    Parent              = BtnRow.Instance,
+                    Name                = "\0",
+                    FillDirection       = Enum.FillDirection.Horizontal,
+                    HorizontalAlignment = Enum.HorizontalAlignment.Left,
+                    VerticalAlignment   = Enum.VerticalAlignment.Center,
+                    Padding             = UDimNew(0, 6),
+                    SortOrder           = Enum.SortOrder.LayoutOrder,
+                })
+
+                local count   = #QP.Presets
+                local TI_btn  = TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+
+                for idx, preset in ipairs(QP.Presets) do
+                    local Btn = Instances:Create("TextButton", {
+                        Parent           = BtnRow.Instance,
+                        Name             = "\0",
+                        Text             = "",
+                        AutoButtonColor  = false,
+                        Size             = UDim2New(1/count, -(6*(count-1)/count), 1, 0),
+                        BackgroundColor3 = Library.Theme.Element,
+                        BorderSizePixel  = 0,
+                        ZIndex           = 3,
+                        LayoutOrder      = idx,
+                    })
+                    Btn:AddToTheme({BackgroundColor3 = "Element"})
+                    Instances:Create("UICorner", { Parent = Btn.Instance, CornerRadius = UDimNew(0, 5) })
+                    Instances:Create("UIStroke", {
+                        Parent       = Btn.Instance,
+                        Color        = Library.Theme.Outline,
+                        Thickness    = 1,
+                        Transparency = 0.5,
+                    }):AddToTheme({Color = "Outline"})
+
+                    -- Accent fill on hover
+                    local BtnAccent = Instances:Create("Frame", {
+                        Parent           = Btn.Instance,
+                        Name             = "\0",
+                        Size             = UDim2New(0, 0, 1, 0),
+                        AnchorPoint      = Vector2New(0.5, 0.5),
+                        Position         = UDim2New(0.5, 0, 0.5, 0),
+                        BackgroundColor3 = Library.Theme.Accent,
+                        BackgroundTransparency = 1,
+                        BorderSizePixel  = 0,
+                        ZIndex           = 2,
+                    })
+                    BtnAccent:AddToTheme({BackgroundColor3 = "Accent"})
+                    Instances:Create("UICorner", { Parent = BtnAccent.Instance, CornerRadius = UDimNew(0, 5) })
+
+                    local BtnLabel = Instances:Create("TextLabel", {
+                        Parent              = Btn.Instance,
+                        Name                = "\0",
+                        FontFace            = Library.Font,
+                        Text                = preset.Name or ("Preset " .. idx),
+                        TextColor3          = FromRGB(235, 235, 235),
+                        TextTransparency    = 0.2,
+                        TextSize            = 12,
+                        BackgroundTransparency = 1,
+                        BorderSizePixel     = 0,
+                        AnchorPoint         = Vector2New(0.5, 0.5),
+                        Position            = UDim2New(0.5, 0, 0.5, 0),
+                        Size                = UDim2New(1, -4, 0, 14),
+                        TextTruncate        = Enum.TextTruncate.AtEnd,
+                        TextXAlignment      = Enum.TextXAlignment.Center,
+                        ZIndex              = 4,
+                    })
+                    BtnLabel:AddToTheme({TextColor3 = "Text"})
+
+                    Btn:OnHover(function()
+                        TweenService:Create(BtnAccent.Instance, TI_btn, {Size = UDim2New(1,0,1,0), BackgroundTransparency = 0.85}):Play()
+                        TweenService:Create(BtnLabel.Instance,  TI_btn, {TextTransparency = 0}):Play()
+                    end)
+                    Btn:OnHoverLeave(function()
+                        TweenService:Create(BtnAccent.Instance, TI_btn, {Size = UDim2New(0,0,1,0), BackgroundTransparency = 1}):Play()
+                        TweenService:Create(BtnLabel.Instance,  TI_btn, {TextTransparency = 0.2}):Play()
+                    end)
+
+                    Btn:Connect("MouseButton1Click", function()
+                        -- flash accent
+                        TweenService:Create(BtnAccent.Instance, TI_btn, {Size = UDim2New(1,0,1,0), BackgroundTransparency = 0.7}):Play()
+                        task.delay(0.18, function()
+                            TweenService:Create(BtnAccent.Instance, TI_btn, {BackgroundTransparency = 1, Size = UDim2New(0,0,1,0)}):Play()
+                        end)
+
+                        if preset.Values then
+                            for flag, value in pairs(preset.Values) do
+                                local setter = Library.SetFlags[flag]
+                                if setter then
+                                    Library:SafeCall(setter, value)
+                                end
+                            end
+                        end
+
+                        if preset.Callback then
+                            Library:SafeCall(preset.Callback)
+                        end
+                    end)
+
+                    if Data.ToolTip and preset.ToolTip then
+                        Library:AddTooltip(preset.ToolTip, Btn.Instance)
+                    end
+                end
+            end
+
+            function QP:SetVisibility(Bool)
+                Items["QP"].Instance.Visible = Bool
+            end
+
+            function QP:RefreshPosition(Bool) end
+
+            if QP.Section.Page and QP.Section.Page.Active then
+                QP:RefreshPosition(true)
+            end
+
+            QP.Section.Elements[#QP.Section.Elements + 1] = QP
+
+            if QP.ToolTip then
+                Library:AddTooltip(QP.ToolTip, Items["QP"].Instance)
+            end
+
+            return QP
+        end
 
         Library.Sections.Divider = function(self, Data)
             Data = Data or {}
@@ -16301,6 +16601,24 @@ local Library do
         -- ── Initial card pass (for any pages already in Window.Pages) ─────────
         task.wait()
         if Library then RefreshCards() end
+
+        -- ── Tab memory: restore last active page ─────────────────────────────
+        task.defer(function()
+            if not Library then return end
+            local ok, savedName = pcall(function()
+                if isfile and isfile(Library.Folders.Directory .. "/lastpage.txt") then
+                    return readfile(Library.Folders.Directory .. "/lastpage.txt")
+                end
+            end)
+            if ok and savedName and savedName ~= "" then
+                for _, page in ipairs(Window.Pages) do
+                    if page.Name == savedName and page.Name ~= "Dashboard" then
+                        Window:SelectTab(page)
+                        return
+                    end
+                end
+            end
+        end)
 
         -- ── Theme callback: update every accent element in the Dashboard ────────
         -- Collect references to everything accent/outline-reactive at build time.
