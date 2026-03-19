@@ -188,8 +188,8 @@ local Library do
                   or (UserInputService.TouchEnabled or _viewportX < 1000)
 
     -- UI scale constants
-    local UI_TOTAL_SCALE  = 1.15   -- TEST: 15% bigger for both PC and mobile
-    local UI_MOBILE_SCALE = 1.15   -- TEST: same as PC
+    local UI_TOTAL_SCALE  = 1.38   -- TEST: 1.20 window * 1.15 elements, both PC and mobile
+    local UI_MOBILE_SCALE = 1.38   -- TEST: same as PC
 
     Library = {
         Theme =  { },
