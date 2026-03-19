@@ -184,9 +184,9 @@ local Library do
     local IsMobile = (getgenv and getgenv().IsMobile ~= nil) and getgenv().IsMobile or (UserInputService.TouchEnabled or false)
 
     -- UI scale constants
-    local UI_WINDOW_SCALE  = 1.45   -- 45% bigger window (PC only)
-    local UI_ELEMENT_SCALE = 1.25   -- 25% bigger elements (PC only)
-    local UI_TOTAL_SCALE   = UI_WINDOW_SCALE * UI_ELEMENT_SCALE  -- 1.8125
+    local UI_WINDOW_SCALE  = 1.45
+    local UI_ELEMENT_SCALE = 1.15
+    local UI_TOTAL_SCALE   = UI_WINDOW_SCALE * UI_ELEMENT_SCALE  -- 1.6675
     local UI_MOBILE_SCALE  = UI_TOTAL_SCALE  -- TEST: same as PC
 
     Library = {
