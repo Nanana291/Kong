@@ -181,13 +181,7 @@ local Library do
 
     local RectNew = Rect.new
 
-    local IsMobile = (getgenv and getgenv().IsMobile ~= nil) and getgenv().IsMobile or (UserInputService.TouchEnabled or false)
-
-    -- UI scale constants
-    local UI_WINDOW_SCALE  = 1.45
-    local UI_ELEMENT_SCALE = 1.15
-    local UI_TOTAL_SCALE   = UI_WINDOW_SCALE * UI_ELEMENT_SCALE  -- 1.6675
-    local UI_MOBILE_SCALE  = 0.55  -- mobile unchanged
+    local IsMobile = UserInputService.TouchEnabled or false
 
     Library = {
         Theme =  { },
@@ -2940,18 +2934,12 @@ local Library do
                     BackgroundColor3 = FromRGB(27, 25, 29)
                 })  Items["MainFrame"]:AddToTheme({BackgroundColor3 = "Background"})
 
-                if IsMobile then
+                if IsMobile then 
                     Instances:Create("UIScale", {
                         Parent = Items["MainFrame"].Instance,
                         Name = "\0",
-                        Scale = UI_MOBILE_SCALE   -- 0.55 unchanged
-                    })
-                else
-                    Instances:Create("UIScale", {
-                        Parent = Items["MainFrame"].Instance,
-                        Name = "\0",
-                        Scale = UI_TOTAL_SCALE    -- 1.45 * 1.25 = 1.8125
-                    })
+                        Scale = 0.55
+                    })                    
                 end
 
                 Items["MainFrame"]:MakeResizeable(Vector2New(Items["MainFrame"].Instance.AbsoluteSize.X, Items["MainFrame"].Instance.AbsoluteSize.Y), Vector2New(9999, 9999), OriginalSizes)
