@@ -183,6 +183,13 @@ local Library do
 
     local IsMobile = (getgenv and getgenv().IsMobile ~= nil) and getgenv().IsMobile or (UserInputService.TouchEnabled or false)
 
+    -- UI scale constants (easy to adjust later)
+    local UI_WINDOW_SCALE  = 1.45   -- 45% bigger window (remove for mobile-only later)
+    local UI_ELEMENT_SCALE = 1.15   -- 15% bigger elements inside the window
+    local UI_TOTAL_SCALE   = UI_WINDOW_SCALE * UI_ELEMENT_SCALE  -- 1.6675
+    local UI_MOBILE_BASE   = 0.55   -- base mobile shrink
+    local UI_MOBILE_SCALE  = UI_MOBILE_BASE * UI_ELEMENT_SCALE   -- 0.6325
+
     Library = {
         Theme =  { },
 
@@ -2934,17 +2941,17 @@ local Library do
                     BackgroundColor3 = FromRGB(27, 25, 29)
                 })  Items["MainFrame"]:AddToTheme({BackgroundColor3 = "Background"})
 
-                if IsMobile then 
+                if IsMobile then
                     Instances:Create("UIScale", {
                         Parent = Items["MainFrame"].Instance,
                         Name = "\0",
-                        Scale = 0.55
-                    })                    
+                        Scale = UI_MOBILE_SCALE   -- 0.55 * 1.15 = 0.6325
+                    })
                 else
                     Instances:Create("UIScale", {
                         Parent = Items["MainFrame"].Instance,
                         Name = "\0",
-                        Scale = 1.45
+                        Scale = UI_TOTAL_SCALE    -- 1.45 * 1.15 = 1.6675
                     })
                 end
 
