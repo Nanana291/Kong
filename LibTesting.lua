@@ -181,13 +181,15 @@ local Library do
 
     local RectNew = Rect.new
 
-    local IsMobile = (getgenv and getgenv().IsMobile ~= nil) and getgenv().IsMobile or (UserInputService.TouchEnabled or false)
+    -- Detect mobile via TouchEnabled + viewport width fallback
+    -- Some mobile executors report TouchEnabled=false, so check screen width too
+    local _viewportX = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.X or 1920
+    local IsMobile = (getgenv and getgenv().IsMobile ~= nil) and getgenv().IsMobile
+                  or (UserInputService.TouchEnabled or _viewportX < 1000)
 
     -- UI scale constants
-    local UI_WINDOW_SCALE  = 1.45
-    local UI_ELEMENT_SCALE = 1.15
-    local UI_TOTAL_SCALE   = UI_WINDOW_SCALE * UI_ELEMENT_SCALE  -- 1.6675
-    local UI_MOBILE_SCALE  = UI_TOTAL_SCALE  -- TEST: same as PC
+    local UI_TOTAL_SCALE  = 1.15   -- TEST: 15% bigger for both PC and mobile
+    local UI_MOBILE_SCALE = 1.15   -- TEST: same as PC
 
     Library = {
         Theme =  { },
