@@ -2938,7 +2938,7 @@ local Library do
                     Instances:Create("UIScale", {
                         Parent = Items["MainFrame"].Instance,
                         Name = "\0",
-                        Scale = IsMobile and 0.62 or 1.125
+                        Scale = IsMobile and 0.55 or 1.125
                     })
                 end
 
@@ -5894,7 +5894,7 @@ local Library do
                 })
                 
                 -- PC users get a ~15% larger indicator (21px vs 18px) for easier clicking
-                local _IndicatorSize = IsMobile and 21 or 24
+                local _IndicatorSize = IsMobile and 18 or 24
 
                 Items["Indicator"] = Instances:Create("Frame", {
                     Parent = Items["Toggle"].Instance,
@@ -5975,14 +5975,14 @@ local Library do
                 end)
             end
 
-            local _IndicatorSize = IsMobile and 21 or 24
-            local _TextXOffset   = _IndicatorSize + 7  -- 24 mobile, 30 PC
+            local _IndicatorSize = IsMobile and 18 or 24
+            local _TextXOffset   = _IndicatorSize + 7
 
             Items["Indicator"].Instance.Position = UDim2New(0, 30, 0.5, -math.floor(_IndicatorSize / 2))
             Items["Text"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, 0)
 
             function Toggle:RefreshPosition(Bool)
-                local _IndicatorSize = IsMobile and 21 or 24
+                local _IndicatorSize = IsMobile and 18 or 24
                 local _TextXOffset   = _IndicatorSize + 7
                 if Bool then
                     Items["Indicator"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0.5, -math.floor(_IndicatorSize / 2))})
@@ -6001,7 +6001,7 @@ local Library do
                 Toggle.Value = Value 
                 Library.Flags[Toggle.Flag] = Value 
 
-                local _CheckSize = IsMobile and 14 or 16
+                local _CheckSize = IsMobile and 12 or 16
                 if Toggle.Value then
                     Items["IndicatorGradient"].Instance.Enabled = true
                     Items["Indicator"]:ChangeItemTheme({BackgroundColor3 = function()
@@ -12576,7 +12576,7 @@ local Library do
                         })
 
                         -- Indicator (exact Toggle indicator)
-                        local indSize = IsMobile and 21 or 24
+                        local indSize = IsMobile and 18 or 24
                         local Indicator = Instances:Create("Frame", {
                             Parent           = EvRow.Instance,
                             Name             = "evInd" .. idx,
