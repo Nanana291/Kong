@@ -1283,15 +1283,12 @@ end
 
 local TOAST_W = 280
 local TOAST_GAP = 6
-local TOAST_ICONS = {
+
+local TOAST_FALLBACK = {
     info = "\226\132\185",
     success = "\226\156\147",
     warning = "\226\154\160",
     error = "\226\156\151",
-    key = "\240\159\148\145",
-    star = "\226\152\133",
-    bell = "\240\159\148\148",
-    shield = "\240\159\155\161",
 }
 
 local TOAST_COLORS = {
@@ -1300,6 +1297,62 @@ local TOAST_COLORS = {
     warning = Color3.fromRGB(220, 170, 40),
     error = Theme.Error,
 }
+
+local LucideCache = {}
+local LUCIDE_CDN = "https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/"
+
+local _writefile = writefile
+local _isfile = isfile
+local _getcustomasset = getcustomasset
+local _httpget = game.HttpGet
+
+local lucideSupported = (_writefile and _isfile and _getcustomasset) and true or false
+
+local function EnsureLucideFolder()
+    if not lucideSupported then return false end
+    local ok = pcall(function()
+        if not _isfile("ImpHubIcons/init.txt") then
+            makefolder and makefolder("ImpHubIcons")
+            _writefile("ImpHubIcons/init.txt", "1")
+        end
+    end)
+    return ok
+end
+
+local folderReady = EnsureLucideFolder()
+
+local function FetchLucideIcon(name)
+    if LucideCache[name] then return LucideCache[name] end
+    if not lucideSupported or not folderReady then return nil end
+
+    local path = "ImpHubIcons/" .. name .. ".svg"
+    local asset = nil
+
+    local ok = pcall(function()
+        if not _isfile(path) then
+            local data = _httpget(game, LUCIDE_CDN .. name .. ".svg")
+            if data and #data > 0 then
+                _writefile(path, data)
+            end
+        end
+        if _isfile(path) then
+            asset = _getcustomasset(path)
+        end
+    end)
+
+    if ok and asset then
+        LucideCache[name] = asset
+        return asset
+    end
+    return nil
+end
+
+local function IsLucideName(str)
+    if not str or str == "" then return false end
+    local b = string.byte(str, 1)
+    if b > 127 then return false end
+    return string.match(str, "^[a-z][a-z0-9%-]*$") ~= nil
+end
 
 local ToastContainer = New("Frame", {
     Name = "ToastContainer",
@@ -1328,7 +1381,7 @@ local function CreateToast(config)
 
     local toastType = config.Type or "info"
     local accentColor = config.Color or TOAST_COLORS[toastType] or Theme.Accent
-    local iconStr = config.Icon or TOAST_ICONS[toastType] or TOAST_ICONS.info
+    local rawIcon = config.Icon
     local title = config.Title or ""
     local subtitle = config.Subtitle or ""
     local description = config.Description or ""
@@ -1354,7 +1407,7 @@ local function CreateToast(config)
     Corner(card, 8)
     Stroke(card, Theme.Border, 1)
 
-    local accentBar = New("Frame", {
+    New("Frame", {
         Name = "Accent",
         Size = UDim2.new(0, 3, 1, -12),
         AnchorPoint = Vector2.new(0, 0.5),
@@ -1364,7 +1417,7 @@ local function CreateToast(config)
         ZIndex = 102,
         Parent = card,
     })
-    Corner(accentBar, 2)
+    Corner(card:FindFirstChild("Accent"), 2)
 
     local iconBG = New("Frame", {
         Name = "IconBG",
@@ -1378,17 +1431,68 @@ local function CreateToast(config)
     })
     Corner(iconBG, 8)
 
-    New("TextLabel", {
-        Name = "Icon",
-        Size = UDim2.fromScale(1, 1),
-        BackgroundTransparency = 1,
-        Text = iconStr,
-        TextColor3 = accentColor,
-        Font = Enum.Font.GothamBold,
-        TextSize = 14,
-        ZIndex = 103,
-        Parent = iconBG,
-    })
+    local iconName = nil
+    local iconEmoji = nil
+
+    if rawIcon then
+        if IsLucideName(rawIcon) then
+            iconName = rawIcon
+        else
+            iconEmoji = rawIcon
+        end
+    elseif TOAST_FALLBACK[toastType] then
+        iconEmoji = TOAST_FALLBACK[toastType]
+    end
+
+    if iconName then
+        local fallbackLetter = string.upper(string.sub(iconName, 1, 1))
+
+        local img = New("ImageLabel", {
+            Name = "LucideIcon",
+            Size = UDim2.fromOffset(16, 16),
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.fromScale(0.5, 0.5),
+            BackgroundTransparency = 1,
+            ImageColor3 = accentColor,
+            ScaleType = Enum.ScaleType.Fit,
+            ZIndex = 103,
+            Parent = iconBG,
+        })
+
+        local fallback = New("TextLabel", {
+            Name = "Fallback",
+            Size = UDim2.fromScale(1, 1),
+            BackgroundTransparency = 1,
+            Text = fallbackLetter,
+            TextColor3 = accentColor,
+            Font = Enum.Font.GothamBold,
+            TextSize = 13,
+            ZIndex = 103,
+            Parent = iconBG,
+        })
+
+        coroutine.resume(coroutine.create(function()
+            local asset = FetchLucideIcon(iconName)
+            if asset and img.Parent then
+                img.Image = asset
+                fallback.Visible = false
+            else
+                img.Visible = false
+            end
+        end))
+    else
+        New("TextLabel", {
+            Name = "Icon",
+            Size = UDim2.fromScale(1, 1),
+            BackgroundTransparency = 1,
+            Text = iconEmoji or TOAST_FALLBACK.info,
+            TextColor3 = accentColor,
+            Font = Enum.Font.GothamBold,
+            TextSize = 14,
+            ZIndex = 103,
+            Parent = iconBG,
+        })
+    end
 
     local textX = 52
     local textW = TOAST_W - textX - 12
