@@ -1,5 +1,7 @@
 --!optimize 2
 
+local function __INIT__()
+
 local TS = game:GetService("TweenService")
 local UIS = game:GetService("UserInputService")
 local RS = game:GetService("RunService")
@@ -1301,42 +1303,50 @@ local TOAST_COLORS = {
 local LucideCache = {}
 local LUCIDE_CDN = "https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/"
 
-local _writefile = writefile
-local _isfile = isfile
-local _getcustomasset = getcustomasset
-local _httpget = game.HttpGet
+local lucideSupported = false
+do
+    local ok = pcall(function()
+        return writefile and isfile and getcustomasset
+    end)
+    if ok and writefile and isfile and getcustomasset then
+        lucideSupported = true
+    end
+end
 
-local lucideSupported = (_writefile and _isfile and _getcustomasset) and true or false
+local folderReady = false
 
 local function EnsureLucideFolder()
-    if not lucideSupported then return false end
+    if folderReady or not lucideSupported then return folderReady end
     local ok = pcall(function()
-        if not _isfile("ImpHubIcons/init.txt") then
-            makefolder and makefolder("ImpHubIcons")
-            _writefile("ImpHubIcons/init.txt", "1")
+        if not isfile("ImpHubIcons/init.txt") then
+            if makefolder then
+                makefolder("ImpHubIcons")
+            end
+            writefile("ImpHubIcons/init.txt", "1")
         end
     end)
+    folderReady = ok
     return ok
 end
 
-local folderReady = EnsureLucideFolder()
-
 local function FetchLucideIcon(name)
     if LucideCache[name] then return LucideCache[name] end
-    if not lucideSupported or not folderReady then return nil end
+    if not lucideSupported then return nil end
+    if not folderReady then EnsureLucideFolder() end
+    if not folderReady then return nil end
 
     local path = "ImpHubIcons/" .. name .. ".svg"
     local asset = nil
 
     local ok = pcall(function()
-        if not _isfile(path) then
-            local data = _httpget(game, LUCIDE_CDN .. name .. ".svg")
+        if not isfile(path) then
+            local data = game:HttpGet(LUCIDE_CDN .. name .. ".svg")
             if data and #data > 0 then
-                _writefile(path, data)
+                writefile(path, data)
             end
         end
-        if _isfile(path) then
-            asset = _getcustomasset(path)
+        if isfile(path) then
+            asset = getcustomasset(path)
         end
     end)
 
@@ -1349,8 +1359,7 @@ end
 
 local function IsLucideName(str)
     if not str or str == "" then return false end
-    local b = string.byte(str, 1)
-    if b > 127 then return false end
+    if string.byte(str, 1) > 127 then return false end
     return string.match(str, "^[a-z][a-z0-9%-]*$") ~= nil
 end
 
@@ -1614,3 +1623,101 @@ function Loader:Destroy()
 end
 
 return Loader
+
+end
+
+local ok, result = xpcall(__INIT__, function(err)
+    local trace = debug.traceback(err, 2)
+    local msg = "[IMP HUB X] LOAD ERROR:\n" .. tostring(trace)
+
+    pcall(function()
+        warn(msg)
+    end)
+
+    pcall(function()
+        local errGui = Instance.new("ScreenGui")
+        errGui.Name = "ImpHubError"
+        errGui.ResetOnSpawn = false
+        errGui.DisplayOrder = 99999
+        errGui.IgnoreGuiInset = true
+
+        local pOk = pcall(function() errGui.Parent = game:GetService("CoreGui") end)
+        if not pOk then
+            errGui.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+        end
+
+        local bg = Instance.new("Frame")
+        bg.Size = UDim2.fromScale(1, 1)
+        bg.BackgroundColor3 = Color3.new(0, 0, 0)
+        bg.BackgroundTransparency = 0.3
+        bg.ZIndex = 1
+        bg.Parent = errGui
+
+        local card = Instance.new("Frame")
+        card.Size = UDim2.fromOffset(500, 260)
+        card.AnchorPoint = Vector2.new(0.5, 0.5)
+        card.Position = UDim2.fromScale(0.5, 0.5)
+        card.BackgroundColor3 = Color3.fromRGB(18, 12, 12)
+        card.ZIndex = 2
+        card.Parent = errGui
+        Instance.new("UICorner", card).CornerRadius = UDim.new(0, 10)
+
+        local stripe = Instance.new("Frame")
+        stripe.Size = UDim2.new(1, 0, 0, 3)
+        stripe.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
+        stripe.BorderSizePixel = 0
+        stripe.ZIndex = 3
+        stripe.Parent = card
+
+        local title = Instance.new("TextLabel")
+        title.Size = UDim2.new(1, -24, 0, 22)
+        title.Position = UDim2.fromOffset(12, 14)
+        title.BackgroundTransparency = 1
+        title.Text = "IMP HUB X  —  Script Error"
+        title.TextColor3 = Color3.fromRGB(220, 60, 60)
+        title.Font = Enum.Font.GothamBold
+        title.TextSize = 14
+        title.TextXAlignment = Enum.TextXAlignment.Left
+        title.ZIndex = 3
+        title.Parent = card
+
+        local body = Instance.new("TextLabel")
+        body.Size = UDim2.new(1, -24, 1, -80)
+        body.Position = UDim2.fromOffset(12, 44)
+        body.BackgroundTransparency = 1
+        body.Text = tostring(trace)
+        body.TextColor3 = Color3.fromRGB(200, 200, 210)
+        body.Font = Enum.Font.Code
+        body.TextSize = 11
+        body.TextXAlignment = Enum.TextXAlignment.Left
+        body.TextYAlignment = Enum.TextYAlignment.Top
+        body.TextWrapped = true
+        body.ZIndex = 3
+        body.Parent = card
+
+        local closeBtn = Instance.new("TextButton")
+        closeBtn.Size = UDim2.new(1, -24, 0, 28)
+        closeBtn.AnchorPoint = Vector2.new(0.5, 1)
+        closeBtn.Position = UDim2.new(0.5, 0, 1, -10)
+        closeBtn.BackgroundColor3 = Color3.fromRGB(40, 20, 20)
+        closeBtn.Text = "CLOSE"
+        closeBtn.TextColor3 = Color3.fromRGB(220, 60, 60)
+        closeBtn.Font = Enum.Font.GothamBold
+        closeBtn.TextSize = 11
+        closeBtn.ZIndex = 3
+        closeBtn.Parent = card
+        Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 6)
+
+        closeBtn.MouseButton1Click:Connect(function()
+            errGui:Destroy()
+        end)
+    end)
+
+    return nil
+end)
+
+if not ok then
+    return nil
+end
+
+return result
