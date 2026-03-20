@@ -2938,7 +2938,7 @@ local Library do
                     Instances:Create("UIScale", {
                         Parent = Items["MainFrame"].Instance,
                         Name = "\0",
-                        Scale = IsMobile and 0.66 or 1.20
+                        Scale = IsMobile and 0.62 or 1.125
                     })
                 end
 
