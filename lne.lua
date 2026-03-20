@@ -1281,6 +1281,225 @@ function Loader:SetOnValidate(fn)
     Loader.OnValidate = fn
 end
 
+local TOAST_W = 280
+local TOAST_GAP = 6
+local TOAST_ICONS = {
+    info = "\226\132\185",
+    success = "\226\156\147",
+    warning = "\226\154\160",
+    error = "\226\156\151",
+    key = "\240\159\148\145",
+    star = "\226\152\133",
+    bell = "\240\159\148\148",
+    shield = "\240\159\155\161",
+}
+
+local TOAST_COLORS = {
+    info = Theme.Accent,
+    success = Theme.Success,
+    warning = Color3.fromRGB(220, 170, 40),
+    error = Theme.Error,
+}
+
+local ToastContainer = New("Frame", {
+    Name = "ToastContainer",
+    Size = UDim2.new(0, TOAST_W + 16, 1, -16),
+    AnchorPoint = Vector2.new(1, 0),
+    Position = UDim2.new(1, -8, 0, 8),
+    BackgroundTransparency = 1,
+    ZIndex = 100,
+    ClipsDescendants = false,
+    Parent = Gui,
+})
+
+New("UIListLayout", {
+    SortOrder = Enum.SortOrder.LayoutOrder,
+    FillDirection = Enum.FillDirection.Vertical,
+    VerticalAlignment = Enum.VerticalAlignment.Bottom,
+    HorizontalAlignment = Enum.HorizontalAlignment.Right,
+    Padding = UDim.new(0, TOAST_GAP),
+    Parent = ToastContainer,
+})
+
+local toastOrder = 0
+
+local function CreateToast(config)
+    toastOrder = toastOrder + 1
+
+    local toastType = config.Type or "info"
+    local accentColor = config.Color or TOAST_COLORS[toastType] or Theme.Accent
+    local iconStr = config.Icon or TOAST_ICONS[toastType] or TOAST_ICONS.info
+    local title = config.Title or ""
+    local subtitle = config.Subtitle or ""
+    local description = config.Description or ""
+    local duration = config.Duration or 4
+
+    local hasSubtitle = subtitle ~= ""
+    local hasDesc = description ~= ""
+    local contentH = 12
+    if title ~= "" then contentH = contentH + 16 end
+    if hasSubtitle then contentH = contentH + 14 end
+    if hasDesc then contentH = contentH + 4 + 14 end
+    local cardH = math.max(contentH + 16, 48)
+
+    local card = New("Frame", {
+        Name = "Toast_" .. toastOrder,
+        Size = UDim2.fromOffset(TOAST_W, cardH),
+        BackgroundColor3 = Theme.Surface,
+        LayoutOrder = toastOrder,
+        ClipsDescendants = true,
+        ZIndex = 101,
+        Parent = ToastContainer,
+    })
+    Corner(card, 8)
+    Stroke(card, Theme.Border, 1)
+
+    local accentBar = New("Frame", {
+        Name = "Accent",
+        Size = UDim2.new(0, 3, 1, -12),
+        AnchorPoint = Vector2.new(0, 0.5),
+        Position = UDim2.new(0, 6, 0.5, 0),
+        BackgroundColor3 = accentColor,
+        BorderSizePixel = 0,
+        ZIndex = 102,
+        Parent = card,
+    })
+    Corner(accentBar, 2)
+
+    local iconBG = New("Frame", {
+        Name = "IconBG",
+        Size = UDim2.fromOffset(28, 28),
+        AnchorPoint = Vector2.new(0, 0.5),
+        Position = UDim2.new(0, 16, 0.5, 0),
+        BackgroundColor3 = accentColor,
+        BackgroundTransparency = 0.85,
+        ZIndex = 102,
+        Parent = card,
+    })
+    Corner(iconBG, 8)
+
+    New("TextLabel", {
+        Name = "Icon",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        Text = iconStr,
+        TextColor3 = accentColor,
+        Font = Enum.Font.GothamBold,
+        TextSize = 14,
+        ZIndex = 103,
+        Parent = iconBG,
+    })
+
+    local textX = 52
+    local textW = TOAST_W - textX - 12
+    local yOff = 8
+
+    if title ~= "" then
+        New("TextLabel", {
+            Name = "Title",
+            Size = UDim2.fromOffset(textW, 16),
+            Position = UDim2.fromOffset(textX, yOff),
+            BackgroundTransparency = 1,
+            Text = title,
+            TextColor3 = Theme.Text,
+            Font = Enum.Font.GothamBold,
+            TextSize = 11,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+            ZIndex = 102,
+            Parent = card,
+        })
+        yOff = yOff + 16
+    end
+
+    if hasSubtitle then
+        New("TextLabel", {
+            Name = "Subtitle",
+            Size = UDim2.fromOffset(textW, 13),
+            Position = UDim2.fromOffset(textX, yOff),
+            BackgroundTransparency = 1,
+            Text = subtitle,
+            TextColor3 = Theme.TextMuted,
+            Font = Enum.Font.Gotham,
+            TextSize = 9,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+            ZIndex = 102,
+            Parent = card,
+        })
+        yOff = yOff + 14
+    end
+
+    if hasDesc then
+        yOff = yOff + 4
+        New("TextLabel", {
+            Name = "Description",
+            Size = UDim2.fromOffset(textW, cardH - yOff - 8),
+            Position = UDim2.fromOffset(textX, yOff),
+            BackgroundTransparency = 1,
+            Text = description,
+            TextColor3 = Theme.TextSub,
+            Font = Enum.Font.Gotham,
+            TextSize = 10,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextYAlignment = Enum.TextYAlignment.Top,
+            TextWrapped = true,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+            ZIndex = 102,
+            Parent = card,
+        })
+    end
+
+    local progressBG = New("Frame", {
+        Name = "ProgressBG",
+        Size = UDim2.new(1, 0, 0, 2),
+        AnchorPoint = Vector2.new(0, 1),
+        Position = UDim2.new(0, 0, 1, 0),
+        BackgroundColor3 = Theme.SurfaceLight,
+        BorderSizePixel = 0,
+        ZIndex = 103,
+        Parent = card,
+    })
+
+    local progressFill = New("Frame", {
+        Name = "Fill",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = accentColor,
+        BorderSizePixel = 0,
+        ZIndex = 104,
+        Parent = progressBG,
+    })
+
+    card.Position = UDim2.fromOffset(TOAST_W + 20, 0)
+    card.BackgroundTransparency = 0.1
+
+    Tween(card, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+        {Position = UDim2.fromOffset(0, 0)})
+
+    TS:Create(progressFill,
+        TweenInfo.new(duration, Enum.EasingStyle.Linear),
+        {Size = UDim2.new(0, 0, 1, 0)}):Play()
+
+    task.delay(duration, function()
+        if not card.Parent then return end
+        local exitTween = Tween(card,
+            TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.In),
+            {Position = UDim2.fromOffset(TOAST_W + 20, 0), BackgroundTransparency = 1})
+        exitTween.Completed:Once(function()
+            card:Destroy()
+        end)
+    end)
+
+    return card
+end
+
+function Loader:Toast(config)
+    if type(config) == "string" then
+        config = {Title = config}
+    end
+    return CreateToast(config)
+end
+
 function Loader:Destroy()
     if loadingDotsConn then loadingDotsConn:Disconnect() end
     spinnerTween:Cancel()
