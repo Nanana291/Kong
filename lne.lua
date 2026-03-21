@@ -326,6 +326,67 @@ local LeftPanel = New("Frame", {
     Parent = ContentFrame,
 })
 
+local ParticleBG = New("Frame", {
+    Name = "ParticleBG",
+    Size = UDim2.fromScale(1, 1),
+    BackgroundTransparency = 1,
+    ClipsDescendants = true,
+    ZIndex = 2,
+    Parent = LeftPanel,
+})
+
+do
+    local ORB_COUNT = 12
+    local orbs = {}
+    local mathRandom = math.random
+    local mathSin = math.sin
+    local mathCos = math.cos
+
+    for i = 1, ORB_COUNT do
+        local sz = mathRandom(3, 8)
+        local startX = mathRandom(5, 95) / 100
+        local startY = mathRandom(5, 95) / 100
+        local alpha = mathRandom(85, 96) / 100
+
+        local orb = New("Frame", {
+            Name = "Orb" .. i,
+            Size = UDim2.fromOffset(sz, sz),
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.fromScale(startX, startY),
+            BackgroundColor3 = i % 3 == 0 and Theme.Accent or Theme.BorderLight,
+            BackgroundTransparency = alpha,
+            BorderSizePixel = 0,
+            ZIndex = 2,
+            Parent = ParticleBG,
+        })
+        Corner(orb, sz)
+
+        orbs[i] = {
+            Inst = orb,
+            BaseX = startX,
+            BaseY = startY,
+            SpeedX = (mathRandom(8, 20) / 1000) * (mathRandom(0, 1) == 0 and -1 or 1),
+            SpeedY = (mathRandom(5, 15) / 1000) * (mathRandom(0, 1) == 0 and -1 or 1),
+            Phase = mathRandom(0, 628) / 100,
+            Drift = mathRandom(2, 5) / 100,
+        }
+    end
+
+    local elapsed = 0
+    Conn(RS.Heartbeat:Connect(function(dt)
+        elapsed = elapsed + dt
+        for i = 1, ORB_COUNT do
+            local o = orbs[i]
+            local nx = o.BaseX + mathSin(elapsed * o.SpeedX * 10 + o.Phase) * o.Drift
+            local ny = o.BaseY + mathCos(elapsed * o.SpeedY * 10 + o.Phase) * o.Drift
+            o.Inst.Position = UDim2.fromScale(
+                nx % 1,
+                ny % 1
+            )
+        end
+    end))
+end
+
 local CopyrightLabel = New("TextLabel", {
     Name = "Copyright",
     Size = UDim2.new(1, -28, 0, 16),
@@ -357,7 +418,7 @@ local WelcomeLabel = New("TextLabel", {
 
 local ProfileCard = New("Frame", {
     Name = "ProfileCard",
-    Size = UDim2.new(1, -28, 0, 280),
+    Size = UDim2.new(1, -28, 0, 310),
     Position = UDim2.fromOffset(14, 56),
     BackgroundColor3 = Theme.Surface,
     ZIndex = 3,
@@ -516,7 +577,7 @@ local Divider = New("Frame", {
 
 local StatsSection = New("Frame", {
     Name = "Stats",
-    Size = UDim2.new(1, -32, 0, 88),
+    Size = UDim2.new(1, -32, 0, 116),
     AnchorPoint = Vector2.new(0.5, 0),
     Position = UDim2.new(0.5, 0, 0, 184),
     BackgroundTransparency = 1,
@@ -578,6 +639,29 @@ end
 CreateStatRow(StatsSection, "Server Time", 1)
 CreateStatRow(StatsSection, "Server Size", 2)
 CreateStatRow(StatsSection, "FPS", 3)
+CreateStatRow(StatsSection, "Executions", 4)
+
+local execCount = 0
+do
+    local EXEC_PATH = "ImpHubX/executions.txt"
+    pcall(function()
+        if readfile and writefile and isfile then
+            if makefolder and not isfile("ImpHubX/init.txt") then
+                makefolder("ImpHubX")
+                writefile("ImpHubX/init.txt", "1")
+            end
+            if isfile(EXEC_PATH) then
+                execCount = tonumber(readfile(EXEC_PATH)) or 0
+            end
+            execCount = execCount + 1
+            writefile(EXEC_PATH, tostring(execCount))
+        end
+    end)
+    if LiveLabels["Executions"] then
+        LiveLabels["Executions"].Text = execCount > 0 and ("#" .. tostring(execCount)) or "N/A"
+        LiveLabels["Executions"].TextColor3 = Theme.Accent
+    end
+end
 
 do
     local fpsBuffer = {}
