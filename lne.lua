@@ -1343,7 +1343,6 @@ Conn(ValidateBtn.MouseButton1Click:Connect(function()
 
                     task.delay(1.2, function()
                         Tween(Window, TI.Medium, {BackgroundTransparency = 1})
-                        Tween(Overlay, TI.Medium, {BackgroundTransparency = 1})
 
                         for _, desc in ipairs(Window:GetDescendants()) do
                             if desc:IsA("GuiObject") then
@@ -1422,7 +1421,6 @@ Conn(CloseBtn.MouseButton1Click:Connect(function()
             end)
         end
     end
-    Tween(Overlay, TI.Medium, {BackgroundTransparency = 1})
     task.delay(0.5, function()
         if loadingDotsConn then loadingDotsConn:Disconnect() end
         spinnerTween:Cancel()
@@ -1459,7 +1457,6 @@ do
     end
 
     task.delay(0.1, function()
-        Tween(Overlay, TI.Slow, {BackgroundTransparency = 0.4})
         Tween(Window, TI.FadeIn, {BackgroundTransparency = 0})
         Tween(WindowStroke, TI.FadeIn, {Transparency = 0})
 
