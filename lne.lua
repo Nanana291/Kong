@@ -1292,6 +1292,19 @@ do
     end))
 end
 
+local function ShakeElement(inst)
+    local orig = inst.Position
+    local ox = orig.X.Offset
+    local seq = {10, -8, 6, -4, 2, 0}
+    coroutine.resume(coroutine.create(function()
+        for _, dx in ipairs(seq) do
+            inst.Position = UDim2.new(orig.X.Scale, ox + dx, orig.Y.Scale, orig.Y.Offset)
+            task.wait(0.035)
+        end
+        inst.Position = orig
+    end))
+end
+
 local Loader = {}
 Loader.OnValidate = nil
 
@@ -1301,6 +1314,11 @@ Conn(ValidateBtn.MouseButton1Click:Connect(function()
         StatusLabel.TextColor3 = Theme.Error
         StatusLabel.Text = "Please enter a key."
         Tween(StatusLabel, TI.Fast, {TextTransparency = 0})
+        ShakeElement(KeyInputFrame)
+        Tween(KeyInputStroke, TI.Fast, {Color = Theme.Error})
+        task.delay(0.6, function()
+            Tween(KeyInputStroke, TI.Fast, {Color = Theme.InputBorder})
+        end)
         task.delay(3, function()
             Tween(StatusLabel, TI.Medium, {TextTransparency = 1})
         end)
@@ -1353,6 +1371,11 @@ Conn(ValidateBtn.MouseButton1Click:Connect(function()
                     StatusLabel.TextColor3 = Theme.Error
                     StatusLabel.Text = msg or "Invalid key."
                     Tween(StatusLabel, TI.Fast, {TextTransparency = 0})
+                    ShakeElement(KeyInputFrame)
+                    Tween(KeyInputStroke, TI.Fast, {Color = Theme.Error})
+                    task.delay(0.6, function()
+                        Tween(KeyInputStroke, TI.Fast, {Color = Theme.InputBorder})
+                    end)
                     ValidateBtnLabel.Text = "VALIDATE"
                     Tween(ValidateBtn, TI.Fast, {BackgroundColor3 = Theme.Accent})
                     task.delay(4, function()
@@ -1366,6 +1389,11 @@ Conn(ValidateBtn.MouseButton1Click:Connect(function()
             StatusLabel.TextColor3 = Theme.Error
             StatusLabel.Text = "No validation handler set."
             Tween(StatusLabel, TI.Fast, {TextTransparency = 0})
+            ShakeElement(KeyInputFrame)
+            Tween(KeyInputStroke, TI.Fast, {Color = Theme.Error})
+            task.delay(0.6, function()
+                Tween(KeyInputStroke, TI.Fast, {Color = Theme.InputBorder})
+            end)
             ValidateBtnLabel.Text = "VALIDATE"
             Tween(ValidateBtn, TI.Fast, {BackgroundColor3 = Theme.Accent})
             task.delay(3, function()
