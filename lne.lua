@@ -778,6 +778,41 @@ local KeyTextBox = New("TextBox", {
     Parent = KeyInputFrame,
 })
 
+local LucideIcons = nil
+local LucideFetched = false
+
+do
+    local ok, result = pcall(function()
+        return loadstring(
+            game:HttpGet("https://raw.githubusercontent.com/deividcomsono/lucide-roblox-direct/refs/heads/main/source.lua")
+        )()
+    end)
+    if ok and result then
+        LucideIcons = result
+        LucideFetched = true
+    end
+end
+
+local function GetLucideIcon(name)
+    if not LucideFetched or not LucideIcons then return nil end
+    local ok, icon = pcall(LucideIcons.GetAsset, name)
+    if not ok then return nil end
+    if type(icon) == "string" then
+        return {
+            Url = icon,
+            ImageRectOffset = Vector2.new(0, 0),
+            ImageRectSize = Vector2.new(0, 0),
+        }
+    end
+    return icon
+end
+
+local function IsLucideName(str)
+    if not str or str == "" then return false end
+    if string.byte(str, 1) > 127 then return false end
+    return string.match(str, "^[a-z][a-z0-9%-]*$") ~= nil
+end
+
 local GetKeyBtn = New("TextButton", {
     Name = "GetKeyBtn",
     Size = UDim2.new(1, 0, 0, 36),
@@ -1389,41 +1424,6 @@ local TOAST_COLORS = {
     warning = Color3.fromRGB(220, 170, 40),
     error = Theme.Error,
 }
-
-local LucideIcons = nil
-local LucideFetched = false
-
-do
-    local ok, result = pcall(function()
-        return loadstring(
-            game:HttpGet("https://raw.githubusercontent.com/deividcomsono/lucide-roblox-direct/refs/heads/main/source.lua")
-        )()
-    end)
-    if ok and result then
-        LucideIcons = result
-        LucideFetched = true
-    end
-end
-
-local function GetLucideIcon(name)
-    if not LucideFetched or not LucideIcons then return nil end
-    local ok, icon = pcall(LucideIcons.GetAsset, name)
-    if not ok then return nil end
-    if type(icon) == "string" then
-        return {
-            Url = icon,
-            ImageRectOffset = Vector2.new(0, 0),
-            ImageRectSize = Vector2.new(0, 0),
-        }
-    end
-    return icon
-end
-
-local function IsLucideName(str)
-    if not str or str == "" then return false end
-    if string.byte(str, 1) > 127 then return false end
-    return string.match(str, "^[a-z][a-z0-9%-]*$") ~= nil
-end
 
 local ToastContainer = New("Frame", {
     Name = "ToastContainer",
