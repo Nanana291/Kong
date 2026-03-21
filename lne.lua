@@ -1456,18 +1456,6 @@ local function CreateToast(config)
     if iconName then
         local fallbackLetter = string.upper(string.sub(iconName, 1, 1))
 
-        local img = New("ImageLabel", {
-            Name = "LucideIcon",
-            Size = UDim2.fromOffset(16, 16),
-            AnchorPoint = Vector2.new(0.5, 0.5),
-            Position = UDim2.fromScale(0.5, 0.5),
-            BackgroundTransparency = 1,
-            ImageColor3 = accentColor,
-            ScaleType = Enum.ScaleType.Fit,
-            ZIndex = 103,
-            Parent = iconBG,
-        })
-
         local fallback = New("TextLabel", {
             Name = "Fallback",
             Size = UDim2.fromScale(1, 1),
@@ -1480,13 +1468,29 @@ local function CreateToast(config)
             Parent = iconBG,
         })
 
+        local img = New("ImageLabel", {
+            Name = "LucideIcon",
+            Size = UDim2.fromOffset(16, 16),
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.fromScale(0.5, 0.5),
+            BackgroundTransparency = 1,
+            ImageColor3 = accentColor,
+            ImageTransparency = 1,
+            ScaleType = Enum.ScaleType.Fit,
+            ZIndex = 104,
+            Parent = iconBG,
+        })
+
         coroutine.resume(coroutine.create(function()
             local asset = FetchLucideIcon(iconName)
-            if asset and img.Parent then
-                img.Image = asset
-                fallback.Visible = false
-            else
-                img.Visible = false
+            if not asset or not img.Parent then return end
+            img.Image = asset
+            task.wait(0.3)
+            if not img.Parent then return end
+            local loaded = pcall(function() return img.IsLoaded end)
+            if loaded and img.IsLoaded then
+                Tween(img, TI.Fast, {ImageTransparency = 0})
+                Tween(fallback, TI.Fast, {TextTransparency = 1})
             end
         end))
     else
