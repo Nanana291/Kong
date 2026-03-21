@@ -221,6 +221,7 @@ local TitleSep = New("TextLabel", {
     TextColor3 = Theme.TextDark,
     Font = Enum.Font.Gotham,
     TextSize = 13,
+    Visible = false,
     ZIndex = 11,
     Parent = TopBar,
 })
@@ -231,10 +232,11 @@ local GameNameLabel = New("TextLabel", {
     BackgroundTransparency = 1,
     Text = "",
     TextColor3 = Theme.TextMuted,
-    Font = Enum.Font.Gotham,
+    Font = Enum.Font.Code,
     TextSize = 11,
     TextXAlignment = Enum.TextXAlignment.Left,
     TextTruncate = Enum.TextTruncate.AtEnd,
+    Visible = false,
     ZIndex = 11,
     Parent = TopBar,
 })
@@ -253,33 +255,100 @@ do
     TitleLabel:GetPropertyChangedSignal("AbsoluteSize"):Connect(UpdateTitleLayout)
     task.defer(UpdateTitleLayout)
 
-    TitleSep.Visible = false
-    GameNameLabel.Visible = false
+    local strSub = string.sub
+    local CURSOR = "|"
+    local TYPE_SPEED = 0.04
+    local DELETE_SPEED = 0.025
+
+    local function TypeText(label, text, color, speed)
+        speed = speed or TYPE_SPEED
+        label.TextColor3 = color
+        for i = 1, #text do
+            label.Text = strSub(text, 1, i) .. CURSOR
+            task.wait(speed)
+        end
+        label.Text = text .. CURSOR
+    end
+
+    local function DeleteText(label, speed)
+        speed = speed or DELETE_SPEED
+        local current = label.Text
+        if strSub(current, -1) == CURSOR then
+            current = strSub(current, 1, -2)
+        end
+        for i = #current, 1, -1 do
+            label.Text = strSub(current, 1, i - 1) .. CURSOR
+            task.wait(speed)
+        end
+        label.Text = CURSOR
+    end
+
+    local function SetFinal(label, text, color)
+        label.TextColor3 = color
+        label.Text = text
+    end
 
     task.spawn(function()
-        local gameName = nil
-        local done = false
+        TitleSep.Visible = true
+        GameNameLabel.Visible = true
+        GameNameLabel.Text = CURSOR
 
-        task.spawn(function()
-            local ok, result = pcall(function()
-                return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
-            end)
-            if ok and result and type(result.Name) == "string" then
-                gameName = result.Name
+        task.wait(0.8)
+
+        local isSupported = false
+        local gameId = game.GameId
+
+        pcall(function()
+            if type(Games) == "table" and Games[gameId] then
+                isSupported = true
+            elseif type(NewGames) == "table" and NewGames[gameId] then
+                isSupported = true
             end
-            done = true
         end)
 
-        local waited = 0
-        while not done and waited < 5 do
-            task.wait(0.1)
-            waited = waited + 0.1
-        end
+        if isSupported then
+            TypeText(GameNameLabel, "GAME SUPPORTED!", Color3.fromHex("#57bf3f"), 0.045)
+            task.wait(0.8)
+            DeleteText(GameNameLabel, 0.025)
+            task.wait(0.3)
 
-        if gameName and TitleSep.Parent then
-            GameNameLabel.Text = gameName
-            TitleSep.Visible = true
-            GameNameLabel.Visible = true
+            local gameName = nil
+            local done = false
+
+            task.spawn(function()
+                local ok, result = pcall(function()
+                    return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
+                end)
+                if ok and result and type(result.Name) == "string" then
+                    gameName = result.Name
+                end
+                done = true
+            end)
+
+            local waited = 0
+            while not done and waited < 5 do
+                task.wait(0.1)
+                waited = waited + 0.1
+            end
+
+            local finalName = gameName or "Unknown Game"
+            TypeText(GameNameLabel, finalName, Theme.Text, TYPE_SPEED)
+            task.wait(0.2)
+            SetFinal(GameNameLabel, finalName, Theme.Text)
+        else
+            TypeText(GameNameLabel, "NOT SUPPORTED", Color3.fromRGB(180, 50, 50), 0.045)
+            task.wait(0.8)
+            DeleteText(GameNameLabel, 0.025)
+            task.wait(0.3)
+
+            TypeText(GameNameLabel, "SETTING AS AIMBOT", Color3.fromRGB(220, 180, 40), 0.04)
+            task.wait(0.8)
+            DeleteText(GameNameLabel, 0.025)
+            task.wait(0.3)
+
+            TypeText(GameNameLabel, "UNIVERSAL", Theme.Text, 0.05)
+            task.wait(0.2)
+            SetFinal(GameNameLabel, "UNIVERSAL", Theme.Text)
         end
     end)
 end
