@@ -4177,6 +4177,11 @@ local Library do
         end
 
         Library.Category = function(self, Name, Collapsible)
+            if type(Name) == "table" then
+                Collapsible = Name.Collapsible or Name.collapsible or Collapsible
+                Name = Name.Name or Name.name or "Category"
+            end
+            Name = tostring(Name or "Category")
             if not Collapsible then
                 local Items = { } do
                     Items["Category"] = Instances:Create("TextLabel", {
