@@ -45,6 +45,8 @@ local Theme = {
     Success = Color3.fromRGB(64, 180, 80),
 }
 
+local KEY_LINK = "https://imphub.vercel.app/GetKeyAccess"
+
 local State = {
     Dragging = false,
     DragStart = Vector2.zero,
@@ -691,7 +693,7 @@ New("Frame", {
 
 local AuthContainer = New("Frame", {
     Name = "AuthContainer",
-    Size = UDim2.new(1, -60, 0, 320),
+    Size = UDim2.new(1, -60, 0, 360),
     AnchorPoint = Vector2.new(0.5, 0.5),
     Position = UDim2.fromScale(0.5, 0.5),
     BackgroundTransparency = 1,
@@ -776,10 +778,54 @@ local KeyTextBox = New("TextBox", {
     Parent = KeyInputFrame,
 })
 
+local GetKeyBtn = New("TextButton", {
+    Name = "GetKeyBtn",
+    Size = UDim2.new(1, 0, 0, 36),
+    Position = UDim2.fromOffset(0, 146),
+    BackgroundColor3 = Theme.SurfaceLight,
+    Text = "",
+    AutoButtonColor = false,
+    ZIndex = 5,
+    Parent = AuthContainer,
+})
+Corner(GetKeyBtn, 8)
+local GetKeyStroke = Stroke(GetKeyBtn, Theme.Accent, 1)
+
+local GetKeyIcon = GetLucideIcon("link")
+
+if GetKeyIcon then
+    New("ImageLabel", {
+        Name = "Icon",
+        Size = UDim2.fromOffset(14, 14),
+        AnchorPoint = Vector2.new(0, 0.5),
+        Position = UDim2.new(0.5, -46, 0.5, 0),
+        BackgroundTransparency = 1,
+        Image = GetKeyIcon.Url or "",
+        ImageRectOffset = GetKeyIcon.ImageRectOffset or Vector2.new(0, 0),
+        ImageRectSize = GetKeyIcon.ImageRectSize or Vector2.new(0, 0),
+        ImageColor3 = Theme.Accent,
+        ZIndex = 6,
+        Parent = GetKeyBtn,
+    })
+end
+
+New("TextLabel", {
+    Name = "Label",
+    Size = UDim2.new(1, 0, 1, 0),
+    Position = UDim2.fromOffset(GetKeyIcon and 10 or 0, 0),
+    BackgroundTransparency = 1,
+    Text = "GET KEY",
+    TextColor3 = Theme.Accent,
+    Font = Enum.Font.GothamBold,
+    TextSize = 11,
+    ZIndex = 6,
+    Parent = GetKeyBtn,
+})
+
 local ValidateBtn = New("TextButton", {
     Name = "ValidateBtn",
     Size = UDim2.new(1, 0, 0, 44),
-    Position = UDim2.fromOffset(0, 150),
+    Position = UDim2.fromOffset(0, 194),
     BackgroundColor3 = Theme.Accent,
     Text = "",
     AutoButtonColor = false,
@@ -803,7 +849,7 @@ local ValidateBtnLabel = New("TextLabel", {
 local StatusLabel = New("TextLabel", {
     Name = "Status",
     Size = UDim2.new(1, 0, 0, 16),
-    Position = UDim2.fromOffset(0, 202),
+    Position = UDim2.fromOffset(0, 246),
     BackgroundTransparency = 1,
     Text = "",
     TextColor3 = Theme.Error,
@@ -861,6 +907,46 @@ Conn(KeyTextBox.FocusLost:Connect(function()
     Tween(KeyInputStroke, TI.Fast, {Color = Theme.InputBorder, Thickness = 1})
     Tween(KeyIcon, TI.Fast, {BackgroundColor3 = Theme.Accent})
 end))
+
+do
+    local gkHoverIn = TS:Create(GetKeyBtn, TI.Fast, {BackgroundColor3 = Theme.SurfaceHover})
+    local gkHoverOut = TS:Create(GetKeyBtn, TI.Fast, {BackgroundColor3 = Theme.SurfaceLight})
+    local gkStrokeIn = TS:Create(GetKeyStroke, TI.Fast, {Color = Theme.AccentGlow})
+    local gkStrokeOut = TS:Create(GetKeyStroke, TI.Fast, {Color = Theme.Accent})
+
+    Conn(GetKeyBtn.MouseEnter:Connect(function()
+        gkHoverIn:Play()
+        gkStrokeIn:Play()
+    end))
+
+    Conn(GetKeyBtn.MouseLeave:Connect(function()
+        gkHoverOut:Play()
+        gkStrokeOut:Play()
+    end))
+
+    Conn(GetKeyBtn.MouseButton1Click:Connect(function()
+        Tween(GetKeyBtn, TI.Snappy, {Size = UDim2.new(1, -4, 0, 34)})
+        task.delay(0.12, function()
+            Tween(GetKeyBtn, TI.Bounce, {Size = UDim2.new(1, 0, 0, 36)})
+        end)
+
+        local setClip = setclipboard or toclipboard or set_clipboard
+        if type(setClip) == "function" then
+            pcall(setClip, KEY_LINK)
+        end
+
+        if Loader and Loader.Toast then
+            Loader:Toast({
+                Type = "info",
+                Icon = "link",
+                Title = "Key Link Copied",
+                Subtitle = KEY_LINK,
+                Description = "Paste it in your browser to get your key.",
+                Duration = 5,
+            })
+        end
+    end))
+end
 
 do
     local hoverTweenIn = TS:Create(ValidateBtn, TI.Fast, {BackgroundColor3 = Theme.AccentGlow})
@@ -1281,6 +1367,10 @@ end
 
 function Loader:SetOnValidate(fn)
     Loader.OnValidate = fn
+end
+
+function Loader:SetKeyLink(url)
+    KEY_LINK = tostring(url)
 end
 
 local TOAST_W = 280
