@@ -1300,67 +1300,186 @@ local TOAST_COLORS = {
     error = Theme.Error,
 }
 
-local LucideCache = {}
-local LUCIDE_CDN = "https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/"
+local LUCIDE_EMOJI = {
+    ["activity"] = "\226\154\161",
+    ["alert-circle"] = "\226\154\160",
+    ["apple"] = "\240\159\141\142",
+    ["arrow-right"] = "\226\158\156",
+    ["ban"] = "\240\159\154\171",
+    ["bar-chart"] = "\240\159\147\138",
+    ["bell"] = "\240\159\148\148",
+    ["bell-off"] = "\240\159\148\149",
+    ["bluetooth"] = "\240\159\147\182",
+    ["bolt"] = "\226\154\161",
+    ["bomb"] = "\240\159\146\163",
+    ["book"] = "\240\159\147\150",
+    ["bookmark"] = "\240\159\148\150",
+    ["bot"] = "\240\159\164\150",
+    ["brain"] = "\240\159\167\160",
+    ["bug"] = "\240\159\144\155",
+    ["calendar"] = "\240\159\147\133",
+    ["camera"] = "\240\159\147\183",
+    ["check"] = "\226\156\147",
+    ["check-circle"] = "\226\156\133",
+    ["chevron-right"] = "\226\128\186",
+    ["circle-alert"] = "\226\154\160",
+    ["circle-check"] = "\226\156\133",
+    ["circle-x"] = "\226\156\151",
+    ["clipboard"] = "\240\159\147\139",
+    ["clock"] = "\240\159\149\144",
+    ["cloud"] = "\226\152\129",
+    ["code"] = "\240\159\146\187",
+    ["coffee"] = "\226\152\149",
+    ["compass"] = "\240\159\167\173",
+    ["copy"] = "\240\159\147\139",
+    ["cpu"] = "\240\159\146\187",
+    ["credit-card"] = "\240\159\146\179",
+    ["crosshair"] = "\226\138\149",
+    ["crown"] = "\240\159\145\145",
+    ["database"] = "\240\159\146\190",
+    ["diamond"] = "\240\159\146\142",
+    ["disc"] = "\240\159\146\191",
+    ["download"] = "\226\172\135",
+    ["eye"] = "\240\159\145\129",
+    ["eye-off"] = "\240\159\153\136",
+    ["file"] = "\240\159\147\132",
+    ["film"] = "\240\159\142\172",
+    ["filter"] = "\240\159\148\141",
+    ["fire"] = "\240\159\148\165",
+    ["flag"] = "\240\159\154\169",
+    ["flame"] = "\240\159\148\165",
+    ["flash"] = "\226\154\161",
+    ["folder"] = "\240\159\147\129",
+    ["gamepad"] = "\240\159\142\174",
+    ["gamepad-2"] = "\240\159\142\174",
+    ["gem"] = "\240\159\146\142",
+    ["ghost"] = "\240\159\145\187",
+    ["gift"] = "\240\159\142\129",
+    ["globe"] = "\240\159\140\141",
+    ["grid"] = "\226\150\163",
+    ["hammer"] = "\240\159\148\168",
+    ["hand"] = "\226\156\139",
+    ["hash"] = "#",
+    ["headphones"] = "\240\159\142\167",
+    ["heart"] = "\226\157\164",
+    ["help-circle"] = "\226\157\147",
+    ["home"] = "\240\159\143\160",
+    ["image"] = "\240\159\150\188",
+    ["inbox"] = "\240\159\147\165",
+    ["infinity"] = "\226\153\190",
+    ["info"] = "\226\132\185",
+    ["key"] = "\240\159\148\145",
+    ["key-round"] = "\240\159\148\145",
+    ["keyboard"] = "\226\140\168",
+    ["layers"] = "\240\159\147\154",
+    ["layout"] = "\240\159\147\144",
+    ["lightbulb"] = "\240\159\146\161",
+    ["link"] = "\240\159\148\151",
+    ["list"] = "\240\159\147\139",
+    ["loader"] = "\226\159\179",
+    ["loader-2"] = "\226\159\179",
+    ["lock"] = "\240\159\148\146",
+    ["lock-open"] = "\240\159\148\147",
+    ["log-in"] = "\226\158\161",
+    ["log-out"] = "\226\158\161",
+    ["mail"] = "\240\159\147\167",
+    ["map"] = "\240\159\151\186",
+    ["map-pin"] = "\240\159\147\141",
+    ["megaphone"] = "\240\159\147\162",
+    ["message-circle"] = "\240\159\146\172",
+    ["message-square"] = "\240\159\146\172",
+    ["mic"] = "\240\159\142\164",
+    ["minus"] = "\226\158\150",
+    ["monitor"] = "\240\159\150\165",
+    ["moon"] = "\240\159\140\153",
+    ["mountain"] = "\226\155\176",
+    ["mouse"] = "\240\159\150\177",
+    ["music"] = "\240\159\142\181",
+    ["navigation"] = "\240\159\167\173",
+    ["package"] = "\240\159\147\166",
+    ["paintbrush"] = "\240\159\150\140",
+    ["palette"] = "\240\159\142\168",
+    ["pause"] = "\226\143\184",
+    ["pen"] = "\226\156\143",
+    ["phone"] = "\240\159\147\177",
+    ["pin"] = "\240\159\147\140",
+    ["pizza"] = "\240\159\141\149",
+    ["plane"] = "\226\156\136",
+    ["play"] = "\226\150\182",
+    ["plug"] = "\240\159\148\140",
+    ["plus"] = "\226\158\149",
+    ["plus-circle"] = "\226\138\149",
+    ["power"] = "\226\143\187",
+    ["printer"] = "\240\159\150\168",
+    ["puzzle"] = "\240\159\167\169",
+    ["radio"] = "\240\159\147\187",
+    ["refresh-cw"] = "\240\159\148\132",
+    ["repeat"] = "\240\159\148\129",
+    ["rocket"] = "\240\159\154\128",
+    ["save"] = "\240\159\146\190",
+    ["scan"] = "\240\159\147\183",
+    ["search"] = "\240\159\148\141",
+    ["send"] = "\240\159\147\168",
+    ["server"] = "\240\159\150\165",
+    ["settings"] = "\226\154\153",
+    ["share"] = "\240\159\148\151",
+    ["shield"] = "\240\159\155\161",
+    ["shield-check"] = "\240\159\155\161",
+    ["shopping-cart"] = "\240\159\155\146",
+    ["signal"] = "\240\159\147\182",
+    ["skull"] = "\240\159\146\128",
+    ["slash"] = "\226\157\140",
+    ["sliders"] = "\240\159\142\155",
+    ["smartphone"] = "\240\159\147\177",
+    ["smile"] = "\240\159\152\138",
+    ["snowflake"] = "\226\157\132",
+    ["sparkle"] = "\226\156\168",
+    ["sparkles"] = "\226\156\168",
+    ["speaker"] = "\240\159\148\138",
+    ["star"] = "\226\173\144",
+    ["sun"] = "\226\152\128",
+    ["sword"] = "\240\159\151\161",
+    ["swords"] = "\226\154\148",
+    ["tablet"] = "\240\159\147\177",
+    ["tag"] = "\240\159\143\183",
+    ["target"] = "\240\159\142\175",
+    ["terminal"] = "\240\159\146\187",
+    ["thermometer"] = "\240\159\140\161",
+    ["timer"] = "\226\143\177",
+    ["toggle-left"] = "\240\159\148\152",
+    ["toggle-right"] = "\240\159\148\155",
+    ["tool"] = "\240\159\148\167",
+    ["trash"] = "\240\159\151\145",
+    ["trash-2"] = "\240\159\151\145",
+    ["tree"] = "\240\159\140\178",
+    ["trending-up"] = "\240\159\147\136",
+    ["triangle-alert"] = "\226\154\160",
+    ["trophy"] = "\240\159\143\134",
+    ["truck"] = "\240\159\154\154",
+    ["tv"] = "\240\159\147\186",
+    ["umbrella"] = "\226\152\130",
+    ["upload"] = "\226\172\134",
+    ["user"] = "\240\159\145\164",
+    ["users"] = "\240\159\145\165",
+    ["video"] = "\240\159\142\172",
+    ["volume"] = "\240\159\148\138",
+    ["wallet"] = "\240\159\146\176",
+    ["wand"] = "\226\156\168",
+    ["watch"] = "\226\140\154",
+    ["wifi"] = "\240\159\147\182",
+    ["wind"] = "\240\159\146\168",
+    ["wrench"] = "\240\159\148\167",
+    ["x"] = "\226\156\151",
+    ["x-circle"] = "\226\156\151",
+    ["zap"] = "\226\154\161",
+    ["zoom-in"] = "\240\159\148\141",
+    ["zoom-out"] = "\240\159\148\141",
+}
 
-local lucideSupported = false
-do
-    local ok = pcall(function()
-        return writefile and isfile and getcustomasset
-    end)
-    if ok and writefile and isfile and getcustomasset then
-        lucideSupported = true
-    end
-end
-
-local folderReady = false
-
-local function EnsureLucideFolder()
-    if folderReady or not lucideSupported then return folderReady end
-    local ok = pcall(function()
-        if not isfile("ImpHubIcons/init.txt") then
-            if makefolder then
-                makefolder("ImpHubIcons")
-            end
-            writefile("ImpHubIcons/init.txt", "1")
-        end
-    end)
-    folderReady = ok
-    return ok
-end
-
-local function FetchLucideIcon(name)
-    if LucideCache[name] then return LucideCache[name] end
-    if not lucideSupported then return nil end
-    if not folderReady then EnsureLucideFolder() end
-    if not folderReady then return nil end
-
-    local path = "ImpHubIcons/" .. name .. ".svg"
-    local asset = nil
-
-    local ok = pcall(function()
-        if not isfile(path) then
-            local data = game:HttpGet(LUCIDE_CDN .. name .. ".svg")
-            if data and #data > 0 then
-                writefile(path, data)
-            end
-        end
-        if isfile(path) then
-            asset = getcustomasset(path)
-        end
-    end)
-
-    if ok and asset then
-        LucideCache[name] = asset
-        return asset
-    end
-    return nil
-end
-
-local function IsLucideName(str)
-    if not str or str == "" then return false end
-    if string.byte(str, 1) > 127 then return false end
-    return string.match(str, "^[a-z][a-z0-9%-]*$") ~= nil
+local function ResolveLucideIcon(name)
+    if not name or name == "" then return nil end
+    if string.byte(name, 1) > 127 then return name end
+    return LUCIDE_EMOJI[name]
 end
 
 local ToastContainer = New("Frame", {
@@ -1440,72 +1559,25 @@ local function CreateToast(config)
     })
     Corner(iconBG, 8)
 
-    local iconName = nil
-    local iconEmoji = nil
+    local resolvedIcon = nil
 
     if rawIcon then
-        if IsLucideName(rawIcon) then
-            iconName = rawIcon
-        else
-            iconEmoji = rawIcon
-        end
-    elseif TOAST_FALLBACK[toastType] then
-        iconEmoji = TOAST_FALLBACK[toastType]
-    end
-
-    if iconName then
-        local fallbackLetter = string.upper(string.sub(iconName, 1, 1))
-
-        local fallback = New("TextLabel", {
-            Name = "Fallback",
-            Size = UDim2.fromScale(1, 1),
-            BackgroundTransparency = 1,
-            Text = fallbackLetter,
-            TextColor3 = accentColor,
-            Font = Enum.Font.GothamBold,
-            TextSize = 13,
-            ZIndex = 103,
-            Parent = iconBG,
-        })
-
-        local img = New("ImageLabel", {
-            Name = "LucideIcon",
-            Size = UDim2.fromOffset(16, 16),
-            AnchorPoint = Vector2.new(0.5, 0.5),
-            Position = UDim2.fromScale(0.5, 0.5),
-            BackgroundTransparency = 1,
-            ImageColor3 = accentColor,
-            ImageTransparency = 1,
-            ScaleType = Enum.ScaleType.Fit,
-            ZIndex = 104,
-            Parent = iconBG,
-        })
-
-        coroutine.resume(coroutine.create(function()
-            local asset = FetchLucideIcon(iconName)
-            if not asset or not img.Parent then return end
-            img.Image = asset
-            task.wait(0.3)
-            if not img.Parent then return end
-            local loaded = pcall(function() return img.IsLoaded end)
-            if loaded and img.IsLoaded then
-                Tween(img, TI.Fast, {ImageTransparency = 0})
-                Tween(fallback, TI.Fast, {TextTransparency = 1})
-            end
-        end))
+        resolvedIcon = ResolveLucideIcon(rawIcon) or rawIcon
     else
-        New("TextLabel", {
-            Name = "Icon",
-            Size = UDim2.fromScale(1, 1),
-            BackgroundTransparency = 1,
-            Text = iconEmoji or TOAST_FALLBACK.info,
-            TextColor3 = accentColor,
-            Font = Enum.Font.GothamBold,
-            TextSize = 14,
-            ZIndex = 103,
-            Parent = iconBG,
-        })
+        resolvedIcon = TOAST_FALLBACK[toastType] or TOAST_FALLBACK.info
     end
+
+    New("TextLabel", {
+        Name = "Icon",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        Text = resolvedIcon,
+        TextColor3 = accentColor,
+        Font = Enum.Font.GothamBold,
+        TextSize = 14,
+        ZIndex = 103,
+        Parent = iconBG,
+    })
 
     local textX = 52
     local textW = TOAST_W - textX - 12
