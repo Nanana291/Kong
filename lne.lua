@@ -200,7 +200,7 @@ Corner(LogoCircle:FindFirstChild("LogoDot"), 4)
 
 local TitleLabel = New("TextLabel", {
     Name = "Title",
-    Size = UDim2.new(0, 200, 1, 0),
+    Size = UDim2.new(0, 0, 1, 0),
     Position = UDim2.fromOffset(44, 0),
     BackgroundTransparency = 1,
     Text = "IMP HUB X",
@@ -208,9 +208,81 @@ local TitleLabel = New("TextLabel", {
     Font = Enum.Font.GothamBold,
     TextSize = 13,
     TextXAlignment = Enum.TextXAlignment.Left,
+    AutomaticSize = Enum.AutomaticSize.X,
     ZIndex = 11,
     Parent = TopBar,
 })
+
+local TitleSep = New("TextLabel", {
+    Name = "Sep",
+    Size = UDim2.new(0, 8, 1, 0),
+    BackgroundTransparency = 1,
+    Text = "|",
+    TextColor3 = Theme.TextDark,
+    Font = Enum.Font.Gotham,
+    TextSize = 13,
+    ZIndex = 11,
+    Parent = TopBar,
+})
+
+local GameNameLabel = New("TextLabel", {
+    Name = "GameName",
+    Size = UDim2.new(0, 200, 1, 0),
+    BackgroundTransparency = 1,
+    Text = "",
+    TextColor3 = Theme.TextMuted,
+    Font = Enum.Font.Gotham,
+    TextSize = 11,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    TextTruncate = Enum.TextTruncate.AtEnd,
+    ZIndex = 11,
+    Parent = TopBar,
+})
+
+do
+    local function UpdateTitleLayout()
+        local titleW = TitleLabel.AbsoluteSize.X
+        local baseX = 44
+        local sepX = baseX + titleW + 6
+        local nameX = baseX + titleW + 18
+        TitleSep.Position = UDim2.fromOffset(sepX, 0)
+        GameNameLabel.Position = UDim2.fromOffset(nameX, 0)
+        GameNameLabel.Size = UDim2.new(1, -(nameX + 44), 1, 0)
+    end
+
+    TitleLabel:GetPropertyChangedSignal("AbsoluteSize"):Connect(UpdateTitleLayout)
+    task.defer(UpdateTitleLayout)
+
+    TitleSep.Visible = false
+    GameNameLabel.Visible = false
+
+    task.spawn(function()
+        local gameName = nil
+        local done = false
+
+        task.spawn(function()
+            local ok, result = pcall(function()
+                return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
+            end)
+            if ok and result and type(result.Name) == "string" then
+                gameName = result.Name
+            end
+            done = true
+        end)
+
+        local waited = 0
+        while not done and waited < 5 do
+            task.wait(0.1)
+            waited = waited + 0.1
+        end
+
+        if gameName and TitleSep.Parent then
+            GameNameLabel.Text = gameName
+            TitleSep.Visible = true
+            GameNameLabel.Visible = true
+        end
+    end)
+end
 
 local CloseBtn = New("TextButton", {
     Name = "Close",
