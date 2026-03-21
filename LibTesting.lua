@@ -6687,12 +6687,12 @@ local Library do
                     Items["InlineCP"] = Instances:Create("Frame", {
                         Parent              = Items["Toggle"].Instance,
                         Name                = "\0",
-                        Size                = UDim2New(0, 20, 0, 16),
+                        Size                = UDim2New(0, 20, 0, 20),
                         AnchorPoint         = Vector2New(1, 0.5),
                         Position            = UDim2New(1, -2, 0.5, 0),
                         BackgroundTransparency = 1,
                         BorderSizePixel     = 0,
-                        ClipsDescendants    = true,
+                        ClipsDescendants    = false,
                         ZIndex              = 2,
                         BackgroundColor3    = FromRGB(0, 0, 0),
                     })
