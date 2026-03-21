@@ -2899,25 +2899,35 @@ local Library do
                 CurrentAlignment = "LeftTabs"
             }
 
+            Window.ActivePage    = nil
+            Window._tabLocked   = false
+
             function Window:SelectTab(Tab)
+                local Target
                 if type(Tab) == "number" then
-                    local Page = Window.Pages[Tab]
-                    if Page then
-                        for _, P in ipairs(Window.Pages) do
-                            if P.Active and P ~= Page then
-                                P:Turn(false)
-                            end
-                        end
-                        Page:Turn(true)
-                    end
-                elseif type(Tab) == "table" and Tab.Turn then -- Assuming it's a Page object
-                    for _, P in ipairs(Window.Pages) do
-                        if P.Active and P ~= Tab then
-                            P:Turn(false)
-                        end
-                    end
-                    Tab:Turn(true)
+                    Target = Window.Pages[Tab]
+                elseif type(Tab) == "table" and Tab.Turn then
+                    Target = Tab
                 end
+                if not Target then return end
+                if Window.ActivePage == Target then return end
+                if Window._tabLocked then return end
+
+                Window._tabLocked = true
+
+                local prev = Window.ActivePage
+                Window.ActivePage = Target
+
+                for _, P in ipairs(Window.Pages) do
+                    if P ~= Target and P.Active then
+                        P:_ForceOff()
+                    end
+                end
+                Target:Turn(true)
+
+                task.delay(0.55, function()
+                    Window._tabLocked = false
+                end)
             end
 
             local Items = { } do
@@ -4167,6 +4177,11 @@ local Library do
         end
 
         Library.Category = function(self, Name, Collapsible)
+            if type(Name) == "table" then
+                Collapsible = Name.Collapsible or Name.collapsible or Collapsible
+                Name = Name.Name or Name.name or "Category"
+            end
+            Name = tostring(Name or "Category")
             if not Collapsible then
                 local Items = { } do
                     Items["Category"] = Instances:Create("TextLabel", {
@@ -4473,18 +4488,33 @@ local Library do
 
             local Debounce = false
 
-            function Page:Turn(Bool)
-                if Debounce then 
-                    return 
-                end
+            function Page:_ForceOff()
+                if not Page.Active then return end
+                Page.Active = false
+                Items["Page"].Instance.Visible = false
+                Items["Page"].Instance.Parent = Library.UnusedHolder.Instance
 
-                Page.Active = Bool 
-                
+                Items["Inactive"]:Tween(nil, {BackgroundTransparency = 1})
+                Items["SelectedIndicator"]:Tween(TweenInfo.new(0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {BackgroundTransparency = 1, Size = UDim2New(0, 4, 0, 0)})
+                Items["Text"]:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {TextColor3 = Library.Theme.Text, Position = UDim2New(0, 45, 0.5, 0)})
+                Items["Icon"]:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {ImageColor3 = FromRGB(255, 255, 255), Position = UDim2New(0, 16, 0.5, 0)})
+
+                task.spawn(function()
+                    for _, Value in Page.Sections do
+                        Value:TweenElements(false, true)
+                    end
+                end)
+            end
+
+            function Page:Turn(Bool)
+                if Debounce and Bool == Page.Active then return end
+
+                Page.Active = Bool
+
                 Debounce = true
-                Items["Page"].Instance.Visible = Bool 
+                Items["Page"].Instance.Visible = Bool
                 Items["Page"].Instance.Parent = Bool and Page.Window.Items["Content"].Instance or Library.UnusedHolder.Instance
 
-                -- Tab memory: save active page name to file
                 if Page.Active and Page.Name ~= "Dashboard" then
                     pcall(function()
                         if writefile and Library.Folders then
@@ -4496,41 +4526,30 @@ local Library do
                 if Page.Active then
                     Items["Inactive"]:Tween(nil, {BackgroundTransparency = 0.25})
                     Items["SelectedIndicator"]:Tween(TweenInfo.new(0.6, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {BackgroundTransparency = 0, Size = UDim2New(0, 4, 0, 18)})
-
                     Items["Text"]:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {TextColor3 = Library.Theme.Accent, Position = UDim2New(0, 49, 0.5, 0)})
                     Items["Icon"]:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {ImageColor3 = Library.Theme.Accent, Position = UDim2New(0, 20, 0.5, 0)})
-
                     Items["Page"]:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 0)})
-
-                    for Index, Value in Page.Sections do 
-                        task.spawn(function()
-                            Value:TweenElements(true)
-                        end)
+                    for Index, Value in Page.Sections do
+                        task.spawn(function() Value:TweenElements(true) end)
                     end
                 else
                     Items["Inactive"]:Tween(nil, {BackgroundTransparency = 1})
                     Items["SelectedIndicator"]:Tween(TweenInfo.new(0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {BackgroundTransparency = 1, Size = UDim2New(0, 4, 0, 0)})
-
                     Items["Text"]:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {TextColor3 = Library.Theme.Text, Position = UDim2New(0, 45, 0.5, 0)})
                     Items["Icon"]:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {ImageColor3 = FromRGB(255, 255, 255), Position = UDim2New(0, 16, 0.5, 0)})
-
                     Items["Page"]:Tween(TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 60)})
                 end
 
                 local AllInstances = Items["Page"].Instance:GetDescendants()
                 TableInsert(AllInstances, Items["Page"].Instance)
-                
-                local NewTween 
 
-                for Index, Value in AllInstances do 
+                local NewTween
+
+                for Index, Value in AllInstances do
                     local TransparencyProperty = Tween:GetProperty(Value)
-
-                    if not TransparencyProperty then 
-                        continue
-                    end
-
-                    if type(TransparencyProperty) == "table" then 
-                        for _, Property in TransparencyProperty do 
+                    if not TransparencyProperty then continue end
+                    if type(TransparencyProperty) == "table" then
+                        for _, Property in TransparencyProperty do
                             NewTween = Tween:FadeItem(Value, Property, Bool, Library.FadeSpeed)
                         end
                     else
@@ -4540,42 +4559,28 @@ local Library do
 
                 Library:Connect(NewTween.Tween.Completed, function()
                     Debounce = false
-
-                    if not Page.Active then 
-                        for Index, Value in Page.Sections do 
-                            task.spawn(function()
-                                Value:TweenElements(false, true)
-                            end)   
+                    if not Page.Active then
+                        for Index, Value in Page.Sections do
+                            task.spawn(function() Value:TweenElements(false, true) end)
                         end
                     end
                 end)
             end
 
             Items["Inactive"]:Connect("MouseButton1Click", function()
-                for Index, Value in Page.Window.Pages do 
-                    if Value == Page and Page.Active then
-                        return
-                    end
-
-                    Value:Turn(Value == Page)
-                end
+                if Page.Window.ActivePage == Page then return end
+                Page.Window:SelectTab(Page)
             end)
 
-            if #Page.Window.Pages == 0 then 
+            if #Page.Window.Pages == 0 then
+                Page.Window.ActivePage = Page
                 Page:Turn(true)
             end
-            
+
             TableInsert(Page.Window.Pages, Page)
 
             if Page.Window.SelectedTab and Page.Window.SelectedTab == #Page.Window.Pages then
-                -- If this is the newly added page and matches SelectedTab index, select it
-                -- First turn off any existing active page if needed (though existing logic might handle it)
-                for _, P in ipairs(Page.Window.Pages) do
-                    if P ~= Page and P.Active then
-                        P:Turn(false)
-                    end
-                end
-                Page:Turn(true)
+                Page.Window:SelectTab(Page)
             end
 
             return setmetatable(Page, Library.Pages)
@@ -6671,28 +6676,61 @@ local Library do
             end
 
             function Toggle:Colorpicker(Data)
-                Data = Data or { }
+                Data = Data or {}
 
-                local Colorpicker = {
-                    Window = Toggle.Window,
-                    Page = Toggle.Page,
-                    Section = Toggle.Section,
-
-                    Flag = Data.Flag or Data.flag or Library:NextFlag(),
-                    Default = Data.Default or Data.default or Color3.fromRGB(255, 255, 255),
+                local CP = {
+                    Window   = Toggle.Window,
+                    Page     = Toggle.Page,
+                    Section  = Toggle.Section,
+                    Flag     = Data.Flag     or Data.flag     or Library:NextFlag(),
+                    Default  = Data.Default  or Data.default  or Color3.fromRGB(255, 255, 255),
                     Callback = Data.Callback or Data.callback or function() end,
-                    Alpha = Data.Alpha or Data.alpha or false
+                    Alpha    = Data.Alpha    or Data.alpha    or false,
                 }
 
-                local NewColorpicker, ColorpickerItems = Library:CreateColorpicker({
-                    Parent = Items["SubElements"],
-                    Page = Colorpicker.Page,
-                    Section = Colorpicker.Section,
-                    Flag = Colorpicker.Flag,
-                    Default = Colorpicker.Default,
-                    Callback = Colorpicker.Callback,
-                    Alpha = Colorpicker.Alpha
+                if not Items["InlineCP"] then
+                    Items["InlineCP"] = Instances:Create("Frame", {
+                        Parent              = Items["Toggle"].Instance,
+                        Name                = "\0",
+                        Size                = UDim2New(0, 20, 0, 20),
+                        AnchorPoint         = Vector2New(1, 0.5),
+                        Position            = UDim2New(1, -2, 0.5, 0),
+                        BackgroundTransparency = 1,
+                        BorderSizePixel     = 0,
+                        ClipsDescendants    = true,
+                        ZIndex              = 2,
+                        BackgroundColor3    = FromRGB(0, 0, 0),
+                    })
+                end
+
+                local DummyParent2 = Instances:Create("Frame", {
+                    Parent              = Library.UnusedHolder.Instance,
+                    Name                = "\0",
+                    Size                = UDim2New(0, 1, 0, 1),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel     = 0,
+                    Visible             = false,
+                    BackgroundColor3    = FromRGB(0, 0, 0),
                 })
+
+                local NewColorpicker = Library:CreateColorpicker({
+                    Parent   = Items["InlineCP"],
+                    Parent2  = DummyParent2,
+                    Page     = CP.Page,
+                    Section  = CP.Section,
+                    Flag     = CP.Flag,
+                    Default  = CP.Default,
+                    Callback = CP.Callback,
+                    Alpha    = CP.Alpha,
+                })
+
+                local cpBtn = Items["InlineCP"].Instance:FindFirstChildWhichIsA("TextButton")
+                if cpBtn then
+                    cpBtn.Position = UDim2New(0, 0, 0.5, 0)
+                end
+
+                Items["Text"].Instance.AutomaticSize = Enum.AutomaticSize.None
+                Items["Text"].Instance.Size = UDim2New(1, -58, 0, 15)
 
                 return NewColorpicker
             end
@@ -16728,12 +16766,8 @@ local Library do
             if ok and savedName and savedName ~= "" and savedName ~= "Dashboard" then
                 for _, page in ipairs(Window.Pages) do
                     if page.Name == savedName then
-                        -- turn off dashboard first, then turn on saved page
-                        for _, p in ipairs(Window.Pages) do
-                            if p.Active then p:Turn(false) end
-                        end
-                        task.wait(0.05)
-                        if Library then page:Turn(true) end
+                        Window._tabLocked = false
+                        Window:SelectTab(page)
                         return
                     end
                 end
