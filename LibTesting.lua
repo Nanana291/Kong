@@ -6697,15 +6697,25 @@ local Library do
                         Position            = UDim2New(1, -2, 0.5, 0),
                         BackgroundTransparency = 1,
                         BorderSizePixel     = 0,
-                        ClipsDescendants    = false,
+                        ClipsDescendants    = true,
                         ZIndex              = 2,
                         BackgroundColor3    = FromRGB(0, 0, 0),
                     })
                 end
 
+                local DummyParent2 = Instances:Create("Frame", {
+                    Parent              = Library.UnusedHolder.Instance,
+                    Name                = "\0",
+                    Size                = UDim2New(0, 1, 0, 1),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel     = 0,
+                    Visible             = false,
+                    BackgroundColor3    = FromRGB(0, 0, 0),
+                })
+
                 local NewColorpicker = Library:CreateColorpicker({
                     Parent   = Items["InlineCP"],
-                    Parent2  = Items["InlineCP"],
+                    Parent2  = DummyParent2,
                     Page     = CP.Page,
                     Section  = CP.Section,
                     Flag     = CP.Flag,
@@ -6714,8 +6724,8 @@ local Library do
                     Alpha    = CP.Alpha,
                 })
 
-                Items["Text"].Instance.Size = UDim2New(1, -58, 0, 15)
                 Items["Text"].Instance.AutomaticSize = Enum.AutomaticSize.None
+                Items["Text"].Instance.Size = UDim2New(1, -58, 0, 15)
 
                 return NewColorpicker
             end
