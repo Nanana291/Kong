@@ -1460,29 +1460,7 @@ Conn(ValidateBtn.MouseButton1Click:Connect(function()
                     Tween(ValidateBtn, TI.Fast, {BackgroundColor3 = Theme.Success})
 
                     task.delay(1.2, function()
-                        Tween(Window, TI.Medium, {BackgroundTransparency = 1})
-
-                        for _, desc in ipairs(Window:GetDescendants()) do
-                            if desc:IsA("GuiObject") then
-                                pcall(function()
-                                    Tween(desc, TI.Medium, {BackgroundTransparency = 1})
-                                end)
-                            end
-                            if desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox") then
-                                pcall(function()
-                                    Tween(desc, TI.Medium, {TextTransparency = 1})
-                                end)
-                            end
-                            if desc:IsA("UIStroke") then
-                                pcall(function()
-                                    Tween(desc, TI.Medium, {Transparency = 1})
-                                end)
-                            end
-                        end
-
-                        task.delay(0.5, function()
-                            Gui:Destroy()
-                        end)
+                        AnimateClose()
                     end)
                 else
                     StatusLabel.TextColor3 = Theme.Error
@@ -1520,33 +1498,64 @@ Conn(ValidateBtn.MouseButton1Click:Connect(function()
     end
 end))
 
-Conn(CloseBtn.MouseButton1Click:Connect(function()
-    Tween(Window, TI.Medium, {BackgroundTransparency = 1})
-    for _, desc in ipairs(Window:GetDescendants()) do
-        if desc:IsA("GuiObject") then
-            pcall(function()
-                Tween(desc, TI.Fast, {BackgroundTransparency = 1})
-            end)
-        end
-        if desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox") then
-            pcall(function()
-                Tween(desc, TI.Fast, {TextTransparency = 1})
-            end)
-        end
-        if desc:IsA("UIStroke") then
-            pcall(function()
-                Tween(desc, TI.Fast, {Transparency = 1})
-            end)
-        end
+local isClosing = false
+
+local function CleanupAll()
+    if loadingDotsConn then loadingDotsConn:Disconnect() end
+    spinnerTween:Cancel()
+    for _, c in ipairs(State.Connections) do
+        c:Disconnect()
     end
-    task.delay(0.5, function()
-        if loadingDotsConn then loadingDotsConn:Disconnect() end
-        spinnerTween:Cancel()
-        for _, c in ipairs(State.Connections) do
-            c:Disconnect()
+    Gui:Destroy()
+end
+
+local function AnimateClose(onDone)
+    if isClosing then return end
+    isClosing = true
+
+    local currentScale = UIScale.Scale
+
+    Tween(UIScale, TI.Snappy, {Scale = currentScale * 1.03})
+
+    task.delay(0.1, function()
+        local shrinkTI = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+
+        Tween(UIScale, shrinkTI, {Scale = currentScale * 0.6})
+        Tween(Window, shrinkTI, {BackgroundTransparency = 1})
+        Tween(WindowStroke, TI.Fast, {Transparency = 1})
+
+        for _, desc in ipairs(Window:GetDescendants()) do
+            if desc:IsA("GuiObject") then
+                pcall(function()
+                    Tween(desc, TI.Fast, {BackgroundTransparency = 1})
+                end)
+            end
+            if desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox") then
+                pcall(function()
+                    Tween(desc, TI.Fast, {TextTransparency = 1})
+                end)
+            end
+            if desc:IsA("ImageLabel") then
+                pcall(function()
+                    Tween(desc, TI.Fast, {ImageTransparency = 1})
+                end)
+            end
+            if desc:IsA("UIStroke") then
+                pcall(function()
+                    Tween(desc, TI.Fast, {Transparency = 1})
+                end)
+            end
         end
-        Gui:Destroy()
+
+        task.delay(0.4, function()
+            CleanupAll()
+            if type(onDone) == "function" then onDone() end
+        end)
     end)
+end
+
+Conn(CloseBtn.MouseButton1Click:Connect(function()
+    AnimateClose()
 end))
 
 do
@@ -1928,13 +1937,12 @@ function Loader:Toast(config)
     return CreateToast(config)
 end
 
+function Loader:Close(callback)
+    AnimateClose(callback)
+end
+
 function Loader:Destroy()
-    if loadingDotsConn then loadingDotsConn:Disconnect() end
-    spinnerTween:Cancel()
-    for _, c in ipairs(State.Connections) do
-        c:Disconnect()
-    end
-    Gui:Destroy()
+    CleanupAll()
 end
 
 return Loader
