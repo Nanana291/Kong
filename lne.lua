@@ -983,6 +983,52 @@ local StatusLabel = New("TextLabel", {
     Parent = AuthContainer,
 })
 
+local ExpiryFrame = New("Frame", {
+    Name = "ExpiryFrame",
+    Size = UDim2.new(0.7, 0, 0, 28),
+    AnchorPoint = Vector2.new(0.5, 0),
+    Position = UDim2.new(0.5, 0, 0, 268),
+    BackgroundColor3 = Theme.SurfaceLight,
+    BackgroundTransparency = 1,
+    Visible = false,
+    ZIndex = 5,
+    Parent = AuthContainer,
+})
+Corner(ExpiryFrame, 6)
+
+local ExpiryIcon = GetLucideIcon("clock")
+
+if ExpiryIcon then
+    New("ImageLabel", {
+        Name = "Icon",
+        Size = UDim2.fromOffset(12, 12),
+        AnchorPoint = Vector2.new(0, 0.5),
+        Position = UDim2.new(0, 10, 0.5, 0),
+        BackgroundTransparency = 1,
+        Image = ExpiryIcon.Url or "",
+        ImageRectOffset = ExpiryIcon.ImageRectOffset or Vector2.new(0, 0),
+        ImageRectSize = ExpiryIcon.ImageRectSize or Vector2.new(0, 0),
+        ImageColor3 = Theme.TextSub,
+        ZIndex = 6,
+        Parent = ExpiryFrame,
+    })
+end
+
+local ExpiryLabel = New("TextLabel", {
+    Name = "ExpiryText",
+    Size = UDim2.new(1, ExpiryIcon and -28 or 0, 1, 0),
+    Position = UDim2.fromOffset(ExpiryIcon and 26 or 0, 0),
+    BackgroundTransparency = 1,
+    Text = "",
+    TextColor3 = Theme.TextSub,
+    Font = Enum.Font.Gotham,
+    TextSize = 10,
+    TextTransparency = 1,
+    TextXAlignment = Enum.TextXAlignment.Left,
+    ZIndex = 6,
+    Parent = ExpiryFrame,
+})
+
 local VersionLabel = New("TextLabel", {
     Name = "Version",
     Size = UDim2.fromOffset(60, 16),
@@ -1518,6 +1564,48 @@ end
 
 function Loader:SetKeyLink(url)
     KEY_LINK = tostring(url)
+end
+
+function Loader:SetExpiry(seconds)
+    if not seconds then return end
+    seconds = tonumber(seconds)
+    if not seconds then return end
+
+    local text, color
+    if seconds >= math.huge or seconds >= 999999999 then
+        text = "Lifetime Access"
+        color = Theme.Success
+    else
+        local days = mathFloor(seconds / 86400)
+        local hours = mathFloor((seconds % 86400) / 3600)
+        local mins = mathFloor((seconds % 3600) / 60)
+
+        if days > 30 then
+            local months = mathFloor(days / 30)
+            text = months .. (months == 1 and " month" or " months") .. " remaining"
+            color = Theme.Success
+        elseif days > 0 then
+            text = days .. (days == 1 and " day" or " days") .. ", " .. hours .. "h remaining"
+            color = days <= 3 and Color3.fromRGB(220, 170, 40) or Theme.TextSub
+        elseif hours > 0 then
+            text = hours .. "h " .. mins .. "m remaining"
+            color = Color3.fromRGB(220, 170, 40)
+        else
+            text = mins .. (mins == 1 and " minute" or " minutes") .. " remaining"
+            color = Theme.Error
+        end
+    end
+
+    ExpiryLabel.Text = text
+    ExpiryLabel.TextColor3 = color
+    ExpiryFrame.Visible = true
+    Tween(ExpiryFrame, TI.Fast, {BackgroundTransparency = 0.5})
+    Tween(ExpiryLabel, TI.Fast, {TextTransparency = 0})
+
+    local icon = ExpiryFrame:FindFirstChild("Icon")
+    if icon then
+        icon.ImageColor3 = color
+    end
 end
 
 local TOAST_W = 280
