@@ -6724,6 +6724,11 @@ local Library do
                     Alpha    = CP.Alpha,
                 })
 
+                local cpBtn = Items["InlineCP"].Instance:FindFirstChildWhichIsA("TextButton")
+                if cpBtn then
+                    cpBtn.Position = UDim2New(0, 0, 0.5, 0)
+                end
+
                 Items["Text"].Instance.AutomaticSize = Enum.AutomaticSize.None
                 Items["Text"].Instance.Size = UDim2New(1, -58, 0, 15)
 
