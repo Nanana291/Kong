@@ -6671,28 +6671,46 @@ local Library do
             end
 
             function Toggle:Colorpicker(Data)
-                Data = Data or { }
+                Data = Data or {}
 
-                local Colorpicker = {
-                    Window = Toggle.Window,
-                    Page = Toggle.Page,
-                    Section = Toggle.Section,
-
-                    Flag = Data.Flag or Data.flag or Library:NextFlag(),
-                    Default = Data.Default or Data.default or Color3.fromRGB(255, 255, 255),
+                local CP = {
+                    Window   = Toggle.Window,
+                    Page     = Toggle.Page,
+                    Section  = Toggle.Section,
+                    Flag     = Data.Flag     or Data.flag     or Library:NextFlag(),
+                    Default  = Data.Default  or Data.default  or Color3.fromRGB(255, 255, 255),
                     Callback = Data.Callback or Data.callback or function() end,
-                    Alpha = Data.Alpha or Data.alpha or false
+                    Alpha    = Data.Alpha    or Data.alpha    or false,
                 }
 
-                local NewColorpicker, ColorpickerItems = Library:CreateColorpicker({
-                    Parent = Items["SubElements"],
-                    Page = Colorpicker.Page,
-                    Section = Colorpicker.Section,
-                    Flag = Colorpicker.Flag,
-                    Default = Colorpicker.Default,
-                    Callback = Colorpicker.Callback,
-                    Alpha = Colorpicker.Alpha
+                if not Items["InlineCP"] then
+                    Items["InlineCP"] = Instances:Create("Frame", {
+                        Parent              = Items["Toggle"].Instance,
+                        Name                = "\0",
+                        Size                = UDim2New(0, 20, 0, 16),
+                        AnchorPoint         = Vector2New(1, 0.5),
+                        Position            = UDim2New(1, -2, 0.5, 0),
+                        BackgroundTransparency = 1,
+                        BorderSizePixel     = 0,
+                        ClipsDescendants    = true,
+                        ZIndex              = 2,
+                        BackgroundColor3    = FromRGB(0, 0, 0),
+                    })
+                end
+
+                local NewColorpicker = Library:CreateColorpicker({
+                    Parent   = Items["InlineCP"],
+                    Parent2  = Items["InlineCP"],
+                    Page     = CP.Page,
+                    Section  = CP.Section,
+                    Flag     = CP.Flag,
+                    Default  = CP.Default,
+                    Callback = CP.Callback,
+                    Alpha    = CP.Alpha,
                 })
+
+                Items["Text"].Instance.Size = UDim2New(1, -58, 0, 15)
+                Items["Text"].Instance.AutomaticSize = Enum.AutomaticSize.None
 
                 return NewColorpicker
             end
