@@ -733,6 +733,7 @@ local KeyInputFrame = New("Frame", {
     Size = UDim2.new(1, 0, 0, 44),
     Position = UDim2.fromOffset(0, 90),
     BackgroundColor3 = Theme.InputBG,
+    ClipsDescendants = true,
     ZIndex = 5,
     Parent = AuthContainer,
 })
@@ -773,7 +774,9 @@ local KeyTextBox = New("TextBox", {
     Font = Enum.Font.Gotham,
     TextSize = 12,
     TextXAlignment = Enum.TextXAlignment.Left,
+    TextTruncate = Enum.TextTruncate.AtEnd,
     ClearTextOnFocus = false,
+    ClipsDescendants = true,
     ZIndex = 7,
     Parent = KeyInputFrame,
 })
