@@ -8089,8 +8089,11 @@ local Library do
 
             Items["RealDropdown"]:Connect("Changed", function(Property)
                 if Property == "AbsolutePosition" and Dropdown.IsOpen then
-                    Dropdown.IsOpen = not Library:IsClipped(Items["OptionHolder"].Instance, Dropdown.Section.Items["Section"].Instance.Parent)
-                    Items["OptionHolder"].Instance.Visible = Dropdown.IsOpen
+                    local sectionInst = Dropdown.Section.Items and Dropdown.Section.Items["Section"]
+                    if sectionInst then
+                        Dropdown.IsOpen = not Library:IsClipped(Items["OptionHolder"].Instance, sectionInst.Instance.Parent)
+                        Items["OptionHolder"].Instance.Visible = Dropdown.IsOpen
+                    end
                 end
             end)
 
@@ -8766,8 +8769,11 @@ local Library do
 
             Items["RealDropdown"]:Connect("Changed", function(Property)
                 if Property == "AbsolutePosition" and Dropdown.IsOpen then
-                    Dropdown.IsOpen = not Library:IsClipped(Items["OptionHolder"].Instance, Dropdown.Section.Items["Section"].Instance.Parent)
-                    Items["OptionHolder"].Instance.Visible = Dropdown.IsOpen
+                    local sectionInst = Dropdown.Section.Items and Dropdown.Section.Items["Section"]
+                    if sectionInst then
+                        Dropdown.IsOpen = not Library:IsClipped(Items["OptionHolder"].Instance, sectionInst.Instance.Parent)
+                        Items["OptionHolder"].Instance.Visible = Dropdown.IsOpen
+                    end
                 end
             end)
 
@@ -9406,8 +9412,11 @@ local Library do
 
             Items["RealDropdown"]:Connect("Changed", function(Property)
                 if Property == "AbsolutePosition" and Dropdown.IsOpen then
-                    Dropdown.IsOpen = not Library:IsClipped(Items["OptionHolder"].Instance, Dropdown.Section.Items["Section"].Instance.Parent)
-                    Items["OptionHolder"].Instance.Visible = Dropdown.IsOpen
+                    local sectionInst = Dropdown.Section.Items and Dropdown.Section.Items["Section"]
+                    if sectionInst then
+                        Dropdown.IsOpen = not Library:IsClipped(Items["OptionHolder"].Instance, sectionInst.Instance.Parent)
+                        Items["OptionHolder"].Instance.Visible = Dropdown.IsOpen
+                    end
                 end
             end)
 
