@@ -1550,13 +1550,13 @@ local function ShakeElement(inst)
     local orig = inst.Position
     local ox = orig.X.Offset
     local seq = {10, -8, 6, -4, 2, 0}
-    coroutine.resume(coroutine.create(function()
+    task.spawn(function()
         for _, dx in ipairs(seq) do
             inst.Position = UDim2.new(orig.X.Scale, ox + dx, orig.Y.Scale, orig.Y.Offset)
             task.wait(0.035)
         end
         inst.Position = orig
-    end))
+    end)
 end
 
 local Loader = {}
@@ -1584,15 +1584,18 @@ Conn(ValidateBtn.MouseButton1Click:Connect(function()
     ShowLoading("Validating key...")
 
     if type(Loader.OnValidate) == "function" then
-        coroutine.resume(coroutine.create(function()
+        -- task.spawn = Roblox-native scheduler, survives Luraph coroutine replacement.
+        -- coroutine.resume/create are hijacked by Luraph VM — task.wait inside them
+        -- yields into a dead context and never resumes, so success is never evaluated.
+        task.spawn(function()
             local success, msg = Loader.OnValidate(key)
 
             if success then
                 AnimateClose()
+                return
             end
 
             HideLoading(function()
-                if success then return end
                 StatusLabel.TextColor3 = Theme.Error
                 StatusLabel.Text = msg or "Invalid key."
                 Tween(StatusLabel, TI.Fast, {TextTransparency = 0})
@@ -1607,7 +1610,7 @@ Conn(ValidateBtn.MouseButton1Click:Connect(function()
                     Tween(StatusLabel, TI.Medium, {TextTransparency = 1})
                 end)
             end)
-        end))
+        end)
     else
         HideLoading(function()
             StatusLabel.TextColor3 = Theme.Error
@@ -1646,10 +1649,7 @@ local function CleanupAll()
 end
 
 local function AnimateClose(onDone)
-    if isClosing then
-        if type(onDone) == "function" then task.spawn(onDone) end
-        return
-    end
+    if isClosing then return end
     if not Gui or not Gui.Parent then
         CleanupAll()
         if type(onDone) == "function" then task.spawn(onDone) end
@@ -1657,26 +1657,14 @@ local function AnimateClose(onDone)
     end
     isClosing = true
 
-    -- One-shot callback guard
-    local _cbFired = false
-    local function _fireCallback()
-        if _cbFired then return end
-        _cbFired = true
-        CleanupAll()
-        if type(onDone) == "function" then task.spawn(onDone) end
-    end
-
-    -- Fire ALL tweens immediately in parallel — no chained callbacks.
-    -- Completed:Once is unreliable in Luraph; Heartbeat timer is not.
+    -- Fire all tweens immediately in parallel (no chain, no callbacks).
     pcall(function()
-        local currentScale = UIScale.Scale
+        local s = UIScale.Scale
         local shrinkTI = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-
-        TS:Create(UIScale,    TI.Snappy, {Scale = currentScale * 1.03}):Play()
-        TS:Create(UIScale,    shrinkTI,  {Scale = currentScale * 0.6}):Play()
-        TS:Create(Window,     shrinkTI,  {BackgroundTransparency = 1}):Play()
-        TS:Create(WindowStroke, TI.Fast, {Transparency = 1}):Play()
-
+        TS:Create(UIScale,      TI.Snappy, {Scale = s * 1.03}):Play()
+        TS:Create(UIScale,      shrinkTI,  {Scale = s * 0.6}):Play()
+        TS:Create(Window,       shrinkTI,  {BackgroundTransparency = 1}):Play()
+        TS:Create(WindowStroke, TI.Fast,   {Transparency = 1}):Play()
         if Window and Window.Parent then
             for _, desc in ipairs(Window:GetDescendants()) do
                 if desc:IsA("GuiObject") then
@@ -1695,20 +1683,15 @@ local function AnimateClose(onDone)
         end
     end)
 
-    -- Heartbeat timer: fires cleanup after 0.45s regardless of tween state.
-    -- Uses a fired-flag instead of hbConn:Disconnect() inside the callback —
-    -- Luraph captures forward-declared upvalues as nil at bind time, so
-    -- hbConn:Disconnect() inside the callback would throw and block _fireCallback.
-    local _hbElapsed = 0
-    local _hbFired = false
-    Conn(RS.Heartbeat:Connect(function(dt)
-        if _hbFired then return end
-        _hbElapsed = _hbElapsed + dt
-        if _hbElapsed >= 0.45 then
-            _hbFired = true
-            _fireCallback()
-        end
-    end))
+    -- task.spawn + task.wait: Roblox-native scheduler, not affected by Luraph.
+    -- Avoids Heartbeat (race with CleanupAll disconnecting it) and task.delay
+    -- (unreliable inside obfuscated VM boundaries). task.wait inside a
+    -- task.spawn coroutine is a native yield — always resumes correctly.
+    task.spawn(function()
+        task.wait(0.45)
+        CleanupAll()
+        if type(onDone) == "function" then task.spawn(onDone) end
+    end)
 end
 
 Conn(CloseBtn.MouseButton1Click:Connect(function()
