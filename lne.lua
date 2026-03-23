@@ -1665,7 +1665,7 @@ local function AnimateClose(onDone)
     end
     isClosing = true
 
-    -- Wrap callback so it only fires once regardless of path
+    -- One-shot callback guard
     local _cbFired = false
     local function _fireCallback()
         if _cbFired then return end
@@ -1674,20 +1674,18 @@ local function AnimateClose(onDone)
         if type(onDone) == "function" then task.spawn(onDone) end
     end
 
-    local ok = pcall(function()
+    -- Fire ALL tweens immediately in parallel — no chained callbacks.
+    -- Completed:Once is unreliable in Luraph; Heartbeat timer is not.
+    pcall(function()
         local currentScale = UIScale.Scale
         local shrinkTI = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.In)
 
-        -- Micro punch up then shrink — use Tween.Completed to trigger cleanup
-        -- (avoids task.delay which Luraph obfuscation can interrupt)
-        local punchTween = TS:Create(UIScale, TI.Snappy, {Scale = currentScale * 1.03})
-        punchTween.Completed:Once(function()
-            if not Window or not Window.Parent then _fireCallback() return end
+        TS:Create(UIScale,    TI.Snappy, {Scale = currentScale * 1.03}):Play()
+        TS:Create(UIScale,    shrinkTI,  {Scale = currentScale * 0.6}):Play()
+        TS:Create(Window,     shrinkTI,  {BackgroundTransparency = 1}):Play()
+        TS:Create(WindowStroke, TI.Fast, {Transparency = 1}):Play()
 
-            local shrinkTween = TS:Create(UIScale, shrinkTI, {Scale = currentScale * 0.6})
-            TS:Create(Window, shrinkTI, {BackgroundTransparency = 1}):Play()
-            TS:Create(WindowStroke, TI.Fast, {Transparency = 1}):Play()
-
+        if Window and Window.Parent then
             for _, desc in ipairs(Window:GetDescendants()) do
                 if desc:IsA("GuiObject") then
                     pcall(function() TS:Create(desc, TI.Fast, {BackgroundTransparency = 1}):Play() end)
@@ -1702,15 +1700,20 @@ local function AnimateClose(onDone)
                     pcall(function() TS:Create(desc, TI.Fast, {Transparency = 1}):Play() end)
                 end
             end
-
-            -- Cleanup fires when shrink tween ends — no task.delay needed
-            shrinkTween.Completed:Once(_fireCallback)
-            shrinkTween:Play()
-        end)
-        punchTween:Play()
+        end
     end)
 
-    if not ok then _fireCallback() end
+    -- Heartbeat timer: fires cleanup after 0.45s regardless of tween state.
+    -- RS.Heartbeat is a Roblox-native signal — survives Luraph VM boundaries.
+    local elapsed = 0
+    local hbConn
+    hbConn = RS.Heartbeat:Connect(function(dt)
+        elapsed = elapsed + dt
+        if elapsed >= 0.45 then
+            hbConn:Disconnect()
+            _fireCallback()
+        end
+    end)
 end
 
 Conn(CloseBtn.MouseButton1Click:Connect(function()
@@ -2108,24 +2111,7 @@ function Loader:Toast(config)
 end
 
 function Loader:Close(callback)
-    -- Direct call — no pcall wrapper (pcall + Luraph obfuscation breaks task scheduling)
-    local _fallbackFired = false
-    local _origCallback = callback
-    local function _wrappedCallback()
-        _fallbackFired = true
-        if type(_origCallback) == "function" then task.spawn(_origCallback) end
-    end
-
-    AnimateClose(_wrappedCallback)
-
-    -- Hard fallback: if the GUI is somehow still alive after 0.8s, force-destroy it.
-    -- Handles cases where Luraph interrupts the Tween.Completed chain.
-    task.delay(0.8, function()
-        if not _fallbackFired then
-            pcall(CleanupAll)
-            if type(_origCallback) == "function" then task.spawn(_origCallback) end
-        end
-    end)
+    AnimateClose(callback)
 end
 
 function Loader:Destroy()
