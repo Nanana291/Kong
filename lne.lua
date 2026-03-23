@@ -1636,13 +1636,17 @@ Conn(ValidateBtn.MouseButton1Click:Connect(function()
 end))
 
 
+local _cleanupDone = false
 local function CleanupAll()
+    if _cleanupDone then return end
+    _cleanupDone = true
     pcall(function()
         if loadingDotsConn then loadingDotsConn:Disconnect() end
         spinnerTween:Cancel()
         for _, c in ipairs(State.Connections) do
             c:Disconnect()
         end
+        State.Connections = {}
     end)
     pcall(function()
         if Gui and Gui.Parent then Gui:Destroy() end
@@ -1650,66 +1654,63 @@ local function CleanupAll()
 end
 
 local function AnimateClose(onDone)
-    if isClosing then return end
+    if isClosing then
+        if type(onDone) == "function" then task.spawn(onDone) end
+        return
+    end
     if not Gui or not Gui.Parent then
         CleanupAll()
-        if type(onDone) == "function" then onDone() end
+        if type(onDone) == "function" then task.spawn(onDone) end
         return
     end
     isClosing = true
 
+    -- Wrap callback so it only fires once regardless of path
+    local _cbFired = false
+    local function _fireCallback()
+        if _cbFired then return end
+        _cbFired = true
+        CleanupAll()
+        if type(onDone) == "function" then task.spawn(onDone) end
+    end
+
     local ok = pcall(function()
         local currentScale = UIScale.Scale
+        local shrinkTI = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.In)
 
-        Tween(UIScale, TI.Snappy, {Scale = currentScale * 1.03})
+        -- Micro punch up then shrink — use Tween.Completed to trigger cleanup
+        -- (avoids task.delay which Luraph obfuscation can interrupt)
+        local punchTween = TS:Create(UIScale, TI.Snappy, {Scale = currentScale * 1.03})
+        punchTween.Completed:Once(function()
+            if not Window or not Window.Parent then _fireCallback() return end
 
-        task.delay(0.1, function()
-            if not Window or not Window.Parent then
-                CleanupAll()
-                if type(onDone) == "function" then onDone() end
-                return
-            end
-
-            local shrinkTI = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-
-            Tween(UIScale, shrinkTI, {Scale = currentScale * 0.6})
-            Tween(Window, shrinkTI, {BackgroundTransparency = 1})
-            Tween(WindowStroke, TI.Fast, {Transparency = 1})
+            local shrinkTween = TS:Create(UIScale, shrinkTI, {Scale = currentScale * 0.6})
+            TS:Create(Window, shrinkTI, {BackgroundTransparency = 1}):Play()
+            TS:Create(WindowStroke, TI.Fast, {Transparency = 1}):Play()
 
             for _, desc in ipairs(Window:GetDescendants()) do
                 if desc:IsA("GuiObject") then
-                    pcall(function()
-                        Tween(desc, TI.Fast, {BackgroundTransparency = 1})
-                    end)
+                    pcall(function() TS:Create(desc, TI.Fast, {BackgroundTransparency = 1}):Play() end)
                 end
                 if desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox") then
-                    pcall(function()
-                        Tween(desc, TI.Fast, {TextTransparency = 1})
-                    end)
+                    pcall(function() TS:Create(desc, TI.Fast, {TextTransparency = 1}):Play() end)
                 end
                 if desc:IsA("ImageLabel") then
-                    pcall(function()
-                        Tween(desc, TI.Fast, {ImageTransparency = 1})
-                    end)
+                    pcall(function() TS:Create(desc, TI.Fast, {ImageTransparency = 1}):Play() end)
                 end
                 if desc:IsA("UIStroke") then
-                    pcall(function()
-                        Tween(desc, TI.Fast, {Transparency = 1})
-                    end)
+                    pcall(function() TS:Create(desc, TI.Fast, {Transparency = 1}):Play() end)
                 end
             end
 
-            task.delay(0.4, function()
-                CleanupAll()
-                if type(onDone) == "function" then onDone() end
-            end)
+            -- Cleanup fires when shrink tween ends — no task.delay needed
+            shrinkTween.Completed:Once(_fireCallback)
+            shrinkTween:Play()
         end)
+        punchTween:Play()
     end)
 
-    if not ok then
-        CleanupAll()
-        if type(onDone) == "function" then onDone() end
-    end
+    if not ok then _fireCallback() end
 end
 
 Conn(CloseBtn.MouseButton1Click:Connect(function()
@@ -2107,7 +2108,24 @@ function Loader:Toast(config)
 end
 
 function Loader:Close(callback)
-    pcall(AnimateClose, callback)
+    -- Direct call — no pcall wrapper (pcall + Luraph obfuscation breaks task scheduling)
+    local _fallbackFired = false
+    local _origCallback = callback
+    local function _wrappedCallback()
+        _fallbackFired = true
+        if type(_origCallback) == "function" then task.spawn(_origCallback) end
+    end
+
+    AnimateClose(_wrappedCallback)
+
+    -- Hard fallback: if the GUI is somehow still alive after 0.8s, force-destroy it.
+    -- Handles cases where Luraph interrupts the Tween.Completed chain.
+    task.delay(0.8, function()
+        if not _fallbackFired then
+            pcall(CleanupAll)
+            if type(_origCallback) == "function" then task.spawn(_origCallback) end
+        end
+    end)
 end
 
 function Loader:Destroy()
