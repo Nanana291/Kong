@@ -1638,13 +1638,9 @@ local function CleanupAll()
     pcall(function()
         if loadingDotsConn then loadingDotsConn:Disconnect() end
         spinnerTween:Cancel()
-        for _, c in ipairs(State.Connections) do
-            c:Disconnect()
-        end
+        for _, c in ipairs(State.Connections) do c:Disconnect() end
         State.Connections = {}
     end)
-    -- Nil the parent first (works even on executor-protected CoreGui children
-    -- where :Destroy() may silently fail). Enabled=false is belt+suspenders.
     pcall(function() Gui.Enabled = false end)
     pcall(function() Gui.Parent = nil end)
     pcall(function() Gui:Destroy() end)
@@ -1652,30 +1648,25 @@ end
 
 local function AnimateClose(onDone)
     if isClosing then return end
-    if not Gui then
-        if type(onDone) == "function" then task.spawn(onDone) end
-        return
-    end
     isClosing = true
 
-    -- Kill the UI visually right now, synchronously.
-    -- This is the only guaranteed-to-work approach across all executors:
-    -- Gui.Enabled=false is a property write — it cannot be silently swallowed.
-    -- :Destroy() on CoreGui children CAN fail on certain executors.
+    -- Window.Visible = false is a Frame property we own directly.
+    -- It CANNOT fail regardless of executor CoreGui protection level.
+    -- This is the guaranteed instant visual kill.
+    Window.Visible = false
+
+    -- Try additional hide methods as belt+suspenders
     pcall(function() Gui.Enabled = false end)
 
-    -- Cosmetic fade tweens (GUI is already invisible, these are just polish
-    -- in case Enabled=false ever gets reverted by a DescendantAdded handler)
-    pcall(function()
-        local s = UIScale.Scale
-        local shrinkTI = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-        TS:Create(UIScale,      shrinkTI, {Scale = s * 0.6}):Play()
-        TS:Create(Window,       shrinkTI, {BackgroundTransparency = 1}):Play()
-        TS:Create(WindowStroke, shrinkTI, {Transparency = 1}):Play()
-    end)
-
-    -- Full cleanup after a short delay (connections, memory, Destroy)
+    -- Animate the shrink (purely cosmetic — UI is already invisible above)
     task.spawn(function()
+        pcall(function()
+            local s = UIScale.Scale
+            local shrinkTI = TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+            TS:Create(UIScale, TweenInfo.new(0.1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Scale = s * 1.05}):Play()
+            task.wait(0.1)
+            TS:Create(UIScale, shrinkTI, {Scale = s * 0.5}):Play()
+        end)
         task.wait(0.35)
         CleanupAll()
         if type(onDone) == "function" then task.spawn(onDone) end
