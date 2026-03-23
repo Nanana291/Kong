@@ -1696,16 +1696,19 @@ local function AnimateClose(onDone)
     end)
 
     -- Heartbeat timer: fires cleanup after 0.45s regardless of tween state.
-    -- RS.Heartbeat is a Roblox-native signal — survives Luraph VM boundaries.
-    local elapsed = 0
-    local hbConn
-    hbConn = RS.Heartbeat:Connect(function(dt)
-        elapsed = elapsed + dt
-        if elapsed >= 0.45 then
-            hbConn:Disconnect()
+    -- Uses a fired-flag instead of hbConn:Disconnect() inside the callback —
+    -- Luraph captures forward-declared upvalues as nil at bind time, so
+    -- hbConn:Disconnect() inside the callback would throw and block _fireCallback.
+    local _hbElapsed = 0
+    local _hbFired = false
+    Conn(RS.Heartbeat:Connect(function(dt)
+        if _hbFired then return end
+        _hbElapsed = _hbElapsed + dt
+        if _hbElapsed >= 0.45 then
+            _hbFired = true
             _fireCallback()
         end
-    end)
+    end))
 end
 
 Conn(CloseBtn.MouseButton1Click:Connect(function()
