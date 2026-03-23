@@ -1498,7 +1498,6 @@ local function HideLoading(callback)
 
     local fade = Tween(LoadingScreen, TI.Medium, {BackgroundTransparency = 1})
     fade.Completed:Once(function()
-        if isClosing then return end
         LoadingScreen.Visible = false
         SpinnerFrame.Rotation = 0
         if type(callback) == "function" then callback() end
@@ -1588,38 +1587,25 @@ Conn(ValidateBtn.MouseButton1Click:Connect(function()
         coroutine.resume(coroutine.create(function()
             local success, msg = Loader.OnValidate(key)
 
-            HideLoading(function()
-                if success then
-                    StatusLabel.TextColor3 = Theme.Success
-                    StatusLabel.Text = msg or "Key validated!"
-                    Tween(StatusLabel, TI.Fast, {TextTransparency = 0})
-                    ValidateBtnLabel.Text = "SUCCESS"
-                    Tween(ValidateBtn, TI.Fast, {BackgroundColor3 = Theme.Success})
+            if success then
+                AnimateClose()
+            end
 
-                    local _closeElapsed = 0
-                    local _closeConn
-                    _closeConn = RS.Heartbeat:Connect(function(dt)
-                        _closeElapsed = _closeElapsed + dt
-                        if _closeElapsed >= 1.2 then
-                            _closeConn:Disconnect()
-                            AnimateClose()
-                        end
-                    end)
-                else
-                    StatusLabel.TextColor3 = Theme.Error
-                    StatusLabel.Text = msg or "Invalid key."
-                    Tween(StatusLabel, TI.Fast, {TextTransparency = 0})
-                    ShakeElement(KeyInputFrame)
-                    Tween(KeyInputStroke, TI.Fast, {Color = Theme.Error})
-                    task.delay(0.6, function()
-                        Tween(KeyInputStroke, TI.Fast, {Color = Theme.InputBorder})
-                    end)
-                    ValidateBtnLabel.Text = "VALIDATE"
-                    Tween(ValidateBtn, TI.Fast, {BackgroundColor3 = Theme.Accent})
-                    task.delay(4, function()
-                        Tween(StatusLabel, TI.Medium, {TextTransparency = 1})
-                    end)
-                end
+            HideLoading(function()
+                if success then return end
+                StatusLabel.TextColor3 = Theme.Error
+                StatusLabel.Text = msg or "Invalid key."
+                Tween(StatusLabel, TI.Fast, {TextTransparency = 0})
+                ShakeElement(KeyInputFrame)
+                Tween(KeyInputStroke, TI.Fast, {Color = Theme.Error})
+                task.delay(0.6, function()
+                    Tween(KeyInputStroke, TI.Fast, {Color = Theme.InputBorder})
+                end)
+                ValidateBtnLabel.Text = "VALIDATE"
+                Tween(ValidateBtn, TI.Fast, {BackgroundColor3 = Theme.Accent})
+                task.delay(4, function()
+                    Tween(StatusLabel, TI.Medium, {TextTransparency = 1})
+                end)
             end)
         end))
     else
