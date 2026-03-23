@@ -1185,27 +1185,93 @@ local VersionLabel = New("TextLabel", {
     Parent = RightPanel,
 })
 
-local DiscordFrame = New("Frame", {
-    Name = "DiscordIcon",
+local DISCORD_URL = "https://discord.gg/vRXFYAtH5z"
+
+local DiscordBtn = New("TextButton", {
+    Name = "DiscordBtn",
     Size = UDim2.fromOffset(24, 24),
     AnchorPoint = Vector2.new(1, 1),
     Position = UDim2.new(1, -12, 1, -8),
     BackgroundColor3 = Theme.SurfaceHover,
+    Text = "",
+    AutoButtonColor = false,
+    Active = true,
     ZIndex = 5,
     Parent = RightPanel,
 })
-Corner(DiscordFrame, 6)
+Corner(DiscordBtn, 6)
+local DiscordStroke = Stroke(DiscordBtn, Theme.Border, 1)
 
-New("TextLabel", {
-    Size = UDim2.fromScale(1, 1),
-    BackgroundTransparency = 1,
-    Text = "DC",
-    TextColor3 = Theme.TextSub,
-    Font = Enum.Font.GothamBold,
-    TextSize = 8,
-    ZIndex = 6,
-    Parent = DiscordFrame,
-})
+do
+    local discordIconData = GetLucideIcon("message-circle")
+    if discordIconData then
+        New("ImageLabel", {
+            Name = "DiscordIcon",
+            Size = UDim2.fromOffset(13, 13),
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.fromScale(0.5, 0.5),
+            BackgroundTransparency = 1,
+            Image = discordIconData.Url or "",
+            ImageRectOffset = discordIconData.ImageRectOffset or Vector2.new(0, 0),
+            ImageRectSize = discordIconData.ImageRectSize or Vector2.new(0, 0),
+            ImageColor3 = Theme.TextSub,
+            ZIndex = 6,
+            Parent = DiscordBtn,
+        })
+    else
+        New("TextLabel", {
+            Size = UDim2.fromScale(1, 1),
+            BackgroundTransparency = 1,
+            Text = "DC",
+            TextColor3 = Theme.TextSub,
+            Font = Enum.Font.GothamBold,
+            TextSize = 8,
+            ZIndex = 6,
+            Parent = DiscordBtn,
+        })
+    end
+end
+
+do
+    local discordHoverIn  = TS:Create(DiscordBtn,    TI.Fast, {BackgroundColor3 = Theme.Border})
+    local discordHoverOut = TS:Create(DiscordBtn,    TI.Fast, {BackgroundColor3 = Theme.SurfaceHover})
+    local discordStrokeIn = TS:Create(DiscordStroke, TI.Fast, {Color = Theme.AccentGlow})
+    local discordStrokeOut= TS:Create(DiscordStroke, TI.Fast, {Color = Theme.Border})
+
+    Conn(DiscordBtn.MouseEnter:Connect(function()
+        discordHoverIn:Play()
+        discordStrokeIn:Play()
+        local img = DiscordBtn:FindFirstChild("DiscordIcon")
+        if img then Tween(img, TI.Fast, {ImageColor3 = Theme.AccentGlow}) end
+    end))
+
+    Conn(DiscordBtn.MouseLeave:Connect(function()
+        discordHoverOut:Play()
+        discordStrokeOut:Play()
+        local img = DiscordBtn:FindFirstChild("DiscordIcon")
+        if img then Tween(img, TI.Fast, {ImageColor3 = Theme.TextSub}) end
+    end))
+
+    Conn(DiscordBtn.MouseButton1Click:Connect(function()
+        Tween(DiscordBtn, TI.Snappy, {Size = UDim2.fromOffset(20, 20)})
+        task.delay(0.12, function()
+            Tween(DiscordBtn, TI.Bounce, {Size = UDim2.fromOffset(24, 24)})
+        end)
+
+        local setClip = setclipboard or toclipboard or set_clipboard
+        if type(setClip) == "function" then
+            pcall(setClip, DISCORD_URL)
+        end
+
+        Loader:Toast({
+            Type = "info",
+            Icon = "message-circle",
+            Title = "Discord Copied",
+            Subtitle = DISCORD_URL,
+            Duration = 4,
+        })
+    end))
+end
 
 Conn(KeyTextBox.Focused:Connect(function()
     Tween(KeyInputStroke, TI.Fast, {Color = Theme.InputFocus, Thickness = 1.5})
@@ -1676,10 +1742,17 @@ do
     end
 
     task.delay(0.1, function()
+        if isClosing then return end
         Tween(Window, TI.FadeIn, {BackgroundTransparency = 0})
         Tween(WindowStroke, TI.FadeIn, {Transparency = 0})
 
         task.delay(0.15, function()
+            if isClosing then
+                origTransparency = nil
+                origTextTransparency = nil
+                origStrokeTransparency = nil
+                return
+            end
             for desc, orig in pairs(origTransparency) do
                 if desc and desc.Parent then
                     Tween(desc, TI.FadeIn, {BackgroundTransparency = orig})
@@ -1701,18 +1774,22 @@ do
             origStrokeTransparency = nil
 
             task.delay(0.4, function()
+                if isClosing then return end
                 local fullText = "WELCOME, " .. LP.DisplayName:upper()
                 local strSub = string.sub
                 WelcomeLabel.TextTransparency = 0
 
                 for i = 1, #fullText do
+                    if isClosing then return end
                     WelcomeLabel.Text = strSub(fullText, 1, i) .. '<font color="#555">|</font>'
                     task.wait(0.035)
                 end
 
+                if isClosing then return end
                 WelcomeLabel.Text = fullText
 
                 task.delay(0.3, function()
+                    if isClosing then return end
                     local glowTween = TS:Create(WelcomeLabel, TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
                         TextColor3 = Theme.AccentGlow,
                     })
