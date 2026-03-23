@@ -2,6 +2,23 @@
 
 local function __INIT__()
 
+-- Prevent double execution (Luraph obfuscation can cause executors to run the
+-- script twice). Destroy any existing instance and reclaim the slot.
+do
+    local genv = pcall(getgenv) and getgenv() or _G
+    if genv.__ImpHubLoaderRunning then
+        pcall(function()
+            local old = game:GetService("CoreGui"):FindFirstChild("ImpHubLoader")
+                or game:GetService("Players").LocalPlayer
+                    :FindFirstChild("PlayerGui")
+                    and game:GetService("Players").LocalPlayer.PlayerGui
+                        :FindFirstChild("ImpHubLoader")
+            if old then old:Destroy() end
+        end)
+    end
+    genv.__ImpHubLoaderRunning = true
+end
+
 local TS = game:GetService("TweenService")
 local UIS = game:GetService("UserInputService")
 local RS = game:GetService("RunService")
@@ -1636,6 +1653,10 @@ local function CleanupAll()
     if _cleanupDone then return end
     _cleanupDone = true
     pcall(function()
+        local genv = pcall(getgenv) and getgenv() or _G
+        genv.__ImpHubLoaderRunning = nil
+    end)
+    pcall(function()
         if loadingDotsConn then loadingDotsConn:Disconnect() end
         spinnerTween:Cancel()
         for _, c in ipairs(State.Connections) do c:Disconnect() end
@@ -1650,24 +1671,33 @@ local function AnimateClose(onDone)
     if isClosing then return end
     isClosing = true
 
-    -- Window.Visible = false is a Frame property we own directly.
-    -- It CANNOT fail regardless of executor CoreGui protection level.
-    -- This is the guaranteed instant visual kill.
-    Window.Visible = false
+    -- Play the shrink + fade animation
+    pcall(function()
+        local s = UIScale.Scale
+        local shrinkTI = TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+        TS:Create(UIScale,      shrinkTI, {Scale = s * 0.6}):Play()
+        TS:Create(Window,       shrinkTI, {BackgroundTransparency = 1}):Play()
+        TS:Create(WindowStroke, TI.Fast,  {Transparency = 1}):Play()
+        for _, desc in ipairs(Window:GetDescendants()) do
+            if desc:IsA("GuiObject") then
+                pcall(function() TS:Create(desc, TI.Fast, {BackgroundTransparency = 1}):Play() end)
+            end
+            if desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox") then
+                pcall(function() TS:Create(desc, TI.Fast, {TextTransparency = 1}):Play() end)
+            end
+            if desc:IsA("ImageLabel") then
+                pcall(function() TS:Create(desc, TI.Fast, {ImageTransparency = 1}):Play() end)
+            end
+            if desc:IsA("UIStroke") then
+                pcall(function() TS:Create(desc, TI.Fast, {Transparency = 1}):Play() end)
+            end
+        end
+    end)
 
-    -- Try additional hide methods as belt+suspenders
-    pcall(function() Gui.Enabled = false end)
-
-    -- Animate the shrink (purely cosmetic — UI is already invisible above)
+    -- After animation, force-hide then cleanup
     task.spawn(function()
-        pcall(function()
-            local s = UIScale.Scale
-            local shrinkTI = TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-            TS:Create(UIScale, TweenInfo.new(0.1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Scale = s * 1.05}):Play()
-            task.wait(0.1)
-            TS:Create(UIScale, shrinkTI, {Scale = s * 0.5}):Play()
-        end)
         task.wait(0.35)
+        pcall(function() Window.Visible = false end)
         CleanupAll()
         if type(onDone) == "function" then task.spawn(onDone) end
     end)
