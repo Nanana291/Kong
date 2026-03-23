@@ -246,7 +246,7 @@ do
         local titleW = TitleLabel.AbsoluteSize.X
         local baseX = 44
         local sepX = baseX + titleW + 6
-        local nameX = baseX + titleW + 18
+        local nameX = baseX + titleW + 20
         TitleSep.Position = UDim2.fromOffset(sepX, 0)
         GameNameLabel.Position = UDim2.fromOffset(nameX, 0)
         GameNameLabel.Size = UDim2.new(1, -(nameX + 44), 1, 0)
@@ -1570,57 +1570,79 @@ end))
 local isClosing = false
 
 local function CleanupAll()
-    if loadingDotsConn then loadingDotsConn:Disconnect() end
-    spinnerTween:Cancel()
-    for _, c in ipairs(State.Connections) do
-        c:Disconnect()
-    end
-    Gui:Destroy()
+    pcall(function()
+        if loadingDotsConn then loadingDotsConn:Disconnect() end
+        spinnerTween:Cancel()
+        for _, c in ipairs(State.Connections) do
+            c:Disconnect()
+        end
+    end)
+    pcall(function()
+        if Gui and Gui.Parent then Gui:Destroy() end
+    end)
 end
 
 local function AnimateClose(onDone)
     if isClosing then return end
+    if not Gui or not Gui.Parent then
+        CleanupAll()
+        if type(onDone) == "function" then onDone() end
+        return
+    end
     isClosing = true
 
-    local currentScale = UIScale.Scale
+    local ok = pcall(function()
+        local currentScale = UIScale.Scale
 
-    Tween(UIScale, TI.Snappy, {Scale = currentScale * 1.03})
+        Tween(UIScale, TI.Snappy, {Scale = currentScale * 1.03})
 
-    task.delay(0.1, function()
-        local shrinkTI = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-
-        Tween(UIScale, shrinkTI, {Scale = currentScale * 0.6})
-        Tween(Window, shrinkTI, {BackgroundTransparency = 1})
-        Tween(WindowStroke, TI.Fast, {Transparency = 1})
-
-        for _, desc in ipairs(Window:GetDescendants()) do
-            if desc:IsA("GuiObject") then
-                pcall(function()
-                    Tween(desc, TI.Fast, {BackgroundTransparency = 1})
-                end)
+        task.delay(0.1, function()
+            if not Window or not Window.Parent then
+                CleanupAll()
+                if type(onDone) == "function" then onDone() end
+                return
             end
-            if desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox") then
-                pcall(function()
-                    Tween(desc, TI.Fast, {TextTransparency = 1})
-                end)
-            end
-            if desc:IsA("ImageLabel") then
-                pcall(function()
-                    Tween(desc, TI.Fast, {ImageTransparency = 1})
-                end)
-            end
-            if desc:IsA("UIStroke") then
-                pcall(function()
-                    Tween(desc, TI.Fast, {Transparency = 1})
-                end)
-            end
-        end
 
-        task.delay(0.4, function()
-            CleanupAll()
-            if type(onDone) == "function" then onDone() end
+            local shrinkTI = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+
+            Tween(UIScale, shrinkTI, {Scale = currentScale * 0.6})
+            Tween(Window, shrinkTI, {BackgroundTransparency = 1})
+            Tween(WindowStroke, TI.Fast, {Transparency = 1})
+
+            for _, desc in ipairs(Window:GetDescendants()) do
+                if desc:IsA("GuiObject") then
+                    pcall(function()
+                        Tween(desc, TI.Fast, {BackgroundTransparency = 1})
+                    end)
+                end
+                if desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox") then
+                    pcall(function()
+                        Tween(desc, TI.Fast, {TextTransparency = 1})
+                    end)
+                end
+                if desc:IsA("ImageLabel") then
+                    pcall(function()
+                        Tween(desc, TI.Fast, {ImageTransparency = 1})
+                    end)
+                end
+                if desc:IsA("UIStroke") then
+                    pcall(function()
+                        Tween(desc, TI.Fast, {Transparency = 1})
+                    end)
+                end
+            end
+
+            task.delay(0.4, function()
+                CleanupAll()
+                if type(onDone) == "function" then onDone() end
+            end)
         end)
     end)
+
+    if not ok then
+        CleanupAll()
+        if type(onDone) == "function" then onDone() end
+    end
 end
 
 Conn(CloseBtn.MouseButton1Click:Connect(function()
@@ -2007,11 +2029,11 @@ function Loader:Toast(config)
 end
 
 function Loader:Close(callback)
-    AnimateClose(callback)
+    pcall(AnimateClose, callback)
 end
 
 function Loader:Destroy()
-    CleanupAll()
+    pcall(CleanupAll)
 end
 
 return Loader
