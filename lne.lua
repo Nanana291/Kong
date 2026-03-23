@@ -246,7 +246,7 @@ do
         local titleW = TitleLabel.AbsoluteSize.X
         local baseX = 44
         local sepX = baseX + titleW + 6
-        local nameX = baseX + titleW + 20
+        local nameX = baseX + titleW + 22
         TitleSep.Position = UDim2.fromOffset(sepX, 0)
         GameNameLabel.Position = UDim2.fromOffset(nameX, 0)
         GameNameLabel.Size = UDim2.new(1, -(nameX + 44), 1, 0)
@@ -1384,6 +1384,7 @@ local LoadingDots = New("TextLabel", {
 })
 
 local loadingDotsConn = nil
+local isClosing = false
 
 local function ShowLoading(text)
     LoadingText.Text = text or "Validating..."
@@ -1431,6 +1432,7 @@ local function HideLoading(callback)
 
     local fade = Tween(LoadingScreen, TI.Medium, {BackgroundTransparency = 1})
     fade.Completed:Once(function()
+        if isClosing then return end
         LoadingScreen.Visible = false
         SpinnerFrame.Rotation = 0
         if type(callback) == "function" then callback() end
@@ -1567,7 +1569,6 @@ Conn(ValidateBtn.MouseButton1Click:Connect(function()
     end
 end))
 
-local isClosing = false
 
 local function CleanupAll()
     pcall(function()
