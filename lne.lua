@@ -1643,52 +1643,40 @@ local function CleanupAll()
         end
         State.Connections = {}
     end)
-    pcall(function()
-        if Gui and Gui.Parent then Gui:Destroy() end
-    end)
+    -- Nil the parent first (works even on executor-protected CoreGui children
+    -- where :Destroy() may silently fail). Enabled=false is belt+suspenders.
+    pcall(function() Gui.Enabled = false end)
+    pcall(function() Gui.Parent = nil end)
+    pcall(function() Gui:Destroy() end)
 end
 
 local function AnimateClose(onDone)
     if isClosing then return end
-    if not Gui or not Gui.Parent then
-        CleanupAll()
+    if not Gui then
         if type(onDone) == "function" then task.spawn(onDone) end
         return
     end
     isClosing = true
 
-    -- Fire all tweens immediately in parallel (no chain, no callbacks).
+    -- Kill the UI visually right now, synchronously.
+    -- This is the only guaranteed-to-work approach across all executors:
+    -- Gui.Enabled=false is a property write — it cannot be silently swallowed.
+    -- :Destroy() on CoreGui children CAN fail on certain executors.
+    pcall(function() Gui.Enabled = false end)
+
+    -- Cosmetic fade tweens (GUI is already invisible, these are just polish
+    -- in case Enabled=false ever gets reverted by a DescendantAdded handler)
     pcall(function()
         local s = UIScale.Scale
-        local shrinkTI = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-        TS:Create(UIScale,      TI.Snappy, {Scale = s * 1.03}):Play()
-        TS:Create(UIScale,      shrinkTI,  {Scale = s * 0.6}):Play()
-        TS:Create(Window,       shrinkTI,  {BackgroundTransparency = 1}):Play()
-        TS:Create(WindowStroke, TI.Fast,   {Transparency = 1}):Play()
-        if Window and Window.Parent then
-            for _, desc in ipairs(Window:GetDescendants()) do
-                if desc:IsA("GuiObject") then
-                    pcall(function() TS:Create(desc, TI.Fast, {BackgroundTransparency = 1}):Play() end)
-                end
-                if desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox") then
-                    pcall(function() TS:Create(desc, TI.Fast, {TextTransparency = 1}):Play() end)
-                end
-                if desc:IsA("ImageLabel") then
-                    pcall(function() TS:Create(desc, TI.Fast, {ImageTransparency = 1}):Play() end)
-                end
-                if desc:IsA("UIStroke") then
-                    pcall(function() TS:Create(desc, TI.Fast, {Transparency = 1}):Play() end)
-                end
-            end
-        end
+        local shrinkTI = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+        TS:Create(UIScale,      shrinkTI, {Scale = s * 0.6}):Play()
+        TS:Create(Window,       shrinkTI, {BackgroundTransparency = 1}):Play()
+        TS:Create(WindowStroke, shrinkTI, {Transparency = 1}):Play()
     end)
 
-    -- task.spawn + task.wait: Roblox-native scheduler, not affected by Luraph.
-    -- Avoids Heartbeat (race with CleanupAll disconnecting it) and task.delay
-    -- (unreliable inside obfuscated VM boundaries). task.wait inside a
-    -- task.spawn coroutine is a native yield — always resumes correctly.
+    -- Full cleanup after a short delay (connections, memory, Destroy)
     task.spawn(function()
-        task.wait(0.45)
+        task.wait(0.35)
         CleanupAll()
         if type(onDone) == "function" then task.spawn(onDone) end
     end)
