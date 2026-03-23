@@ -1596,8 +1596,14 @@ Conn(ValidateBtn.MouseButton1Click:Connect(function()
                     ValidateBtnLabel.Text = "SUCCESS"
                     Tween(ValidateBtn, TI.Fast, {BackgroundColor3 = Theme.Success})
 
-                    task.delay(1.2, function()
-                        AnimateClose()
+                    local _closeElapsed = 0
+                    local _closeConn
+                    _closeConn = RS.Heartbeat:Connect(function(dt)
+                        _closeElapsed = _closeElapsed + dt
+                        if _closeElapsed >= 1.2 then
+                            _closeConn:Disconnect()
+                            AnimateClose()
+                        end
                     end)
                 else
                     StatusLabel.TextColor3 = Theme.Error
