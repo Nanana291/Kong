@@ -1,23 +1,4 @@
---!optimize 2
-
 local function __INIT__()
-
--- Prevent double execution (Luraph obfuscation can cause executors to run the
--- script twice). Destroy any existing instance and reclaim the slot.
-do
-    local genv = pcall(getgenv) and getgenv() or _G
-    if genv.__ImpHubLoaderRunning then
-        pcall(function()
-            local old = game:GetService("CoreGui"):FindFirstChild("ImpHubLoader")
-                or game:GetService("Players").LocalPlayer
-                    :FindFirstChild("PlayerGui")
-                    and game:GetService("Players").LocalPlayer.PlayerGui
-                        :FindFirstChild("ImpHubLoader")
-            if old then old:Destroy() end
-        end)
-    end
-    genv.__ImpHubLoaderRunning = true
-end
 
 local TS = game:GetService("TweenService")
 local UIS = game:GetService("UserInputService")
@@ -263,7 +244,7 @@ do
         local titleW = TitleLabel.AbsoluteSize.X
         local baseX = 44
         local sepX = baseX + titleW + 6
-        local nameX = baseX + titleW + 22
+        local nameX = baseX + titleW + 20
         TitleSep.Position = UDim2.fromOffset(sepX, 0)
         GameNameLabel.Position = UDim2.fromOffset(nameX, 0)
         GameNameLabel.Size = UDim2.new(1, -(nameX + 44), 1, 0)
@@ -1027,14 +1008,21 @@ local LucideIcons = nil
 local LucideFetched = false
 
 do
-    local ok, result = pcall(function()
-        return loadstring(
-            game:HttpGet("https://raw.githubusercontent.com/deividcomsono/lucide-roblox-direct/refs/heads/main/source.lua")
-        )()
+    local fetchOk, source = pcall(function()
+        return game:HttpGet("https://raw.githubusercontent.com/deividcomsono/lucide-roblox-direct/refs/heads/main/source.lua")
     end)
-    if ok and result then
-        LucideIcons = result
-        LucideFetched = true
+
+    if fetchOk and type(source) == "string" and #source > 100 then
+        local compileOk, compiled = pcall(loadstring, source)
+
+        if compileOk and type(compiled) == "function" then
+            local runOk, result = pcall(compiled)
+
+            if runOk and result then
+                LucideIcons = result
+                LucideFetched = true
+            end
+        end
     end
 end
 
@@ -1202,93 +1190,27 @@ local VersionLabel = New("TextLabel", {
     Parent = RightPanel,
 })
 
-local DISCORD_URL = "https://discord.gg/vRXFYAtH5z"
-
-local DiscordBtn = New("TextButton", {
-    Name = "DiscordBtn",
+local DiscordFrame = New("Frame", {
+    Name = "DiscordIcon",
     Size = UDim2.fromOffset(24, 24),
     AnchorPoint = Vector2.new(1, 1),
     Position = UDim2.new(1, -12, 1, -8),
     BackgroundColor3 = Theme.SurfaceHover,
-    Text = "",
-    AutoButtonColor = false,
-    Active = true,
     ZIndex = 5,
     Parent = RightPanel,
 })
-Corner(DiscordBtn, 6)
-local DiscordStroke = Stroke(DiscordBtn, Theme.Border, 1)
+Corner(DiscordFrame, 6)
 
-do
-    local discordIconData = GetLucideIcon("message-circle")
-    if discordIconData then
-        New("ImageLabel", {
-            Name = "DiscordIcon",
-            Size = UDim2.fromOffset(13, 13),
-            AnchorPoint = Vector2.new(0.5, 0.5),
-            Position = UDim2.fromScale(0.5, 0.5),
-            BackgroundTransparency = 1,
-            Image = discordIconData.Url or "",
-            ImageRectOffset = discordIconData.ImageRectOffset or Vector2.new(0, 0),
-            ImageRectSize = discordIconData.ImageRectSize or Vector2.new(0, 0),
-            ImageColor3 = Theme.TextSub,
-            ZIndex = 6,
-            Parent = DiscordBtn,
-        })
-    else
-        New("TextLabel", {
-            Size = UDim2.fromScale(1, 1),
-            BackgroundTransparency = 1,
-            Text = "DC",
-            TextColor3 = Theme.TextSub,
-            Font = Enum.Font.GothamBold,
-            TextSize = 8,
-            ZIndex = 6,
-            Parent = DiscordBtn,
-        })
-    end
-end
-
-do
-    local discordHoverIn  = TS:Create(DiscordBtn,    TI.Fast, {BackgroundColor3 = Theme.Border})
-    local discordHoverOut = TS:Create(DiscordBtn,    TI.Fast, {BackgroundColor3 = Theme.SurfaceHover})
-    local discordStrokeIn = TS:Create(DiscordStroke, TI.Fast, {Color = Theme.AccentGlow})
-    local discordStrokeOut= TS:Create(DiscordStroke, TI.Fast, {Color = Theme.Border})
-
-    Conn(DiscordBtn.MouseEnter:Connect(function()
-        discordHoverIn:Play()
-        discordStrokeIn:Play()
-        local img = DiscordBtn:FindFirstChild("DiscordIcon")
-        if img then Tween(img, TI.Fast, {ImageColor3 = Theme.AccentGlow}) end
-    end))
-
-    Conn(DiscordBtn.MouseLeave:Connect(function()
-        discordHoverOut:Play()
-        discordStrokeOut:Play()
-        local img = DiscordBtn:FindFirstChild("DiscordIcon")
-        if img then Tween(img, TI.Fast, {ImageColor3 = Theme.TextSub}) end
-    end))
-
-    Conn(DiscordBtn.MouseButton1Click:Connect(function()
-        Tween(DiscordBtn, TI.Snappy, {Size = UDim2.fromOffset(20, 20)})
-        task.delay(0.12, function()
-            Tween(DiscordBtn, TI.Bounce, {Size = UDim2.fromOffset(24, 24)})
-        end)
-
-        local setClip = setclipboard or toclipboard or set_clipboard
-        if type(setClip) == "function" then
-            pcall(setClip, DISCORD_URL)
-        end
-
-        Loader:Toast({
-            Type = "info",
-            Icon = "message-circle",
-            Title = "Discord Copied",
-            Subtitle = DISCORD_URL,
-            Duration = 4,
-        })
-    end))
-end
+New("TextLabel", {
+    Size = UDim2.fromScale(1, 1),
+    BackgroundTransparency = 1,
+    Text = "DC",
+    TextColor3 = Theme.TextSub,
+    Font = Enum.Font.GothamBold,
+    TextSize = 8,
+    ZIndex = 6,
+    Parent = DiscordFrame,
+})
 
 Conn(KeyTextBox.Focused:Connect(function()
     Tween(KeyInputStroke, TI.Fast, {Color = Theme.InputFocus, Thickness = 1.5})
@@ -1467,7 +1389,6 @@ local LoadingDots = New("TextLabel", {
 })
 
 local loadingDotsConn = nil
-local isClosing = false
 
 local function ShowLoading(text)
     LoadingText.Text = text or "Validating..."
@@ -1567,13 +1488,13 @@ local function ShakeElement(inst)
     local orig = inst.Position
     local ox = orig.X.Offset
     local seq = {10, -8, 6, -4, 2, 0}
-    task.spawn(function()
+    coroutine.resume(coroutine.create(function()
         for _, dx in ipairs(seq) do
             inst.Position = UDim2.new(orig.X.Scale, ox + dx, orig.Y.Scale, orig.Y.Offset)
             task.wait(0.035)
         end
         inst.Position = orig
-    end)
+    end))
 end
 
 local Loader = {}
@@ -1601,33 +1522,37 @@ Conn(ValidateBtn.MouseButton1Click:Connect(function()
     ShowLoading("Validating key...")
 
     if type(Loader.OnValidate) == "function" then
-        -- task.spawn = Roblox-native scheduler, survives Luraph coroutine replacement.
-        -- coroutine.resume/create are hijacked by Luraph VM — task.wait inside them
-        -- yields into a dead context and never resumes, so success is never evaluated.
-        task.spawn(function()
+        coroutine.resume(coroutine.create(function()
             local success, msg = Loader.OnValidate(key)
 
-            if success then
-                AnimateClose()
-                return
-            end
-
             HideLoading(function()
-                StatusLabel.TextColor3 = Theme.Error
-                StatusLabel.Text = msg or "Invalid key."
-                Tween(StatusLabel, TI.Fast, {TextTransparency = 0})
-                ShakeElement(KeyInputFrame)
-                Tween(KeyInputStroke, TI.Fast, {Color = Theme.Error})
-                task.delay(0.6, function()
-                    Tween(KeyInputStroke, TI.Fast, {Color = Theme.InputBorder})
-                end)
-                ValidateBtnLabel.Text = "VALIDATE"
-                Tween(ValidateBtn, TI.Fast, {BackgroundColor3 = Theme.Accent})
-                task.delay(4, function()
-                    Tween(StatusLabel, TI.Medium, {TextTransparency = 1})
-                end)
+                if success then
+                    StatusLabel.TextColor3 = Theme.Success
+                    StatusLabel.Text = msg or "Key validated!"
+                    Tween(StatusLabel, TI.Fast, {TextTransparency = 0})
+                    ValidateBtnLabel.Text = "SUCCESS"
+                    Tween(ValidateBtn, TI.Fast, {BackgroundColor3 = Theme.Success})
+
+                    task.delay(1.2, function()
+                        AnimateClose()
+                    end)
+                else
+                    StatusLabel.TextColor3 = Theme.Error
+                    StatusLabel.Text = msg or "Invalid key."
+                    Tween(StatusLabel, TI.Fast, {TextTransparency = 0})
+                    ShakeElement(KeyInputFrame)
+                    Tween(KeyInputStroke, TI.Fast, {Color = Theme.Error})
+                    task.delay(0.6, function()
+                        Tween(KeyInputStroke, TI.Fast, {Color = Theme.InputBorder})
+                    end)
+                    ValidateBtnLabel.Text = "VALIDATE"
+                    Tween(ValidateBtn, TI.Fast, {BackgroundColor3 = Theme.Accent})
+                    task.delay(4, function()
+                        Tween(StatusLabel, TI.Medium, {TextTransparency = 1})
+                    end)
+                end
             end)
-        end)
+        end))
     else
         HideLoading(function()
             StatusLabel.TextColor3 = Theme.Error
@@ -1647,60 +1572,82 @@ Conn(ValidateBtn.MouseButton1Click:Connect(function()
     end
 end))
 
+local isClosing = false
 
-local _cleanupDone = false
 local function CleanupAll()
-    if _cleanupDone then return end
-    _cleanupDone = true
-    pcall(function()
-        local genv = pcall(getgenv) and getgenv() or _G
-        genv.__ImpHubLoaderRunning = nil
-    end)
     pcall(function()
         if loadingDotsConn then loadingDotsConn:Disconnect() end
         spinnerTween:Cancel()
-        for _, c in ipairs(State.Connections) do c:Disconnect() end
-        State.Connections = {}
+        for _, c in ipairs(State.Connections) do
+            c:Disconnect()
+        end
     end)
-    pcall(function() Gui.Enabled = false end)
-    pcall(function() Gui.Parent = nil end)
-    pcall(function() Gui:Destroy() end)
+    pcall(function()
+        if Gui and Gui.Parent then Gui:Destroy() end
+    end)
 end
 
 local function AnimateClose(onDone)
     if isClosing then return end
+    if not Gui or not Gui.Parent then
+        CleanupAll()
+        if type(onDone) == "function" then onDone() end
+        return
+    end
     isClosing = true
 
-    -- Play the shrink + fade animation
-    pcall(function()
-        local s = UIScale.Scale
-        local shrinkTI = TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-        TS:Create(UIScale,      shrinkTI, {Scale = s * 0.6}):Play()
-        TS:Create(Window,       shrinkTI, {BackgroundTransparency = 1}):Play()
-        TS:Create(WindowStroke, TI.Fast,  {Transparency = 1}):Play()
-        for _, desc in ipairs(Window:GetDescendants()) do
-            if desc:IsA("GuiObject") then
-                pcall(function() TS:Create(desc, TI.Fast, {BackgroundTransparency = 1}):Play() end)
+    local ok = pcall(function()
+        local currentScale = UIScale.Scale
+
+        Tween(UIScale, TI.Snappy, {Scale = currentScale * 1.03})
+
+        task.delay(0.1, function()
+            if not Window or not Window.Parent then
+                CleanupAll()
+                if type(onDone) == "function" then onDone() end
+                return
             end
-            if desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox") then
-                pcall(function() TS:Create(desc, TI.Fast, {TextTransparency = 1}):Play() end)
+
+            local shrinkTI = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+
+            Tween(UIScale, shrinkTI, {Scale = currentScale * 0.6})
+            Tween(Window, shrinkTI, {BackgroundTransparency = 1})
+            Tween(WindowStroke, TI.Fast, {Transparency = 1})
+
+            for _, desc in ipairs(Window:GetDescendants()) do
+                if desc:IsA("GuiObject") then
+                    pcall(function()
+                        Tween(desc, TI.Fast, {BackgroundTransparency = 1})
+                    end)
+                end
+                if desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox") then
+                    pcall(function()
+                        Tween(desc, TI.Fast, {TextTransparency = 1})
+                    end)
+                end
+                if desc:IsA("ImageLabel") then
+                    pcall(function()
+                        Tween(desc, TI.Fast, {ImageTransparency = 1})
+                    end)
+                end
+                if desc:IsA("UIStroke") then
+                    pcall(function()
+                        Tween(desc, TI.Fast, {Transparency = 1})
+                    end)
+                end
             end
-            if desc:IsA("ImageLabel") then
-                pcall(function() TS:Create(desc, TI.Fast, {ImageTransparency = 1}):Play() end)
-            end
-            if desc:IsA("UIStroke") then
-                pcall(function() TS:Create(desc, TI.Fast, {Transparency = 1}):Play() end)
-            end
-        end
+
+            task.delay(0.4, function()
+                CleanupAll()
+                if type(onDone) == "function" then onDone() end
+            end)
+        end)
     end)
 
-    -- After animation, force-hide then cleanup
-    task.spawn(function()
-        task.wait(0.35)
-        pcall(function() Window.Visible = false end)
+    if not ok then
         CleanupAll()
-        if type(onDone) == "function" then task.spawn(onDone) end
-    end)
+        if type(onDone) == "function" then onDone() end
+    end
 end
 
 Conn(CloseBtn.MouseButton1Click:Connect(function()
@@ -1733,17 +1680,10 @@ do
     end
 
     task.delay(0.1, function()
-        if isClosing then return end
         Tween(Window, TI.FadeIn, {BackgroundTransparency = 0})
         Tween(WindowStroke, TI.FadeIn, {Transparency = 0})
 
         task.delay(0.15, function()
-            if isClosing then
-                origTransparency = nil
-                origTextTransparency = nil
-                origStrokeTransparency = nil
-                return
-            end
             for desc, orig in pairs(origTransparency) do
                 if desc and desc.Parent then
                     Tween(desc, TI.FadeIn, {BackgroundTransparency = orig})
@@ -1765,22 +1705,18 @@ do
             origStrokeTransparency = nil
 
             task.delay(0.4, function()
-                if isClosing then return end
                 local fullText = "WELCOME, " .. LP.DisplayName:upper()
                 local strSub = string.sub
                 WelcomeLabel.TextTransparency = 0
 
                 for i = 1, #fullText do
-                    if isClosing then return end
                     WelcomeLabel.Text = strSub(fullText, 1, i) .. '<font color="#555">|</font>'
                     task.wait(0.035)
                 end
 
-                if isClosing then return end
                 WelcomeLabel.Text = fullText
 
                 task.delay(0.3, function()
-                    if isClosing then return end
                     local glowTween = TS:Create(WelcomeLabel, TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
                         TextColor3 = Theme.AccentGlow,
                     })
@@ -2098,7 +2034,7 @@ function Loader:Toast(config)
 end
 
 function Loader:Close(callback)
-    AnimateClose(callback)
+    pcall(AnimateClose, callback)
 end
 
 function Loader:Destroy()
