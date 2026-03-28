@@ -16973,22 +16973,20 @@ local Library do
 
     Library.CreateSettingsPage = function(self, Window, KeybindList)
 
-        -- ── Helpers ──────────────────────────────────────────────────────────
-        local BoldFont  = Font.new("rbxassetid://12187365364", Enum.FontWeight.Bold,      Enum.FontStyle.Normal)
-        local MedFont   = Font.new("rbxassetid://12187365364", Enum.FontWeight.SemiBold,  Enum.FontStyle.Normal)
+        -- ── Fonts ─────────────────────────────────────────────────────────────
+        local BoldFont = Font.new("rbxassetid://12187365364", Enum.FontWeight.Bold,     Enum.FontStyle.Normal)
+        local MedFont  = Font.new("rbxassetid://12187365364", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
 
-        local function Accent()   return Library.Theme["Accent"]          or FromRGB(151, 69, 186) end
-        local function AccGrad()  return Library.Theme["AccentGradient"]  or FromRGB(109, 43, 139) end
-        local function Bg()       return Library.Theme["Background"]       or FromRGB(12,  12,  14) end
-        local function Elem()     return Library.Theme["Element"]          or FromRGB(18,  17,  22) end
-        local function Sec()      return Library.Theme["Section Background 2"] or FromRGB(22, 21, 27) end
-        local function Outline()  return Library.Theme["Outline"]          or FromRGB(40,  38,  46) end
-        local function Txt()      return Library.Theme["Text"]             or FromRGB(235,235,235)  end
+        -- ── Theme helpers ─────────────────────────────────────────────────────
+        local function Accent()  return Library.Theme["Accent"]              or FromRGB(151,69,186)  end
+        local function AccGrad() return Library.Theme["AccentGradient"]      or FromRGB(109,43,139)  end
+        local function Sec()     return Library.Theme["Section Background 2"] or FromRGB(22,21,27)   end
+        local function Outline() return Library.Theme["Outline"]             or FromRGB(40,38,46)    end
+        local function Elem()    return Library.Theme["Element"]              or FromRGB(18,17,22)   end
+        local function Txt()     return Library.Theme["Text"]                or FromRGB(235,235,235) end
 
-        local function N(inst)   -- create raw, returns inst
-            inst.Name = "\0"
-            return inst
-        end
+        -- ── Primitive helpers ─────────────────────────────────────────────────
+        local function N(inst) inst.Name = "\0"; return inst end
 
         local function Corner(r, p)
             local c = N(InstanceNew("UICorner")); c.CornerRadius = UDimNew(0, r); c.Parent = p; return c
@@ -17002,49 +17000,28 @@ local Library do
 
         local function Pad(l, r, t, b, p)
             local pd = N(InstanceNew("UIPadding"))
-            pd.PaddingLeft = UDimNew(0, l); pd.PaddingRight  = UDimNew(0, r)
-            pd.PaddingTop  = UDimNew(0, t); pd.PaddingBottom = UDimNew(0, b)
+            pd.PaddingLeft = UDimNew(0,l); pd.PaddingRight  = UDimNew(0,r)
+            pd.PaddingTop  = UDimNew(0,t); pd.PaddingBottom = UDimNew(0,b)
             pd.Parent = p; return pd
         end
 
         local function List(dir, align, gap, p)
             local l = N(InstanceNew("UIListLayout"))
-            l.FillDirection       = dir or Enum.FillDirection.Vertical
+            l.FillDirection       = dir   or Enum.FillDirection.Vertical
             l.SortOrder           = Enum.SortOrder.LayoutOrder
             l.Padding             = UDimNew(0, gap or 0)
             l.HorizontalAlignment = align or Enum.HorizontalAlignment.Left
             l.Parent = p; return l
         end
 
-        local function Frame(props, parent)
+        local function MkFrame(props, parent)
             local f = N(InstanceNew("Frame"))
             for k, v in pairs(props) do f[k] = v end
-            f.BorderSizePixel = 0
-            f.Name = "\0"
-            f.Parent = parent
-            return f
+            f.BorderSizePixel = 0; f.Parent = parent; return f
         end
 
-        local function Label(txt, sz, col, transp, parent, bold)
-            local l = N(InstanceNew("TextLabel"))
-            l.FontFace            = bold and BoldFont or Library.Font
-            l.Text                = txt
-            l.TextColor3          = col or Txt()
-            l.TextTransparency    = transp or 0
-            l.TextSize            = sz
-            l.BackgroundTransparency = 1
-            l.BorderSizePixel     = 0
-            l.TextXAlignment      = Enum.TextXAlignment.Left
-            l.AutomaticSize       = Enum.AutomaticSize.X
-            l.Size                = UDim2New(0, 0, 0, sz + 4)
-            l.ZIndex              = 5
-            l.Parent              = parent
-            return l
-        end
-
-        -- ── Page setup ───────────────────────────────────────────────────────
-        local Page = Window:Page({Name = "Settings", Icon = "122669828593160", Columns = 0})
-
+        -- ── Page (Columns=0 → custom layout) ─────────────────────────────────
+        local Page  = Window:Page({Name = "Settings", Icon = "122669828593160", Columns = 0})
         local PageFr = Page.Items["Page"].Instance
         for _, ch in ipairs(PageFr:GetChildren()) do
             if ch:IsA("UIListLayout") or ch:IsA("UIPadding") then ch:Destroy() end
@@ -17052,287 +17029,228 @@ local Library do
 
         local PAD = 10
 
-        -- ── Root container ───────────────────────────────────────────────────
-        local Root = Frame({
-            Size = UDim2New(1, 0, 1, 0),
-            BackgroundTransparency = 1,
-            ZIndex = 2,
-        }, PageFr)
+        -- Root — transparent, non-blocking
+        local Root = MkFrame({ Size = UDim2New(1,0,1,0), BackgroundTransparency = 1, ZIndex = 2 }, PageFr)
 
-        -- Subtle top glow
-        local TopGlow = Frame({
-            Size = UDim2New(1, 0, 0, 200),
-            BackgroundColor3 = Accent(),
-            BackgroundTransparency = 0.92,
-            ZIndex = 2,
+        -- Ambient glow
+        local TopGlow = MkFrame({
+            Size = UDim2New(1,0,0,180),
+            BackgroundColor3 = Accent(), BackgroundTransparency = 0.93, ZIndex = 2,
         }, Root)
         do
             local g = N(InstanceNew("UIGradient"))
             g.Rotation = 90
-            g.Transparency = NumSequence{NumSequenceKeypoint(0,0), NumSequenceKeypoint(0.6,0.5), NumSequenceKeypoint(1,1)}
+            g.Transparency = NumSequence{NumSequenceKeypoint(0,0),NumSequenceKeypoint(0.6,0.5),NumSequenceKeypoint(1,1)}
             g.Parent = TopGlow
         end
 
-        -- ── Three-column layout ──────────────────────────────────────────────
-        -- Outer row frame
-        local Row = Frame({
-            Size        = UDim2New(1, -(PAD*2), 1, -(PAD*2)),
-            Position    = UDim2New(0, PAD, 0, PAD),
-            BackgroundTransparency = 1,
-            ZIndex = 3,
+        -- Outer row (2 cols: nav + content)
+        local Row = MkFrame({
+            Size = UDim2New(1,-(PAD*2), 1,-(PAD*2)),
+            Position = UDim2New(0,PAD, 0,PAD),
+            BackgroundTransparency = 1, ZIndex = 3,
         }, Root)
         List(Enum.FillDirection.Horizontal, Enum.HorizontalAlignment.Left, PAD, Row)
 
-        -- ── LEFT NAV (110px) ─────────────────────────────────────────────────
-        local NavW = 110
-        local NavPanel = Frame({
-            Size                 = UDim2New(0, NavW, 1, 0),
-            BackgroundColor3     = Sec(),
-            BackgroundTransparency = 0.3,
-            ZIndex = 4,
+        -- ── LEFT NAV (110px) ──────────────────────────────────────────────────
+        local NavW    = 110
+        local NavPanel = MkFrame({
+            Size = UDim2New(0,NavW, 1,0),
+            BackgroundColor3 = Sec(), BackgroundTransparency = 0.15, ZIndex = 4,
         }, Row)
         Corner(12, NavPanel)
-        Stroke(Outline(), 1, 0.45, NavPanel)
+        Stroke(Outline(), 1, 0.35, NavPanel)
         Pad(0, 0, PAD, PAD, NavPanel)
 
-        -- Nav panel inner list
-        local NavList = Frame({
-            Size = UDim2New(1, 0, 1, 0),
-            BackgroundTransparency = 1,
-            ZIndex = 5,
-        }, NavPanel)
+        local NavList = MkFrame({ Size = UDim2New(1,0,1,0), BackgroundTransparency = 1, ZIndex = 5 }, NavPanel)
         List(Enum.FillDirection.Vertical, Enum.HorizontalAlignment.Center, 6, NavList)
 
-        -- Nav header
-        local navHdr = Label("SETTINGS", 10, Accent(), 0, NavList, true)
+        -- Nav header label
+        local navHdr = N(InstanceNew("TextLabel"))
+        navHdr.FontFace = BoldFont; navHdr.Text = "SETTINGS"
+        navHdr.TextColor3 = Accent(); navHdr.TextTransparency = 0.1; navHdr.TextSize = 10
+        navHdr.Size = UDim2New(1,0,0,14); navHdr.BackgroundTransparency = 1
         navHdr.TextXAlignment = Enum.TextXAlignment.Center
-        navHdr.Size = UDim2New(1, 0, 0, 14)
-        navHdr.AutomaticSize = Enum.AutomaticSize.None
-        navHdr.LayoutOrder = 1
+        navHdr.ZIndex = 6; navHdr.LayoutOrder = 1; navHdr.Parent = NavList
 
-        -- Accent divider under header
-        local navDiv = Frame({
-            Size = UDim2New(0.7, 0, 0, 1),
-            BackgroundColor3 = Accent(),
-            BackgroundTransparency = 0.4,
-            ZIndex = 5,
-            LayoutOrder = 2,
+        -- Nav divider
+        local navDiv = MkFrame({
+            Size = UDim2New(0.75,0, 0,1), BackgroundColor3 = Accent(),
+            BackgroundTransparency = 0.45, ZIndex = 6, LayoutOrder = 2,
         }, NavList)
-        do
-            local c = N(InstanceNew("UICorner")); c.CornerRadius = UDimNew(1,0); c.Parent = navDiv
-        end
+        Corner(1, navDiv)
 
-        -- Nav items
-        local navItems = {
-            { icon = "settings-2",  label = "Interface"   },
-            { icon = "palette",     label = "Theme"       },
-            { icon = "activity",    label = "Animation"   },
-            { icon = "folder-open", label = "Configs"     },
-        }
-
-        for i, item in ipairs(navItems) do
-            local navBtn = Frame({
-                Size = UDim2New(1, -8, 0, 32),
-                BackgroundColor3 = i == 1 and Accent() or Elem(),
-                BackgroundTransparency = i == 1 and 0.75 or 0.85,
-                ZIndex = 6,
-                LayoutOrder = 2 + i,
-            }, NavList)
-            Corner(8, navBtn)
-            if i == 1 then
-                Stroke(Accent(), 1, 0.55, navBtn)
-            end
-
-            local iconData = Library:GetCustomIcon(item.icon)
-            if iconData then
-                local ico = N(InstanceNew("ImageLabel"))
-                ico.Size              = UDim2New(0, 14, 0, 14)
-                ico.AnchorPoint       = Vector2New(0, 0.5)
-                ico.Position          = UDim2New(0, 10, 0.5, 0)
-                ico.BackgroundTransparency = 1
-                ico.Image             = iconData.Url
-                ico.ImageRectOffset   = iconData.ImageRectOffset
-                ico.ImageRectSize     = iconData.ImageRectSize
-                ico.ImageColor3       = i == 1 and Accent() or FromRGB(180, 178, 195)
-                ico.ZIndex            = 7
-                ico.Parent            = navBtn
-            end
-
-            local lbl = N(InstanceNew("TextLabel"))
-            lbl.FontFace    = i == 1 and MedFont or Library.Font
-            lbl.Text        = item.label
-            lbl.TextColor3  = i == 1 and Txt() or FromRGB(160, 158, 175)
-            lbl.TextTransparency = 0
-            lbl.TextSize    = 11
-            lbl.Size        = UDim2New(1, -30, 1, 0)
-            lbl.Position    = UDim2New(0, 28, 0, 0)
-            lbl.BackgroundTransparency = 1
-            lbl.TextXAlignment = Enum.TextXAlignment.Left
-            lbl.ZIndex      = 7
-            lbl.Name        = "\0"
-            lbl.Parent      = navBtn
-        end
-
-        -- ── CENTER COLUMN (fills remaining space minus right panel) ───────────
-        local RightW  = 160
-        local CenterW = UDim2New(1, -(NavW + PAD + RightW + PAD), 1, 0)
-
+        -- ── CENTER scroll (all cards live here, shown/hidden per tab) ─────────
         local CenterScroll = N(InstanceNew("ScrollingFrame"))
-        CenterScroll.Size                  = CenterW
+        CenterScroll.Size                   = UDim2New(1, -(NavW + PAD), 1, 0)
         CenterScroll.BackgroundTransparency = 1
-        CenterScroll.BorderSizePixel       = 0
-        CenterScroll.ScrollBarThickness    = 2
-        CenterScroll.ScrollBarImageColor3  = Accent()
-        CenterScroll.ScrollBarImageTransparency = 0.5
-        CenterScroll.AutomaticCanvasSize   = Enum.AutomaticSize.Y
-        CenterScroll.CanvasSize            = UDim2New(0,0,0,0)
-        CenterScroll.ZIndex                = 4
-        CenterScroll.Parent                = Row
+        CenterScroll.BorderSizePixel        = 0
+        CenterScroll.ScrollBarThickness     = 2
+        CenterScroll.ScrollBarImageColor3   = Accent()
+        CenterScroll.ScrollBarImageTransparency = 0.45
+        CenterScroll.AutomaticCanvasSize    = Enum.AutomaticSize.Y
+        CenterScroll.CanvasSize             = UDim2New(0,0,0,0)
+        CenterScroll.ZIndex                 = 4
+        CenterScroll.Parent                 = Row
         List(Enum.FillDirection.Vertical, Enum.HorizontalAlignment.Left, PAD, CenterScroll)
 
-        -- ── RIGHT CONFIG PANEL ───────────────────────────────────────────────
-        local RightScroll = N(InstanceNew("ScrollingFrame"))
-        RightScroll.Size                   = UDim2New(0, RightW, 1, 0)
-        RightScroll.BackgroundTransparency = 1
-        RightScroll.BorderSizePixel        = 0
-        RightScroll.ScrollBarThickness     = 2
-        RightScroll.ScrollBarImageColor3   = Accent()
-        RightScroll.ScrollBarImageTransparency = 0.5
-        RightScroll.AutomaticCanvasSize    = Enum.AutomaticSize.Y
-        RightScroll.CanvasSize             = UDim2New(0,0,0,0)
-        RightScroll.ZIndex                 = 4
-        RightScroll.Parent                 = Row
-        List(Enum.FillDirection.Vertical, Enum.HorizontalAlignment.Left, PAD, RightScroll)
-
-        -- ── Card factory ─────────────────────────────────────────────────────
-        local function MakeCard(parent, titleTxt, iconName, order)
-            local card = Frame({
-                Size              = UDim2New(1, 0, 0, 0),
-                BackgroundColor3  = Sec(),
-                BackgroundTransparency = 0.25,
-                AutomaticSize     = Enum.AutomaticSize.Y,
-                ZIndex            = 5,
-                LayoutOrder       = order or 1,
-            }, parent)
+        -- ── Card factory ──────────────────────────────────────────────────────
+        local function MakeCard(titleTxt, iconName, order)
+            local card = MkFrame({
+                Size = UDim2New(1,0, 0,0),
+                BackgroundColor3 = Sec(), BackgroundTransparency = 0.12,
+                AutomaticSize = Enum.AutomaticSize.Y,
+                ZIndex = 5, LayoutOrder = order or 1,
+            }, CenterScroll)
             Corner(12, card)
-            Stroke(Outline(), 1, 0.4, card)
+            Stroke(Outline(), 1, 0.3, card)
 
-            -- Top accent glow line
-            local accentBar = Frame({
-                Size = UDim2New(1, 0, 0, 2),
-                BackgroundColor3 = Accent(),
-                BackgroundTransparency = 0.3,
-                ZIndex = 7,
+            -- Accent bar
+            local aBar = MkFrame({
+                Size = UDim2New(1,0, 0,2), BackgroundColor3 = Accent(),
+                BackgroundTransparency = 0.2, ZIndex = 7,
             }, card)
-            Corner(12, accentBar)
+            Corner(12, aBar)
             do
                 local g = N(InstanceNew("UIGradient"))
-                g.Color = RGBSequence{RGBSequenceKeypoint(0, Accent()), RGBSequenceKeypoint(1, AccGrad())}
-                g.Parent = accentBar
+                g.Color = RGBSequence{RGBSequenceKeypoint(0,Accent()),RGBSequenceKeypoint(1,AccGrad())}
+                g.Parent = aBar
             end
 
-            -- Card header row
-            local hdr = Frame({
-                Size = UDim2New(1, 0, 0, 34),
-                BackgroundTransparency = 1,
-                ZIndex = 6,
-            }, card)
+            -- Header row
+            local hdr = MkFrame({ Size = UDim2New(1,0,0,34), BackgroundTransparency = 1, ZIndex = 6 }, card)
             Pad(12, 12, 0, 0, hdr)
 
             local iconData = Library:GetCustomIcon(iconName)
             if iconData then
                 local ico = N(InstanceNew("ImageLabel"))
-                ico.Size              = UDim2New(0, 16, 0, 16)
-                ico.AnchorPoint       = Vector2New(0, 0.5)
-                ico.Position          = UDim2New(0, 0, 0.5, 0)
-                ico.BackgroundTransparency = 1
-                ico.Image             = iconData.Url
-                ico.ImageRectOffset   = iconData.ImageRectOffset
-                ico.ImageRectSize     = iconData.ImageRectSize
-                ico.ImageColor3       = Accent()
-                ico.ZIndex            = 7
-                ico.Parent            = hdr
+                ico.Size = UDim2New(0,16,0,16); ico.AnchorPoint = Vector2New(0,0.5)
+                ico.Position = UDim2New(0,0,0.5,0); ico.BackgroundTransparency = 1
+                ico.Image = iconData.Url; ico.ImageRectOffset = iconData.ImageRectOffset
+                ico.ImageRectSize = iconData.ImageRectSize; ico.ImageColor3 = Accent()
+                ico.ZIndex = 7; ico.Parent = hdr
             end
 
             local titleLbl = N(InstanceNew("TextLabel"))
-            titleLbl.FontFace            = BoldFont
-            titleLbl.Text                = titleTxt
-            titleLbl.TextColor3          = Txt()
-            titleLbl.TextTransparency    = 0.05
-            titleLbl.TextSize            = 13
-            titleLbl.Size                = UDim2New(1, -22, 1, 0)
-            titleLbl.Position            = UDim2New(0, 22, 0, 0)
-            titleLbl.BackgroundTransparency = 1
-            titleLbl.TextXAlignment      = Enum.TextXAlignment.Left
-            titleLbl.ZIndex              = 7
-            titleLbl.Parent              = hdr
+            titleLbl.FontFace = BoldFont; titleLbl.Text = titleTxt
+            titleLbl.TextColor3 = Txt(); titleLbl.TextTransparency = 0.05; titleLbl.TextSize = 13
+            titleLbl.Size = UDim2New(1,-22,1,0); titleLbl.Position = UDim2New(0,22,0,0)
+            titleLbl.BackgroundTransparency = 1; titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+            titleLbl.ZIndex = 7; titleLbl.Parent = hdr
 
-            -- Divider line
-            local divLine = Frame({
-                Size = UDim2New(1, -24, 0, 1),
-                Position = UDim2New(0, 12, 0, 34),
-                BackgroundColor3 = Outline(),
-                BackgroundTransparency = 0.5,
-                ZIndex = 6,
+            -- Divider
+            MkFrame({
+                Size = UDim2New(1,-24,0,1), Position = UDim2New(0,12,0,34),
+                BackgroundColor3 = Outline(), BackgroundTransparency = 0.45, ZIndex = 6,
             }, card)
 
-            -- Content area (sections park here)
+            -- Content (sections park here)
             local content = N(InstanceNew("Frame"))
-            content.Size                   = UDim2New(1, 0, 0, 0)
-            content.Position               = UDim2New(0, 0, 0, 36)
-            content.BackgroundTransparency = 1
-            content.BorderSizePixel        = 0
-            content.AutomaticSize          = Enum.AutomaticSize.Y
-            content.ZIndex                 = 6
-            content.Parent                 = card
+            content.Size = UDim2New(1,0,0,0); content.Position = UDim2New(0,0,0,36)
+            content.BackgroundTransparency = 1; content.BorderSizePixel = 0
+            content.AutomaticSize = Enum.AutomaticSize.Y
+            content.ZIndex = 6; content.Parent = card
+            local cl = List(Enum.FillDirection.Vertical, Enum.HorizontalAlignment.Left, 0, content)
+            cl.HorizontalFlex = Enum.UIFlexAlignment.Fill
 
-            local contentList = List(Enum.FillDirection.Vertical, Enum.HorizontalAlignment.Left, 0, content)
-            contentList.HorizontalFlex = Enum.UIFlexAlignment.Fill
-
-            -- fake ColumnsData entry pointing at this content area
-            return { Instance = content, card = card }
+            return { frame = card, Instance = content }
         end
 
-        -- ── Build center cards ───────────────────────────────────────────────
-        -- Card 1: UI Settings
-        local UICard    = MakeCard(CenterScroll, "Interface",    "settings-2",  1)
-        -- Card 2: Animations
-        local AnimCard  = MakeCard(CenterScroll, "Animations",   "activity",    2)
+        -- ── Build all cards ───────────────────────────────────────────────────
+        local UICard     = MakeCard("Interface",  "settings-2",  1)
+        local ThemeCard  = MakeCard("Theme",      "palette",     2)
+        local AnimCard   = MakeCard("Animation",  "activity",    3)
+        local ConfigCard = MakeCard("Configs",    "folder-open", 4)
 
-        -- ── Build right card ─────────────────────────────────────────────────
-        local ConfigCard = MakeCard(RightScroll, "Configs", "folder-open", 1)
+        -- Start with only Interface visible
+        ThemeCard.frame.Visible  = false
+        AnimCard.frame.Visible   = false
+        ConfigCard.frame.Visible = false
 
-        -- Config card header accent
-        do
-            local badge = Frame({
-                Size = UDim2New(0, 50, 0, 16),
-                Position = UDim2New(1, -62, 0, 9),
-                BackgroundColor3 = Accent(),
-                BackgroundTransparency = 0.7,
-                ZIndex = 8,
-            }, ConfigCard.card)
-            Corner(8, badge)
-            local badgeTxt = N(InstanceNew("TextLabel"))
-            badgeTxt.Text = "CONFIGS"
-            badgeTxt.FontFace = BoldFont
-            badgeTxt.TextColor3 = Accent()
-            badgeTxt.TextTransparency = 0.1
-            badgeTxt.TextSize = 8
-            badgeTxt.Size = UDim2New(1,0,1,0)
-            badgeTxt.BackgroundTransparency = 1
-            badgeTxt.TextXAlignment = Enum.TextXAlignment.Center
-            badgeTxt.ZIndex = 9
-            badgeTxt.Parent = badge
+        -- ── Tab system ────────────────────────────────────────────────────────
+        local navDefs = {
+            { id = "interface", label = "Interface", icon = "settings-2",  card = UICard     },
+            { id = "theme",     label = "Theme",     icon = "palette",     card = ThemeCard  },
+            { id = "animation", label = "Animation", icon = "activity",    card = AnimCard   },
+            { id = "configs",   label = "Configs",   icon = "folder-open", card = ConfigCard },
+        }
+
+        local activeTab = "interface"
+        local navBtns   = {}
+        local TI_fast   = TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+
+        local function setActiveTab(id)
+            if activeTab == id then return end
+            activeTab = id
+
+            for _, def in ipairs(navDefs) do
+                local on = def.id == id
+                def.card.frame.Visible = on
+
+                local nb = navBtns[def.id]
+                if nb then
+                    TweenService:Create(nb.btn, TI_fast, {
+                        BackgroundColor3      = on and Accent() or Elem(),
+                        BackgroundTransparency = on and 0.70 or 0.85,
+                    }):Play()
+                    TweenService:Create(nb.lbl, TI_fast, {
+                        TextColor3 = on and Txt() or FromRGB(160,158,175),
+                    }):Play()
+                    if nb.ico then
+                        TweenService:Create(nb.ico, TI_fast, {
+                            ImageColor3 = on and Accent() or FromRGB(155,153,170),
+                        }):Play()
+                    end
+                    nb.lbl.FontFace = on and MedFont or Library.Font
+                end
+            end
         end
 
-        -- ── Wire ColumnsData so Page:Section works ───────────────────────────
-        Page.ColumnsData[1] = UICard      -- Side = 1 → UI Card
-        Page.ColumnsData[2] = ConfigCard  -- Side = 2 → Config Card
+        -- ── Build nav buttons ─────────────────────────────────────────────────
+        for i, def in ipairs(navDefs) do
+            local isFirst = def.id == "interface"
 
-        -- Section factory helper that applies card-style visual overrides
-        local function MakeSection(data)
-            local sec = Page:Section(data)
-            -- remove section header chrome (we have card titles instead)
+            local navBtn = N(InstanceNew("TextButton"))
+            navBtn.Size = UDim2New(1,-8, 0,32)
+            navBtn.BackgroundColor3 = isFirst and Accent() or Elem()
+            navBtn.BackgroundTransparency = isFirst and 0.70 or 0.85
+            navBtn.BorderSizePixel = 0; navBtn.AutoButtonColor = false; navBtn.Text = ""
+            navBtn.ZIndex = 6; navBtn.LayoutOrder = 2 + i; navBtn.Parent = NavList
+            Corner(8, navBtn)
+            if isFirst then Stroke(Accent(), 1, 0.5, navBtn) end
+
+            local iconData = Library:GetCustomIcon(def.icon)
+            local icoInst  = nil
+            if iconData then
+                icoInst = N(InstanceNew("ImageLabel"))
+                icoInst.Size = UDim2New(0,14,0,14); icoInst.AnchorPoint = Vector2New(0,0.5)
+                icoInst.Position = UDim2New(0,10,0.5,0); icoInst.BackgroundTransparency = 1
+                icoInst.Image = iconData.Url; icoInst.ImageRectOffset = iconData.ImageRectOffset
+                icoInst.ImageRectSize = iconData.ImageRectSize
+                icoInst.ImageColor3 = isFirst and Accent() or FromRGB(155,153,170)
+                icoInst.ZIndex = 7; icoInst.Parent = navBtn
+            end
+
+            local lbl = N(InstanceNew("TextLabel"))
+            lbl.FontFace = isFirst and MedFont or Library.Font
+            lbl.Text = def.label; lbl.TextColor3 = isFirst and Txt() or FromRGB(160,158,175)
+            lbl.TextTransparency = 0; lbl.TextSize = 11
+            lbl.Size = UDim2New(1,-30,1,0); lbl.Position = UDim2New(0,28,0,0)
+            lbl.BackgroundTransparency = 1; lbl.TextXAlignment = Enum.TextXAlignment.Left
+            lbl.ZIndex = 7; lbl.Parent = navBtn
+
+            navBtns[def.id] = { btn = navBtn, ico = icoInst, lbl = lbl }
+
+            -- Click handler
+            navBtn.MouseButton1Click:Connect(function()
+                setActiveTab(def.id)
+            end)
+        end
+
+        -- ── Section factory (strips default section chrome) ───────────────────
+        local function MkSection(cardData)
+            Page.ColumnsData[1] = cardData
+            local sec = Page:Section({Name = "", Side = 1})
             if sec.Items["Top"] then
                 sec.Items["Top"].Instance.Visible = false
                 sec.Items["Top"].Instance.Size = UDim2New(0,0,0,0)
@@ -17344,170 +17262,112 @@ local Library do
             return sec
         end
 
-        -- ── UI Settings Section (Side = 1 → UICard) ─────────────────────────
-        local SettingsSection = MakeSection({Name = "UI Settings", Side = 1})
-
-        SettingsSection:Keybind({
-            Name = "Menu Keybind",
-            Flag = "UI_MenuBind",
+        -- ── Interface card ────────────────────────────────────────────────────
+        local UISection = MkSection(UICard)
+        UISection:Keybind({
+            Name = "Menu Keybind", Flag = "UI_MenuBind",
             Default = Enum.KeyCode.RightControl,
-            ToolTip = "Keybind to toggle the menu",
-            Callback = function(Value) Window:SetOpen(Value) end
+            ToolTip = "Toggle menu visibility",
+            Callback = function(v) Window:SetOpen(v) end,
+        })
+        UISection:Button({
+            Name = "Unload UI", ToolTip = "Remove the UI completely",
+            Callback = function() Library:Unload() end,
         })
 
-        SettingsSection:Dropdown({
-            Name = "Library Themes",
-            Flag = "UI_ThemePreset",
-            Icon = "palette",
-            Default = "Default",
-            Items = {"Default", "Dark", "Flame", "Plasma", "Forest", "Aqua"},
-            ToolTip = "Change the color theme",
-            Callback = function(Value) Library:ApplyThemePreset(Value) end
+        -- ── Theme card ────────────────────────────────────────────────────────
+        local ThemeSection = MkSection(ThemeCard)
+        ThemeSection:Dropdown({
+            Name = "Library Themes", Flag = "UI_ThemePreset",
+            Icon = "palette", Default = "Default",
+            Items = {"Default","Dark","Flame","Plasma","Forest","Aqua"},
+            ToolTip = "Change the UI color theme",
+            Callback = function(v) Library:ApplyThemePreset(v) end,
+        })
+        ThemeSection:Colorpicker({
+            Flag = "UI_AccentColor", Default = Accent(),
+            ToolTip = "Override the accent color",
+            Callback = function(c) Library.ChangeTheme("Accent", c) end,
         })
 
-        SettingsSection:Button({
-            Name = "Unload UI",
-            ToolTip = "Destroy the UI completely",
-            Callback = function() Library:Unload() end
-        })
-
-        -- ── Animation Section — parented to AnimCard ─────────────────────────
-        Page.ColumnsData[1] = AnimCard   -- redirect Side=1 to Anim card
-
-        local AnimSection = MakeSection({Name = "Animations", Side = 1})
-
+        -- ── Animation card ────────────────────────────────────────────────────
+        local AnimSection = MkSection(AnimCard)
         AnimSection:Slider({
-            Name = "Background Transparency",
-            Flag = "UI_BackgroundTransparency",
+            Name = "Background Transparency", Flag = "UI_BackgroundTransparency",
             Default = 0.12, Min = 0, Max = 1, Decimals = 0.01,
             ToolTip = "Window background opacity",
-            Callback = function(Value) Window:SetTransparency(Value) end
+            Callback = function(v) Window:SetTransparency(v) end,
         })
-
         AnimSection:Slider({
-            Name = "Fade Speed",
-            Flag = "UI_FadeSpeed",
-            Default = Library.FadeSpeed,
-            Min = 0, Max = 1, Decimals = 0.01,
-            ToolTip = "Element fade transition speed",
-            Callback = function(Value) Library.FadeSpeed = Value end
+            Name = "Fade Speed", Flag = "UI_FadeSpeed",
+            Default = Library.FadeSpeed, Min = 0, Max = 1, Decimals = 0.01,
+            ToolTip = "Element fade-in / fade-out speed",
+            Callback = function(v) Library.FadeSpeed = v end,
         })
-
         AnimSection:Slider({
-            Name = "Tween Speed",
-            Flag = "UI_TweenSpeed",
-            Default = Library.Tween.Time,
-            Min = 0, Max = 1, Decimals = 0.01,
+            Name = "Tween Speed", Flag = "UI_TweenSpeed",
+            Default = Library.Tween.Time, Min = 0, Max = 1, Decimals = 0.01,
             ToolTip = "UI tween animation speed",
-            Callback = function(Value) Library.Tween.Time = Value end
+            Callback = function(v) Library.Tween.Time = v end,
         })
 
-        -- ── Config Section (Side = 2 → ConfigCard) ──────────────────────────
-        Page.ColumnsData[2] = ConfigCard
+        -- ── Configs card ──────────────────────────────────────────────────────
+        local ConfigSection = MkSection(ConfigCard)
+        local ConfigName, ConfigSelected
 
-        local ConfigsSection = MakeSection({Name = "Configs", Side = 2})
-
-        local ConfigName
-        local ConfigSelected
-
-        local ConfigsDropdown = ConfigsSection:Listbox({
-            Flag = "ConfigsList",
-            Items = {},
-            Multi = false,
-            ToolTip = "Select a config to load, save or delete",
-            Callback = function(Value) ConfigSelected = Value end
+        local ConfigsDropdown = ConfigSection:Listbox({
+            Flag = "ConfigsList", Items = {}, Multi = false,
+            ToolTip = "Select a config to manage",
+            Callback = function(v) ConfigSelected = v end,
         })
-
-        ConfigsSection:Textbox({
-            Flag = "ConfigsName",
-            Placeholder = "Config name...",
-            Numeric = false,
-            Finished = true,
-            ToolTip = "Name for new config",
-            Callback = function(Value) ConfigName = Value end
+        ConfigSection:Textbox({
+            Flag = "ConfigsName", Placeholder = "Config name...",
+            Numeric = false, Finished = true,
+            ToolTip = "Name for the new config",
+            Callback = function(v) ConfigName = v end,
         })
-
-        ConfigsSection:Button({
-            Name = "Create",
-            ToolTip = "Create a new config with this name",
-            Callback = function()
-                if ConfigName and ConfigName ~= "" then
-                    if not isfile(Library.Folders.Configs .. "/" .. ConfigName .. ".json") then
-                        writefile(Library.Folders.Configs .. "/" .. ConfigName .. ".json", Library:GetConfig())
-                        Library:RefreshConfigsList(ConfigsDropdown)
-                        Library:Notification({Title = "Config Created", Description = string.format("Created %q", ConfigName), Duration = 5})
-                    else
-                        Library:Notification({Title = "Config Error", Description = string.format("%q already exists", ConfigName), Duration = 5})
-                    end
-                else
-                    Library:Notification({Title = "Config Error", Description = "Enter a config name first", Duration = 5})
-                end
-            end
-        })
-
-        ConfigsSection:Button({
-            Name = "Load",
-            ToolTip = "Load the selected config",
-            Callback = function()
-                if ConfigSelected then
-                    Library:LoadConfig(readfile(Library.Folders.Configs .. "/" .. ConfigSelected))
-                    Library:Notification({Title = "Config Loaded", Description = string.format("Loaded %q", ConfigSelected), Duration = 5})
-                end
-            end
-        })
-
-        ConfigsSection:Button({
-            Name = "Save",
-            ToolTip = "Save current settings to the selected config",
-            Callback = function()
-                if ConfigSelected then
-                    writefile(Library.Folders.Configs .. "/" .. ConfigSelected, Library:GetConfig())
-                    Library:Notification({Title = "Config Saved", Description = string.format("Saved %q", ConfigSelected), Duration = 5})
-                end
-            end
-        })
-
-        ConfigsSection:Button({
-            Name = "Delete",
-            ToolTip = "Delete the selected config",
-            Callback = function()
-                if ConfigSelected then
-                    Library:DeleteConfig(ConfigSelected)
+        ConfigSection:Button({ Name = "Create", ToolTip = "Create new config", Callback = function()
+            if ConfigName and ConfigName ~= "" then
+                if not isfile(Library.Folders.Configs .. "/" .. ConfigName .. ".json") then
+                    writefile(Library.Folders.Configs .. "/" .. ConfigName .. ".json", Library:GetConfig())
                     Library:RefreshConfigsList(ConfigsDropdown)
-                    Library:Notification({Title = "Config Deleted", Description = string.format("Deleted %q", ConfigSelected), Duration = 5})
+                    Library:Notification({Title="Config Created", Description=string.format("Created %q", ConfigName), Duration=5})
+                else
+                    Library:Notification({Title="Error", Description=string.format("%q already exists", ConfigName), Duration=5})
                 end
+            else
+                Library:Notification({Title="Error", Description="Enter a name first", Duration=5})
             end
-        })
-
-        ConfigsSection:Button({
-            Name = "Refresh",
-            ToolTip = "Refresh the configs list",
-            Callback = function()
+        end})
+        ConfigSection:Button({ Name = "Load",  ToolTip = "Load selected config", Callback = function()
+            if ConfigSelected then
+                Library:LoadConfig(readfile(Library.Folders.Configs .. "/" .. ConfigSelected))
+                Library:Notification({Title="Config Loaded", Description=string.format("Loaded %q", ConfigSelected), Duration=5})
+            end
+        end})
+        ConfigSection:Button({ Name = "Save",  ToolTip = "Save to selected config", Callback = function()
+            if ConfigSelected then
+                writefile(Library.Folders.Configs .. "/" .. ConfigSelected, Library:GetConfig())
+                Library:Notification({Title="Config Saved", Description=string.format("Saved %q", ConfigSelected), Duration=5})
+            end
+        end})
+        ConfigSection:Button({ Name = "Delete", ToolTip = "Delete selected config", Callback = function()
+            if ConfigSelected then
+                Library:DeleteConfig(ConfigSelected)
                 Library:RefreshConfigsList(ConfigsDropdown)
-                Library:Notification({Title = "Refreshed", Description = "Config list updated", Duration = 3})
+                Library:Notification({Title="Config Deleted", Description=string.format("Deleted %q", ConfigSelected), Duration=5})
             end
-        })
-
-        ConfigsSection:Button({
-            Name = "Set Autoload",
-            ToolTip = "Load this config automatically on next run",
-            Callback = function()
-                if ConfigSelected then
-                    writefile(Library.Folders.Configs .. "/autoload.txt", ConfigSelected)
-                    Library:Notification({Title = "Autoload Set", Description = string.format("%q set as autoload", ConfigSelected), Duration = 5})
-                end
+        end})
+        ConfigSection:Button({ Name = "Refresh", ToolTip = "Reload config list", Callback = function()
+            Library:RefreshConfigsList(ConfigsDropdown)
+            Library:Notification({Title="Refreshed", Description="Config list updated", Duration=3})
+        end})
+        ConfigSection:Button({ Name = "Set Autoload", ToolTip = "Autoload this config on next run", Callback = function()
+            if ConfigSelected then
+                writefile(Library.Folders.Configs .. "/autoload.txt", ConfigSelected)
+                Library:Notification({Title="Autoload Set", Description=string.format("%q set as autoload", ConfigSelected), Duration=5})
             end
-        })
-
-        -- ── Theme reactivity ─────────────────────────────────────────────────
-        Library.ThemeCallbacks[#Library.ThemeCallbacks + 1] = function(theme)
-            local acc  = theme.Accent         or FromRGB(151, 69, 186)
-            local aGrd = theme.AccentGradient  or FromRGB(109, 43, 139)
-            local ol   = theme.Outline         or FromRGB(40, 38, 46)
-            TopGlow.BackgroundColor3 = acc
-            -- accent bars are created per-card and inherit theme colors at build time
-            -- (accent bars inside cards are registered via AddToTheme indirectly)
-        end
+        end})
 
         Library:RefreshConfigsList(ConfigsDropdown)
 
