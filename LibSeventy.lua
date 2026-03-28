@@ -17380,6 +17380,21 @@ local Library do
 
         Library:RefreshConfigsList(ConfigsDropdown)
 
+        -- Force all elements into active/visible positions.
+        -- Page is inactive at build time so every factory skips RefreshPosition(true).
+        local allSections = {UISection, ThemeSection, AnimSection, ConfigSection}
+        for _, sec in ipairs(allSections) do
+            for _, elem in ipairs(sec.Elements) do
+                if elem.RefreshPosition then
+                    elem:RefreshPosition(true)
+                end
+            end
+            -- Remove the dark section background overlay
+            if sec.Items["Background"] then
+                sec.Items["Background"].Instance.BackgroundTransparency = 1
+            end
+        end
+
         return Page
     end
 end
