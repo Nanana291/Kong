@@ -17098,7 +17098,7 @@ local Library do
         local function MakeCard(titleTxt, iconName, order)
             local card = MkFrame({
                 Size = UDim2New(1,0, 0,0),
-                BackgroundColor3 = Sec(), BackgroundTransparency = 0.12,
+                BackgroundColor3 = Sec(), BackgroundTransparency = 0.45,
                 AutomaticSize = Enum.AutomaticSize.Y,
                 ZIndex = 5, LayoutOrder = order or 1,
             }, CenterScroll)
@@ -17162,7 +17162,8 @@ local Library do
         local AnimCard   = MakeCard("Animation",  "activity",    3)
         local ConfigCard = MakeCard("Configs",    "folder-open", 4)
 
-        -- Start with only Interface visible
+        -- All hidden by default — setActiveTab will show the correct one
+        UICard.frame.Visible     = false
         ThemeCard.frame.Visible  = false
         AnimCard.frame.Visible   = false
         ConfigCard.frame.Visible = false
@@ -17175,7 +17176,7 @@ local Library do
             { id = "configs",   label = "Configs",   icon = "folder-open", card = ConfigCard },
         }
 
-        local activeTab = "interface"
+        local activeTab = nil   -- nil initially so first call always fires
         local navBtns   = {}
         local TI_fast   = TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
 
@@ -17190,34 +17191,39 @@ local Library do
                 local nb = navBtns[def.id]
                 if nb then
                     TweenService:Create(nb.btn, TI_fast, {
-                        BackgroundColor3      = on and Accent() or Elem(),
-                        BackgroundTransparency = on and 0.70 or 0.85,
+                        BackgroundColor3       = on and Accent() or Elem(),
+                        BackgroundTransparency = on and 0.65 or 0.88,
                     }):Play()
                     TweenService:Create(nb.lbl, TI_fast, {
-                        TextColor3 = on and Txt() or FromRGB(160,158,175),
+                        TextColor3 = on and Txt() or FromRGB(155,153,172),
                     }):Play()
                     if nb.ico then
                         TweenService:Create(nb.ico, TI_fast, {
-                            ImageColor3 = on and Accent() or FromRGB(155,153,170),
+                            ImageColor3 = on and Accent() or FromRGB(150,148,168),
                         }):Play()
                     end
                     nb.lbl.FontFace = on and MedFont or Library.Font
+                    -- toggle stroke: active = accent border, inactive = none
+                    if nb.stroke then
+                        nb.stroke.Color       = Accent()
+                        nb.stroke.Transparency = on and 0.45 or 1
+                    end
                 end
             end
         end
 
         -- ── Build nav buttons ─────────────────────────────────────────────────
         for i, def in ipairs(navDefs) do
-            local isFirst = def.id == "interface"
-
             local navBtn = N(InstanceNew("TextButton"))
             navBtn.Size = UDim2New(1,-8, 0,32)
-            navBtn.BackgroundColor3 = isFirst and Accent() or Elem()
-            navBtn.BackgroundTransparency = isFirst and 0.70 or 0.85
+            navBtn.BackgroundColor3 = Elem()
+            navBtn.BackgroundTransparency = 0.88
             navBtn.BorderSizePixel = 0; navBtn.AutoButtonColor = false; navBtn.Text = ""
             navBtn.ZIndex = 6; navBtn.LayoutOrder = 2 + i; navBtn.Parent = NavList
             Corner(8, navBtn)
-            if isFirst then Stroke(Accent(), 1, 0.5, navBtn) end
+
+            -- Stroke starts invisible; setActiveTab drives it
+            local strokeInst = Stroke(Accent(), 1, 1, navBtn)
 
             local iconData = Library:GetCustomIcon(def.icon)
             local icoInst  = nil
@@ -17227,25 +17233,28 @@ local Library do
                 icoInst.Position = UDim2New(0,10,0.5,0); icoInst.BackgroundTransparency = 1
                 icoInst.Image = iconData.Url; icoInst.ImageRectOffset = iconData.ImageRectOffset
                 icoInst.ImageRectSize = iconData.ImageRectSize
-                icoInst.ImageColor3 = isFirst and Accent() or FromRGB(155,153,170)
+                icoInst.ImageColor3 = FromRGB(150,148,168)
                 icoInst.ZIndex = 7; icoInst.Parent = navBtn
             end
 
             local lbl = N(InstanceNew("TextLabel"))
-            lbl.FontFace = isFirst and MedFont or Library.Font
-            lbl.Text = def.label; lbl.TextColor3 = isFirst and Txt() or FromRGB(160,158,175)
+            lbl.FontFace = Library.Font
+            lbl.Text = def.label; lbl.TextColor3 = FromRGB(155,153,172)
             lbl.TextTransparency = 0; lbl.TextSize = 11
             lbl.Size = UDim2New(1,-30,1,0); lbl.Position = UDim2New(0,28,0,0)
             lbl.BackgroundTransparency = 1; lbl.TextXAlignment = Enum.TextXAlignment.Left
             lbl.ZIndex = 7; lbl.Parent = navBtn
 
-            navBtns[def.id] = { btn = navBtn, ico = icoInst, lbl = lbl }
+            navBtns[def.id] = { btn = navBtn, ico = icoInst, lbl = lbl, stroke = strokeInst }
 
-            -- Click handler
+            local capturedId = def.id
             navBtn.MouseButton1Click:Connect(function()
-                setActiveTab(def.id)
+                setActiveTab(capturedId)
             end)
         end
+
+        -- Select first tab now that all navBtns are registered
+        setActiveTab("interface")
 
         -- ── Section factory (strips default section chrome) ───────────────────
         local function MkSection(cardData)
