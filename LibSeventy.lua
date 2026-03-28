@@ -17296,7 +17296,7 @@ local Library do
         ThemeSection:Label("Accent Color"):Colorpicker({
             Flag = "UI_AccentColor", Default = Accent(),
             ToolTip = "Override the accent color",
-            Callback = function(c) Library.ChangeTheme("Accent", c) end,
+            Callback = function(c) Library:ChangeTheme("Accent", c) end,
         })
 
         -- ── Animation card ────────────────────────────────────────────────────
