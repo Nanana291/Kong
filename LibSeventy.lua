@@ -17257,9 +17257,11 @@ local Library do
         setActiveTab("interface")
 
         -- ── Section factory (strips default section chrome) ───────────────────
+        local _sectionIdx = 0
         local function MkSection(cardData)
+            _sectionIdx = _sectionIdx + 1
             Page.ColumnsData[1] = cardData
-            local sec = Page:Section({Name = "", Side = 1})
+            local sec = Page:Section({Name = "__settings_" .. _sectionIdx, Side = 1})
             if sec.Items["Top"] then
                 sec.Items["Top"].Instance.Visible = false
                 sec.Items["Top"].Instance.Size = UDim2New(0,0,0,0)
