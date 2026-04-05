@@ -730,9 +730,18 @@ local Library do
 
     Library.GetConfig = function(self)
         local Config = { } 
+        local IgnoredFlags = {
+            ConfigsList = true,
+            ConfigsName = true,
+            UI_AutoloadConfig = true
+        }
 
         local Success, Result = Library:SafeCall(function()
             for Index, Value in Library.Flags do 
+                if IgnoredFlags[Index] then
+                    continue
+                end
+
                 if type(Value) == "table" and Value.Key then
                     Config[Index] = {Key = tostring(Value.Key), Mode = Value.Mode}
                 elseif type(Value) == "table" and Value.Color then
