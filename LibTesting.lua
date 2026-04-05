@@ -8089,11 +8089,8 @@ local Library do
 
             Items["RealDropdown"]:Connect("Changed", function(Property)
                 if Property == "AbsolutePosition" and Dropdown.IsOpen then
-                    local sectionInst = Dropdown.Section.Items and Dropdown.Section.Items["Section"]
-                    if sectionInst then
-                        Dropdown.IsOpen = not Library:IsClipped(Items["OptionHolder"].Instance, sectionInst.Instance.Parent)
-                        Items["OptionHolder"].Instance.Visible = Dropdown.IsOpen
-                    end
+                    Dropdown.IsOpen = not Library:IsClipped(Items["OptionHolder"].Instance, Dropdown.Section.Items["Section"].Instance.Parent)
+                    Items["OptionHolder"].Instance.Visible = Dropdown.IsOpen
                 end
             end)
 
@@ -8769,11 +8766,8 @@ local Library do
 
             Items["RealDropdown"]:Connect("Changed", function(Property)
                 if Property == "AbsolutePosition" and Dropdown.IsOpen then
-                    local sectionInst = Dropdown.Section.Items and Dropdown.Section.Items["Section"]
-                    if sectionInst then
-                        Dropdown.IsOpen = not Library:IsClipped(Items["OptionHolder"].Instance, sectionInst.Instance.Parent)
-                        Items["OptionHolder"].Instance.Visible = Dropdown.IsOpen
-                    end
+                    Dropdown.IsOpen = not Library:IsClipped(Items["OptionHolder"].Instance, Dropdown.Section.Items["Section"].Instance.Parent)
+                    Items["OptionHolder"].Instance.Visible = Dropdown.IsOpen
                 end
             end)
 
@@ -9412,11 +9406,8 @@ local Library do
 
             Items["RealDropdown"]:Connect("Changed", function(Property)
                 if Property == "AbsolutePosition" and Dropdown.IsOpen then
-                    local sectionInst = Dropdown.Section.Items and Dropdown.Section.Items["Section"]
-                    if sectionInst then
-                        Dropdown.IsOpen = not Library:IsClipped(Items["OptionHolder"].Instance, sectionInst.Instance.Parent)
-                        Items["OptionHolder"].Instance.Visible = Dropdown.IsOpen
-                    end
+                    Dropdown.IsOpen = not Library:IsClipped(Items["OptionHolder"].Instance, Dropdown.Section.Items["Section"].Instance.Parent)
+                    Items["OptionHolder"].Instance.Visible = Dropdown.IsOpen
                 end
             end)
 
@@ -15865,6 +15856,638 @@ local Library do
         end
 
         return CB
+    end
+    -- ─────────────────────────────────────────────────────────────────────────
+
+    -- ─────────────────────────────────────────────────────────────────────────
+    -- TagInput: text input that builds a removable-tag list
+    -- API: :Add(tag), :Remove(tag), :Clear(), :Get() → {string,...}
+    -- Callback(tags) fires on every Add/Remove/Clear
+    -- ─────────────────────────────────────────────────────────────────────────
+    Library.Sections.TagInput = function(self, Data)
+        Data = Data or {}
+
+        local TagInput = {
+            Window      = self.Window,
+            Page        = self.Page,
+            Section     = self,
+
+            Name        = Data.Name        or Data.name        or "TagInput",
+            Flag        = Data.Flag        or Data.flag        or Library:NextFlag(),
+            Callback    = Data.Callback    or Data.callback    or function() end,
+            Placeholder = Data.Placeholder or Data.placeholder or "Add tag...",
+            MaxTags     = Data.MaxTags     or Data.maxTags     or 30,
+
+            Value       = {},    -- list of tag strings
+            TagFrames   = {},    -- tag string → frame reference
+        }
+
+        -- ── height constants ───────────────────────────────────────────────
+        local INPUT_H   = 32
+        local TAGS_PADV = 6   -- vertical padding inside tags area
+        local TAG_H     = 22  -- height of each pill row
+        local WRAP_PAD  = 6   -- horizontal gap between pills
+        local MAX_VISIBLE_ROWS = 3  -- rows before scroll kicks in
+
+        local Items = {} do
+            -- root frame
+            Items["TagInput"] = Instances:Create("Frame", {
+                Parent              = TagInput.Section.Items["Content"].Instance,
+                Name                = "\0",
+                BackgroundTransparency = 1,
+                Size                = UDim2New(1, 0, 0, INPUT_H),
+                AutomaticSize       = Enum.AutomaticSize.Y,
+                BorderColor3        = FromRGB(0, 0, 0),
+                ZIndex              = 2,
+                BorderSizePixel     = 0,
+                BackgroundColor3    = FromRGB(255, 255, 255),
+            })
+
+            -- title label
+            Items["Title"] = Instances:Create("TextLabel", {
+                Parent              = Items["TagInput"].Instance,
+                Name                = "\0",
+                FontFace            = Library.Font,
+                TextColor3          = FromRGB(240, 240, 240),
+                TextTransparency    = 0.3,
+                Text                = TagInput.Name,
+                AutomaticSize       = Enum.AutomaticSize.X,
+                Size                = UDim2New(0, 0, 0, 15),
+                AnchorPoint         = Vector2New(0, 0.5),
+                BorderSizePixel     = 0,
+                BackgroundTransparency = 1,
+                Position            = UDim2New(0, 30, 0, INPUT_H / 2),
+                BorderColor3        = FromRGB(0, 0, 0),
+                ZIndex              = 2,
+                TextSize            = 14,
+                BackgroundColor3    = FromRGB(255, 255, 255),
+            }) Items["Title"]:AddToTheme({TextColor3 = "Text"})
+
+            -- input background (right side)
+            Items["InputBg"] = Instances:Create("Frame", {
+                Parent              = Items["TagInput"].Instance,
+                Name                = "\0",
+                Active              = true,
+                BorderColor3        = FromRGB(0, 0, 0),
+                AnchorPoint         = Vector2New(1, 0),
+                Position            = UDim2New(1, -4, 0, 5),
+                Size                = UDim2New(0, 160, 0, 22),
+                ZIndex              = 2,
+                ClipsDescendants    = true,
+                BorderSizePixel     = 0,
+                BackgroundColor3    = FromRGB(27, 26, 29),
+            }) Items["InputBg"]:AddToTheme({BackgroundColor3 = "Element"})
+
+            Instances:Create("UIStroke", {
+                Parent              = Items["InputBg"].Instance,
+                Name                = "\0",
+                Color               = FromRGB(35, 33, 38),
+                ApplyStrokeMode     = Enum.ApplyStrokeMode.Border,
+            }):AddToTheme({Color = "Outline"})
+
+            Instances:Create("UICorner", {
+                Parent              = Items["InputBg"].Instance,
+                Name                = "\0",
+                CornerRadius        = UDimNew(0, 4),
+            })
+
+            -- text input inside InputBg
+            Items["Input"] = Instances:Create("TextBox", {
+                Parent              = Items["InputBg"].Instance,
+                Name                = "\0",
+                FontFace            = Library.Font,
+                TextColor3          = FromRGB(240, 240, 240),
+                BorderColor3        = FromRGB(0, 0, 0),
+                Text                = "",
+                ZIndex              = 3,
+                Size                = UDim2New(1, -10, 1, 0),
+                Position            = UDim2New(0, 8, 0, 0),
+                BorderSizePixel     = 0,
+                BackgroundTransparency = 1,
+                PlaceholderColor3   = FromRGB(185, 185, 185),
+                TextXAlignment      = Enum.TextXAlignment.Left,
+                PlaceholderText     = TagInput.Placeholder,
+                TextSize            = 13,
+                BackgroundColor3    = FromRGB(255, 255, 255),
+                ClearTextOnFocus    = false,
+            }) Items["Input"]:AddToTheme({TextColor3 = "Text"})
+
+            -- "+ Add" button (sits just to the right of InputBg's right edge)
+            Items["AddBtn"] = Instances:Create("TextButton", {
+                Parent              = Items["TagInput"].Instance,
+                Name                = "\0",
+                FontFace            = Library.Font,
+                TextColor3          = FromRGB(255, 255, 255),
+                Text                = "+",
+                AutoButtonColor     = false,
+                AnchorPoint         = Vector2New(1, 0),
+                Position            = UDim2New(1, -170, 0, 5),
+                Size                = UDim2New(0, 22, 0, 22),
+                ZIndex              = 3,
+                BorderSizePixel     = 0,
+                BackgroundColor3    = FromRGB(80, 50, 110),
+                TextSize            = 17,
+            })
+
+            Instances:Create("UIGradient", {
+                Parent   = Items["AddBtn"].Instance,
+                Name     = "\0",
+                Rotation = -115,
+                Color    = RGBSequence{
+                    RGBSequenceKeypoint(0, FromRGB(255, 255, 255)),
+                    RGBSequenceKeypoint(1, FromRGB(143, 143, 143)),
+                },
+            }):AddToTheme({Color = function()
+                return RGBSequence{
+                    RGBSequenceKeypoint(0, Library.Theme.Accent),
+                    RGBSequenceKeypoint(1, Library.Theme.AccentGradient),
+                }
+            end})
+
+            Instances:Create("UICorner", {
+                Parent       = Items["AddBtn"].Instance,
+                Name         = "\0",
+                CornerRadius = UDimNew(0, 4),
+            })
+
+            -- tags scroll area (appears below input row)
+            Items["TagsArea"] = Instances:Create("ScrollingFrame", {
+                Parent                  = Items["TagInput"].Instance,
+                Name                    = "\0",
+                Position                = UDim2New(0, 0, 0, INPUT_H),
+                Size                    = UDim2New(1, 0, 0, 0),
+                AutomaticCanvasSize     = Enum.AutomaticSize.Y,
+                CanvasSize              = UDim2New(0, 0, 0, 0),
+                ScrollBarThickness      = 2,
+                ScrollingDirection      = Enum.ScrollingDirection.Y,
+                BackgroundTransparency  = 1,
+                BorderSizePixel         = 0,
+                ZIndex                  = 2,
+                Visible                 = false,
+                BackgroundColor3        = FromRGB(255, 255, 255),
+            }) Items["TagsArea"]:AddToTheme({ScrollBarImageColor3 = "Accent"})
+
+            -- wrap layout for the pills
+            Items["TagsLayout"] = Instances:Create("UIListLayout", {
+                Parent          = Items["TagsArea"].Instance,
+                Name            = "\0",
+                FillDirection   = Enum.FillDirection.Horizontal,
+                Wrap            = true,
+                Padding         = UDimNew(0, WRAP_PAD),
+                SortOrder       = Enum.SortOrder.LayoutOrder,
+                HorizontalAlignment = Enum.HorizontalAlignment.Left,
+            })
+
+            Instances:Create("UIPadding", {
+                Parent        = Items["TagsArea"].Instance,
+                Name          = "\0",
+                PaddingTop    = UDimNew(0, TAGS_PADV),
+                PaddingBottom = UDimNew(0, TAGS_PADV),
+                PaddingLeft   = UDimNew(0, 4),
+                PaddingRight  = UDimNew(0, 4),
+            })
+        end
+
+        -- ── internal helpers ───────────────────────────────────────────────
+        local function FireCallback()
+            Library:SafeCall(TagInput.Callback, TagInput.Value)
+            Library.Flags[TagInput.Flag] = TagInput.Value
+        end
+
+        local function RecalcTagsHeight()
+            local count = #TagInput.Value
+            if count == 0 then
+                Items["TagsArea"].Instance.Size    = UDim2New(1, 0, 0, 0)
+                Items["TagsArea"].Instance.Visible = false
+                return
+            end
+            local pillsPerRow = math.max(1, math.floor((Items["TagInput"].Instance.AbsoluteSize.X) / 84))
+            local rows        = math.ceil(count / pillsPerRow)
+            local clampedRows = math.min(rows, MAX_VISIBLE_ROWS)
+            local h           = clampedRows * (TAG_H + WRAP_PAD) + TAGS_PADV * 2
+            Items["TagsArea"]:Tween(
+                TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+                {Size = UDim2New(1, 0, 0, h)}
+            )
+            Items["TagsArea"].Instance.Visible = true
+        end
+
+        local function MakePill(tag)
+            local pill = Instances:Create("Frame", {
+                Parent              = Items["TagsArea"].Instance,
+                Name                = "\0",
+                Size                = UDim2New(0, 78, 0, TAG_H),
+                BackgroundColor3    = FromRGB(35, 30, 45),
+                BorderSizePixel     = 0,
+                ZIndex              = 3,
+                ClipsDescendants    = true,
+            }) pill:AddToTheme({BackgroundColor3 = "Element"})
+
+            Instances:Create("UIStroke", {
+                Parent          = pill.Instance,
+                Name            = "\0",
+                Color           = FromRGB(80, 50, 110),
+                ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+            }):AddToTheme({Color = "Accent"})
+
+            Instances:Create("UICorner", {
+                Parent       = pill.Instance,
+                Name         = "\0",
+                CornerRadius = UDimNew(0, 11),
+            })
+
+            local nameLabel = Instances:Create("TextLabel", {
+                Parent              = pill.Instance,
+                Name                = "\0",
+                FontFace            = Library.Font,
+                TextColor3          = FromRGB(220, 220, 220),
+                Text                = tag,
+                Size                = UDim2New(1, -18, 1, 0),
+                Position            = UDim2New(0, 7, 0, 0),
+                BackgroundTransparency = 1,
+                TextXAlignment      = Enum.TextXAlignment.Left,
+                TextSize            = 12,
+                ZIndex              = 3,
+                BorderSizePixel     = 0,
+                BackgroundColor3    = FromRGB(255, 255, 255),
+                ClipsDescendants    = true,
+            }) nameLabel:AddToTheme({TextColor3 = "Text"})
+
+            local removeBtn = Instances:Create("TextButton", {
+                Parent              = pill.Instance,
+                Name                = "\0",
+                FontFace            = Library.Font,
+                TextColor3          = FromRGB(180, 140, 200),
+                Text                = "×",
+                AutoButtonColor     = false,
+                AnchorPoint         = Vector2New(1, 0.5),
+                Position            = UDim2New(1, -2, 0.5, 0),
+                Size                = UDim2New(0, 16, 0, 16),
+                BackgroundTransparency = 1,
+                TextSize            = 14,
+                ZIndex              = 4,
+                BorderSizePixel     = 0,
+                BackgroundColor3    = FromRGB(255, 255, 255),
+            })
+
+            removeBtn:Connect("MouseButton1Click", function()
+                TagInput:Remove(tag)
+            end)
+
+            TagInput.TagFrames[tag] = pill
+        end
+
+        -- ── Public API ─────────────────────────────────────────────────────
+        function TagInput:Add(tag)
+            tag = tostring(tag):match("^%s*(.-)%s*$")  -- trim whitespace
+            if tag == "" then return end
+            if #TagInput.Value >= TagInput.MaxTags then return end
+            for _, existing in ipairs(TagInput.Value) do
+                if existing == tag then return end  -- no duplicates
+            end
+
+            TagInput.Value[#TagInput.Value + 1] = tag
+            MakePill(tag)
+            RecalcTagsHeight()
+            FireCallback()
+        end
+
+        function TagInput:Remove(tag)
+            for i, existing in ipairs(TagInput.Value) do
+                if existing == tag then
+                    table.remove(TagInput.Value, i)
+                    break
+                end
+            end
+            local pill = TagInput.TagFrames[tag]
+            if pill then
+                pill.Instance:Destroy()
+                TagInput.TagFrames[tag] = nil
+            end
+            RecalcTagsHeight()
+            FireCallback()
+        end
+
+        function TagInput:Clear()
+            for _, pill in pairs(TagInput.TagFrames) do
+                if pill and pill.Instance and pill.Instance.Parent then
+                    pill.Instance:Destroy()
+                end
+            end
+            TagInput.Value     = {}
+            TagInput.TagFrames = {}
+            RecalcTagsHeight()
+            FireCallback()
+        end
+
+        function TagInput:Get()
+            local copy = {}
+            for i, v in ipairs(TagInput.Value) do copy[i] = v end
+            return copy
+        end
+
+        function TagInput:Set(tagsTable)
+            TagInput:Clear()
+            if type(tagsTable) ~= "table" then return end
+            for _, tag in ipairs(tagsTable) do
+                TagInput:Add(tag)
+            end
+        end
+
+        function TagInput:SetVisibility(Bool)
+            Items["TagInput"].Instance.Visible = Bool
+        end
+
+        function TagInput:RefreshPosition(Bool)
+            if Bool then
+                Items["Title"]:Tween(
+                    TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+                    {Position = UDim2New(0, 0, 0, INPUT_H / 2)}
+                )
+            else
+                Items["Title"].Instance.Position = UDim2New(0, 30, 0, INPUT_H / 2)
+            end
+        end
+
+        -- ── Input events ───────────────────────────────────────────────────
+        Items["Input"]:Connect("FocusLost", function(enterPressed)
+            if enterPressed then
+                TagInput:Add(Items["Input"].Instance.Text)
+                Items["Input"].Instance.Text = ""
+            end
+        end)
+
+        Items["AddBtn"]:Connect("MouseButton1Click", function()
+            TagInput:Add(Items["Input"].Instance.Text)
+            Items["Input"].Instance.Text = ""
+        end)
+
+        -- ── Defaults & registration ────────────────────────────────────────
+        if Data.Default or Data.default then
+            TagInput:Set(Data.Default or Data.default)
+        end
+
+        Library.SetFlags[TagInput.Flag] = function(Value)
+            TagInput:Set(Value)
+        end
+
+        if TagInput.Section.Page and TagInput.Section.Page.Active then
+            TagInput:RefreshPosition(true)
+        end
+
+        TagInput.Section.Elements[#TagInput.Section.Elements + 1] = TagInput
+
+        if Data.ToolTip or Data.tooltip then
+            Library:AddTooltip(Data.ToolTip or Data.tooltip, Items["TagInput"].Instance)
+        end
+
+        return TagInput
+    end
+    -- ─────────────────────────────────────────────────────────────────────────
+
+    -- ─────────────────────────────────────────────────────────────────────────
+    -- StatBar: multi-segment live stat bars with labels and optional value text
+    -- API: :SetSegment(label, current, max), :Get() → {label→{Current,Max,...}}
+    -- Callback(label, current, max) fires on every :SetSegment()
+    -- ─────────────────────────────────────────────────────────────────────────
+    Library.Sections.StatBar = function(self, Data)
+        Data = Data or {}
+
+        local StatBar = {
+            Window      = self.Window,
+            Page        = self.Page,
+            Section     = self,
+
+            Name        = Data.Name        or Data.name        or "StatBar",
+            Flag        = Data.Flag        or Data.flag        or Library:NextFlag(),
+            Callback    = Data.Callback    or Data.callback    or function() end,
+
+            Segments    = {},  -- array of segment data from Data.Segments
+            SegmentUI   = {},  -- label → {Fill, ValueLabel, BarBg}
+        }
+
+        local SEG_H     = 28   -- height per segment row
+        local BAR_H     = 6    -- fill bar height
+        local LABEL_W   = 68   -- fixed width for the label column
+        local VAL_W     = 48   -- fixed width for the value text column
+
+        local totalH = 32  -- header row
+
+        -- copy segment definitions
+        local segmentDefs = Data.Segments or Data.segments or {}
+        for _, def in ipairs(segmentDefs) do
+            local seg = {
+                Label   = def.Label   or def.label   or "Stat",
+                Color   = def.Color   or def.color   or FromRGB(130, 80, 220),
+                Flag    = def.Flag    or def.flag     or nil,
+                Current = 0,
+                Max     = 100,
+            }
+            StatBar.Segments[#StatBar.Segments + 1] = seg
+            totalH = totalH + SEG_H
+        end
+
+        local Items = {} do
+            -- root frame
+            Items["StatBar"] = Instances:Create("Frame", {
+                Parent              = StatBar.Section.Items["Content"].Instance,
+                Name                = "\0",
+                BackgroundTransparency = 1,
+                Size                = UDim2New(1, 0, 0, totalH),
+                BorderColor3        = FromRGB(0, 0, 0),
+                ZIndex              = 2,
+                BorderSizePixel     = 0,
+                BackgroundColor3    = FromRGB(255, 255, 255),
+            })
+
+            -- section title
+            Items["Title"] = Instances:Create("TextLabel", {
+                Parent              = Items["StatBar"].Instance,
+                Name                = "\0",
+                FontFace            = Library.Font,
+                TextColor3          = FromRGB(240, 240, 240),
+                TextTransparency    = 0.3,
+                Text                = StatBar.Name,
+                AutomaticSize       = Enum.AutomaticSize.X,
+                Size                = UDim2New(0, 0, 0, 15),
+                AnchorPoint         = Vector2New(0, 0.5),
+                BorderSizePixel     = 0,
+                BackgroundTransparency = 1,
+                Position            = UDim2New(0, 30, 0, 16),
+                BorderColor3        = FromRGB(0, 0, 0),
+                ZIndex              = 2,
+                TextSize            = 14,
+                BackgroundColor3    = FromRGB(255, 255, 255),
+            }) Items["Title"]:AddToTheme({TextColor3 = "Text"})
+
+            -- build one row per segment
+            for i, seg in ipairs(StatBar.Segments) do
+                local yOff = 32 + (i - 1) * SEG_H
+
+                -- label
+                local segLabel = Instances:Create("TextLabel", {
+                    Parent              = Items["StatBar"].Instance,
+                    Name                = "\0",
+                    FontFace            = Library.Font,
+                    TextColor3          = FromRGB(180, 180, 190),
+                    Text                = seg.Label,
+                    Size                = UDim2New(0, LABEL_W, 0, SEG_H),
+                    Position            = UDim2New(0, 8, 0, yOff),
+                    BackgroundTransparency = 1,
+                    TextXAlignment      = Enum.TextXAlignment.Left,
+                    TextSize            = 12,
+                    ZIndex              = 2,
+                    BorderSizePixel     = 0,
+                    BackgroundColor3    = FromRGB(255, 255, 255),
+                }) segLabel:AddToTheme({TextColor3 = "SubText"})
+
+                -- bar background
+                local barBg = Instances:Create("Frame", {
+                    Parent              = Items["StatBar"].Instance,
+                    Name                = "\0",
+                    Position            = UDim2New(0, LABEL_W + 12, 0, yOff + (SEG_H - BAR_H) / 2),
+                    Size                = UDim2New(1, -(LABEL_W + 12 + VAL_W + 10), 0, BAR_H),
+                    BackgroundColor3    = FromRGB(35, 33, 42),
+                    BorderSizePixel     = 0,
+                    ZIndex              = 2,
+                    ClipsDescendants    = true,
+                }) barBg:AddToTheme({BackgroundColor3 = "Element"})
+
+                Instances:Create("UICorner", {
+                    Parent       = barBg.Instance,
+                    Name         = "\0",
+                    CornerRadius = UDimNew(1, 0),
+                })
+
+                Instances:Create("UIStroke", {
+                    Parent          = barBg.Instance,
+                    Name            = "\0",
+                    Color           = FromRGB(50, 45, 60),
+                    ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+                }):AddToTheme({Color = "Outline"})
+
+                -- fill bar (starts at 0 width)
+                local fill = Instances:Create("Frame", {
+                    Parent           = barBg.Instance,
+                    Name             = "\0",
+                    Size             = UDim2New(0, 0, 1, 0),
+                    BackgroundColor3 = seg.Color,
+                    BorderSizePixel  = 0,
+                    ZIndex           = 3,
+                })
+
+                Instances:Create("UIGradient", {
+                    Parent   = fill.Instance,
+                    Name     = "\0",
+                    Rotation = 0,
+                    Transparency = NumSequence{
+                        NumSequenceKeypoint(0, 0),
+                        NumSequenceKeypoint(0.85, 0),
+                        NumSequenceKeypoint(1, 0.35),
+                    },
+                })
+
+                Instances:Create("UICorner", {
+                    Parent       = fill.Instance,
+                    Name         = "\0",
+                    CornerRadius = UDimNew(1, 0),
+                })
+
+                -- value text (right side)
+                local valLabel = Instances:Create("TextLabel", {
+                    Parent              = Items["StatBar"].Instance,
+                    Name                = "\0",
+                    FontFace            = Library.Font,
+                    TextColor3          = FromRGB(160, 160, 170),
+                    Text                = "0 / 100",
+                    AnchorPoint         = Vector2New(1, 0),
+                    Size                = UDim2New(0, VAL_W, 0, SEG_H),
+                    Position            = UDim2New(1, -4, 0, yOff),
+                    BackgroundTransparency = 1,
+                    TextXAlignment      = Enum.TextXAlignment.Right,
+                    TextSize            = 11,
+                    ZIndex              = 2,
+                    BorderSizePixel     = 0,
+                    BackgroundColor3    = FromRGB(255, 255, 255),
+                }) valLabel:AddToTheme({TextColor3 = "SubText"})
+
+                StatBar.SegmentUI[seg.Label] = {
+                    Fill       = fill,
+                    ValueLabel = valLabel,
+                    BarBg      = barBg,
+                    SegData    = seg,
+                }
+            end
+        end
+
+        -- ── Public API ─────────────────────────────────────────────────────
+        function StatBar:SetSegment(label, current, max)
+            local ui = StatBar.SegmentUI[label]
+            if not ui then return end
+
+            current = math.max(0, current or 0)
+            max     = math.max(1, max     or 100)
+
+            ui.SegData.Current = current
+            ui.SegData.Max     = max
+
+            local ratio = math.clamp(current / max, 0, 1)
+
+            -- animate fill width
+            ui.Fill:Tween(
+                TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+                {Size = UDim2New(ratio, 0, 1, 0)}
+            )
+
+            -- update value text
+            ui.ValueLabel.Instance.Text = string.format("%d / %d", current, max)
+
+            -- update Flags
+            if not Library.Flags[StatBar.Flag] then
+                Library.Flags[StatBar.Flag] = {}
+            end
+            Library.Flags[StatBar.Flag][label] = {Current = current, Max = max}
+
+            Library:SafeCall(StatBar.Callback, label, current, max)
+        end
+
+        function StatBar:Get()
+            local out = {}
+            for label, ui in pairs(StatBar.SegmentUI) do
+                out[label] = {Current = ui.SegData.Current, Max = ui.SegData.Max}
+            end
+            return out
+        end
+
+        function StatBar:SetVisibility(Bool)
+            Items["StatBar"].Instance.Visible = Bool
+        end
+
+        function StatBar:RefreshPosition(Bool)
+            if Bool then
+                Items["Title"]:Tween(
+                    TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+                    {Position = UDim2New(0, 0, 0, 16)}
+                )
+            else
+                Items["Title"].Instance.Position = UDim2New(0, 30, 0, 16)
+            end
+        end
+
+        -- ── Registration ───────────────────────────────────────────────────
+        Library.Flags[StatBar.Flag] = {}
+
+        if StatBar.Section.Page and StatBar.Section.Page.Active then
+            StatBar:RefreshPosition(true)
+        end
+
+        StatBar.Section.Elements[#StatBar.Section.Elements + 1] = StatBar
+
+        if Data.ToolTip or Data.tooltip then
+            Library:AddTooltip(Data.ToolTip or Data.tooltip, Items["StatBar"].Instance)
+        end
+
+        return StatBar
     end
     -- ─────────────────────────────────────────────────────────────────────────
 
