@@ -16703,11 +16703,13 @@ local Library do
             local CS = 10
             if value then
                 m.IndicGrad.Instance.Enabled = true
+                m.Indic:ChangeItemTheme({BackgroundColor3 = function() return FromRGB(255, 255, 255) end})
                 m.Indic:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = FromRGB(255, 255, 255)})
                 m.CheckImg:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {ImageTransparency = 0, Size = UDim2New(0, CS, 0, CS)})
                 m.Lbl:Tween(nil, {TextTransparency = 0})
             else
                 m.IndicGrad.Instance.Enabled = false
+                m.Indic:ChangeItemTheme({BackgroundColor3 = "Element"})
                 m.Indic:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = Library.Theme.Element})
                 m.CheckImg:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {ImageTransparency = 1, Size = UDim2New(0, 0, 0, 0)})
                 m.Lbl:Tween(nil, {TextTransparency = 0.3})
@@ -18666,7 +18668,7 @@ local Library do
                 Flag = "ConfigsName",
                 Placeholder = "Name",
                 Numeric = false,
-                Finished = true,
+                Finished = false,
                 Callback = function(Value)
                     ConfigName = Value
                 end
