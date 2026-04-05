@@ -18660,7 +18660,7 @@ local Library do
         Main.Size = UDim2New(1, 0, 1, 0)
         Main.BackgroundTransparency = 1
         Main.BorderSizePixel = 0
-        Main.ZIndex = 2
+        Main.ZIndex = 1
         Main.Parent = PageFr
 
         local TopGlow = InstanceNew("Frame")
@@ -18669,7 +18669,7 @@ local Library do
         TopGlow.BackgroundColor3 = Accent()
         TopGlow.BackgroundTransparency = 0.92
         TopGlow.BorderSizePixel = 0
-        TopGlow.ZIndex = 2
+        TopGlow.ZIndex = 1
         TopGlow.Parent = Main
         do
             local glowGrad = InstanceNew("UIGradient")
@@ -18690,7 +18690,7 @@ local Library do
         BackGlow.BackgroundColor3 = Accent()
         BackGlow.BackgroundTransparency = 0.95
         BackGlow.BorderSizePixel = 0
-        BackGlow.ZIndex = 2
+        BackGlow.ZIndex = 1
         BackGlow.Parent = Main
         do
             local glowGrad = InstanceNew("UIGradient")
@@ -18710,31 +18710,56 @@ local Library do
         local columnDecor = {}
 
         local function SetupColumn(column, position, size, backgroundTransparency)
-            column.Parent = Main
-            column.Position = position
-            column.Size = size
-            column.BackgroundColor3 = Elem()
-            column.BackgroundTransparency = backgroundTransparency
-            column.BorderSizePixel = 0
-            column.ScrollBarThickness = 2
-            column.ScrollBarImageColor3 = Accent()
-            column.CanvasPosition = Vector2New(0, 0)
-            column.ClipsDescendants = true
-            column.ZIndex = 3
+            local shell = InstanceNew("Frame")
+            shell.Name = "\0"
+            shell.Position = position
+            shell.Size = size
+            shell.BackgroundColor3 = Elem()
+            shell.BackgroundTransparency = backgroundTransparency
+            shell.BorderSizePixel = 0
+            shell.ZIndex = 2
+            shell.Parent = Main
 
-            Instances:Create("UICorner", {
-                Parent = column,
-                CornerRadius = UDimNew(0, 16)
-            })
+            local shellCorner = InstanceNew("UICorner")
+            shellCorner.CornerRadius = UDimNew(0, 18)
+            shellCorner.Parent = shell
 
-            local borderStroke = Instances:Create("UIStroke", {
-                Parent = column,
+            local shellStroke = Instances:Create("UIStroke", {
+                Parent = shell,
                 ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
                 Color = Outline(),
                 Thickness = 1,
                 Transparency = 0.35
             })
-            borderStroke:AddToTheme({Color = "Outline"})
+            shellStroke:AddToTheme({Color = "Outline"})
+
+            local shellGlow = InstanceNew("Frame")
+            shellGlow.Name = "\0"
+            shellGlow.AnchorPoint = Vector2New(0.5, 0)
+            shellGlow.Position = UDim2New(0.5, 0, 0, 2)
+            shellGlow.Size = UDim2New(1, -26, 0, 60)
+            shellGlow.BackgroundColor3 = Accent()
+            shellGlow.BackgroundTransparency = 0.9
+            shellGlow.BorderSizePixel = 0
+            shellGlow.ZIndex = 2
+            shellGlow.Parent = shell
+            do
+                local glowCorner = InstanceNew("UICorner")
+                glowCorner.CornerRadius = UDimNew(0, 18)
+                glowCorner.Parent = shellGlow
+            end
+
+            column.Parent = shell
+            column.Position = UDim2New(0, 12, 0, 12)
+            column.Size = UDim2New(1, -24, 1, -24)
+            column.BackgroundColor3 = Elem()
+            column.BackgroundTransparency = 1
+            column.BorderSizePixel = 0
+            column.ScrollBarThickness = 2
+            column.ScrollBarImageColor3 = Accent()
+            column.CanvasPosition = Vector2New(0, 0)
+            column.ClipsDescendants = true
+            column.ZIndex = 2
 
             local topBorder = InstanceNew("Frame")
             topBorder.Name = "\0"
@@ -18742,8 +18767,8 @@ local Library do
             topBorder.BackgroundColor3 = Accent()
             topBorder.BackgroundTransparency = 0.15
             topBorder.BorderSizePixel = 0
-            topBorder.ZIndex = 4
-            topBorder.Parent = column
+            topBorder.ZIndex = 3
+            topBorder.Parent = shell
             do
                 local borderGrad = InstanceNew("UIGradient")
                 borderGrad.Color = RGBSequence{
@@ -18754,7 +18779,9 @@ local Library do
             end
 
             columnDecor[column] = {
-                Stroke = borderStroke.Instance,
+                Shell = shell,
+                Stroke = shellStroke.Instance,
+                Glow = shellGlow,
                 TopBorder = topBorder,
             }
 
@@ -18764,14 +18791,6 @@ local Library do
                 layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
                 layout.SortOrder = Enum.SortOrder.LayoutOrder
             end
-
-            Instances:Create("UIPadding", {
-                Parent = column,
-                PaddingTop = UDimNew(0, 14),
-                PaddingBottom = UDimNew(0, 14),
-                PaddingLeft = UDimNew(0, 14),
-                PaddingRight = UDimNew(0, 14)
-            })
         end
 
         SetupColumn(columns.Sidebar, UDim2New(0, 0, 0, 0), UDim2New(0.23, 0, 1, 0), 0.08)
@@ -19564,9 +19583,17 @@ local Library do
                 pcall(function()
                     TweenService:Create(column, tweenInfo, {ScrollBarImageColor3 = accent}):Play()
                     local decor = columnDecor[column]
+                    local shell = decor and decor.Shell
                     local stroke = decor and decor.Stroke
+                    local glow = decor and decor.Glow
+                    if shell then
+                        TweenService:Create(shell, tweenInfo, {BackgroundColor3 = theme.Element or FromRGB(18, 17, 22)}):Play()
+                    end
                     if stroke then
                         TweenService:Create(stroke, tweenInfo, {Color = outline}):Play()
+                    end
+                    if glow then
+                        TweenService:Create(glow, tweenInfo, {BackgroundColor3 = accent}):Play()
                     end
                     local topBorder = decor and decor.TopBorder
                     if topBorder and topBorder:IsA("Frame") then
