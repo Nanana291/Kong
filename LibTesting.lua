@@ -13277,7 +13277,7 @@ local Library do
                     Parent = Divider.Section.Items["Content"].Instance,
                     Name = "\0",
                     BackgroundTransparency = 1,
-                    Size = UDim2New(1, 0, 0, 20),
+                    Size = UDim2New(1, 0, 0, 14),
                     BorderColor3 = FromRGB(0, 0, 0),
                     ZIndex = 2,
                     BorderSizePixel = 0,
@@ -13292,14 +13292,15 @@ local Library do
                         TextColor3 = FromRGB(240, 240, 240),
                         Text = Divider.Title,
                         AutomaticSize = Enum.AutomaticSize.X,
-                        Size = UDim2New(0, 0, 0, 15),
+                        Size = UDim2New(0, 0, 0, 13),
                         AnchorPoint = Vector2New(0.5, 0.5),
                         BorderSizePixel = 0,
                         BackgroundTransparency = 1,
                         Position = UDim2New(0.5, 0, 0.5, 0),
                         BorderColor3 = FromRGB(0, 0, 0),
                         ZIndex = 2,
-                        TextSize = 13,
+                        TextSize = 11,
+                        TextTransparency = 0.18,
                         BackgroundColor3 = FromRGB(255, 255, 255)
                     })  Items["Title"]:AddToTheme({TextColor3 = "Text"})
 
@@ -13345,8 +13346,8 @@ local Library do
 
                     local function UpdateLines()
                         local HalfText = Items["Title"].Instance.TextBounds.X / 2
-                        local Padding = 10
-                        local EdgeMargin = 20
+                        local Padding = 8
+                        local EdgeMargin = 14
 
                         Items["LeftLine"].Instance.Position = UDim2New(0.5, -HalfText - Padding, 0.5, 0)
                         Items["RightLine"].Instance.Position = UDim2New(0.5, HalfText + Padding, 0.5, 0)
@@ -13363,7 +13364,7 @@ local Library do
                         Name = "\0",
                         AnchorPoint = Vector2New(0.5, 0.5),
                         Position = UDim2New(0.5, 0, 0.5, 0),
-                        Size = UDim2New(1, -40, 0, 1),
+                        Size = UDim2New(1, -28, 0, 1),
                         BorderColor3 = FromRGB(0, 0, 0),
                         ZIndex = 2,
                         BorderSizePixel = 0,
@@ -13374,9 +13375,9 @@ local Library do
                         Parent = Items["Line"].Instance,
                         Transparency = NumSequence{
                             NumSequenceKeypoint(0, 1),
-                            NumSequenceKeypoint(0.2, 0.2),
-                            NumSequenceKeypoint(0.5, 0),
-                            NumSequenceKeypoint(0.8, 0.2),
+                            NumSequenceKeypoint(0.2, 0.45),
+                            NumSequenceKeypoint(0.5, 0.22),
+                            NumSequenceKeypoint(0.8, 0.45),
                             NumSequenceKeypoint(1, 1)
                         }
                     })
@@ -18666,9 +18667,9 @@ local Library do
 
         local TopGlow = InstanceNew("Frame")
         TopGlow.Name = "\0"
-        TopGlow.Size = UDim2New(1, 0, 0, 210)
+        TopGlow.Size = UDim2New(1, 0, 0, 170)
         TopGlow.BackgroundColor3 = Accent()
-        TopGlow.BackgroundTransparency = 0.93
+        TopGlow.BackgroundTransparency = 0.955
         TopGlow.BorderSizePixel = 0
         TopGlow.ZIndex = 1
         TopGlow.Parent = Main
@@ -18686,10 +18687,10 @@ local Library do
         local SideGlow = InstanceNew("Frame")
         SideGlow.Name = "\0"
         SideGlow.AnchorPoint = Vector2New(1, 1)
-        SideGlow.Position = UDim2New(1, 40, 1, 30)
-        SideGlow.Size = UDim2New(0, 240, 0, 220)
+        SideGlow.Position = UDim2New(1, 26, 1, 18)
+        SideGlow.Size = UDim2New(0, 190, 0, 150)
         SideGlow.BackgroundColor3 = Accent()
-        SideGlow.BackgroundTransparency = 0.96
+        SideGlow.BackgroundTransparency = 0.978
         SideGlow.BorderSizePixel = 0
         SideGlow.ZIndex = 1
         SideGlow.Parent = Main
@@ -18776,7 +18777,7 @@ local Library do
         HeaderLeft.BackgroundTransparency = 1
         HeaderLeft.BorderSizePixel = 0
         HeaderLeft.Position = UDim2New(0, 0, 0, 3)
-        HeaderLeft.Size = UDim2New(1, -190, 1, -6)
+        HeaderLeft.Size = UDim2New(1, -176, 1, -6)
         HeaderLeft.ZIndex = 3
         HeaderLeft.Parent = Header.Instance
 
@@ -18841,7 +18842,7 @@ local Library do
         HeaderStats.BorderSizePixel = 0
         HeaderStats.AnchorPoint = Vector2New(1, 0.5)
         HeaderStats.Position = UDim2New(1, -2, 0.5, 0)
-        HeaderStats.Size = UDim2New(0, 176, 0, 34)
+        HeaderStats.Size = UDim2New(0, 164, 0, 34)
         HeaderStats.ZIndex = 4
         HeaderStats.Parent = Header.Instance
 
@@ -19011,9 +19012,9 @@ local Library do
                 Name = "\0",
                 AnchorPoint = Vector2New(0.5, 0),
                 Position = UDim2New(0.5, 0, 0, 2),
-                Size = UDim2New(1, -28, 0, 48),
+                Size = UDim2New(1, -32, 0, 34),
                 BackgroundColor3 = Accent(),
-                BackgroundTransparency = 0.92,
+                BackgroundTransparency = 0.955,
                 BorderSizePixel = 0,
                 ZIndex = 2
             })
@@ -19027,8 +19028,8 @@ local Library do
             shellHeader.Name = "\0"
             shellHeader.BackgroundTransparency = 1
             shellHeader.BorderSizePixel = 0
-            shellHeader.Position = UDim2New(0, 14, 0, 12)
-            shellHeader.Size = UDim2New(1, -28, 0, 52)
+            shellHeader.Position = UDim2New(0, 14, 0, 10)
+            shellHeader.Size = UDim2New(1, -28, 0, 46)
             shellHeader.ZIndex = 4
             shellHeader.Parent = shell.Instance
 
@@ -19051,7 +19052,7 @@ local Library do
                 FontFace = BoldFont,
                 Text = title,
                 TextColor3 = Txt(),
-                TextSize = 15,
+                TextSize = 14,
                 BackgroundTransparency = 1,
                 Position = UDim2New(0, 0, 0, 10),
                 Size = UDim2New(1, -88, 0, 16),
@@ -19067,12 +19068,13 @@ local Library do
                 FontFace = Library.Font,
                 Text = subtitle,
                 TextColor3 = FromRGB(140, 137, 156),
-                TextSize = 10,
+                TextSize = 9,
                 BackgroundTransparency = 1,
-                Position = UDim2New(0, 0, 0, 28),
-                Size = UDim2New(1, -4, 0, 20),
-                TextWrapped = true,
-                TextYAlignment = Enum.TextYAlignment.Top,
+                Position = UDim2New(0, 0, 0, 26),
+                Size = UDim2New(1, -4, 0, 14),
+                TextWrapped = false,
+                TextTruncate = Enum.TextTruncate.AtEnd,
+                TextYAlignment = Enum.TextYAlignment.Center,
                 TextXAlignment = Enum.TextXAlignment.Left,
                 ZIndex = 5
             })
@@ -19085,10 +19087,10 @@ local Library do
                 Parent = shell.Instance,
                 Name = "\0",
                 AnchorPoint = Vector2New(0.5, 0),
-                Position = UDim2New(0.5, 0, 0, 68),
+                Position = UDim2New(0.5, 0, 0, 60),
                 Size = UDim2New(1, -28, 0, 1),
                 BackgroundColor3 = Outline(),
-                BackgroundTransparency = 0.56,
+                BackgroundTransparency = 0.72,
                 BorderSizePixel = 0,
                 ZIndex = 3
             })
@@ -19097,19 +19099,19 @@ local Library do
                 local dividerGrad = InstanceNew("UIGradient")
                 dividerGrad.Transparency = NumSequence{
                     NumSequenceKeypoint(0, 1),
-                    NumSequenceKeypoint(0.18, 0.12),
-                    NumSequenceKeypoint(0.82, 0.12),
+                    NumSequenceKeypoint(0.18, 0.35),
+                    NumSequenceKeypoint(0.82, 0.35),
                     NumSequenceKeypoint(1, 1)
                 }
                 dividerGrad.Parent = shellDivider.Instance
             end
 
             column.Parent = shell.Instance
-            column.Position = UDim2New(0, 12, 0, 78)
-            column.Size = UDim2New(1, -24, 1, -90)
+            column.Position = UDim2New(0, 12, 0, 68)
+            column.Size = UDim2New(1, -24, 1, -80)
             column.BackgroundTransparency = 1
             column.BorderSizePixel = 0
-            column.ScrollBarThickness = 3
+            column.ScrollBarThickness = 2
             column.ScrollBarImageColor3 = Accent()
             column.CanvasPosition = Vector2New(0, 0)
             column.ClipsDescendants = true
@@ -19117,7 +19119,7 @@ local Library do
 
             local layout = column:FindFirstChildOfClass("UIListLayout")
             if layout then
-                layout.Padding = UDimNew(0, 12)
+                layout.Padding = UDimNew(0, 10)
                 layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
                 layout.SortOrder = Enum.SortOrder.LayoutOrder
             end
@@ -19133,9 +19135,9 @@ local Library do
             }
         end
 
-        SetupColumn(columns.Sidebar, UDim2New(0, 0, 0, 68), UDim2New(0.24, -4, 1, -68), 0.12, "Navigation", "Route the page and watch the live state.", "LIVE")
-        SetupColumn(columns.Main, UDim2New(0.26, 2, 0, 68), UDim2New(0.42, -6, 1, -68), 0.08, "UI & Motion", "Keybind, theme, transparency, fade, and tween tuning.", "ACTIVE")
-        SetupColumn(columns.Right, UDim2New(0.70, 4, 0, 68), UDim2New(0.30, -4, 1, -68), 0.12, "Config Control", "Saved setups, autoload, and workspace context.", "MANAGE")
+        SetupColumn(columns.Sidebar, UDim2New(0, 0, 0, 68), UDim2New(0.19, -2, 1, -68), 0.12, "Navigation", "Route the page and watch the live state.", "LIVE")
+        SetupColumn(columns.Main, UDim2New(0.205, 2, 0, 68), UDim2New(0.525, -6, 1, -68), 0.08, "UI & Motion", "Keybind, theme, transparency, fade, and tween tuning.", "ACTIVE")
+        SetupColumn(columns.Right, UDim2New(0.745, 4, 0, 68), UDim2New(0.255, -4, 1, -68), 0.12, "Config Control", "Saved setups, autoload, and workspace context.", "MANAGE")
 
         local function CreateSidebarCard(title, subtitle, height)
             local card = Instances:Create("Frame", {
@@ -19143,7 +19145,7 @@ local Library do
                 Name = "\0",
                 Size = UDim2New(1, 0, 0, height),
                 BackgroundColor3 = Bg(),
-                BackgroundTransparency = 0.14,
+                BackgroundTransparency = 0.1,
                 BorderSizePixel = 0,
                 ZIndex = 3
             })
@@ -19209,10 +19211,10 @@ local Library do
                 FontFace = Library.Font,
                 Text = subtitle,
                 TextColor3 = FromRGB(142, 139, 158),
-                TextSize = 11,
+                TextSize = 10,
                 BackgroundTransparency = 1,
                 Position = UDim2New(0, 14, 0, 30),
-                Size = UDim2New(1, -28, 0, 26),
+                Size = UDim2New(1, -28, 0, 22),
                 TextWrapped = true,
                 TextYAlignment = Enum.TextYAlignment.Top,
                 TextXAlignment = Enum.TextXAlignment.Left,
@@ -19223,8 +19225,8 @@ local Library do
                 Parent = card.Instance,
                 Name = "\0",
                 BackgroundTransparency = 1,
-                Position = UDim2New(0, 14, 0, 62),
-                Size = UDim2New(1, -28, 1, -76),
+                Position = UDim2New(0, 14, 0, 58),
+                Size = UDim2New(1, -28, 1, -70),
                 BorderSizePixel = 0,
                 ZIndex = 4
             })
@@ -19240,26 +19242,26 @@ local Library do
         local NavigationCard, NavBody = CreateSidebarCard(
             "Navigation",
             "Jump between the four settings groups without relying on the old stacked flow.",
-            226
+            254
         )
 
         local SnapshotCard, SnapshotBody = CreateSidebarCard(
             "Snapshot",
             "Theme, autoload, and keybind status at a glance.",
-            124
+            134
         )
 
         local NotesCard, NotesBody = CreateSidebarCard(
             "Workflow",
             "Use UI first, tune motion second, then finish by saving or autoloading a config.",
-            112
+            136
         )
 
         local function CreateWorkflowRow(index, title, hint)
             local row = Instances:Create("Frame", {
                 Parent = NotesBody.Instance,
                 Name = "\0",
-                Size = UDim2New(1, 0, 0, 18),
+                Size = UDim2New(1, 0, 0, 16),
                 BackgroundTransparency = 1,
                 BorderSizePixel = 0,
                 ZIndex = 4
@@ -19299,7 +19301,7 @@ local Library do
                 FontFace = BoldFont,
                 Text = title,
                 TextColor3 = Txt(),
-                TextSize = 10,
+                TextSize = 9,
                 BackgroundTransparency = 1,
                 Position = UDim2New(0, 24, 0, 0),
                 Size = UDim2New(0.5, 0, 1, 0),
@@ -19314,7 +19316,7 @@ local Library do
                 FontFace = Library.Font,
                 Text = hint,
                 TextColor3 = FromRGB(140, 137, 156),
-                TextSize = 9,
+                TextSize = 8,
                 BackgroundTransparency = 1,
                 Position = UDim2New(0.5, 0, 0, 0),
                 Size = UDim2New(0.5, 0, 1, 0),
@@ -19704,10 +19706,10 @@ local Library do
                 sectionPadding = InstanceNew("UIPadding")
                 sectionPadding.Parent = items["Section"].Instance
             end
-            sectionPadding.PaddingTop = UDimNew(0, 10)
-            sectionPadding.PaddingBottom = UDimNew(0, 10)
-            sectionPadding.PaddingLeft = UDimNew(0, 10)
-            sectionPadding.PaddingRight = UDimNew(0, 10)
+            sectionPadding.PaddingTop = UDimNew(0, 8)
+            sectionPadding.PaddingBottom = UDimNew(0, 8)
+            sectionPadding.PaddingLeft = UDimNew(0, 8)
+            sectionPadding.PaddingRight = UDimNew(0, 8)
 
             local outerStroke = items["Section"].Instance:FindFirstChild("SettingsOuterStroke")
             if not outerStroke then
@@ -19722,14 +19724,14 @@ local Library do
             Library:AddToTheme(outerStroke, {Color = "Outline"})
 
             items["Top"].Instance.BackgroundTransparency = 1
-            items["TopBackground"].Instance.BackgroundTransparency = 0.04
+            items["TopBackground"].Instance.BackgroundTransparency = 0.06
             items["Background"].Instance.BackgroundTransparency = 0.02
             items["Fill"].Instance.Visible = false
             items["TopFills"].Instance.Visible = false
 
             local topLayout = items["TopBackground"].Instance:FindFirstChildOfClass("UIListLayout")
             if topLayout then
-                topLayout.Padding = UDimNew(0, 6)
+                topLayout.Padding = UDimNew(0, 4)
             end
 
             local topPadding = items["TopBackground"].Instance:FindFirstChildOfClass("UIPadding")
@@ -19737,16 +19739,16 @@ local Library do
                 topPadding = InstanceNew("UIPadding")
                 topPadding.Parent = items["TopBackground"].Instance
             end
-            topPadding.PaddingTop = UDimNew(0, 10)
-            topPadding.PaddingBottom = UDimNew(0, 10)
-            topPadding.PaddingLeft = UDimNew(0, 10)
-            topPadding.PaddingRight = UDimNew(0, 10)
+            topPadding.PaddingTop = UDimNew(0, 8)
+            topPadding.PaddingBottom = UDimNew(0, 8)
+            topPadding.PaddingLeft = UDimNew(0, 8)
+            topPadding.PaddingRight = UDimNew(0, 8)
 
-            items["IconContainer"].Instance.Size = UDim2New(0, 36, 0, 0)
-            items["TextContainer"].Instance.Size = UDim2New(1, -84, 0, 0)
+            items["IconContainer"].Instance.Size = UDim2New(0, 32, 0, 0)
+            items["TextContainer"].Instance.Size = UDim2New(1, -74, 0, 0)
             items["ToggleContainer"].Instance.Size = UDim2New(0, 28, 0, 0)
-            items["Content"].Instance.Position = UDim2New(0, 14, 0, 12)
-            items["Content"].Instance.Size = UDim2New(1, -28, 0, 0)
+            items["Content"].Instance.Position = UDim2New(0, 12, 0, 10)
+            items["Content"].Instance.Size = UDim2New(1, -24, 0, 0)
 
             local contentLayout = items["Content"].Instance:FindFirstChildOfClass("UIListLayout")
             if contentLayout then
@@ -19755,12 +19757,12 @@ local Library do
 
             local contentPadding = items["Content"].Instance:FindFirstChildOfClass("UIPadding")
             if contentPadding then
-                contentPadding.PaddingBottom = UDimNew(0, 14)
+                contentPadding.PaddingBottom = UDimNew(0, 10)
             end
 
             local textLayout = items["TextContainer"].Instance:FindFirstChildOfClass("UIListLayout")
             if textLayout then
-                textLayout.Padding = UDimNew(0, 1)
+                textLayout.Padding = UDimNew(0, 0)
             end
 
             local textPadding = items["TextContainer"].Instance:FindFirstChildOfClass("UIPadding")
@@ -19769,9 +19771,9 @@ local Library do
                 textPadding.PaddingBottom = UDimNew(0, 0)
             end
 
-            items["Title"].Instance.TextSize = 14
+            items["Title"].Instance.TextSize = 13
             if items["Description"] then
-                items["Description"].Instance.TextSize = 11
+                items["Description"].Instance.TextSize = 10
                 items["Description"].Instance.TextTransparency = 0.22
             end
 
@@ -19799,8 +19801,8 @@ local Library do
             if not accentBar then
                 accentBar = InstanceNew("Frame")
                 accentBar.Name = "SettingsAccentBar"
-                accentBar.Size = UDim2New(1, 0, 0, 2)
-                accentBar.BackgroundTransparency = 0.08
+                accentBar.Size = UDim2New(1, 0, 0, 1)
+                accentBar.BackgroundTransparency = 0.45
                 accentBar.BorderSizePixel = 0
                 accentBar.ZIndex = 3
                 accentBar.Parent = items["TopBackground"].Instance
@@ -19832,8 +19834,8 @@ local Library do
                 glow.Name = "SettingsHeaderGlow"
                 glow.AnchorPoint = Vector2New(0.5, 0)
                 glow.Position = UDim2New(0.5, 0, 0, 2)
-                glow.Size = UDim2New(1, -18, 0, 34)
-                glow.BackgroundTransparency = 0.92
+                glow.Size = UDim2New(1, -20, 0, 22)
+                glow.BackgroundTransparency = 0.965
                 glow.BorderSizePixel = 0
                 glow.ZIndex = 1
                 glow.Parent = items["TopBackground"].Instance
@@ -19919,7 +19921,7 @@ local Library do
                 Name = "\0",
                 Text = "",
                 AutoButtonColor = false,
-                Size = UDim2New(1, 0, 0, 46),
+                Size = UDim2New(1, 0, 0, 40),
                 BackgroundColor3 = Elem(),
                 BackgroundTransparency = 0.12,
                 BorderSizePixel = 0,
@@ -19982,9 +19984,9 @@ local Library do
                 FontFace = BoldFont,
                 Text = title,
                 TextColor3 = Txt(),
-                TextSize = 11,
+                TextSize = 10,
                 BackgroundTransparency = 1,
-                Position = UDim2New(0, 34, 0, 8),
+                Position = UDim2New(0, 34, 0, 6),
                 Size = UDim2New(1, -42, 0, 12),
                 TextXAlignment = Enum.TextXAlignment.Left,
                 ZIndex = 5
@@ -19997,9 +19999,9 @@ local Library do
                 FontFace = Library.Font,
                 Text = description,
                 TextColor3 = FromRGB(142, 139, 158),
-                TextSize = 9,
+                TextSize = 8,
                 BackgroundTransparency = 1,
-                Position = UDim2New(0, 34, 0, 21),
+                Position = UDim2New(0, 34, 0, 18),
                 Size = UDim2New(1, -42, 0, 11),
                 TextXAlignment = Enum.TextXAlignment.Left,
                 TextTruncate = Enum.TextTruncate.AtEnd,
