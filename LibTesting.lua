@@ -6225,15 +6225,15 @@ local Library do
                 if Toggle.Value then
                     Items["IndicatorGradient"].Instance.Enabled = true
                     Items["Indicator"]:ChangeItemTheme({BackgroundColor3 = function()
-                        return FromRGB(255, 255, 255)
+                        return Library.Theme.Accent
                     end})
                     if Instant then
-                        Items["Indicator"].Instance.BackgroundColor3 = FromRGB(255, 255, 255)
+                        Items["Indicator"].Instance.BackgroundColor3 = Library.Theme.Accent
                         Items["CheckImage"].Instance.ImageTransparency = 0
                         Items["CheckImage"].Instance.Size = UDim2New(0, _CheckSize, 0, _CheckSize)
                         Items["IndicatorStroke"].Instance.Transparency = 1
                     else
-                        Items["Indicator"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = FromRGB(255, 255, 255)})
+                        Items["Indicator"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = Library.Theme.Accent})
                         Items["CheckImage"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {ImageTransparency = 0, Size = UDim2New(0, _CheckSize, 0, _CheckSize)})
                         Items["IndicatorStroke"]:Tween(nil, {Transparency = 1})
                     end
@@ -16926,8 +16926,8 @@ local Library do
             local CS = 10
             if value then
                 m.IndicGrad.Instance.Enabled = true
-                m.Indic:ChangeItemTheme({BackgroundColor3 = function() return FromRGB(255, 255, 255) end})
-                m.Indic:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = FromRGB(255, 255, 255)})
+                m.Indic:ChangeItemTheme({BackgroundColor3 = function() return Library.Theme.Accent end})
+                m.Indic:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = Library.Theme.Accent})
                 m.CheckImg:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {ImageTransparency = 0, Size = UDim2New(0, CS, 0, CS)})
                 m.Lbl:Tween(nil, {TextTransparency = 0})
             else
@@ -17620,14 +17620,14 @@ local Library do
             local CS = IsMobile and 12 or 16
             if value then
                 Items["IndicGrad"].Instance.Enabled = true
-                Items["Indicator"]:ChangeItemTheme({BackgroundColor3 = function() return FromRGB(255, 255, 255) end})
+                Items["Indicator"]:ChangeItemTheme({BackgroundColor3 = function() return Library.Theme.Accent end})
                 if instant then
-                    Items["Indicator"].Instance.BackgroundColor3 = FromRGB(255, 255, 255)
+                    Items["Indicator"].Instance.BackgroundColor3 = Library.Theme.Accent
                     Items["CheckImage"].Instance.ImageTransparency = 0
                     Items["CheckImage"].Instance.Size = UDim2New(0, CS, 0, CS)
                     Items["IndicStroke"].Instance.Transparency = 1
                 else
-                    Items["Indicator"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = FromRGB(255, 255, 255)})
+                    Items["Indicator"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = Library.Theme.Accent})
                     Items["CheckImage"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {ImageTransparency = 0, Size = UDim2New(0, CS, 0, CS)})
                     Items["IndicStroke"]:Tween(nil, {Transparency = 1})
                 end
@@ -19898,7 +19898,7 @@ local Library do
             AutoloadToggle = ConfigsSection:Toggle({
                 Name = "Autoload Selected Config",
                 Flag = "UI_AutoloadConfig",
-                Default = GetAutoloadConfig() ~= nil,
+                Default = false,
                 ToolTip = "When enabled, the selected config becomes the autoload target.",
                 Callback = function(Value)
                     if suppressAutoloadCallback then
