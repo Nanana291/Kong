@@ -1468,17 +1468,17 @@ local Library do
         Name = "\0",
         BackgroundTransparency = 1,
         AnchorPoint = Vector2New(1, 1),
-        Position = UDim2New(1, -20, 1, -20),
-        Size = UDim2New(0, 320, 1, -40),
+        Position = UDim2New(1, -16, 1, -16),
+        Size = UDim2New(0, 480, 1, -32),
         BorderSizePixel = 0,
         BackgroundColor3 = FromRGB(255, 255, 255),
         ClipsDescendants = false,
     })
-    
+
     Instances:Create("UIListLayout", {
         Parent = Library.NotifHolder.Instance,
         Name = "\0",
-        Padding = UDimNew(0, 10),
+        Padding = UDimNew(0, 8),
         SortOrder = Enum.SortOrder.LayoutOrder,
         VerticalAlignment = Enum.VerticalAlignment.Bottom,
         HorizontalAlignment = Enum.HorizontalAlignment.Right,
@@ -2586,36 +2586,34 @@ local Library do
             local Title       = Data.Title       or "Notification"
             local Description = Data.Description or ""
             local SubText     = Data.SubText     or ""
-            local Icon        = Data.Icon        or "check"
             local Duration    = Data.Duration    or 5
 
-            local Camera  = workspace.CurrentCamera
-            local vpW     = Camera.ViewportSize.X
-            local W       = math.min(300, math.max(240, vpW - 44))
+            local Camera = workspace.CurrentCamera
+            local vpW    = Camera.ViewportSize.X
+            local W      = math.min(480, math.max(280, vpW - 32))
 
-            local PAD    = 16
-            local ICON_D = 44
-            local BAR_H  = 3
-            local CORNER = 12
-            local BAR_W  = 3
+            local PAD_H  = 18   -- horizontal padding
+            local PAD_V  = 16   -- vertical padding
+            local CORNER = 18
+            local PROG_H = 2    -- ultra-thin progress line
 
             local TitleFont = Font.fromEnum(Enum.Font.GothamBold)
             local BodyFont  = Font.fromEnum(Enum.Font.Gotham)
 
-            local TI_In  = TweenInfo.new(0.40, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
-            local TI_Out = TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+            local TI_In  = TweenInfo.new(0.38, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+            local TI_Out = TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
 
-            -- Root card
+            -- ── Root card ─────────────────────────────────────────────────
             local Root = Instances:Create("Frame", {
-                Parent              = Library.NotifHolder.Instance,
-                Name                = "\0",
-                BackgroundColor3    = FromRGB(10, 9, 14),
-                BorderSizePixel     = 0,
-                Size                = UDim2New(0, W, 0, 0),
-                AutomaticSize       = Enum.AutomaticSize.Y,
-                ClipsDescendants    = false,
+                Parent               = Library.NotifHolder.Instance,
+                Name                 = "\0",
+                BackgroundColor3     = FromRGB(36, 34, 44),
+                BorderSizePixel      = 0,
+                Size                 = UDim2New(0, W, 0, 0),
+                AutomaticSize        = Enum.AutomaticSize.Y,
+                ClipsDescendants     = false,
                 BackgroundTransparency = 0,
-                ZIndex              = 10,
+                ZIndex               = 10,
             })
 
             Instances:Create("UICorner", {
@@ -2625,110 +2623,35 @@ local Library do
 
             Instances:Create("UIStroke", {
                 Parent       = Root.Instance,
-                Color        = FromRGB(32, 28, 44),
+                Color        = FromRGB(58, 55, 72),
                 Thickness    = 1,
                 Transparency = 0,
             })
 
-            -- Top + bottom padding on Root. No left/right so content starts at x=0
+            -- Outer padding drives the card height cleanly
             Instances:Create("UIPadding", {
                 Parent        = Root.Instance,
                 Name          = "\0",
-                PaddingTop    = UDimNew(0, PAD),
-                PaddingBottom = UDimNew(0, PAD + BAR_H),
-                PaddingLeft   = UDimNew(0, 0),
-                PaddingRight  = UDimNew(0, 0),
+                PaddingTop    = UDimNew(0, PAD_V),
+                PaddingBottom = UDimNew(0, PAD_V + PROG_H),
+                PaddingLeft   = UDimNew(0, PAD_H),
+                PaddingRight  = UDimNew(0, PAD_H),
             })
 
-            -- Left accent bar — spans full Root height (absolute, not layout child)
-            local LeftBar = Instances:Create("Frame", {
-                Parent           = Root.Instance,
-                Name             = "\0",
-                BackgroundColor3 = Library.Theme.Accent,
-                BorderSizePixel  = 0,
-                AnchorPoint      = Vector2New(0, 0.5),
-                Position         = UDim2New(0, 0, 0.5, 0),
-                Size             = UDim2New(0, BAR_W, 1, -(CORNER * 2)),
-                ZIndex           = 11,
-            })
-            LeftBar:AddToTheme({BackgroundColor3 = "Accent"})
-            Instances:Create("UICorner", { Parent = LeftBar.Instance, CornerRadius = UDimNew(0, BAR_W) })
-
-            -- ContentRow: fills Root padded area, AutomaticSize.Y drives Root height
-            -- This is the key layout fix: ContentRow is a layout-managed child (Y=0),
-            -- so Root.AutomaticSize.Y = UIPadding.Top + ContentRow.Height + UIPadding.Bottom
-            -- No double-padding, no timing issues
-            local ContentRow = Instances:Create("Frame", {
-                Parent              = Root.Instance,
-                Name                = "\0",
-                BackgroundTransparency = 1,
-                BorderSizePixel     = 0,
-                Position            = UDim2New(0, 0, 0, 0),
-                Size                = UDim2New(1, 0, 0, 0),
-                AutomaticSize       = Enum.AutomaticSize.Y,
-                ZIndex              = 11,
-            })
-
-            -- Icon circle — pixel-positioned within ContentRow, no scale Y dependency
-            local textLeft  = BAR_W + PAD + ICON_D + 12
-            local textRight = 26
-
-            local IconBg = Instances:Create("Frame", {
-                Parent           = ContentRow.Instance,
-                Name             = "\0",
-                BorderSizePixel  = 0,
-                AnchorPoint      = Vector2New(0, 0),
-                Position         = UDim2New(0, BAR_W + PAD, 0, 0),
-                Size             = UDim2New(0, ICON_D, 0, ICON_D),
-                ZIndex           = 11,
-                BackgroundColor3 = FromRGB(
-                    math.clamp(math.floor(Library.Theme.Accent.R * 255 * 0.20), 0, 255),
-                    math.clamp(math.floor(Library.Theme.Accent.G * 255 * 0.08), 0, 255),
-                    math.clamp(math.floor(Library.Theme.Accent.B * 255 * 0.30), 0, 255)
-                ),
-            })
-            IconBg:AddToTheme({BackgroundColor3 = function()
-                local A = Library.Theme.Accent
-                return FromRGB(
-                    math.clamp(math.floor(A.R * 255 * 0.20), 0, 255),
-                    math.clamp(math.floor(A.G * 255 * 0.08), 0, 255),
-                    math.clamp(math.floor(A.B * 255 * 0.30), 0, 255)
-                )
-            end})
-            Instances:Create("UICorner", { Parent = IconBg.Instance, CornerRadius = UDimNew(1, 0) })
-
-            local IconData = Library:GetCustomIcon(Icon)
-            Instances:Create("ImageLabel", {
-                Parent              = IconBg.Instance,
-                Name                = "\0",
-                Image               = IconData and IconData.Url or "",
-                ImageRectOffset     = IconData and IconData.ImageRectOffset or Vector2New(0, 0),
-                ImageRectSize       = IconData and IconData.ImageRectSize   or Vector2New(0, 0),
-                ImageColor3         = Library.Theme.Accent,
-                BackgroundTransparency = 1,
-                AnchorPoint         = Vector2New(0.5, 0.5),
-                Position            = UDim2New(0.5, 0, 0.5, 0),
-                Size                = UDim2New(0, 20, 0, 20),
-                BorderSizePixel     = 0,
-                ZIndex              = 12,
-            }):AddToTheme({ImageColor3 = "Accent"})
-
-            -- TextBlock: positioned right of icon, AutomaticSize.Y
-            -- Position.Y = 0 here (no extra offset) — UIPadding on Root handles top spacing
+            -- ── Content block (title + body + subcontent) ──────────────────
             local TextBlock = Instances:Create("Frame", {
-                Parent              = ContentRow.Instance,
-                Name                = "\0",
+                Parent               = Root.Instance,
+                Name                 = "\0",
                 BackgroundTransparency = 1,
-                BorderSizePixel     = 0,
-                Position            = UDim2New(0, textLeft, 0, 0),
-                Size                = UDim2New(1, -(textLeft + textRight), 0, 0),
-                AutomaticSize       = Enum.AutomaticSize.Y,
-                ZIndex              = 11,
+                BorderSizePixel      = 0,
+                Size                 = UDim2New(1, -28, 0, 0),  -- leave room for X
+                AutomaticSize        = Enum.AutomaticSize.Y,
+                ZIndex               = 11,
             })
 
             Instances:Create("UIListLayout", {
                 Parent              = TextBlock.Instance,
-                Padding             = UDimNew(0, 6),
+                Padding             = UDimNew(0, 5),
                 SortOrder           = Enum.SortOrder.LayoutOrder,
                 FillDirection       = Enum.FillDirection.Vertical,
                 HorizontalAlignment = Enum.HorizontalAlignment.Left,
@@ -2737,96 +2660,104 @@ local Library do
 
             -- Title
             Instances:Create("TextLabel", {
-                Parent              = TextBlock.Instance,
-                Name                = "\0",
-                FontFace            = TitleFont,
-                Text                = Title,
-                TextColor3          = FromRGB(245, 244, 252),
-                TextSize            = 16,
-                TextXAlignment      = Enum.TextXAlignment.Left,
-                TextWrapped         = true,
-                RichText            = false,
+                Parent               = TextBlock.Instance,
+                Name                 = "\0",
+                FontFace             = TitleFont,
+                Text                 = Title,
+                TextColor3           = FromRGB(248, 246, 255),
+                TextSize             = 15,
+                TextXAlignment       = Enum.TextXAlignment.Left,
+                TextWrapped          = true,
+                RichText             = false,
                 BackgroundTransparency = 1,
-                BorderSizePixel     = 0,
-                Size                = UDim2New(1, 0, 0, 0),
-                AutomaticSize       = Enum.AutomaticSize.Y,
-                LayoutOrder         = 1,
-                ZIndex              = 12,
-            }):AddToTheme({TextColor3 = "Text"})
+                BorderSizePixel      = 0,
+                Size                 = UDim2New(1, 0, 0, 0),
+                AutomaticSize        = Enum.AutomaticSize.Y,
+                LayoutOrder          = 1,
+                ZIndex               = 12,
+            })
 
-            if SubText ~= "" then
+            -- Description
+            if Description ~= "" then
                 Instances:Create("TextLabel", {
-                    Parent              = TextBlock.Instance,
-                    Name                = "\0",
-                    FontFace            = BodyFont,
-                    Text                = SubText,
-                    TextColor3          = FromRGB(100, 97, 122),
-                    TextSize            = 11,
-                    TextXAlignment      = Enum.TextXAlignment.Left,
-                    TextWrapped         = true,
+                    Parent               = TextBlock.Instance,
+                    Name                 = "\0",
+                    FontFace             = BodyFont,
+                    Text                 = Description,
+                    TextColor3           = FromRGB(195, 192, 212),
+                    TextSize             = 13,
+                    TextXAlignment       = Enum.TextXAlignment.Left,
+                    TextWrapped          = true,
+                    LineHeight           = 1.35,
                     BackgroundTransparency = 1,
-                    BorderSizePixel     = 0,
-                    Size                = UDim2New(1, 0, 0, 0),
-                    AutomaticSize       = Enum.AutomaticSize.Y,
-                    LayoutOrder         = 2,
-                    ZIndex              = 12,
+                    BorderSizePixel      = 0,
+                    Size                 = UDim2New(1, 0, 0, 0),
+                    AutomaticSize        = Enum.AutomaticSize.Y,
+                    LayoutOrder          = 2,
+                    ZIndex               = 12,
                 })
             end
 
-            if Description ~= "" then
+            -- SubContent
+            if SubText ~= "" then
                 Instances:Create("TextLabel", {
-                    Parent              = TextBlock.Instance,
-                    Name                = "\0",
-                    FontFace            = BodyFont,
-                    Text                = Description,
-                    TextColor3          = FromRGB(155, 152, 178),
-                    TextSize            = 13,
-                    TextXAlignment      = Enum.TextXAlignment.Left,
-                    TextWrapped         = true,
-                    LineHeight          = 1.4,
+                    Parent               = TextBlock.Instance,
+                    Name                 = "\0",
+                    FontFace             = BodyFont,
+                    Text                 = SubText,
+                    TextColor3           = FromRGB(98, 94, 118),
+                    TextSize             = 11,
+                    TextXAlignment       = Enum.TextXAlignment.Left,
+                    TextWrapped          = true,
                     BackgroundTransparency = 1,
-                    BorderSizePixel     = 0,
-                    Size                = UDim2New(1, 0, 0, 0),
-                    AutomaticSize       = Enum.AutomaticSize.Y,
-                    LayoutOrder         = 3,
-                    ZIndex              = 12,
-                }):AddToTheme({TextColor3 = "Text"})
+                    BorderSizePixel      = 0,
+                    Size                 = UDim2New(1, 0, 0, 0),
+                    AutomaticSize        = Enum.AutomaticSize.Y,
+                    LayoutOrder          = 3,
+                    ZIndex               = 12,
+                })
             end
 
-            -- Close button
+            -- ── Close button ────────────────────────────────────────────────
             local CloseBtn = Instances:Create("TextButton", {
-                Parent              = Root.Instance,
-                Name                = "\0",
-                Text                = "×",
-                FontFace            = TitleFont,
-                TextSize            = 20,
-                TextColor3          = FromRGB(70, 67, 90),
+                Parent               = Root.Instance,
+                Name                 = "\0",
+                Text                 = "×",
+                FontFace             = TitleFont,
+                TextSize             = 18,
+                TextColor3           = FromRGB(88, 84, 108),
                 BackgroundTransparency = 1,
-                BorderSizePixel     = 0,
-                AnchorPoint         = Vector2New(1, 0),
-                Position            = UDim2New(1, -10, 0, 0),
-                Size                = UDim2New(0, 20, 0, 20),
-                AutoButtonColor     = false,
-                ZIndex              = 14,
+                BorderSizePixel      = 0,
+                AnchorPoint          = Vector2New(1, 0),
+                Position             = UDim2New(1, 0, 0, 0),
+                Size                 = UDim2New(0, 22, 0, 22),
+                AutoButtonColor      = false,
+                ZIndex               = 14,
             })
 
             CloseBtn:OnHover(function()
-                CloseBtn.Instance.TextColor3 = FromRGB(210, 208, 230)
+                TweenService:Create(CloseBtn.Instance, TweenInfo.new(0.15), {TextColor3 = FromRGB(225, 222, 240)}):Play()
             end)
             CloseBtn:OnHoverLeave(function()
-                CloseBtn.Instance.TextColor3 = FromRGB(70, 67, 90)
+                TweenService:Create(CloseBtn.Instance, TweenInfo.new(0.15), {TextColor3 = FromRGB(88, 84, 108)}):Play()
             end)
 
-            -- Progress bar track — anchored to Root bottom, pixel-based Y
+            -- ── Progress line (ultra-thin, bottom edge) ─────────────────────
             local ProgTrack = Instances:Create("Frame", {
                 Parent           = Root.Instance,
                 Name             = "\0",
-                BackgroundColor3 = FromRGB(22, 20, 30),
+                BackgroundColor3 = FromRGB(48, 45, 60),
                 BorderSizePixel  = 0,
                 AnchorPoint      = Vector2New(0, 1),
                 Position         = UDim2New(0, 0, 1, 0),
-                Size             = UDim2New(1, 0, 0, BAR_H),
+                Size             = UDim2New(1, 0, 0, PROG_H),
                 ZIndex           = 11,
+                ClipsDescendants = true,
+            })
+
+            Instances:Create("UICorner", {
+                Parent       = ProgTrack.Instance,
+                CornerRadius = UDimNew(0, PROG_H),
             })
 
             local ProgFill = Instances:Create("Frame", {
@@ -2839,10 +2770,13 @@ local Library do
             })
             ProgFill:AddToTheme({BackgroundColor3 = "Accent"})
 
-            -- Slide in from right
-            Root.Instance.Position = UDim2New(0, W + 30, 0, 0)
+            -- ── Entry animation (slide + fade from right) ────────────────────
+            Root.Instance.Position             = UDim2New(0, W + 24, 0, 0)
+            Root.Instance.BackgroundTransparency = 0.18
+
             TweenService:Create(Root.Instance, TI_In, {
-                Position = UDim2New(0, 0, 0, 0),
+                Position             = UDim2New(0, 0, 0, 0),
+                BackgroundTransparency = 0,
             }):Play()
 
             TweenService:Create(ProgFill.Instance,
@@ -2850,13 +2784,14 @@ local Library do
                 { Size = UDim2New(0, 0, 1, 0) }
             ):Play()
 
+            -- ── Dismiss ──────────────────────────────────────────────────────
             local dismissed = false
             local function Dismiss()
                 if dismissed then return end
                 dismissed = true
 
                 TweenService:Create(Root.Instance, TI_Out, {
-                    Position               = UDim2New(0, W + 30, 0, 0),
+                    Position             = UDim2New(0, W + 24, 0, 0),
                     BackgroundTransparency = 1,
                 }):Play()
 
@@ -2865,7 +2800,7 @@ local Library do
                         TweenService:Create(obj, TI_Out, { TextTransparency = 1 }):Play()
                     elseif obj:IsA("ImageLabel") then
                         TweenService:Create(obj, TI_Out, { ImageTransparency = 1 }):Play()
-                    elseif obj:IsA("Frame") or obj:IsA("ScrollingFrame") then
+                    elseif obj:IsA("Frame") then
                         TweenService:Create(obj, TI_Out, { BackgroundTransparency = 1 }):Play()
                     elseif obj:IsA("UIStroke") then
                         TweenService:Create(obj, TI_Out, { Transparency = 1 }):Play()
