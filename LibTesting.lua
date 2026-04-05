@@ -6191,9 +6191,9 @@ local Library do
                     Name = "\0",
                     Enabled = false,
                     Rotation = -115,
-                    Color = RGBSequence{RGBSequenceKeypoint(0, Library.Theme.Accent), RGBSequenceKeypoint(1, Library.Theme.AccentGradient)}
+                    Color = RGBSequence{RGBSequenceKeypoint(0, Library.Theme.Accent), RGBSequenceKeypoint(1, Library.Theme.Accent)}
                 })  Items["IndicatorGradient"]:AddToTheme({Color = function()
-                    return RGBSequence{RGBSequenceKeypoint(0, Library.Theme.Accent), RGBSequenceKeypoint(1, Library.Theme.AccentGradient)}
+                    return RGBSequence{RGBSequenceKeypoint(0, Library.Theme.Accent), RGBSequenceKeypoint(1, Library.Theme.Accent)}
                 end})
 
                 Items["Toggle"]:OnHover(function()
@@ -16873,12 +16873,12 @@ local Library do
                     Rotation = -115,
                     Color    = RGBSequence{
                         RGBSequenceKeypoint(0, Library.Theme.Accent),
-                        RGBSequenceKeypoint(1, Library.Theme.AccentGradient),
+                        RGBSequenceKeypoint(1, Library.Theme.Accent),
                     },
                 }) indicGrad:AddToTheme({Color = function()
                     return RGBSequence{
                         RGBSequenceKeypoint(0, Library.Theme.Accent),
-                        RGBSequenceKeypoint(1, Library.Theme.AccentGradient),
+                        RGBSequenceKeypoint(1, Library.Theme.Accent),
                     }
                 end})
 
@@ -17355,12 +17355,12 @@ local Library do
                 Rotation = -115,
                 Color    = RGBSequence{
                     RGBSequenceKeypoint(0, Library.Theme.Accent),
-                    RGBSequenceKeypoint(1, Library.Theme.AccentGradient),
+                    RGBSequenceKeypoint(1, Library.Theme.Accent),
                 },
             }) Items["IndicGrad"]:AddToTheme({Color = function()
                 return RGBSequence{
                     RGBSequenceKeypoint(0, Library.Theme.Accent),
-                    RGBSequenceKeypoint(1, Library.Theme.AccentGradient),
+                    RGBSequenceKeypoint(1, Library.Theme.Accent),
                 }
             end})
 
