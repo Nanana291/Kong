@@ -594,7 +594,8 @@ local Library do
             return nil
         end
 
-        local Cleaned = tostring(Name):gsub("\\", "/"):match("[^/]+$") or tostring(Name)
+        local Cleaned = tostring(Name):match("^%s*(.-)%s*$")
+        Cleaned = Cleaned:gsub("\\", "/"):match("[^/]+$") or Cleaned
         if Cleaned == "" or Cleaned == "autoload.txt" then
             return nil
         end
@@ -611,6 +612,14 @@ local Library do
         local DisplayName = Library:NormalizeConfigName(Name, false)
         if not DisplayName then
             return nil, nil, nil
+        end
+
+        local StoredPath = self.ConfigManager.Files[DisplayName]
+        if type(StoredPath) == "string" and StoredPath ~= "" then
+            local StoredFileName = StoredPath:match("[^/\\]+$")
+            if StoredFileName then
+                return DisplayName, StoredFileName, StoredPath
+            end
         end
 
         local FileName = Library:NormalizeConfigName(Name, true)
@@ -650,7 +659,7 @@ local Library do
                 if FileName and FileName:sub(-5):lower() == ".json" then
                     local DisplayName = Library:NormalizeConfigName(FileName, false)
                     if DisplayName then
-                        Files[DisplayName] = FileName
+                        Files[DisplayName] = Path
                         TableInsert(DisplayList, DisplayName)
                     end
                 end
