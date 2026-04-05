@@ -761,6 +761,12 @@ local Library do
             return false, "Invalid config payload"
         end
 
+        local IgnoredFlags = {
+            ConfigsList = true,
+            ConfigsName = true,
+            UI_AutoloadConfig = true
+        }
+
         local RawConfig = Config
         local Trimmed = RawConfig:match("^%s*(.-)%s*$")
 
@@ -788,6 +794,10 @@ local Library do
                     if type(Value) == "string" then
                         Library:ApplyThemePreset(Value)
                     end
+                    continue
+                end
+
+                if IgnoredFlags[Index] then
                     continue
                 end
 
