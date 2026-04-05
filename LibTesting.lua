@@ -16027,12 +16027,11 @@ local Library do
                 BackgroundColor3        = FromRGB(255, 255, 255),
             }) Items["TagsArea"]:AddToTheme({ScrollBarImageColor3 = "Accent"})
 
-            -- wrap layout for the pills
+            -- vertical list layout for the pills
             Items["TagsLayout"] = Instances:Create("UIListLayout", {
                 Parent          = Items["TagsArea"].Instance,
                 Name            = "\0",
-                FillDirection   = Enum.FillDirection.Horizontal,
-                Wrap            = true,
+                FillDirection   = Enum.FillDirection.Vertical,
                 Padding         = UDimNew(0, WRAP_PAD),
                 SortOrder       = Enum.SortOrder.LayoutOrder,
                 HorizontalAlignment = Enum.HorizontalAlignment.Left,
@@ -16061,10 +16060,8 @@ local Library do
                 Items["TagsArea"].Instance.Visible = false
                 return
             end
-            local pillsPerRow = math.max(1, math.floor((Items["TagInput"].Instance.AbsoluteSize.X) / 84))
-            local rows        = math.ceil(count / pillsPerRow)
-            local clampedRows = math.min(rows, MAX_VISIBLE_ROWS)
-            local h           = clampedRows * (TAG_H + WRAP_PAD) + TAGS_PADV * 2
+            local visibleRows = math.min(count, MAX_VISIBLE_ROWS)
+            local h = visibleRows * (TAG_H + WRAP_PAD) + TAGS_PADV * 2
             Items["TagsArea"]:Tween(
                 TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                 {Size = UDim2New(1, 0, 0, h)}
@@ -16076,7 +16073,7 @@ local Library do
             local pill = Instances:Create("Frame", {
                 Parent              = Items["TagsArea"].Instance,
                 Name                = "\0",
-                Size                = UDim2New(0, 78, 0, TAG_H),
+                Size                = UDim2New(1, 0, 0, TAG_H),
                 BackgroundColor3    = FromRGB(35, 30, 45),
                 BorderSizePixel     = 0,
                 ZIndex              = 3,
