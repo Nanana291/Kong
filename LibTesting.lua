@@ -582,6 +582,143 @@ local Library do
 		return `<font color="rgb({MathFloor(Color.R * 255)}, {MathFloor(Color.G * 255)}, {MathFloor(Color.B * 255)})">{Text}</font>`
 	end
 
+    Library.ConfigManager = {
+        Elements = {},
+        List = {},
+        Files = {},
+        Autoload = nil
+    }
+
+    Library.NormalizeConfigName = function(self, Name, KeepExtension)
+        if not Name or Name == "" then
+            return nil
+        end
+
+        local Cleaned = tostring(Name):gsub("\\", "/"):match("[^/]+$") or tostring(Name)
+        if Cleaned == "" or Cleaned == "autoload.txt" then
+            return nil
+        end
+
+        local HasJson = Cleaned:sub(-5):lower() == ".json"
+        if HasJson then
+            return KeepExtension and Cleaned or Cleaned:sub(1, -6)
+        end
+
+        return KeepExtension and (Cleaned .. ".json") or Cleaned
+    end
+
+    Library.ResolveConfigPath = function(self, Name)
+        local DisplayName = Library:NormalizeConfigName(Name, false)
+        if not DisplayName then
+            return nil, nil, nil
+        end
+
+        local FileName = Library:NormalizeConfigName(Name, true)
+        return DisplayName, FileName, self.Folders.Configs .. "/" .. FileName
+    end
+
+    Library.GetAutoloadConfigName = function(self)
+        local Path = self.Folders.Configs .. "/autoload.txt"
+        if not isfile(Path) then
+            return nil
+        end
+
+        return Library:NormalizeConfigName(readfile(Path), false)
+    end
+
+    Library.SetAutoloadConfigName = function(self, Name)
+        local Path = self.Folders.Configs .. "/autoload.txt"
+        local DisplayName, FileName = Library:ResolveConfigPath(Name)
+
+        if FileName then
+            writefile(Path, FileName)
+        elseif isfile(Path) then
+            delfile(Path)
+        end
+
+        self.ConfigManager.Autoload = DisplayName
+        return DisplayName
+    end
+
+    Library.ListConfigs = function(self)
+        local DisplayList = {}
+        local Files = {}
+
+        if isfolder(self.Folders.Configs) then
+            for _, Path in ipairs(listfiles(self.Folders.Configs)) do
+                local FileName = Path:match("[^/\\]+$")
+                if FileName and FileName:sub(-5):lower() == ".json" then
+                    local DisplayName = Library:NormalizeConfigName(FileName, false)
+                    if DisplayName then
+                        Files[DisplayName] = FileName
+                        TableInsert(DisplayList, DisplayName)
+                    end
+                end
+            end
+        end
+
+        table.sort(DisplayList, function(a, b)
+            return tostring(a):lower() < tostring(b):lower()
+        end)
+
+        self.ConfigManager.List = DisplayList
+        self.ConfigManager.Files = Files
+        self.ConfigManager.Autoload = self:GetAutoloadConfigName()
+
+        return DisplayList, Files
+    end
+
+    Library.ReadConfigFile = function(self, Name)
+        local DisplayName, _, Path = Library:ResolveConfigPath(Name)
+        if not DisplayName or not Path or not isfile(Path) then
+            return false, "Config file not found"
+        end
+
+        local Success, Result = pcall(readfile, Path)
+        if not Success then
+            warn(Result)
+            return false, Result
+        end
+
+        return true, Result
+    end
+
+    Library.CreateConfigFile = function(self, Name)
+        local DisplayName, _, Path = Library:ResolveConfigPath(Name)
+        if not DisplayName or not Path then
+            return false, "Invalid config name"
+        end
+
+        if isfile(Path) then
+            return false, "Config already exists"
+        end
+
+        local Success, Result = pcall(writefile, Path, Library:GetConfig())
+        if not Success then
+            warn(Result)
+            return false, Result
+        end
+
+        Library:RefreshConfigsList(nil, DisplayName)
+        return true, DisplayName
+    end
+
+    Library.SaveConfigFile = function(self, Name)
+        local DisplayName, _, Path = Library:ResolveConfigPath(Name)
+        if not DisplayName or not Path then
+            return false, "Invalid config name"
+        end
+
+        local Success, Result = pcall(writefile, Path, Library:GetConfig())
+        if not Success then
+            warn(Result)
+            return false, Result
+        end
+
+        Library:RefreshConfigsList(nil, DisplayName)
+        return true, DisplayName
+    end
+
     Library.GetConfig = function(self)
         local Config = { } 
 
@@ -602,9 +739,32 @@ local Library do
     end
 
     Library.LoadConfig = function(self, Config)
-        local Decoded = HttpService:JSONDecode(Config)
+        if type(Config) ~= "string" or Config == "" then
+            return false, "Invalid config payload"
+        end
 
-        local Success, Result = Library:SafeCall(function()
+        local RawConfig = Config
+        local Trimmed = RawConfig:match("^%s*(.-)%s*$")
+
+        if Trimmed ~= "" and Trimmed:sub(1, 1) ~= "{" and Trimmed:sub(1, 1) ~= "[" then
+            local ReadSuccess, ReadResult = Library:ReadConfigFile(Trimmed)
+            if not ReadSuccess then
+                return false, ReadResult
+            end
+
+            RawConfig = ReadResult
+        end
+
+        local DecodeSuccess, Decoded = pcall(function()
+            return HttpService:JSONDecode(RawConfig)
+        end)
+
+        if not DecodeSuccess then
+            warn(Decoded)
+            return false, Decoded
+        end
+
+        local Success, Result = pcall(function()
             for Index, Value in Decoded do
                 if Index == "__ThemePreset" then
                     if type(Value) == "string" then
@@ -633,59 +793,87 @@ local Library do
             end
         end)
 
-        return Success, Result
+        if not Success then
+            warn(Result)
+            return false, Result
+        end
+
+        return true
     end
 
     Library.LoadAutoloadConfig = function(self)
-        if not isfile(Library.Folders.Configs .. "/autoload.txt") then
+        local ConfigName = Library:GetAutoloadConfigName()
+        if not ConfigName then
             return
         end
 
-        local Config = readfile(Library.Folders.Configs .. "/autoload.txt")
-        local FileName = Library.Folders.Configs .. "/" .. Config
-
-        if not isfile(FileName) then
-            if isfile(FileName .. ".json") then
-                FileName = FileName .. ".json"
-            else
-                return
-            end
-        end
-
-        local Success, Err = Library:LoadConfig(readfile(FileName))
+        local Success, Err = Library:LoadConfig(ConfigName)
         if not Success then
             warn("Failed to load autoload config: " .. tostring(Err))
         end
     end
 
     Library.DeleteConfig = function(self, Config)
-        if isfile(Library.Folders.Configs .. "/" .. Config) then 
-            delfile(Library.Folders.Configs .. "/" .. Config)
+        local DisplayName, _, Path = Library:ResolveConfigPath(Config)
+        if not DisplayName or not Path or not isfile(Path) then
+            return false, "Config file not found"
         end
+
+        local Success, Result = pcall(delfile, Path)
+        if not Success then
+            warn(Result)
+            return false, Result
+        end
+
+        if self:GetAutoloadConfigName() == DisplayName then
+            self:SetAutoloadConfigName(nil)
+        end
+
+        Library:RefreshConfigsList(nil)
+        return true
     end
 
-    Library.RefreshConfigsList = function(self, Element)
-        local CurrentList = { }
-        local List = { }
-
-        for Index, Value in listfiles(Library.Folders.Configs) do
-            local FileName = Value:match("[^/\\]+$")
-            List[Index] = FileName
+    Library.RefreshConfigsList = function(self, Element, SelectedValue)
+        if Element then
+            self.ConfigManager.Elements[Element] = true
         end
 
-        local IsNew = #List ~= CurrentList
+        local List = self:ListConfigs()
 
-        if not IsNew then
-            for Index = 1, #List do
-                if List[Index] ~= CurrentList[Index] then
-                    IsNew = true
-                    break
+        for BoundElement in self.ConfigManager.Elements do
+            if type(BoundElement) ~= "table" or type(BoundElement.Refresh) ~= "function" then
+                self.ConfigManager.Elements[BoundElement] = nil
+                continue
+            end
+
+            local CurrentSelection = SelectedValue
+            if CurrentSelection == nil and type(BoundElement.Get) == "function" then
+                CurrentSelection = BoundElement:Get()
+            end
+            CurrentSelection = Library:NormalizeConfigName(CurrentSelection, false)
+
+            local RefreshSuccess = pcall(function()
+                BoundElement:Refresh(List)
+            end)
+
+            if not RefreshSuccess then
+                self.ConfigManager.Elements[BoundElement] = nil
+                continue
+            end
+
+            if CurrentSelection and self.ConfigManager.Files[CurrentSelection] then
+                pcall(function()
+                    BoundElement:Set(CurrentSelection)
+                end)
+            else
+                BoundElement.Value = BoundElement.Multi and {} or nil
+                if BoundElement.Flag then
+                    Library.Flags[BoundElement.Flag] = BoundElement.Value
                 end
             end
-        else
-            CurrentList = List
-            Element:Refresh(CurrentList)
         end
+
+        return List
     end
 
     Library.ChangeItemTheme = function(self, Item, Properties)
@@ -13273,11 +13461,13 @@ local Library do
             }
 
             local Items = {} do
+                local dividerHeight = Divider.Title and 12 or 8
+
                 Items["Divider"] = Instances:Create("Frame", {
                     Parent = Divider.Section.Items["Content"].Instance,
                     Name = "\0",
                     BackgroundTransparency = 1,
-                    Size = UDim2New(1, 0, 0, 14),
+                    Size = UDim2New(1, 0, 0, dividerHeight),
                     BorderColor3 = FromRGB(0, 0, 0),
                     ZIndex = 2,
                     BorderSizePixel = 0,
@@ -13292,15 +13482,15 @@ local Library do
                         TextColor3 = FromRGB(240, 240, 240),
                         Text = Divider.Title,
                         AutomaticSize = Enum.AutomaticSize.X,
-                        Size = UDim2New(0, 0, 0, 13),
+                        Size = UDim2New(0, 0, 0, 10),
                         AnchorPoint = Vector2New(0.5, 0.5),
                         BorderSizePixel = 0,
                         BackgroundTransparency = 1,
                         Position = UDim2New(0.5, 0, 0.5, 0),
                         BorderColor3 = FromRGB(0, 0, 0),
                         ZIndex = 2,
-                        TextSize = 11,
-                        TextTransparency = 0.18,
+                        TextSize = 10,
+                        TextTransparency = 0.34,
                         BackgroundColor3 = FromRGB(255, 255, 255)
                     })  Items["Title"]:AddToTheme({TextColor3 = "Text"})
 
@@ -13313,14 +13503,16 @@ local Library do
                         BorderColor3 = FromRGB(0, 0, 0),
                         ZIndex = 2,
                         BorderSizePixel = 0,
-                        BackgroundColor3 = FromRGB(45, 45, 48)
+                        BackgroundColor3 = FromRGB(45, 45, 48),
+                        BackgroundTransparency = 0.58
                     })  Items["LeftLine"]:AddToTheme({BackgroundColor3 = "Outline"})
 
                     Instances:Create("UIGradient", {
                         Parent = Items["LeftLine"].Instance,
                         Transparency = NumSequence{
                             NumSequenceKeypoint(0, 1),
-                            NumSequenceKeypoint(1, 0)
+                            NumSequenceKeypoint(0.8, 0.72),
+                            NumSequenceKeypoint(1, 0.48)
                         }
                     })
 
@@ -13333,21 +13525,23 @@ local Library do
                         BorderColor3 = FromRGB(0, 0, 0),
                         ZIndex = 2,
                         BorderSizePixel = 0,
-                        BackgroundColor3 = FromRGB(45, 45, 48)
+                        BackgroundColor3 = FromRGB(45, 45, 48),
+                        BackgroundTransparency = 0.58
                     })  Items["RightLine"]:AddToTheme({BackgroundColor3 = "Outline"})
 
                     Instances:Create("UIGradient", {
                         Parent = Items["RightLine"].Instance,
                         Transparency = NumSequence{
-                            NumSequenceKeypoint(0, 0),
+                            NumSequenceKeypoint(0, 0.48),
+                            NumSequenceKeypoint(0.2, 0.72),
                             NumSequenceKeypoint(1, 1)
                         }
                     })
 
                     local function UpdateLines()
                         local HalfText = Items["Title"].Instance.TextBounds.X / 2
-                        local Padding = 8
-                        local EdgeMargin = 14
+                        local Padding = 6
+                        local EdgeMargin = 10
 
                         Items["LeftLine"].Instance.Position = UDim2New(0.5, -HalfText - Padding, 0.5, 0)
                         Items["RightLine"].Instance.Position = UDim2New(0.5, HalfText + Padding, 0.5, 0)
@@ -13368,16 +13562,17 @@ local Library do
                         BorderColor3 = FromRGB(0, 0, 0),
                         ZIndex = 2,
                         BorderSizePixel = 0,
-                        BackgroundColor3 = FromRGB(45, 45, 48)
+                        BackgroundColor3 = FromRGB(45, 45, 48),
+                        BackgroundTransparency = 0.62
                     })  Items["Line"]:AddToTheme({BackgroundColor3 = "Outline"})
 
                     Instances:Create("UIGradient", {
                         Parent = Items["Line"].Instance,
                         Transparency = NumSequence{
                             NumSequenceKeypoint(0, 1),
-                            NumSequenceKeypoint(0.2, 0.45),
-                            NumSequenceKeypoint(0.5, 0.22),
-                            NumSequenceKeypoint(0.8, 0.45),
+                            NumSequenceKeypoint(0.3, 0.82),
+                            NumSequenceKeypoint(0.5, 0.66),
+                            NumSequenceKeypoint(0.7, 0.82),
                             NumSequenceKeypoint(1, 1)
                         }
                     })
@@ -18621,33 +18816,17 @@ local Library do
         local strFormat = string.format
         local StringUpper = string.upper
         local configFolder = Library.Folders.Configs
-        local autoloadFile = configFolder .. "/autoload.txt"
 
         local function NormalizeConfigName(name)
-            if not name or name == "" then
-                return nil
-            end
-
-            return tostring(name):match("[^/\\]+$")
+            return Library:NormalizeConfigName(name, false)
         end
 
         local function GetAutoloadConfig()
-            if not isfile(autoloadFile) then
-                return nil
-            end
-
-            return NormalizeConfigName(readfile(autoloadFile))
+            return Library:GetAutoloadConfigName()
         end
 
         local function SetAutoloadConfig(configName)
-            if configName and configName ~= "" then
-                writefile(autoloadFile, configName)
-                return
-            end
-
-            if isfile(autoloadFile) then
-                delfile(autoloadFile)
-            end
+            return Library:SetAutoloadConfigName(configName)
         end
 
         local PageFr = Page.Items["Page"].Instance
@@ -19488,6 +19667,34 @@ local Library do
             suppressAutoloadCallback = false
         end
 
+        local function RefreshConfigPanel(selectedValue)
+            local desiredSelection = NormalizeConfigName(selectedValue or ConfigSelected)
+            Library:RefreshConfigsList(ConfigsDropdown, desiredSelection)
+
+            if desiredSelection and Library.ConfigManager.Files[desiredSelection] then
+                ConfigSelected = desiredSelection
+            else
+                ConfigSelected = nil
+                if ConfigsDropdown then
+                    ConfigsDropdown.Value = nil
+                    if ConfigsDropdown.Flag then
+                        Library.Flags[ConfigsDropdown.Flag] = nil
+                    end
+                end
+            end
+
+            local currentAutoload = NormalizeConfigName(GetAutoloadConfig())
+            if currentAutoload and not Library.ConfigManager.Files[currentAutoload] then
+                SetAutoloadConfig(nil)
+                currentAutoload = nil
+            end
+
+            UpdateAutoloadSnapshot(currentAutoload)
+            SetAutoloadToggle(currentAutoload ~= nil)
+
+            return ConfigSelected, currentAutoload
+        end
+
         local ConfigsSection = Page:Section({
             Name = "Config Panel",
             Description = "Saved setups, autoload routing, and direct file actions in one cleaner stack.",
@@ -19527,29 +19734,32 @@ local Library do
                 Icon = "plus",
                 ToolTip = "Create a new config file from the current flags.",
                 Callback = function()
-                    if ConfigName and ConfigName ~= "" then
-                        if not isfile(configFolder .. "/" .. ConfigName .. ".json") then
-                            writefile(configFolder .. "/" .. ConfigName .. ".json", Library:GetConfig())
-                            Library:RefreshConfigsList(ConfigsDropdown)
-                            Library:Notification({
-                                Title = "Config Created",
-                                Description = strFormat("Created config %q", ConfigName),
-                                Duration = 5
-                            })
-                        else
-                            Library:Notification({
-                                Title = "Config Error",
-                                Description = strFormat("Config %q already exists", ConfigName),
-                                Duration = 5
-                            })
-                        end
-                    else
+                    local desiredName = NormalizeConfigName(ConfigName)
+                    if not desiredName then
                         Library:Notification({
                             Title = "Config Error",
                             Description = "Please enter a config name",
                             Duration = 5
                         })
+                        return
                     end
+
+                    local Success, Result = Library:CreateConfigFile(desiredName)
+                    if not Success then
+                        Library:Notification({
+                            Title = "Config Error",
+                            Description = tostring(Result or "Failed to create config"),
+                            Duration = 5
+                        })
+                        return
+                    end
+
+                    RefreshConfigPanel(Result)
+                    Library:Notification({
+                        Title = "Config Created",
+                        Description = strFormat("Created config %q", Result),
+                        Duration = 5
+                    })
                 end
             })
 
@@ -19558,22 +19768,32 @@ local Library do
                 Icon = "trash",
                 ToolTip = "Delete the currently selected config file.",
                 Callback = function()
-                    if ConfigSelected then
-                        Library:DeleteConfig(ConfigSelected)
-
-                        if GetAutoloadConfig() == ConfigSelected then
-                            SetAutoloadConfig(nil)
-                            SetAutoloadToggle(false)
-                            UpdateAutoloadSnapshot(nil)
-                        end
-
-                        Library:RefreshConfigsList(ConfigsDropdown)
+                    if not ConfigSelected then
                         Library:Notification({
-                            Title = "Config Deleted",
-                            Description = strFormat("Deleted config %q", ConfigSelected),
+                            Title = "Config Error",
+                            Description = "Select a config before deleting it",
                             Duration = 5
                         })
+                        return
                     end
+
+                    local deletedName = ConfigSelected
+                    local Success, Result = Library:DeleteConfig(deletedName)
+                    if not Success then
+                        Library:Notification({
+                            Title = "Config Error",
+                            Description = tostring(Result or "Failed to delete config"),
+                            Duration = 5
+                        })
+                        return
+                    end
+
+                    RefreshConfigPanel(nil)
+                    Library:Notification({
+                        Title = "Config Deleted",
+                        Description = strFormat("Deleted config %q", deletedName),
+                        Duration = 5
+                    })
                 end
             })
 
@@ -19582,14 +19802,31 @@ local Library do
                 Icon = "download",
                 ToolTip = "Load the selected config into the active interface.",
                 Callback = function()
-                    if ConfigSelected then
-                        Library:LoadConfig(readfile(configFolder .. "/" .. ConfigSelected))
+                    if not ConfigSelected then
                         Library:Notification({
-                            Title = "Config Loaded",
-                            Description = strFormat("Loaded config %q", ConfigSelected),
+                            Title = "Config Error",
+                            Description = "Select a config before loading it",
                             Duration = 5
                         })
+                        return
                     end
+
+                    local Success, Result = Library:LoadConfig(ConfigSelected)
+                    if not Success then
+                        Library:Notification({
+                            Title = "Config Error",
+                            Description = tostring(Result or "Failed to load config"),
+                            Duration = 5
+                        })
+                        return
+                    end
+
+                    RefreshConfigPanel(ConfigSelected)
+                    Library:Notification({
+                        Title = "Config Loaded",
+                        Description = strFormat("Loaded config %q", ConfigSelected),
+                        Duration = 5
+                    })
                 end
             })
 
@@ -19598,14 +19835,31 @@ local Library do
                 Icon = "save",
                 ToolTip = "Overwrite the selected config with the current flag state.",
                 Callback = function()
-                    if ConfigSelected then
-                        writefile(configFolder .. "/" .. ConfigSelected, Library:GetConfig())
+                    if not ConfigSelected then
                         Library:Notification({
-                            Title = "Config Saved",
-                            Description = strFormat("Saved config %q", ConfigSelected),
+                            Title = "Config Error",
+                            Description = "Select a config before saving it",
                             Duration = 5
                         })
+                        return
                     end
+
+                    local Success, Result = Library:SaveConfigFile(ConfigSelected)
+                    if not Success then
+                        Library:Notification({
+                            Title = "Config Error",
+                            Description = tostring(Result or "Failed to save config"),
+                            Duration = 5
+                        })
+                        return
+                    end
+
+                    RefreshConfigPanel(Result)
+                    Library:Notification({
+                        Title = "Config Saved",
+                        Description = strFormat("Saved config %q", Result),
+                        Duration = 5
+                    })
                 end
             })
 
@@ -19614,7 +19868,7 @@ local Library do
                 Icon = "refresh-cw",
                 ToolTip = "Refresh the config list from disk.",
                 Callback = function()
-                    Library:RefreshConfigsList(ConfigsDropdown)
+                    RefreshConfigPanel(ConfigSelected)
                     Library:Notification({
                         Title = "Configs Refreshed",
                         Description = "Refreshed the config list",
@@ -19641,12 +19895,12 @@ local Library do
                                 Duration = 5
                             })
                             SetAutoloadToggle(false)
-                            UpdateAutoloadSnapshot(nil)
+                            UpdateAutoloadSnapshot(GetAutoloadConfig())
                             return
                         end
 
                         SetAutoloadConfig(ConfigSelected)
-                        UpdateAutoloadSnapshot(ConfigSelected)
+                        RefreshConfigPanel(ConfigSelected)
                         Library:Notification({
                             Title = "Autoload Set",
                             Description = strFormat("Set %q as autoload config", ConfigSelected),
@@ -19654,7 +19908,7 @@ local Library do
                         })
                     else
                         SetAutoloadConfig(nil)
-                        UpdateAutoloadSnapshot(nil)
+                        RefreshConfigPanel(ConfigSelected)
                         Library:Notification({
                             Title = "Autoload Disabled",
                             Description = "Cleared the autoload config",
@@ -20056,16 +20310,7 @@ local Library do
         local initialTheme = Library.Flags["UI_ThemePreset"] or "Default"
         ThemeValue.Instance.Text = tostring(initialTheme)
         HeaderThemeValue.Instance.Text = tostring(initialTheme)
-        UpdateAutoloadSnapshot()
-        Library:RefreshConfigsList(ConfigsDropdown)
-
-        local currentAutoload = GetAutoloadConfig()
-        if currentAutoload then
-            ConfigSelected = currentAutoload
-            pcall(function()
-                ConfigsDropdown:Set(currentAutoload)
-            end)
-        end
+        RefreshConfigPanel(GetAutoloadConfig())
 
         HeaderKeybindValue.Instance.Text = KeybindList and "Attached" or "Detached"
         KeybindValue.Instance.Text = KeybindList and "Attached" or "Detached"
