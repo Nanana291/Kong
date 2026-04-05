@@ -2076,11 +2076,11 @@ local Library do
 
                     if Data.Section.IsSettings ~= true then
                         --print("sus")
-                        for Index, Value in Library.OpenFrames do 
-                            if Value ~= Colorpicker then
-                                Value:SetOpen(false)
+                            for Index, Value in Library.OpenFrames do 
+                                if Value ~= Colorpicker and type(Value) == "table" and Value.SetOpen then 
+                                    Value:SetOpen(false)
+                                end
                             end
-                        end
                     end
 
                     Library.OpenFrames[Colorpicker] = Colorpicker 
@@ -3785,7 +3785,7 @@ local Library do
                             end)
         
                             for Index, Value in Library.OpenFrames do 
-                                if Value ~= Settings then 
+                                if Value ~= Settings and type(Value) == "table" and Value.SetOpen then 
                                     Value:SetOpen(false)
                                 end
                             end
@@ -6598,7 +6598,7 @@ local Library do
                         end)
     
                         for Index, Value in Library.OpenFrames do 
-                            if Value ~= Settings then 
+                            if Value ~= Settings and type(Value) == "table" and Value.SetOpen then 
                                 Value:SetOpen(false)
                             end
                         end
@@ -7717,7 +7717,7 @@ local Library do
                     end)
 
                     for Index, Value in Library.OpenFrames do 
-                        if Value ~= Dropdown and not Dropdown.Section.IsSettings then 
+                        if Value ~= Dropdown and not Dropdown.Section.IsSettings and type(Value) == "table" and Value.SetOpen then 
                             Value:SetOpen(false)
                         end
                     end
@@ -8402,7 +8402,7 @@ local Library do
                     end)
 
                     for Index, Value in Library.OpenFrames do
-                        if Value ~= Dropdown and not Dropdown.Section.IsSettings then
+                        if Value ~= Dropdown and not Dropdown.Section.IsSettings and type(Value) == "table" and Value.SetOpen then
                             Value:SetOpen(false)
                         end
                     end
@@ -9062,7 +9062,7 @@ local Library do
                     end)
 
                     for Index, Value in Library.OpenFrames do
-                        if Value ~= Dropdown and not Dropdown.Section.IsSettings then
+                        if Value ~= Dropdown and not Dropdown.Section.IsSettings and type(Value) == "table" and Value.SetOpen then
                             Value:SetOpen(false)
                         end
                     end
@@ -10734,7 +10734,7 @@ local Library do
                     end)
                     
                      for Index, Value in Library.OpenFrames do 
-                        if Value ~= Textbox then
+                        if Value ~= Textbox and type(Value) == "table" and Value.SetOpen then
                             Value:SetOpen(false)
                         end
                     end
@@ -14387,7 +14387,7 @@ local Library do
                 end)
 
                 for _, v in Library.OpenFrames do
-                    if v ~= PD and not PD.Section.IsSettings then
+                    if v ~= PD and not PD.Section.IsSettings and type(v) == "table" and v.SetOpen then
                         v:SetOpen(false)
                     end
                 end
@@ -18618,6 +18618,7 @@ local Library do
 
         local BoldFont = Font.new("rbxassetid://12187365364", Enum.FontWeight.Bold, Enum.FontStyle.Normal)
         local strFormat = string.format
+        local StringUpper = string.upper
         local configFolder = Library.Folders.Configs
         local autoloadFile = configFolder .. "/autoload.txt"
 
@@ -18665,9 +18666,9 @@ local Library do
 
         local TopGlow = InstanceNew("Frame")
         TopGlow.Name = "\0"
-        TopGlow.Size = UDim2New(1, 0, 0, 250)
+        TopGlow.Size = UDim2New(1, 0, 0, 210)
         TopGlow.BackgroundColor3 = Accent()
-        TopGlow.BackgroundTransparency = 0.92
+        TopGlow.BackgroundTransparency = 0.93
         TopGlow.BorderSizePixel = 0
         TopGlow.ZIndex = 1
         TopGlow.Parent = Main
@@ -18676,30 +18677,221 @@ local Library do
             glowGrad.Rotation = 90
             glowGrad.Transparency = NumSequence{
                 NumSequenceKeypoint(0, 0),
-                NumSequenceKeypoint(0.55, 0.45),
+                NumSequenceKeypoint(0.65, 0.45),
                 NumSequenceKeypoint(1, 1)
             }
             glowGrad.Parent = TopGlow
         end
 
-        local BackGlow = InstanceNew("Frame")
-        BackGlow.Name = "\0"
-        BackGlow.AnchorPoint = Vector2New(1, 1)
-        BackGlow.Position = UDim2New(1, 30, 1, 45)
-        BackGlow.Size = UDim2New(0, 260, 0, 220)
-        BackGlow.BackgroundColor3 = Accent()
-        BackGlow.BackgroundTransparency = 0.95
-        BackGlow.BorderSizePixel = 0
-        BackGlow.ZIndex = 1
-        BackGlow.Parent = Main
+        local SideGlow = InstanceNew("Frame")
+        SideGlow.Name = "\0"
+        SideGlow.AnchorPoint = Vector2New(1, 1)
+        SideGlow.Position = UDim2New(1, 40, 1, 30)
+        SideGlow.Size = UDim2New(0, 240, 0, 220)
+        SideGlow.BackgroundColor3 = Accent()
+        SideGlow.BackgroundTransparency = 0.96
+        SideGlow.BorderSizePixel = 0
+        SideGlow.ZIndex = 1
+        SideGlow.Parent = Main
         do
             local glowGrad = InstanceNew("UIGradient")
             glowGrad.Transparency = NumSequence{
-                NumSequenceKeypoint(0, 0.15),
+                NumSequenceKeypoint(0, 0.2),
                 NumSequenceKeypoint(1, 1)
             }
-            glowGrad.Parent = BackGlow
+            glowGrad.Parent = SideGlow
         end
+
+        local Header = Instances:Create("Frame", {
+            Parent = Main,
+            Name = "\0",
+            Size = UDim2New(1, 0, 0, 92),
+            BackgroundColor3 = Elem(),
+            BackgroundTransparency = 0.08,
+            BorderSizePixel = 0,
+            ZIndex = 2
+        })
+        Header:AddToTheme({BackgroundColor3 = "Element"})
+
+        Instances:Create("UICorner", {
+            Parent = Header.Instance,
+            CornerRadius = UDimNew(0, 18)
+        })
+
+        local HeaderStroke = Instances:Create("UIStroke", {
+            Parent = Header.Instance,
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+            Color = Outline(),
+            Thickness = 1,
+            Transparency = 0.3
+        })
+        HeaderStroke:AddToTheme({Color = "Outline"})
+
+        local HeaderAccent = Instances:Create("Frame", {
+            Parent = Header.Instance,
+            Name = "\0",
+            Size = UDim2New(1, 0, 0, 2),
+            BackgroundColor3 = Accent(),
+            BackgroundTransparency = 0.1,
+            BorderSizePixel = 0,
+            ZIndex = 3
+        })
+        HeaderAccent:AddToTheme({BackgroundColor3 = "Accent"})
+
+        local HeaderAccentGrad = Instances:Create("UIGradient", {
+            Parent = HeaderAccent.Instance,
+            Color = RGBSequence{
+                RGBSequenceKeypoint(0, Accent()),
+                RGBSequenceKeypoint(1, AccGrad())
+            }
+        })
+        HeaderAccentGrad:AddToTheme({Color = function()
+            return RGBSequence{
+                RGBSequenceKeypoint(0, Library.Theme.Accent),
+                RGBSequenceKeypoint(1, Library.Theme.AccentGradient)
+            }
+        end})
+
+        local HeaderGlow = Instances:Create("Frame", {
+            Parent = Header.Instance,
+            Name = "\0",
+            AnchorPoint = Vector2New(0, 0),
+            Position = UDim2New(0, 16, 0, 2),
+            Size = UDim2New(0.4, 0, 0, 60),
+            BackgroundColor3 = Accent(),
+            BackgroundTransparency = 0.9,
+            BorderSizePixel = 0,
+            ZIndex = 2
+        })
+        HeaderGlow:AddToTheme({BackgroundColor3 = "Accent"})
+        Instances:Create("UICorner", {
+            Parent = HeaderGlow.Instance,
+            CornerRadius = UDimNew(0, 18)
+        })
+
+        local HeaderLeft = InstanceNew("Frame")
+        HeaderLeft.Name = "\0"
+        HeaderLeft.BackgroundTransparency = 1
+        HeaderLeft.BorderSizePixel = 0
+        HeaderLeft.Position = UDim2New(0, 18, 0, 15)
+        HeaderLeft.Size = UDim2New(1, -270, 1, -30)
+        HeaderLeft.ZIndex = 3
+        HeaderLeft.Parent = Header.Instance
+
+        local HeaderKicker = Instances:Create("TextLabel", {
+            Parent = HeaderLeft,
+            Name = "\0",
+            FontFace = Library.Font,
+            Text = "CONTROL CENTER",
+            TextColor3 = FromRGB(164, 160, 186),
+            TextSize = 10,
+            BackgroundTransparency = 1,
+            Size = UDim2New(1, 0, 0, 12),
+            TextXAlignment = Enum.TextXAlignment.Left,
+            ZIndex = 4
+        })
+
+        local HeaderTitle = Instances:Create("TextLabel", {
+            Parent = HeaderLeft,
+            Name = "\0",
+            FontFace = BoldFont,
+            Text = "SETTINGS",
+            TextColor3 = Txt(),
+            TextSize = 28,
+            BackgroundTransparency = 1,
+            Position = UDim2New(0, 0, 0, 12),
+            Size = UDim2New(1, 0, 0, 30),
+            TextXAlignment = Enum.TextXAlignment.Left,
+            ZIndex = 4
+        })
+        HeaderTitle:AddToTheme({TextColor3 = "Text"})
+
+        local HeaderTitleGrad = Instances:Create("UIGradient", {
+            Parent = HeaderTitle.Instance,
+            Rotation = 12,
+            Color = RGBSequence{
+                RGBSequenceKeypoint(0, FromRGB(255, 255, 255)),
+                RGBSequenceKeypoint(0.55, FromRGB(232, 226, 247)),
+                RGBSequenceKeypoint(1, FromRGB(187, 161, 220))
+            }
+        })
+
+        local HeaderSubtitle = Instances:Create("TextLabel", {
+            Parent = HeaderLeft,
+            Name = "\0",
+            FontFace = Library.Font,
+            Text = "A tighter settings workspace for interface behavior, animation tuning, and config control.",
+            TextColor3 = FromRGB(145, 142, 160),
+            TextSize = 12,
+            BackgroundTransparency = 1,
+            Position = UDim2New(0, 0, 0, 46),
+            Size = UDim2New(1, -10, 0, 26),
+            TextWrapped = true,
+            TextYAlignment = Enum.TextYAlignment.Top,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            ZIndex = 4
+        })
+
+        local HeaderStats = InstanceNew("Frame")
+        HeaderStats.Name = "\0"
+        HeaderStats.BackgroundTransparency = 1
+        HeaderStats.BorderSizePixel = 0
+        HeaderStats.AnchorPoint = Vector2New(1, 0.5)
+        HeaderStats.Position = UDim2New(1, -18, 0.5, 0)
+        HeaderStats.Size = UDim2New(0, 220, 0, 58)
+        HeaderStats.ZIndex = 4
+        HeaderStats.Parent = Header.Instance
+
+        local headerStatsLayout = InstanceNew("UIListLayout")
+        headerStatsLayout.FillDirection = Enum.FillDirection.Vertical
+        headerStatsLayout.Padding = UDimNew(0, 6)
+        headerStatsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        headerStatsLayout.Parent = HeaderStats
+
+        local function CreateHeaderStat(labelText, valueText)
+            local stat = Instances:Create("Frame", {
+                Parent = HeaderStats,
+                Name = "\0",
+                Size = UDim2New(1, 0, 0, 15),
+                BackgroundTransparency = 1,
+                BorderSizePixel = 0,
+                ZIndex = 4
+            })
+
+            Instances:Create("TextLabel", {
+                Parent = stat.Instance,
+                Name = "\0",
+                FontFace = Library.Font,
+                Text = labelText,
+                TextColor3 = FromRGB(135, 132, 150),
+                TextSize = 10,
+                BackgroundTransparency = 1,
+                Size = UDim2New(0.46, 0, 1, 0),
+                TextXAlignment = Enum.TextXAlignment.Left,
+                ZIndex = 4
+            })
+
+            local value = Instances:Create("TextLabel", {
+                Parent = stat.Instance,
+                Name = "\0",
+                FontFace = BoldFont,
+                Text = valueText,
+                TextColor3 = Txt(),
+                TextSize = 10,
+                BackgroundTransparency = 1,
+                Position = UDim2New(0.46, 0, 0, 0),
+                Size = UDim2New(0.54, 0, 1, 0),
+                TextXAlignment = Enum.TextXAlignment.Right,
+                TextTruncate = Enum.TextTruncate.AtEnd,
+                ZIndex = 4
+            })
+            value:AddToTheme({TextColor3 = "Text"})
+            return value
+        end
+
+        local HeaderThemeValue = CreateHeaderStat("Theme", "Default")
+        local HeaderAutoloadValue = CreateHeaderStat("Autoload", "Disabled")
+        local HeaderKeybindValue = CreateHeaderStat("Keybind Overlay", KeybindList and "Attached" or "Detached")
 
         local columns = {
             Sidebar = Page.ColumnsData[1].Instance,
@@ -18710,22 +18902,25 @@ local Library do
         local columnDecor = {}
 
         local function SetupColumn(column, position, size, backgroundTransparency)
-            local shell = InstanceNew("Frame")
-            shell.Name = "\0"
-            shell.Position = position
-            shell.Size = size
-            shell.BackgroundColor3 = Elem()
-            shell.BackgroundTransparency = backgroundTransparency
-            shell.BorderSizePixel = 0
-            shell.ZIndex = 2
-            shell.Parent = Main
+            local shell = Instances:Create("Frame", {
+                Parent = Main,
+                Name = "\0",
+                Position = position,
+                Size = size,
+                BackgroundColor3 = Elem(),
+                BackgroundTransparency = backgroundTransparency,
+                BorderSizePixel = 0,
+                ZIndex = 2
+            })
+            shell:AddToTheme({BackgroundColor3 = "Element"})
 
-            local shellCorner = InstanceNew("UICorner")
-            shellCorner.CornerRadius = UDimNew(0, 18)
-            shellCorner.Parent = shell
+            Instances:Create("UICorner", {
+                Parent = shell.Instance,
+                CornerRadius = UDimNew(0, 18)
+            })
 
             local shellStroke = Instances:Create("UIStroke", {
-                Parent = shell,
+                Parent = shell.Instance,
                 ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
                 Color = Outline(),
                 Thickness = 1,
@@ -18733,26 +18928,51 @@ local Library do
             })
             shellStroke:AddToTheme({Color = "Outline"})
 
-            local shellGlow = InstanceNew("Frame")
-            shellGlow.Name = "\0"
-            shellGlow.AnchorPoint = Vector2New(0.5, 0)
-            shellGlow.Position = UDim2New(0.5, 0, 0, 2)
-            shellGlow.Size = UDim2New(1, -26, 0, 60)
-            shellGlow.BackgroundColor3 = Accent()
-            shellGlow.BackgroundTransparency = 0.9
-            shellGlow.BorderSizePixel = 0
-            shellGlow.ZIndex = 2
-            shellGlow.Parent = shell
-            do
-                local glowCorner = InstanceNew("UICorner")
-                glowCorner.CornerRadius = UDimNew(0, 18)
-                glowCorner.Parent = shellGlow
-            end
+            local shellTop = Instances:Create("Frame", {
+                Parent = shell.Instance,
+                Name = "\0",
+                Size = UDim2New(1, 0, 0, 2),
+                BackgroundColor3 = Accent(),
+                BackgroundTransparency = 0.16,
+                BorderSizePixel = 0,
+                ZIndex = 3
+            })
+            shellTop:AddToTheme({BackgroundColor3 = "Accent"})
 
-            column.Parent = shell
+            local shellTopGrad = Instances:Create("UIGradient", {
+                Parent = shellTop.Instance,
+                Color = RGBSequence{
+                    RGBSequenceKeypoint(0, Accent()),
+                    RGBSequenceKeypoint(1, AccGrad())
+                }
+            })
+            shellTopGrad:AddToTheme({Color = function()
+                return RGBSequence{
+                    RGBSequenceKeypoint(0, Library.Theme.Accent),
+                    RGBSequenceKeypoint(1, Library.Theme.AccentGradient)
+                }
+            end})
+
+            local shellGlow = Instances:Create("Frame", {
+                Parent = shell.Instance,
+                Name = "\0",
+                AnchorPoint = Vector2New(0.5, 0),
+                Position = UDim2New(0.5, 0, 0, 2),
+                Size = UDim2New(1, -28, 0, 48),
+                BackgroundColor3 = Accent(),
+                BackgroundTransparency = 0.92,
+                BorderSizePixel = 0,
+                ZIndex = 2
+            })
+            shellGlow:AddToTheme({BackgroundColor3 = "Accent"})
+            Instances:Create("UICorner", {
+                Parent = shellGlow.Instance,
+                CornerRadius = UDimNew(0, 18)
+            })
+
+            column.Parent = shell.Instance
             column.Position = UDim2New(0, 12, 0, 12)
             column.Size = UDim2New(1, -24, 1, -24)
-            column.BackgroundColor3 = Elem()
             column.BackgroundTransparency = 1
             column.BorderSizePixel = 0
             column.ScrollBarThickness = 2
@@ -18761,217 +18981,179 @@ local Library do
             column.ClipsDescendants = true
             column.ZIndex = 2
 
-            local topBorder = InstanceNew("Frame")
-            topBorder.Name = "\0"
-            topBorder.Size = UDim2New(1, 0, 0, 2)
-            topBorder.BackgroundColor3 = Accent()
-            topBorder.BackgroundTransparency = 0.15
-            topBorder.BorderSizePixel = 0
-            topBorder.ZIndex = 3
-            topBorder.Parent = shell
-            do
-                local borderGrad = InstanceNew("UIGradient")
-                borderGrad.Color = RGBSequence{
-                    RGBSequenceKeypoint(0, Accent()),
-                    RGBSequenceKeypoint(1, AccGrad())
-                }
-                borderGrad.Parent = topBorder
-            end
-
-            columnDecor[column] = {
-                Shell = shell,
-                Stroke = shellStroke.Instance,
-                Glow = shellGlow,
-                TopBorder = topBorder,
-            }
-
             local layout = column:FindFirstChildOfClass("UIListLayout")
             if layout then
-                layout.Padding = UDimNew(0, 12)
+                layout.Padding = UDimNew(0, 10)
                 layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
                 layout.SortOrder = Enum.SortOrder.LayoutOrder
             end
+
+            columnDecor[column] = {
+                Shell = shell.Instance,
+                Stroke = shellStroke.Instance,
+                Top = shellTop.Instance,
+                Glow = shellGlow.Instance,
+            }
         end
 
-        SetupColumn(columns.Sidebar, UDim2New(0, 0, 0, 0), UDim2New(0.23, 0, 1, 0), 0.08)
-        SetupColumn(columns.Main, UDim2New(0.255, 0, 0, 0), UDim2New(0.445, 0, 1, 0), 0.06)
-        SetupColumn(columns.Right, UDim2New(0.72, 0, 0, 0), UDim2New(0.28, 0, 1, 0), 0.08)
+        SetupColumn(columns.Sidebar, UDim2New(0, 0, 0, 104), UDim2New(0.22, -4, 1, -104), 0.12)
+        SetupColumn(columns.Main, UDim2New(0.24, 2, 0, 104), UDim2New(0.43, -4, 1, -104), 0.08)
+        SetupColumn(columns.Right, UDim2New(0.69, 4, 0, 104), UDim2New(0.31, -4, 1, -104), 0.12)
 
-        local function CreateSidebarBlock(title, subtitle, height)
-            local block = Instances:Create("Frame", {
+        local function CreateSidebarCard(title, subtitle, height)
+            local card = Instances:Create("Frame", {
                 Parent = columns.Sidebar,
                 Name = "\0",
                 Size = UDim2New(1, 0, 0, height),
                 BackgroundColor3 = Bg(),
-                BackgroundTransparency = 0.2,
+                BackgroundTransparency = 0.14,
                 BorderSizePixel = 0,
-                ZIndex = 4
+                ZIndex = 3
             })
-            block:AddToTheme({BackgroundColor3 = "Background"})
+            card:AddToTheme({BackgroundColor3 = "Background"})
 
             Instances:Create("UICorner", {
-                Parent = block.Instance,
+                Parent = card.Instance,
                 CornerRadius = UDimNew(0, 14)
             })
 
-            Instances:Create("UIStroke", {
-                Parent = block.Instance,
+            local stroke = Instances:Create("UIStroke", {
+                Parent = card.Instance,
                 ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
                 Color = Outline(),
                 Thickness = 1,
-                Transparency = 0.45
-            }):AddToTheme({Color = "Outline"})
+                Transparency = 0.48
+            })
+            stroke:AddToTheme({Color = "Outline"})
 
-            local accentLine = Instances:Create("Frame", {
-                Parent = block.Instance,
+            local accent = Instances:Create("Frame", {
+                Parent = card.Instance,
                 Name = "\0",
                 Size = UDim2New(1, 0, 0, 2),
                 BackgroundColor3 = Accent(),
                 BackgroundTransparency = 0.2,
                 BorderSizePixel = 0,
-                ZIndex = 5
+                ZIndex = 4
             })
-            accentLine:AddToTheme({BackgroundColor3 = "Accent"})
+            accent:AddToTheme({BackgroundColor3 = "Accent"})
 
-            local grad = InstanceNew("UIGradient")
-            grad.Color = RGBSequence{
-                RGBSequenceKeypoint(0, Accent()),
-                RGBSequenceKeypoint(1, AccGrad())
-            }
-            grad.Parent = accentLine.Instance
+            local accentGrad = Instances:Create("UIGradient", {
+                Parent = accent.Instance,
+                Color = RGBSequence{
+                    RGBSequenceKeypoint(0, Accent()),
+                    RGBSequenceKeypoint(1, AccGrad())
+                }
+            })
+            accentGrad:AddToTheme({Color = function()
+                return RGBSequence{
+                    RGBSequenceKeypoint(0, Library.Theme.Accent),
+                    RGBSequenceKeypoint(1, Library.Theme.AccentGradient)
+                }
+            end})
 
             local titleLabel = Instances:Create("TextLabel", {
-                Parent = block.Instance,
+                Parent = card.Instance,
                 Name = "\0",
                 FontFace = BoldFont,
                 Text = title,
                 TextColor3 = Txt(),
-                TextSize = 15,
+                TextSize = 13,
                 BackgroundTransparency = 1,
-                Position = UDim2New(0, 14, 0, 16),
-                Size = UDim2New(1, -28, 0, 18),
+                Position = UDim2New(0, 14, 0, 12),
+                Size = UDim2New(1, -28, 0, 16),
                 TextXAlignment = Enum.TextXAlignment.Left,
-                ZIndex = 5
+                ZIndex = 4
             })
             titleLabel:AddToTheme({TextColor3 = "Text"})
 
             local subtitleLabel = Instances:Create("TextLabel", {
-                Parent = block.Instance,
+                Parent = card.Instance,
                 Name = "\0",
                 FontFace = Library.Font,
                 Text = subtitle,
-                TextColor3 = FromRGB(150, 148, 166),
-                TextSize = 12,
+                TextColor3 = FromRGB(142, 139, 158),
+                TextSize = 11,
                 BackgroundTransparency = 1,
-                Position = UDim2New(0, 14, 0, 38),
-                Size = UDim2New(1, -28, 0, height - 54),
+                Position = UDim2New(0, 14, 0, 30),
+                Size = UDim2New(1, -28, 0, 26),
                 TextWrapped = true,
                 TextYAlignment = Enum.TextYAlignment.Top,
                 TextXAlignment = Enum.TextXAlignment.Left,
-                ZIndex = 5
+                ZIndex = 4
             })
 
-            return block, titleLabel, subtitleLabel
+            local body = Instances:Create("Frame", {
+                Parent = card.Instance,
+                Name = "\0",
+                BackgroundTransparency = 1,
+                Position = UDim2New(0, 14, 0, 62),
+                Size = UDim2New(1, -28, 1, -76),
+                BorderSizePixel = 0,
+                ZIndex = 4
+            })
+
+            local bodyLayout = InstanceNew("UIListLayout")
+            bodyLayout.Padding = UDimNew(0, 8)
+            bodyLayout.SortOrder = Enum.SortOrder.LayoutOrder
+            bodyLayout.Parent = body.Instance
+
+            return card, body
         end
 
-        local HeroBlock = CreateSidebarBlock(
-            "SETTINGS DASHBOARD",
-            "A full control center for interface behavior, motion tuning, and config workflow.",
-            124
+        local NavigationCard, NavBody = CreateSidebarCard(
+            "Navigation",
+            "Jump to each control group without scrolling blind through the full page.",
+            238
         )
 
-        local HeroPill = Instances:Create("Frame", {
-            Parent = HeroBlock.Instance,
-            Name = "\0",
-            Size = UDim2New(0, 88, 0, 18),
-            Position = UDim2New(0, 14, 0, 84),
-            BackgroundColor3 = Accent(),
-            BackgroundTransparency = 0.15,
-            BorderSizePixel = 0,
-            ZIndex = 5
-        })
-        HeroPill:AddToTheme({BackgroundColor3 = "Accent"})
-        Instances:Create("UICorner", {
-            Parent = HeroPill.Instance,
-            CornerRadius = UDimNew(0, 999)
-        })
-        Instances:Create("TextLabel", {
-            Parent = HeroPill.Instance,
-            Name = "\0",
-            FontFace = BoldFont,
-            Text = "LIVE CONTROL",
-            TextColor3 = FromRGB(255, 255, 255),
-            TextSize = 9,
-            BackgroundTransparency = 1,
-            Size = UDim2New(1, 0, 1, 0),
-            ZIndex = 6
-        })
-
-        local NavBlock = CreateSidebarBlock(
-            "NAVIGATION",
-            "Jump between settings cards without relying on the legacy stacked flow.",
-            248
+        local SnapshotCard, SnapshotBody = CreateSidebarCard(
+            "Live Snapshot",
+            "Current interface state and config routing at a glance.",
+            136
         )
 
-        local NavHolder = Instances:Create("Frame", {
-            Parent = NavBlock.Instance,
-            Name = "\0",
-            BackgroundTransparency = 1,
-            Position = UDim2New(0, 14, 0, 74),
-            Size = UDim2New(1, -28, 0, 154),
-            BorderSizePixel = 0,
-            ZIndex = 5
-        })
-
-        Instances:Create("UIListLayout", {
-            Parent = NavHolder.Instance,
-            Padding = UDimNew(0, 8),
-            SortOrder = Enum.SortOrder.LayoutOrder
-        })
-
-        local SnapshotBlock = CreateSidebarBlock(
-            "SNAPSHOT",
-            "Quick visibility into active theme, autoload state, and keybind overlay wiring.",
-            154
+        local NotesCard, NotesBody = CreateSidebarCard(
+            "Workflow",
+            "Use Interface first, tune Motion second, then finish in Config Manager.",
+            90
         )
 
-        local SnapshotHolder = Instances:Create("Frame", {
-            Parent = SnapshotBlock.Instance,
+        local NotesText = Instances:Create("TextLabel", {
+            Parent = NotesBody.Instance,
             Name = "\0",
+            FontFace = Library.Font,
+            Text = "This page is now structured like a compact dashboard instead of a stacked utility list.",
+            TextColor3 = FromRGB(150, 147, 168),
+            TextSize = 11,
             BackgroundTransparency = 1,
-            Position = UDim2New(0, 14, 0, 74),
-            Size = UDim2New(1, -28, 0, 66),
-            BorderSizePixel = 0,
-            ZIndex = 5
+            Size = UDim2New(1, 0, 0, 30),
+            TextWrapped = true,
+            TextYAlignment = Enum.TextYAlignment.Top,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            ZIndex = 4
         })
 
-        Instances:Create("UIListLayout", {
-            Parent = SnapshotHolder.Instance,
-            Padding = UDimNew(0, 8),
-            SortOrder = Enum.SortOrder.LayoutOrder
-        })
-
-        local function CreateSnapshotRow(labelText, valueText)
+        local function CreateSnapshotRow(parent, labelText, valueText)
             local row = Instances:Create("Frame", {
-                Parent = SnapshotHolder.Instance,
+                Parent = parent,
                 Name = "\0",
-                Size = UDim2New(1, 0, 0, 16),
+                Size = UDim2New(1, 0, 0, 15),
                 BackgroundTransparency = 1,
                 BorderSizePixel = 0,
-                ZIndex = 5
+                ZIndex = 4
             })
 
-            local label = Instances:Create("TextLabel", {
+            Instances:Create("TextLabel", {
                 Parent = row.Instance,
                 Name = "\0",
                 FontFace = Library.Font,
                 Text = labelText,
-                TextColor3 = FromRGB(138, 136, 154),
-                TextSize = 11,
+                TextColor3 = FromRGB(132, 129, 148),
+                TextSize = 10,
                 BackgroundTransparency = 1,
-                Size = UDim2New(0.52, 0, 1, 0),
+                Size = UDim2New(0.48, 0, 1, 0),
                 TextXAlignment = Enum.TextXAlignment.Left,
-                ZIndex = 5
+                ZIndex = 4
             })
 
             local value = Instances:Create("TextLabel", {
@@ -18980,26 +19162,25 @@ local Library do
                 FontFace = BoldFont,
                 Text = valueText,
                 TextColor3 = Txt(),
-                TextSize = 11,
+                TextSize = 10,
                 BackgroundTransparency = 1,
-                Position = UDim2New(0.52, 0, 0, 0),
-                Size = UDim2New(0.48, 0, 1, 0),
+                Position = UDim2New(0.48, 0, 0, 0),
+                Size = UDim2New(0.52, 0, 1, 0),
                 TextXAlignment = Enum.TextXAlignment.Right,
                 TextTruncate = Enum.TextTruncate.AtEnd,
-                ZIndex = 5
+                ZIndex = 4
             })
             value:AddToTheme({TextColor3 = "Text"})
-
             return value
         end
 
-        local ThemeValue = CreateSnapshotRow("Theme", "Default")
-        local AutoloadValue = CreateSnapshotRow("Autoload", "Disabled")
-        local KeybindValue = CreateSnapshotRow("Keybind List", KeybindList and "Attached" or "Not Attached")
+        local ThemeValue = CreateSnapshotRow(SnapshotBody.Instance, "Theme", "Default")
+        local AutoloadValue = CreateSnapshotRow(SnapshotBody.Instance, "Autoload", "Disabled")
+        local KeybindValue = CreateSnapshotRow(SnapshotBody.Instance, "Keybind Overlay", KeybindList and "Attached" or "Detached")
 
         local UISection = Page:Section({
-            Name = "UI Settings",
-            Description = "Core window controls, menu binding, unload action, and theme selection.",
+            Name = "Interface Controls",
+            Description = "Menu access, theme behavior, and emergency interface controls.",
             Icon = "monitor",
             Side = 2
         }) do
@@ -19022,6 +19203,7 @@ local Library do
                 ToolTip = "Switch the global theme preset used across the library.",
                 Callback = function(Value)
                     ThemeValue.Instance.Text = tostring(Value)
+                    HeaderThemeValue.Instance.Text = tostring(Value)
                     Library:ApplyThemePreset(Value)
                 end
             })
@@ -19037,8 +19219,8 @@ local Library do
         end
 
         local AnimationSection = Page:Section({
-            Name = "Animation Settings",
-            Description = "Tune transparency, fade timing, and transition speed for the full interface.",
+            Name = "Motion & Blend",
+            Description = "Compact tuning for background visibility, fades, and transition speed.",
             Icon = "sparkles",
             Side = 2
         }) do
@@ -19086,14 +19268,16 @@ local Library do
         local ConfigSelected
         local ConfigsDropdown
         local AutoloadToggle
-        local AutoloadInfoLabel
+        local AutoloadInfoParagraph
         local suppressAutoloadCallback = false
 
         local function UpdateAutoloadSnapshot(configName)
             local current = NormalizeConfigName(configName or GetAutoloadConfig())
-            AutoloadValue.Instance.Text = current and current:gsub("%.json$", "") or "Disabled"
-            if AutoloadInfoLabel then
-                AutoloadInfoLabel:SetText(strFormat("Autoload File: %s", current or "Not configured"))
+            local visible = current and current:gsub("%.json$", "") or "Disabled"
+            AutoloadValue.Instance.Text = visible
+            HeaderAutoloadValue.Instance.Text = visible
+            if AutoloadInfoParagraph then
+                AutoloadInfoParagraph:SetText(current or "No autoload config is set right now.")
             end
         end
 
@@ -19108,8 +19292,8 @@ local Library do
         end
 
         local ConfigsSection = Page:Section({
-            Name = "Config Panel",
-            Description = "Manage saved configs, loadouts, and autoload behavior from a dedicated side panel.",
+            Name = "Config Manager",
+            Description = "Saved setups, autoload routing, and direct file actions.",
             Icon = "folder",
             Side = 3
         }) do
@@ -19179,6 +19363,7 @@ local Library do
                 Callback = function()
                     if ConfigSelected then
                         Library:DeleteConfig(ConfigSelected)
+
                         if GetAutoloadConfig() == ConfigSelected then
                             SetAutoloadConfig(nil)
                             SetAutoloadToggle(false)
@@ -19284,26 +19469,29 @@ local Library do
         end
 
         local InfoSection = Page:Section({
-            Name = "Workspace Info",
-            Description = "Reference details for current settings state and storage paths.",
+            Name = "Session Info",
+            Description = "Storage paths and runtime context for the current settings workflow.",
             Icon = "info",
             Side = 3
         }) do
             local autoloadInitial = NormalizeConfigName(GetAutoloadConfig())
 
-            InfoSection:Label({
-                Name = strFormat("Config Folder: %s", configFolder),
-                ToolTip = "Current folder used for config storage."
+            InfoSection:Paragraph({
+                Name = "Config Storage",
+                Icon = "hard-drive",
+                Text = configFolder
             })
 
-            AutoloadInfoLabel = InfoSection:Label({
-                Name = strFormat("Autoload File: %s", autoloadInitial or "Not configured"),
-                ToolTip = "Current autoload target stored on disk."
+            AutoloadInfoParagraph = InfoSection:Paragraph({
+                Name = "Autoload Target",
+                Icon = "clock-3",
+                Text = autoloadInitial or "No autoload config is set right now."
             })
 
-            InfoSection:Label({
-                Name = strFormat("Keybind Overlay: %s", KeybindList and "Attached" or "Not attached"),
-                ToolTip = "Whether a keybind list object was passed into the settings page."
+            InfoSection:Paragraph({
+                Name = "Keybind Overlay",
+                Icon = "keyboard",
+                Text = KeybindList and "A keybind list object is attached to this session." or "No keybind list object was passed into this page."
             })
         end
 
@@ -19324,18 +19512,18 @@ local Library do
             })
             outerStroke:AddToTheme({Color = "Outline"})
 
-            items["Top"].Instance.BackgroundTransparency = 0.22
-            items["TopBackground"].Instance.BackgroundTransparency = 0.08
-            items["Background"].Instance.BackgroundTransparency = 0.06
-
-            local topCorner = items["Top"].Instance:FindFirstChildOfClass("UICorner")
-            if topCorner then
-                topCorner.CornerRadius = UDimNew(0, 16)
-            end
+            items["Top"].Instance.BackgroundTransparency = 0.14
+            items["TopBackground"].Instance.BackgroundTransparency = 0.04
+            items["Background"].Instance.BackgroundTransparency = 0.02
 
             local sectionCorner = items["Section"].Instance:FindFirstChildOfClass("UICorner")
             if sectionCorner then
                 sectionCorner.CornerRadius = UDimNew(0, 16)
+            end
+
+            local topCorner = items["Top"].Instance:FindFirstChildOfClass("UICorner")
+            if topCorner then
+                topCorner.CornerRadius = UDimNew(0, 16)
             end
 
             local topBackgroundCorner = items["TopBackground"].Instance:FindFirstChildOfClass("UICorner")
@@ -19343,7 +19531,7 @@ local Library do
                 topBackgroundCorner.CornerRadius = UDimNew(0, 16)
             end
 
-            local bodyAccent = Instances:Create("Frame", {
+            local accentBar = Instances:Create("Frame", {
                 Parent = items["TopBackground"].Instance,
                 Name = "\0",
                 Size = UDim2New(1, 0, 0, 2),
@@ -19352,31 +19540,44 @@ local Library do
                 BorderSizePixel = 0,
                 ZIndex = 3
             })
-            bodyAccent:AddToTheme({BackgroundColor3 = "Accent"})
+            accentBar:AddToTheme({BackgroundColor3 = "Accent"})
 
-            local bodyAccentGrad = InstanceNew("UIGradient")
-            bodyAccentGrad.Color = RGBSequence{
-                RGBSequenceKeypoint(0, Accent()),
-                RGBSequenceKeypoint(1, AccGrad())
-            }
-            bodyAccentGrad.Parent = bodyAccent.Instance
+            local accentBarGrad = Instances:Create("UIGradient", {
+                Parent = accentBar.Instance,
+                Color = RGBSequence{
+                    RGBSequenceKeypoint(0, Accent()),
+                    RGBSequenceKeypoint(1, AccGrad())
+                }
+            })
+            accentBarGrad:AddToTheme({Color = function()
+                return RGBSequence{
+                    RGBSequenceKeypoint(0, Library.Theme.Accent),
+                    RGBSequenceKeypoint(1, Library.Theme.AccentGradient)
+                }
+            end})
 
             local glow = Instances:Create("Frame", {
                 Parent = items["TopBackground"].Instance,
                 Name = "\0",
                 AnchorPoint = Vector2New(0.5, 0),
                 Position = UDim2New(0.5, 0, 0, 2),
-                Size = UDim2New(1, -20, 0, 42),
+                Size = UDim2New(1, -18, 0, 40),
                 BackgroundColor3 = Accent(),
-                BackgroundTransparency = 0.88,
+                BackgroundTransparency = 0.9,
                 BorderSizePixel = 0,
                 ZIndex = 1
             })
             glow:AddToTheme({BackgroundColor3 = "Accent"})
+            Instances:Create("UICorner", {
+                Parent = glow.Instance,
+                CornerRadius = UDimNew(0, 16)
+            })
 
-            local toggleCorner = items["Toggle"].Instance:FindFirstChildOfClass("UICorner")
-            if toggleCorner then
-                toggleCorner.CornerRadius = UDimNew(0, 999)
+            if items["Toggle"] then
+                local toggleCorner = items["Toggle"].Instance:FindFirstChildOfClass("UICorner")
+                if toggleCorner then
+                    toggleCorner.CornerRadius = UDimNew(0, 999)
+                end
             end
         end
 
@@ -19391,7 +19592,7 @@ local Library do
                 return
             end
 
-            local targetY = math.max(0, column.CanvasPosition.Y + target.AbsolutePosition.Y - column.AbsolutePosition.Y - 4)
+            local targetY = math.max(0, column.CanvasPosition.Y + target.AbsolutePosition.Y - column.AbsolutePosition.Y - 8)
             TweenService:Create(column, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
                 CanvasPosition = Vector2New(0, targetY)
             }):Play()
@@ -19406,29 +19607,29 @@ local Library do
             for _, entry in ipairs(navEntries) do
                 local isActive = entry == targetEntry
                 TweenService:Create(entry.Button.Instance, TweenInfo.new(0.18, Enum.EasingStyle.Quad), {
-                    BackgroundTransparency = isActive and 0 or 0.18
+                    BackgroundTransparency = isActive and 0 or 0.16
                 }):Play()
                 TweenService:Create(entry.Stroke.Instance, TweenInfo.new(0.18), {
                     Transparency = isActive and 0 or 0.45,
                     Color = isActive and Accent() or Outline()
                 }):Play()
                 TweenService:Create(entry.Highlight.Instance, TweenInfo.new(0.18, Enum.EasingStyle.Quad), {
-                    BackgroundTransparency = isActive and 0.82 or 1
+                    BackgroundTransparency = isActive and 0.84 or 1
                 }):Play()
             end
         end
 
         local function CreateNavButton(iconName, title, description, column, section)
             local button = Instances:Create("TextButton", {
-                Parent = NavHolder.Instance,
+                Parent = NavBody.Instance,
                 Name = "\0",
                 Text = "",
                 AutoButtonColor = false,
-                Size = UDim2New(1, 0, 0, 52),
+                Size = UDim2New(1, 0, 0, 44),
                 BackgroundColor3 = Elem(),
-                BackgroundTransparency = 0.18,
+                BackgroundTransparency = 0.16,
                 BorderSizePixel = 0,
-                ZIndex = 5
+                ZIndex = 4
             })
             button:AddToTheme({BackgroundColor3 = "Element"})
 
@@ -19455,9 +19656,10 @@ local Library do
                 BackgroundColor3 = Accent(),
                 BackgroundTransparency = 1,
                 BorderSizePixel = 0,
-                ZIndex = 5
+                ZIndex = 4
             })
             highlight:AddToTheme({BackgroundColor3 = "Accent"})
+
             Instances:Create("UICorner", {
                 Parent = highlight.Instance,
                 CornerRadius = UDimNew(0, 12)
@@ -19468,15 +19670,15 @@ local Library do
                 Parent = button.Instance,
                 Name = "\0",
                 BackgroundTransparency = 1,
-                Position = UDim2New(0, 14, 0.5, 0),
+                Position = UDim2New(0, 12, 0.5, 0),
                 AnchorPoint = Vector2New(0, 0.5),
-                Size = UDim2New(0, 16, 0, 16),
+                Size = UDim2New(0, 15, 0, 15),
                 Image = iconData and iconData.Url or "",
                 ImageRectOffset = iconData and iconData.ImageRectOffset or Vector2New(0, 0),
                 ImageRectSize = iconData and iconData.ImageRectSize or Vector2New(0, 0),
                 ImageColor3 = Accent(),
                 BorderSizePixel = 0,
-                ZIndex = 6
+                ZIndex = 5
             })
             icon:AddToTheme({ImageColor3 = "Accent"})
 
@@ -19486,12 +19688,12 @@ local Library do
                 FontFace = BoldFont,
                 Text = title,
                 TextColor3 = Txt(),
-                TextSize = 12,
+                TextSize = 11,
                 BackgroundTransparency = 1,
-                Position = UDim2New(0, 40, 0, 10),
-                Size = UDim2New(1, -50, 0, 14),
+                Position = UDim2New(0, 34, 0, 8),
+                Size = UDim2New(1, -42, 0, 12),
                 TextXAlignment = Enum.TextXAlignment.Left,
-                ZIndex = 6
+                ZIndex = 5
             })
             titleLabel:AddToTheme({TextColor3 = "Text"})
 
@@ -19500,14 +19702,14 @@ local Library do
                 Name = "\0",
                 FontFace = Library.Font,
                 Text = description,
-                TextColor3 = FromRGB(145, 142, 162),
-                TextSize = 10,
+                TextColor3 = FromRGB(142, 139, 158),
+                TextSize = 9,
                 BackgroundTransparency = 1,
-                Position = UDim2New(0, 40, 0, 25),
-                Size = UDim2New(1, -52, 0, 12),
+                Position = UDim2New(0, 34, 0, 21),
+                Size = UDim2New(1, -42, 0, 11),
                 TextXAlignment = Enum.TextXAlignment.Left,
                 TextTruncate = Enum.TextTruncate.AtEnd,
-                ZIndex = 6
+                ZIndex = 5
             })
 
             local entry = {
@@ -19525,7 +19727,7 @@ local Library do
                         BackgroundTransparency = 0.04
                     }):Play()
                     TweenService:Create(stroke.Instance, TweenInfo.new(0.18), {
-                        Transparency = 0.1,
+                        Transparency = 0.12,
                         Color = Accent()
                     }):Play()
                 end
@@ -19534,7 +19736,7 @@ local Library do
             button:OnHoverLeave(function()
                 if currentNav ~= entry then
                     TweenService:Create(button.Instance, TweenInfo.new(0.18, Enum.EasingStyle.Quad), {
-                        BackgroundTransparency = 0.18
+                        BackgroundTransparency = 0.16
                     }):Play()
                     TweenService:Create(stroke.Instance, TweenInfo.new(0.18), {
                         Transparency = 0.45,
@@ -19549,21 +19751,28 @@ local Library do
             end)
         end
 
-        CreateNavButton("monitor", "UI Settings", "Bind, unload, and theme controls", columns.Main, UISection)
-        CreateNavButton("sparkles", "Animations", "Transparency, fade, and tween tuning", columns.Main, AnimationSection)
-        CreateNavButton("folder", "Config Panel", "List, create, load, and save configs", columns.Right, ConfigsSection)
-        CreateNavButton("info", "Workspace Info", "Storage and runtime reference details", columns.Right, InfoSection)
+        CreateNavButton("monitor", "Interface", "Theme, keybind, unload", columns.Main, UISection)
+        CreateNavButton("sparkles", "Motion", "Fade and tween control", columns.Main, AnimationSection)
+        CreateNavButton("folder", "Configs", "Saved setups and autoload", columns.Right, ConfigsSection)
+        CreateNavButton("info", "Session", "Storage and context", columns.Right, InfoSection)
         SetNavActive(navEntries[1])
 
         local initialTheme = Library.Flags["UI_ThemePreset"] or "Default"
         ThemeValue.Instance.Text = tostring(initialTheme)
+        HeaderThemeValue.Instance.Text = tostring(initialTheme)
         UpdateAutoloadSnapshot()
         Library:RefreshConfigsList(ConfigsDropdown)
 
         local currentAutoload = GetAutoloadConfig()
         if currentAutoload then
             ConfigSelected = currentAutoload
+            pcall(function()
+                ConfigsDropdown:Set(currentAutoload)
+            end)
         end
+
+        HeaderKeybindValue.Instance.Text = KeybindList and "Attached" or "Detached"
+        KeybindValue.Instance.Text = KeybindList and "Attached" or "Detached"
 
         Library.ThemeCallbacks[#Library.ThemeCallbacks + 1] = function(theme, tweenInfo)
             local accent = theme.Accent or FromRGB(151, 69, 186)
@@ -19575,33 +19784,52 @@ local Library do
 
             pcall(function()
                 TweenService:Create(TopGlow, tweenInfo, {BackgroundColor3 = accent}):Play()
-                TweenService:Create(BackGlow, tweenInfo, {BackgroundColor3 = accent}):Play()
-                HeroPill.Instance.BackgroundColor3 = accent
+                TweenService:Create(SideGlow, tweenInfo, {BackgroundColor3 = accent}):Play()
+            end)
+
+            pcall(function()
+                HeaderTitleGrad.Instance.Color = RGBSequence{
+                    RGBSequenceKeypoint(0, FromRGB(255, 255, 255)),
+                    RGBSequenceKeypoint(0.55, FromRGB(
+                        math.min(255, math.floor(255 * 0.9 + accent.R * 255 * 0.1)),
+                        math.min(255, math.floor(255 * 0.9 + accent.G * 255 * 0.1)),
+                        math.min(255, math.floor(255 * 0.9 + accent.B * 255 * 0.1))
+                    )),
+                    RGBSequenceKeypoint(1, FromRGB(
+                        math.min(255, math.floor(255 * 0.7 + accent.R * 255 * 0.3)),
+                        math.min(255, math.floor(255 * 0.7 + accent.G * 255 * 0.3)),
+                        math.min(255, math.floor(255 * 0.7 + accent.B * 255 * 0.3))
+                    ))
+                }
             end)
 
             for _, column in pairs(columns) do
                 pcall(function()
                     TweenService:Create(column, tweenInfo, {ScrollBarImageColor3 = accent}):Play()
                     local decor = columnDecor[column]
-                    local shell = decor and decor.Shell
-                    local stroke = decor and decor.Stroke
-                    local glow = decor and decor.Glow
-                    if shell then
-                        TweenService:Create(shell, tweenInfo, {BackgroundColor3 = theme.Element or FromRGB(18, 17, 22)}):Play()
+                    if decor and decor.Shell then
+                        TweenService:Create(decor.Shell, tweenInfo, {BackgroundColor3 = theme.Element or FromRGB(18, 17, 22)}):Play()
                     end
-                    if stroke then
-                        TweenService:Create(stroke, tweenInfo, {Color = outline}):Play()
+                    if decor and decor.Stroke then
+                        TweenService:Create(decor.Stroke, tweenInfo, {Color = outline}):Play()
                     end
-                    if glow then
-                        TweenService:Create(glow, tweenInfo, {BackgroundColor3 = accent}):Play()
+                    if decor and decor.Glow then
+                        TweenService:Create(decor.Glow, tweenInfo, {BackgroundColor3 = accent}):Play()
                     end
-                    local topBorder = decor and decor.TopBorder
-                    if topBorder and topBorder:IsA("Frame") then
-                        TweenService:Create(topBorder, tweenInfo, {BackgroundColor3 = accent}):Play()
-                        local borderGrad = topBorder:FindFirstChildOfClass("UIGradient")
+                    if decor and decor.Top then
+                        TweenService:Create(decor.Top, tweenInfo, {BackgroundColor3 = accent}):Play()
+                        local borderGrad = decor.Top:FindFirstChildOfClass("UIGradient")
                         if borderGrad then
                             borderGrad.Color = seq
                         end
+                    end
+                end)
+            end
+
+            if currentNav then
+                task.defer(function()
+                    if Library then
+                        SetNavActive(currentNav)
                     end
                 end)
             end
