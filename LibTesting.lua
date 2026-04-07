@@ -8,7 +8,6 @@ local Library do
     local Players = game:GetService("Players")
     local HttpService = game:GetService("HttpService")
     local RunService = game:GetService("RunService")
-    local TextService = game:GetService("TextService")
     local CoreGui = cloneref and cloneref(game:GetService("CoreGui")) or game:GetService("CoreGui")
     local TweenService = game:GetService("TweenService")
     local Lighting = game:GetService("Lighting")
@@ -6282,14 +6281,9 @@ local Library do
                 end
 
                 local availableWidth = math.max(80, Items["Toggle"].Instance.AbsoluteSize.X - (30 + _TextXOffset) - 8)
-                local textSize = TextService:GetTextSize(
-                    Toggle.Description,
-                    Items["Description"].Instance.TextSize,
-                    Items["Description"].Instance.Font,
-                    Vector2New(availableWidth, 1000)
-                )
+                Items["Description"].Instance.Size = UDim2New(0, availableWidth, 0, 1000)
 
-                local descriptionHeight = math.max(14, textSize.Y)
+                local descriptionHeight = math.max(14, Items["Description"].Instance.TextBounds.Y)
                 Items["Description"].Instance.Size = UDim2New(0, availableWidth, 0, descriptionHeight)
 
                 CurrentToggleHeight = math.max(BaseToggleHeight, 18 + descriptionHeight)
@@ -6465,6 +6459,12 @@ local Library do
 
             if Items["Description"] then
                 Items["Toggle"].Instance:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+                    if not Library then
+                        return
+                    end
+                    UpdateDescriptionLayout()
+                end)
+                Items["Description"].Instance:GetPropertyChangedSignal("TextBounds"):Connect(function()
                     if not Library then
                         return
                     end
