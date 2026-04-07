@@ -6525,12 +6525,6 @@ local Library do
                     end
                     QueueDescriptionLayout()
                 end)
-                Items["TextRow"].Instance:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-                    if not Library then
-                        return
-                    end
-                    ApplyMeasuredTextLayout()
-                end)
                 task.defer(function()
                     if not Library then
                         return
