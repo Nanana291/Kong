@@ -6271,7 +6271,26 @@ local Library do
             local IndicatorAnchorY = Toggle.Description ~= "" and 0 or 0.5
             local IndicatorPositionY = Toggle.Description ~= "" and 1 or -math.floor(_IndicatorSize / 2)
             local ToggleContentTopPadding = Toggle.Description ~= "" and 1 or 0
-            local ToggleContentBottomPadding = Toggle.Description ~= "" and ((Toggle.IsSubToggle and 19) or (Toggle.HasSettings and 12) or 6) or 0
+
+            local function ComputeDescriptionBottomPadding(textStackHeight)
+                if Toggle.Description == "" then
+                    return 0
+                end
+
+                local descriptionOverflow = math.max(0, textStackHeight - 15)
+
+                if Toggle.IsSubToggle then
+                    local adaptiveExtra = math.min(10, math.floor((descriptionOverflow / 2.4) + 0.5))
+                    return 9 + adaptiveExtra
+                end
+
+                if Toggle.HasSettings then
+                    local adaptiveExtra = math.min(6, math.floor((descriptionOverflow / 3) + 0.5))
+                    return 6 + adaptiveExtra
+                end
+
+                return 6
+            end
 
             Items["Indicator"].Instance.Position = UDim2New(0, 30, IndicatorAnchorY, IndicatorPositionY)
             Items["TextRow"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, ToggleContentTopPadding)
@@ -6282,6 +6301,7 @@ local Library do
 
             local function ApplyMeasuredTextLayout()
                 local textStackHeight = math.max(15, Items["TextRow"].Instance.AbsoluteSize.Y)
+                local ToggleContentBottomPadding = ComputeDescriptionBottomPadding(textStackHeight)
                 local nextToggleHeight = math.max(BaseToggleHeight, ToggleContentTopPadding + textStackHeight + ToggleContentBottomPadding)
 
                 CurrentToggleHeight = nextToggleHeight
