@@ -6128,12 +6128,14 @@ local Library do
                 
                 -- PC users get a ~15% larger indicator (21px vs 18px) for easier clicking
                 local _IndicatorSize = IsMobile and 18 or 24
+                local IndicatorAnchorY = Toggle.Description ~= "" and 0 or 0.5
+                local IndicatorPositionY = Toggle.Description ~= "" and 1 or -math.floor(_IndicatorSize / 2)
 
                 Items["Indicator"] = Instances:Create("Frame", {
                     Parent = Items["Toggle"].Instance,
                     Name = "\0",
                     Size = UDim2New(0, _IndicatorSize, 0, _IndicatorSize),
-                    Position = UDim2New(0, 0, 0.5, -math.floor(_IndicatorSize / 2)),
+                    Position = UDim2New(0, 0, IndicatorAnchorY, IndicatorPositionY),
                     BorderColor3 = FromRGB(0, 0, 0),
                     ZIndex = 2,
                     BorderSizePixel = 0,
@@ -6243,9 +6245,11 @@ local Library do
             end
 
             local _IndicatorSize = IsMobile and 18 or 24
-            local _TextXOffset   = _IndicatorSize + 6  -- 24 mobile, 27 PC
+            local _TextXOffset   = _IndicatorSize + 4
+            local IndicatorAnchorY = Toggle.Description ~= "" and 0 or 0.5
+            local IndicatorPositionY = Toggle.Description ~= "" and 1 or -math.floor(_IndicatorSize / 2)
 
-            Items["Indicator"].Instance.Position = UDim2New(0, 30, 0.5, -math.floor(_IndicatorSize / 2))
+            Items["Indicator"].Instance.Position = UDim2New(0, 30, IndicatorAnchorY, IndicatorPositionY)
             Items["TextRow"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, 0)
             if Items["Description"] then
                 Items["Description"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, 16)
@@ -6253,15 +6257,17 @@ local Library do
 
             function Toggle:RefreshPosition(Bool)
                 local _IndicatorSize = IsMobile and 18 or 24
-                local _TextXOffset   = _IndicatorSize + 6
+                local _TextXOffset   = _IndicatorSize + 4
+                local IndicatorAnchorY = Toggle.Description ~= "" and 0 or 0.5
+                local IndicatorPositionY = Toggle.Description ~= "" and 1 or -math.floor(_IndicatorSize / 2)
                 if Bool then
-                    Items["Indicator"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0.5, -math.floor(_IndicatorSize / 2))})
+                    Items["Indicator"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, IndicatorAnchorY, IndicatorPositionY)})
                     Items["TextRow"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, _TextXOffset, 0, 0)})
                     if Items["Description"] then
                         Items["Description"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, _TextXOffset, 0, 16)})
                     end
                 else
-                    Items["Indicator"].Instance.Position = UDim2New(0, 30, 0.5, -math.floor(_IndicatorSize / 2))
+                    Items["Indicator"].Instance.Position = UDim2New(0, 30, IndicatorAnchorY, IndicatorPositionY)
                     Items["TextRow"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, 0)
                     if Items["Description"] then
                         Items["Description"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, 16)
