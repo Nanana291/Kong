@@ -6182,10 +6182,17 @@ local Library do
                     Name = "\0",
                     BackgroundTransparency = 1,
                     BorderSizePixel = 0,
-                    Size = UDim2New(1, -60, 0, 15),
+                    Size = UDim2New(1, -60, 0, 0),
                     Position = UDim2New(0, 24, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
                     ZIndex = 2,
                     BackgroundColor3 = FromRGB(255, 255, 255)
+                })
+
+                Items["TextLayout"] = Instances:Create("UIListLayout", {
+                    Parent = Items["TextRow"].Instance,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Padding = UDimNew(0, 1)
                 })
 
                 Items["Text"] = Instances:Create("TextLabel", {
@@ -6204,20 +6211,20 @@ local Library do
                     BorderColor3 = FromRGB(0, 0, 0),
                     ZIndex = 2,
                     TextSize = 14,
-                    BackgroundColor3 = FromRGB(255, 255, 255)
-                })  Items["Text"]:AddToTheme({TextColor3 = "Text"})
+                        BackgroundColor3 = FromRGB(255, 255, 255)
+                    })  Items["Text"]:AddToTheme({TextColor3 = "Text"})
 
                 if Toggle.Description ~= "" then
                     Items["Description"] = Instances:Create("TextLabel", {
-                        Parent = Items["Toggle"].Instance,
+                        Parent = Items["TextRow"].Instance,
                         Name = "\0",
                         FontFace = Library.Font,
                         TextColor3 = FromRGB(183, 183, 183),
                         TextTransparency = 0.4,
                         Text = Toggle.Description,
                         AutomaticSize = Enum.AutomaticSize.Y,
-                        Size = UDim2New(1, -60, 0, 0),
-                        Position = UDim2New(0, 24, 0, 16),
+                        Size = UDim2New(1, 0, 0, 0),
+                        Position = UDim2New(0, 0, 0, 0),
                         BorderSizePixel = 0,
                         BackgroundTransparency = 1,
                         TextWrapped = true,
@@ -6266,9 +6273,6 @@ local Library do
 
             Items["Indicator"].Instance.Position = UDim2New(0, 30, IndicatorAnchorY, IndicatorPositionY)
             Items["TextRow"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, 0)
-            if Items["Description"] then
-                Items["Description"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, 16)
-            end
 
             local UpdateWrapperSize
 
@@ -6281,12 +6285,12 @@ local Library do
                 end
 
                 local availableWidth = math.max(80, Items["Toggle"].Instance.AbsoluteSize.X - (30 + _TextXOffset) - 8)
-                Items["Description"].Instance.Size = UDim2New(0, availableWidth, 0, 1000)
+                Items["TextRow"].Instance.Size = UDim2New(1, -(30 + _TextXOffset) - 8, 0, 0)
+                Items["Description"].Instance.Size = UDim2New(1, 0, 0, 0)
 
                 local descriptionHeight = math.max(14, Items["Description"].Instance.TextBounds.Y)
-                Items["Description"].Instance.Size = UDim2New(0, availableWidth, 0, descriptionHeight)
-
-                CurrentToggleHeight = math.max(BaseToggleHeight, 18 + descriptionHeight)
+                local textStackHeight = math.max(15, Items["TextLayout"].Instance.AbsoluteContentSize.Y)
+                CurrentToggleHeight = math.max(BaseToggleHeight, textStackHeight)
                 Items["Toggle"].Instance.Size = UDim2New(1, 0, 0, CurrentToggleHeight)
                 UpdateWrapperSize()
             end
@@ -6354,15 +6358,9 @@ local Library do
                 if Bool then
                     Items["Indicator"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, IndicatorAnchorY, IndicatorPositionY)})
                     Items["TextRow"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, _TextXOffset, 0, 0)})
-                    if Items["Description"] then
-                        Items["Description"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, _TextXOffset, 0, 16)})
-                    end
                 else
                     Items["Indicator"].Instance.Position = UDim2New(0, 30, IndicatorAnchorY, IndicatorPositionY)
                     Items["TextRow"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, 0)
-                    if Items["Description"] then
-                        Items["Description"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, 16)
-                    end
                 end
             end
 
@@ -6465,6 +6463,12 @@ local Library do
                     UpdateDescriptionLayout()
                 end)
                 Items["Description"].Instance:GetPropertyChangedSignal("TextBounds"):Connect(function()
+                    if not Library then
+                        return
+                    end
+                    UpdateDescriptionLayout()
+                end)
+                Items["TextLayout"].Instance:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
                     if not Library then
                         return
                     end
