@@ -6090,25 +6090,29 @@ local Library do
 
                 Value = false,
                 HasSettings = Data.HasSettings or Data.hasSettings or false,
+                ParentToggle = Data.ParentToggle,
+                IsSubToggle = Data.IsSubToggle == true,
+                SubToggleLevel = Data.SubToggleLevel or 0,
+                _subToggles = { },
+                _subToggleSection = nil,
+                _settingsExpanded = false,
+                _settingsHeight = 0,
             }
 
             local ToggleHeight = Toggle.Description ~= "" and 34 or 18
 
             local Items = { } do 
-                local _ToggleParent = Toggle.Section.Items["Content"].Instance
+                Items["Wrapper"] = Instances:Create("Frame", {
+                    Parent = Toggle.Section.Items["Content"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    Size = UDim2New(1, 0, 0, ToggleHeight),
+                    ZIndex = 2,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })
 
-                if Toggle.HasSettings then
-                    Items["Wrapper"] = Instances:Create("Frame", {
-                        Parent = Toggle.Section.Items["Content"].Instance,
-                        Name = "\0",
-                        BackgroundTransparency = 1,
-                        BorderSizePixel = 0,
-                        Size = UDim2New(1, 0, 0, ToggleHeight),
-                        ZIndex = 2,
-                        BackgroundColor3 = FromRGB(255, 255, 255)
-                    })
-                    _ToggleParent = Items["Wrapper"].Instance
-                end
+                local _ToggleParent = Items["Wrapper"].Instance
 
                 Items["Toggle"] = Instances:Create("TextButton", {
                     Parent = _ToggleParent,
@@ -6225,6 +6229,16 @@ local Library do
                     })  Items["Description"]:AddToTheme({TextColor3 = "Text"})
                 end
 
+                if Toggle.IsSubToggle then
+                    Items["Text"].Instance.TextSize = 13
+                    Items["Text"].Instance.TextTransparency = 0.36
+
+                    if Items["Description"] then
+                        Items["Description"].Instance.TextSize = 11
+                        Items["Description"].Instance.TextTransparency = 0.5
+                    end
+                end
+
                 Items["IndicatorGradient"] = Instances:Create("UIGradient", {
                     Parent = Items["Indicator"].Instance,
                     Name = "\0",
@@ -6255,6 +6269,61 @@ local Library do
                 Items["Description"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, 16)
             end
 
+            local function GetSubToggleHeight()
+                if not Items["SubToggleHost"] or not Items["SubToggleLayout"] then
+                    return 0
+                end
+
+                local height = Items["SubToggleLayout"].Instance.AbsoluteContentSize.Y
+                return height > 0 and (height + 5) or 0
+            end
+
+            local function UpdateWrapperSize()
+                local subToggleHeight = GetSubToggleHeight()
+                local baseHeight = ToggleHeight + subToggleHeight
+
+                if Items["SubToggleHost"] then
+                    Items["SubToggleHost"].Instance.Position = UDim2New(0, 16, 0, ToggleHeight + 5)
+                    Items["SubToggleHost"].Instance.Visible = subToggleHeight > 0
+                end
+
+                if Items["SettingsSeparator"] then
+                    Items["SettingsSeparator"].Instance.Position = UDim2New(0, 0, 0, baseHeight + 4)
+                end
+
+                if Items["SettingsClipper"] then
+                    Items["SettingsClipper"].Instance.Position = UDim2New(0, 0, 0, baseHeight + 5)
+                end
+
+                local targetHeight = baseHeight
+                if Toggle.HasSettings and Toggle._settingsExpanded then
+                    targetHeight = baseHeight + 5 + (Toggle._settingsHeight or 0)
+                end
+
+                Items["Wrapper"].Instance.Size = UDim2New(1, 0, 0, targetHeight)
+            end
+
+            local function ApplyParentToggleState()
+                if not Toggle.ParentToggle then
+                    return
+                end
+
+                local parentEnabled = Toggle.ParentToggle.Value == true
+
+                Items["Text"].Instance.TextTransparency = parentEnabled and (Toggle.IsSubToggle and 0.36 or 0.3) or 0.62
+                if Items["Description"] then
+                    Items["Description"].Instance.TextTransparency = parentEnabled and (Toggle.IsSubToggle and 0.5 or 0.4) or 0.74
+                end
+
+                Items["Indicator"].Instance.BackgroundTransparency = parentEnabled and 0 or 0.25
+                Items["IndicatorStroke"].Instance.Transparency = parentEnabled and (Toggle.Value and 1 or 0.5) or 0.72
+                if Toggle.Value then
+                    Items["CheckImage"].Instance.ImageTransparency = parentEnabled and 0 or 0.45
+                else
+                    Items["CheckImage"].Instance.ImageTransparency = 1
+                end
+            end
+
             function Toggle:RefreshPosition(Bool)
                 local _IndicatorSize = IsMobile and 18 or 24
                 local _TextXOffset   = _IndicatorSize + 4
@@ -6280,6 +6349,10 @@ local Library do
             end
 
             function Toggle:Set(Value, Instant)
+                if Toggle.ParentToggle and not Toggle.ParentToggle.Value and Value == true then
+                    return
+                end
+
                 Toggle.Value = Value 
                 Library.Flags[Toggle.Flag] = Value 
 
@@ -6318,6 +6391,14 @@ local Library do
                     Library:SafeCall(Toggle.Callback, Toggle.Value)
                 end
 
+                ApplyParentToggleState()
+
+                for _, subToggle in ipairs(Toggle._subToggles) do
+                    if subToggle.ApplyParentToggleState then
+                        subToggle:ApplyParentToggleState()
+                    end
+                end
+
                 -- HasSettings: sync settings panel visibility with toggle state
                 if Toggle.HasSettings and Toggle.SetSettingsExpanded then
                     Toggle:SetSettingsExpanded(Toggle.Value)
@@ -6348,6 +6429,75 @@ local Library do
                 })
 
                 return Items["AddonsHolder"]
+            end
+
+            function Toggle:ApplyParentToggleState()
+                ApplyParentToggleState()
+            end
+
+            local function EnsureSubToggleSection()
+                if Toggle._subToggleSection then
+                    return Toggle._subToggleSection
+                end
+
+                Items["SubToggleHost"] = Instances:Create("Frame", {
+                    Parent = Items["Wrapper"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    Position = UDim2New(0, 16, 0, ToggleHeight + 5),
+                    Size = UDim2New(1, -16, 0, 0),
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    Visible = false,
+                    ZIndex = 2,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })
+
+                Items["SubToggleLayout"] = Instances:Create("UIListLayout", {
+                    Parent = Items["SubToggleHost"].Instance,
+                    FillDirection = Enum.FillDirection.Vertical,
+                    SortOrder = Enum.SortOrder.LayoutOrder,
+                    Padding = UDimNew(0, 4)
+                })
+
+                Toggle._subToggleSection = setmetatable({
+                    Window = Toggle.Window,
+                    Page = Toggle.Page,
+                    Section = Toggle.Section,
+                    Items = { Content = Items["SubToggleHost"] },
+                    Elements = { },
+                    IsSubToggleSection = true,
+                    Name = Toggle.Name .. "_SubToggleSection",
+                }, Library.Sections)
+
+                Items["SubToggleLayout"].Instance:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+                    if not Library then
+                        return
+                    end
+                    UpdateWrapperSize()
+                end)
+
+                UpdateWrapperSize()
+                return Toggle._subToggleSection
+            end
+
+            function Toggle:SubToggle(Data)
+                Data = Data or {}
+                assert(Data.Flag or Data.flag, "SubToggle requires Flag")
+
+                local SubSection = EnsureSubToggleSection()
+                local SubToggleData = TableClone(Data)
+                SubToggleData.IsSubToggle = true
+                SubToggleData.ParentToggle = Toggle
+                SubToggleData.SubToggleLevel = (Toggle.SubToggleLevel or 0) + 1
+
+                local SubToggle = Library.Sections.Toggle(SubSection, SubToggleData)
+                TableInsert(Toggle._subToggles, SubToggle)
+                UpdateWrapperSize()
+                if SubToggle.ApplyParentToggleState then
+                    SubToggle:ApplyParentToggleState()
+                end
+                return SubToggle
             end
 
             -- ─────────────────────────────────────────────────────────────
@@ -6483,7 +6633,6 @@ local Library do
                     Toggle._settingsExpanded = Expanded
 
                     local Clipper  = Items["SettingsClipper"].Instance
-                    local Wrapper  = Items["Wrapper"].Instance
                     local Sep      = Items["SettingsSeparator"].Instance
                     local Chevron  = Items["SettingsChevron"].Instance
                     local TInfo    = TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
@@ -6492,22 +6641,20 @@ local Library do
                         Sep.Visible = true
                         TweenService:Create(Chevron, TInfo, { Rotation = 180 }):Play()
                         local targetH = _MeasureSettingsHeight()
+                        Toggle._settingsHeight = targetH
                         TweenService:Create(Clipper, TInfo, {
                             Size = UDim2New(1, 0, 0, targetH)
                         }):Play()
-                        TweenService:Create(Wrapper, TInfo, {
-                            Size = UDim2New(1, 0, 0, ToggleHeight + 5 + targetH)
-                        }):Play()
+                        UpdateWrapperSize()
                     else
                         -- Rotate chevron back down
                         TweenService:Create(Chevron, TInfo, { Rotation = 0 }):Play()
+                        Toggle._settingsHeight = 0
                         local collapseClipper = TweenService:Create(Clipper, TInfo, {
                             Size = UDim2New(1, 0, 0, 0)
                         })
                         collapseClipper:Play()
-                        TweenService:Create(Wrapper, TInfo, {
-                            Size = UDim2New(1, 0, 0, ToggleHeight)
-                        }):Play()
+                        UpdateWrapperSize()
                         collapseClipper.Completed:Connect(function()
                             if not Library then return end
                             Sep.Visible = false
@@ -6520,13 +6667,12 @@ local Library do
                     if not Toggle._settingsExpanded or not Library then return end
                     local targetH = _MeasureSettingsHeight()
                     if targetH <= 10 then return end
+                    Toggle._settingsHeight = targetH
                     local ResizeInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
                     TweenService:Create(Items["SettingsClipper"].Instance, ResizeInfo, {
                         Size = UDim2New(1, 0, 0, targetH)
                     }):Play()
-                    TweenService:Create(Items["Wrapper"].Instance, ResizeInfo, {
-                        Size = UDim2New(1, 0, 0, ToggleHeight + 5 + targetH)
-                    }):Play()
+                    UpdateWrapperSize()
                 end)
 
                 -- ── Child element factories ──────────────────────────────
@@ -6949,7 +7095,7 @@ local Library do
             end
 
             function Toggle:SetVisibility(Bool)
-                Items["Toggle"].Instance.Visible = Bool 
+                Items["Wrapper"].Instance.Visible = Bool 
             end
 
             function Toggle:Colorpicker(Data)
@@ -7014,12 +7160,22 @@ local Library do
 
 
             function Toggle:RefreshPosition(Bool)
+                local _IndicatorSize = IsMobile and 18 or 24
+                local _TextXOffset   = _IndicatorSize + 4
+                local IndicatorAnchorY = Toggle.Description ~= "" and 0 or 0.5
+                local IndicatorPositionY = Toggle.Description ~= "" and 1 or -math.floor(_IndicatorSize / 2)
                 if Bool then 
-                    Items["Indicator"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0, 0)})
-                    Items["Text"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 24, 0, 0)})
+                    Items["Indicator"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, IndicatorAnchorY, IndicatorPositionY)})
+                    Items["TextRow"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, _TextXOffset, 0, 0)})
+                    if Items["Description"] then
+                        Items["Description"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, _TextXOffset, 0, 16)})
+                    end
                 else
-                    Items["Indicator"].Instance.Position = UDim2New(0, 60, 0, 0)
-                    Items["Text"].Instance.Position = UDim2New(0, 84, 0, 0)
+                    Items["Indicator"].Instance.Position = UDim2New(0, 30, IndicatorAnchorY, IndicatorPositionY)
+                    Items["TextRow"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, 0)
+                    if Items["Description"] then
+                        Items["Description"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, 16)
+                    end
                 end 
             end
 
@@ -7027,6 +7183,10 @@ local Library do
                 if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then 
                     if Items["SettingsIcon"] and Library:IsMouseOverFrame(Items["SettingsIcon"]) then
                         return 
+                    end
+
+                    if Toggle.ParentToggle and not Toggle.ParentToggle.Value then
+                        return
                     end
                     
                     Toggle:Set(not Toggle.Value)
