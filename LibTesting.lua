@@ -7538,7 +7538,17 @@ local Library do
                 end
 
                 if Decimals > 0 then
-                    return math.max(0, math.floor(-math.log10(Decimals) + 0.5))
+                    local places = 0
+                    while Decimals < 1 do
+                        Decimals = Decimals * 10
+                        places = places + 1
+
+                        if places >= 6 then
+                            break
+                        end
+                    end
+
+                    return places
                 end
 
                 return 0
