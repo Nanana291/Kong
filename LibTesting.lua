@@ -6299,8 +6299,14 @@ local Library do
             local DescriptionLayoutQueued = false
             local LastDescriptionWidth = -1
 
+            local function MeasureResolvedTextStackHeight()
+                local textRowHeight = Items["TextRow"].Instance.AbsoluteSize.Y
+                local layoutHeight = Items["TextLayout"].Instance.AbsoluteContentSize.Y
+                return math.max(15, textRowHeight, layoutHeight)
+            end
+
             local function ApplyMeasuredTextLayout()
-                local textStackHeight = math.max(15, Items["TextRow"].Instance.AbsoluteSize.Y)
+                local textStackHeight = MeasureResolvedTextStackHeight()
                 local ToggleContentBottomPadding = ComputeDescriptionBottomPadding(textStackHeight)
                 local nextToggleHeight = math.max(BaseToggleHeight, ToggleContentTopPadding + textStackHeight + ToggleContentBottomPadding)
 
@@ -6520,6 +6526,12 @@ local Library do
                     QueueDescriptionLayout()
                 end)
                 Items["TextRow"].Instance:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+                    if not Library then
+                        return
+                    end
+                    ApplyMeasuredTextLayout()
+                end)
+                task.defer(function()
                     if not Library then
                         return
                     end
