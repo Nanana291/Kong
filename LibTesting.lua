@@ -8,6 +8,7 @@ local Library do
     local Players = game:GetService("Players")
     local HttpService = game:GetService("HttpService")
     local RunService = game:GetService("RunService")
+    local TextService = game:GetService("TextService")
     local CoreGui = cloneref and cloneref(game:GetService("CoreGui")) or game:GetService("CoreGui")
     local TweenService = game:GetService("TweenService")
     local Lighting = game:GetService("Lighting")
@@ -6099,7 +6100,8 @@ local Library do
                 _settingsHeight = 0,
             }
 
-            local ToggleHeight = Toggle.Description ~= "" and 34 or 18
+            local BaseToggleHeight = Toggle.Description ~= "" and 34 or 18
+            local CurrentToggleHeight = BaseToggleHeight
 
             local Items = { } do 
                 Items["Wrapper"] = Instances:Create("Frame", {
@@ -6107,7 +6109,7 @@ local Library do
                     Name = "\0",
                     BackgroundTransparency = 1,
                     BorderSizePixel = 0,
-                    Size = UDim2New(1, 0, 0, ToggleHeight),
+                    Size = UDim2New(1, 0, 0, CurrentToggleHeight),
                     ZIndex = 2,
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })
@@ -6124,7 +6126,7 @@ local Library do
                     AutoButtonColor = false,
                     BackgroundTransparency = 1,
                     BorderSizePixel = 0,
-                    Size = UDim2New(1, 0, 0, ToggleHeight),
+                    Size = UDim2New(1, 0, 0, CurrentToggleHeight),
                     ZIndex = 2,
                     TextSize = 14,
                     BackgroundColor3 = FromRGB(255, 255, 255)
@@ -6269,21 +6271,47 @@ local Library do
                 Items["Description"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, 16)
             end
 
+            local UpdateWrapperSize
+
+            local function UpdateDescriptionLayout()
+                if not Items["Description"] then
+                    CurrentToggleHeight = BaseToggleHeight
+                    Items["Toggle"].Instance.Size = UDim2New(1, 0, 0, CurrentToggleHeight)
+                    UpdateWrapperSize()
+                    return
+                end
+
+                local availableWidth = math.max(80, Items["Toggle"].Instance.AbsoluteSize.X - (30 + _TextXOffset) - 8)
+                local textSize = TextService:GetTextSize(
+                    Toggle.Description,
+                    Items["Description"].Instance.TextSize,
+                    Items["Description"].Instance.Font,
+                    Vector2New(availableWidth, 1000)
+                )
+
+                local descriptionHeight = math.max(14, textSize.Y)
+                Items["Description"].Instance.Size = UDim2New(0, availableWidth, 0, descriptionHeight)
+
+                CurrentToggleHeight = math.max(BaseToggleHeight, 18 + descriptionHeight)
+                Items["Toggle"].Instance.Size = UDim2New(1, 0, 0, CurrentToggleHeight)
+                UpdateWrapperSize()
+            end
+
             local function GetSubToggleHeight()
                 if not Items["SubToggleHost"] or not Items["SubToggleLayout"] then
                     return 0
                 end
 
                 local height = Items["SubToggleLayout"].Instance.AbsoluteContentSize.Y
-                return height > 0 and (height + 5) or 0
+                return height > 0 and (height + 7) or 0
             end
 
-            local function UpdateWrapperSize()
+            UpdateWrapperSize = function()
                 local subToggleHeight = GetSubToggleHeight()
-                local baseHeight = ToggleHeight + subToggleHeight
+                local baseHeight = CurrentToggleHeight + subToggleHeight
 
                 if Items["SubToggleHost"] then
-                    Items["SubToggleHost"].Instance.Position = UDim2New(0, 16, 0, ToggleHeight + 5)
+                    Items["SubToggleHost"].Instance.Position = UDim2New(0, 16, 0, CurrentToggleHeight + 5)
                     Items["SubToggleHost"].Instance.Visible = subToggleHeight > 0
                 end
 
@@ -6435,6 +6463,18 @@ local Library do
                 ApplyParentToggleState()
             end
 
+            if Items["Description"] then
+                Items["Toggle"].Instance:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+                    if not Library then
+                        return
+                    end
+                    UpdateDescriptionLayout()
+                end)
+                UpdateDescriptionLayout()
+            else
+                UpdateWrapperSize()
+            end
+
             local function EnsureSubToggleSection()
                 if Toggle._subToggleSection then
                     return Toggle._subToggleSection
@@ -6445,7 +6485,7 @@ local Library do
                     Name = "\0",
                     BackgroundTransparency = 1,
                     BorderSizePixel = 0,
-                    Position = UDim2New(0, 16, 0, ToggleHeight + 5),
+                    Position = UDim2New(0, 16, 0, CurrentToggleHeight + 5),
                     Size = UDim2New(1, -16, 0, 0),
                     AutomaticSize = Enum.AutomaticSize.Y,
                     Visible = false,
@@ -6530,7 +6570,7 @@ local Library do
                     Name = "\0",
                     BackgroundTransparency = 0.75,
                     BorderSizePixel = 0,
-                    Position = UDim2New(0, 0, 0, ToggleHeight + 4),
+                    Position = UDim2New(0, 0, 0, CurrentToggleHeight + 4),
                     Size = UDim2New(1, 0, 0, 1),
                     ZIndex = 2,
                     Visible = false,
@@ -6543,7 +6583,7 @@ local Library do
                     Name = "\0",
                     BackgroundTransparency = 1,
                     BorderSizePixel = 0,
-                    Position = UDim2New(0, 0, 0, ToggleHeight + 5),
+                    Position = UDim2New(0, 0, 0, CurrentToggleHeight + 5),
                     Size = UDim2New(1, 0, 0, 0),
                     ClipsDescendants = true,
                     ZIndex = 2,
