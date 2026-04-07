@@ -7199,15 +7199,9 @@ local Library do
                 if Bool then 
                     Items["Indicator"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, IndicatorAnchorY, IndicatorPositionY)})
                     Items["TextRow"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, _TextXOffset, 0, 0)})
-                    if Items["Description"] then
-                        Items["Description"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, _TextXOffset, 0, 16)})
-                    end
                 else
                     Items["Indicator"].Instance.Position = UDim2New(0, 30, IndicatorAnchorY, IndicatorPositionY)
                     Items["TextRow"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, 0)
-                    if Items["Description"] then
-                        Items["Description"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, 16)
-                    end
                 end 
             end
 
