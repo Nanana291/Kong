@@ -6223,7 +6223,7 @@ local Library do
                         TextTransparency = 0.4,
                         Text = Toggle.Description,
                         AutomaticSize = Enum.AutomaticSize.Y,
-                        Size = UDim2New(1, 0, 0, 14),
+                        Size = UDim2New(1, 0, 0, 0),
                         Position = UDim2New(0, 0, 0, 0),
                         BorderSizePixel = 0,
                         BackgroundTransparency = 1,
@@ -6270,11 +6270,24 @@ local Library do
             local _TextXOffset   = _IndicatorSize + 4
             local IndicatorAnchorY = Toggle.Description ~= "" and 0 or 0.5
             local IndicatorPositionY = Toggle.Description ~= "" and 1 or -math.floor(_IndicatorSize / 2)
+            local ToggleContentTopPadding = Toggle.Description ~= "" and 1 or 0
+            local ToggleContentBottomPadding = Toggle.Description ~= "" and (Toggle.IsSubToggle and 5 or 6) or 0
 
             Items["Indicator"].Instance.Position = UDim2New(0, 30, IndicatorAnchorY, IndicatorPositionY)
-            Items["TextRow"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, 0)
+            Items["TextRow"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, ToggleContentTopPadding)
 
             local UpdateWrapperSize
+            local DescriptionLayoutQueued = false
+            local LastDescriptionWidth = -1
+
+            local function ApplyMeasuredTextLayout()
+                local textStackHeight = math.max(15, Items["TextRow"].Instance.AbsoluteSize.Y)
+                local nextToggleHeight = math.max(BaseToggleHeight, ToggleContentTopPadding + textStackHeight + ToggleContentBottomPadding)
+
+                CurrentToggleHeight = nextToggleHeight
+                Items["Toggle"].Instance.Size = UDim2New(1, 0, 0, CurrentToggleHeight)
+                UpdateWrapperSize()
+            end
 
             local function UpdateDescriptionLayout()
                 if not Items["Description"] then
@@ -6284,15 +6297,39 @@ local Library do
                     return
                 end
 
-                local availableWidth = math.max(80, Items["Toggle"].Instance.AbsoluteSize.X - (30 + _TextXOffset) - 8)
-                Items["TextRow"].Instance.Size = UDim2New(1, -(30 + _TextXOffset) - 8, 0, 0)
-                Items["Description"].Instance.Size = UDim2New(0, availableWidth, 0, 14)
+                local availableWidth = math.max(96, Items["Toggle"].Instance.AbsoluteSize.X - (30 + _TextXOffset) - 8)
+                if availableWidth == LastDescriptionWidth then
+                    ApplyMeasuredTextLayout()
+                    return
+                end
 
-                local descriptionHeight = math.max(14, Items["Description"].Instance.TextBounds.Y)
-                local textStackHeight = 15 + 1 + descriptionHeight
-                CurrentToggleHeight = math.max(BaseToggleHeight, textStackHeight)
-                Items["Toggle"].Instance.Size = UDim2New(1, 0, 0, CurrentToggleHeight)
-                UpdateWrapperSize()
+                LastDescriptionWidth = availableWidth
+                Items["TextRow"].Instance.Size = UDim2New(1, -(30 + _TextXOffset) - 8, 0, 0)
+                Items["Description"].Instance.Size = UDim2New(1, 0, 0, 0)
+                ApplyMeasuredTextLayout()
+            end
+
+            local function QueueDescriptionLayout()
+                if not Items["Description"] or DescriptionLayoutQueued then
+                    return
+                end
+
+                DescriptionLayoutQueued = true
+                task.defer(function()
+                    if not Library then
+                        return
+                    end
+
+                    DescriptionLayoutQueued = false
+                    UpdateDescriptionLayout()
+
+                    task.defer(function()
+                        if not Library then
+                            return
+                        end
+                        ApplyMeasuredTextLayout()
+                    end)
+                end)
             end
 
             local function GetSubToggleHeight()
@@ -6301,7 +6338,7 @@ local Library do
                 end
 
                 local height = Items["SubToggleLayout"].Instance.AbsoluteContentSize.Y
-                return height > 0 and (height + 7) or 0
+                return height > 0 and (height + 9) or 0
             end
 
             UpdateWrapperSize = function()
@@ -6309,16 +6346,16 @@ local Library do
                 local baseHeight = CurrentToggleHeight + subToggleHeight
 
                 if Items["SubToggleHost"] then
-                    Items["SubToggleHost"].Instance.Position = UDim2New(0, 16, 0, CurrentToggleHeight + 5)
+                    Items["SubToggleHost"].Instance.Position = UDim2New(0, 16, 0, CurrentToggleHeight + 6)
                     Items["SubToggleHost"].Instance.Visible = subToggleHeight > 0
                 end
 
                 if Items["SettingsSeparator"] then
-                    Items["SettingsSeparator"].Instance.Position = UDim2New(0, 0, 0, baseHeight + 4)
+                    Items["SettingsSeparator"].Instance.Position = UDim2New(0, 0, 0, baseHeight + 5)
                 end
 
                 if Items["SettingsClipper"] then
-                    Items["SettingsClipper"].Instance.Position = UDim2New(0, 0, 0, baseHeight + 5)
+                    Items["SettingsClipper"].Instance.Position = UDim2New(0, 0, 0, baseHeight + 6)
                 end
 
                 local targetHeight = baseHeight
@@ -6357,10 +6394,10 @@ local Library do
                 local IndicatorPositionY = Toggle.Description ~= "" and 1 or -math.floor(_IndicatorSize / 2)
                 if Bool then
                     Items["Indicator"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, IndicatorAnchorY, IndicatorPositionY)})
-                    Items["TextRow"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, _TextXOffset, 0, 0)})
+                    Items["TextRow"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, _TextXOffset, 0, ToggleContentTopPadding)})
                 else
                     Items["Indicator"].Instance.Position = UDim2New(0, 30, IndicatorAnchorY, IndicatorPositionY)
-                    Items["TextRow"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, 0)
+                    Items["TextRow"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, ToggleContentTopPadding)
                 end
             end
 
@@ -6460,9 +6497,15 @@ local Library do
                     if not Library then
                         return
                     end
-                    UpdateDescriptionLayout()
+                    QueueDescriptionLayout()
                 end)
-                task.defer(UpdateDescriptionLayout)
+                Items["TextRow"].Instance:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+                    if not Library then
+                        return
+                    end
+                    ApplyMeasuredTextLayout()
+                end)
+                QueueDescriptionLayout()
             else
                 UpdateWrapperSize()
             end
@@ -6477,7 +6520,7 @@ local Library do
                     Name = "\0",
                     BackgroundTransparency = 1,
                     BorderSizePixel = 0,
-                    Position = UDim2New(0, 16, 0, CurrentToggleHeight + 5),
+                    Position = UDim2New(0, 16, 0, CurrentToggleHeight + 6),
                     Size = UDim2New(1, -16, 0, 0),
                     AutomaticSize = Enum.AutomaticSize.Y,
                     Visible = false,
@@ -6562,7 +6605,7 @@ local Library do
                     Name = "\0",
                     BackgroundTransparency = 0.75,
                     BorderSizePixel = 0,
-                    Position = UDim2New(0, 0, 0, CurrentToggleHeight + 4),
+                    Position = UDim2New(0, 0, 0, CurrentToggleHeight + 5),
                     Size = UDim2New(1, 0, 0, 1),
                     ZIndex = 2,
                     Visible = false,
@@ -6575,7 +6618,7 @@ local Library do
                     Name = "\0",
                     BackgroundTransparency = 1,
                     BorderSizePixel = 0,
-                    Position = UDim2New(0, 0, 0, CurrentToggleHeight + 5),
+                    Position = UDim2New(0, 0, 0, CurrentToggleHeight + 6),
                     Size = UDim2New(1, 0, 0, 0),
                     ClipsDescendants = true,
                     ZIndex = 2,
@@ -7198,10 +7241,10 @@ local Library do
                 local IndicatorPositionY = Toggle.Description ~= "" and 1 or -math.floor(_IndicatorSize / 2)
                 if Bool then 
                     Items["Indicator"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, IndicatorAnchorY, IndicatorPositionY)})
-                    Items["TextRow"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, _TextXOffset, 0, 0)})
+                    Items["TextRow"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, _TextXOffset, 0, ToggleContentTopPadding)})
                 else
                     Items["Indicator"].Instance.Position = UDim2New(0, 30, IndicatorAnchorY, IndicatorPositionY)
-                    Items["TextRow"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, 0)
+                    Items["TextRow"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, ToggleContentTopPadding)
                 end 
             end
 
