@@ -6277,15 +6277,16 @@ local Library do
                     return 0
                 end
 
-                local descriptionOverflow = math.max(0, textStackHeight - 15)
+                local titleHeight = Toggle.IsSubToggle and 14 or 15
+                local descriptionOverflow = math.max(0, textStackHeight - titleHeight)
 
                 if Toggle.IsSubToggle then
-                    local adaptiveExtra = math.min(10, math.floor((descriptionOverflow / 2.4) + 0.5))
+                    local adaptiveExtra = math.min(12, math.floor((descriptionOverflow / 8) + 0.5))
                     return 9 + adaptiveExtra
                 end
 
                 if Toggle.HasSettings then
-                    local adaptiveExtra = math.min(6, math.floor((descriptionOverflow / 3) + 0.5))
+                    local adaptiveExtra = math.min(8, math.floor((descriptionOverflow / 10) + 0.5))
                     return 6 + adaptiveExtra
                 end
 
@@ -6299,10 +6300,23 @@ local Library do
             local DescriptionLayoutQueued = false
             local LastDescriptionWidth = -1
 
+            local function MeasureResolvedDescriptionHeight()
+                if not Items["Description"] then
+                    return 0
+                end
+
+                local minimumHeight = Toggle.IsSubToggle and 12 or 14
+                return math.max(minimumHeight, Items["Description"].Instance.TextBounds.Y)
+            end
+
             local function MeasureResolvedTextStackHeight()
-                local textRowHeight = Items["TextRow"].Instance.AbsoluteSize.Y
-                local layoutHeight = Items["TextLayout"].Instance.AbsoluteContentSize.Y
-                return math.max(15, textRowHeight, layoutHeight)
+                local titleHeight = math.max(Toggle.IsSubToggle and 14 or 15, Items["Text"].Instance.TextBounds.Y)
+                if not Items["Description"] then
+                    return titleHeight
+                end
+
+                local descriptionHeight = MeasureResolvedDescriptionHeight()
+                return titleHeight + 2 + descriptionHeight
             end
 
             local function ApplyMeasuredTextLayout()
