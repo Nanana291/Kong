@@ -6299,6 +6299,7 @@ local Library do
             local UpdateWrapperSize
             local DescriptionLayoutQueued = false
             local LastDescriptionWidth = -1
+            local LastAppliedTextStackHeight = -1
 
             local function MeasureResolvedDescriptionHeight()
                 if not Items["Description"] then
@@ -6321,6 +6322,11 @@ local Library do
 
             local function ApplyMeasuredTextLayout()
                 local textStackHeight = MeasureResolvedTextStackHeight()
+                if textStackHeight == LastAppliedTextStackHeight then
+                    return
+                end
+
+                LastAppliedTextStackHeight = textStackHeight
                 local ToggleContentBottomPadding = ComputeDescriptionBottomPadding(textStackHeight)
                 local nextToggleHeight = math.max(BaseToggleHeight, ToggleContentTopPadding + textStackHeight + ToggleContentBottomPadding)
 
@@ -6344,6 +6350,7 @@ local Library do
                 end
 
                 LastDescriptionWidth = availableWidth
+                LastAppliedTextStackHeight = -1
                 Items["TextRow"].Instance.Size = UDim2New(1, -(30 + _TextXOffset) - 8, 0, 0)
                 Items["Description"].Instance.Size = UDim2New(1, 0, 0, 0)
                 ApplyMeasuredTextLayout()
@@ -6538,6 +6545,12 @@ local Library do
                         return
                     end
                     QueueDescriptionLayout()
+                end)
+                Items["TextLayout"].Instance:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+                    if not Library then
+                        return
+                    end
+                    ApplyMeasuredTextLayout()
                 end)
                 task.defer(function()
                     if not Library then
