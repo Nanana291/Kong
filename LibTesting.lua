@@ -6271,7 +6271,7 @@ local Library do
             local IndicatorAnchorY = Toggle.Description ~= "" and 0 or 0.5
             local IndicatorPositionY = Toggle.Description ~= "" and 1 or -math.floor(_IndicatorSize / 2)
             local ToggleContentTopPadding = Toggle.Description ~= "" and 1 or 0
-            local ToggleContentBottomPadding = Toggle.Description ~= "" and ((Toggle.IsSubToggle and 9) or (Toggle.HasSettings and 12) or 6) or 0
+            local ToggleContentBottomPadding = Toggle.Description ~= "" and ((Toggle.IsSubToggle and 19) or (Toggle.HasSettings and 12) or 6) or 0
 
             Items["Indicator"].Instance.Position = UDim2New(0, 30, IndicatorAnchorY, IndicatorPositionY)
             Items["TextRow"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, ToggleContentTopPadding)
@@ -7531,6 +7531,19 @@ local Library do
         Library.Sections.Slider = function(self, Data)
             Data = Data or { }
 
+            local function ResolveDecimalPlaces(Decimals)
+                Decimals = tonumber(Decimals) or 0
+                if Decimals >= 1 then
+                    return math.max(0, math.floor(Decimals + 0.5))
+                end
+
+                if Decimals > 0 then
+                    return math.max(0, math.floor(-math.log10(Decimals) + 0.5))
+                end
+
+                return 0
+            end
+
             local Slider = {
                 Window = self.Window,
                 Page = self.Page,
@@ -7739,7 +7752,7 @@ local Library do
             local function openEdit()
                 if editActive then return end
                 editActive = true
-                local places = math.max(0, math.floor(Slider.Decimals + 0.5))
+                local places = ResolveDecimalPlaces(Slider.Decimals)
                 local displayStr = places == 0 and tostring(math.floor(Slider.Value + 0.5))
                                or StringFormat("%." .. places .. "f", Slider.Value)
                 editBox.Instance.Text = displayStr
@@ -7807,7 +7820,7 @@ local Library do
             end
 
             function Slider:Set(Value)
-                local places = math.max(0, math.floor(Slider.Decimals + 0.5))
+                local places = ResolveDecimalPlaces(Slider.Decimals)
                 local step    = places == 0 and 1 or (10 ^ -places)
                 Slider.Value  = Library:Round(MathClamp(Value, Slider.Min, Slider.Max), step)
                 Library.Flags[Slider.Flag] = Slider.Value
@@ -7837,7 +7850,7 @@ local Library do
             end
 
             local function _getStep()
-                local places = math.max(0, math.floor(Slider.Decimals + 0.5))
+                local places = ResolveDecimalPlaces(Slider.Decimals)
                 return places == 0 and 1 or (10 ^ -places)
             end
 
