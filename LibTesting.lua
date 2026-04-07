@@ -6223,7 +6223,7 @@ local Library do
                         TextTransparency = 0.4,
                         Text = Toggle.Description,
                         AutomaticSize = Enum.AutomaticSize.Y,
-                        Size = UDim2New(1, 0, 0, 0),
+                        Size = UDim2New(1, 0, 0, 14),
                         Position = UDim2New(0, 0, 0, 0),
                         BorderSizePixel = 0,
                         BackgroundTransparency = 1,
@@ -6286,10 +6286,9 @@ local Library do
 
                 local availableWidth = math.max(80, Items["Toggle"].Instance.AbsoluteSize.X - (30 + _TextXOffset) - 8)
                 Items["TextRow"].Instance.Size = UDim2New(1, -(30 + _TextXOffset) - 8, 0, 0)
-                Items["Description"].Instance.Size = UDim2New(1, 0, 0, 0)
+                Items["Description"].Instance.Size = UDim2New(0, availableWidth, 0, 14)
 
-                local descriptionHeight = math.max(14, Items["Description"].Instance.TextBounds.Y)
-                local textStackHeight = math.max(15, Items["TextLayout"].Instance.AbsoluteContentSize.Y)
+                local textStackHeight = math.max(BaseToggleHeight, Items["TextRow"].Instance.AbsoluteSize.Y)
                 CurrentToggleHeight = math.max(BaseToggleHeight, textStackHeight)
                 Items["Toggle"].Instance.Size = UDim2New(1, 0, 0, CurrentToggleHeight)
                 UpdateWrapperSize()
@@ -6462,19 +6461,7 @@ local Library do
                     end
                     UpdateDescriptionLayout()
                 end)
-                Items["Description"].Instance:GetPropertyChangedSignal("TextBounds"):Connect(function()
-                    if not Library then
-                        return
-                    end
-                    UpdateDescriptionLayout()
-                end)
-                Items["TextLayout"].Instance:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-                    if not Library then
-                        return
-                    end
-                    UpdateDescriptionLayout()
-                end)
-                UpdateDescriptionLayout()
+                task.defer(UpdateDescriptionLayout)
             else
                 UpdateWrapperSize()
             end
