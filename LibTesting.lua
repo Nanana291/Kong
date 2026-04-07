@@ -6271,7 +6271,7 @@ local Library do
             local IndicatorAnchorY = Toggle.Description ~= "" and 0 or 0.5
             local IndicatorPositionY = Toggle.Description ~= "" and 1 or -math.floor(_IndicatorSize / 2)
             local ToggleContentTopPadding = Toggle.Description ~= "" and 1 or 0
-            local ToggleContentBottomPadding = Toggle.Description ~= "" and (Toggle.IsSubToggle and 5 or 6) or 0
+            local ToggleContentBottomPadding = Toggle.Description ~= "" and ((Toggle.IsSubToggle and 9) or (Toggle.HasSettings and 12) or 6) or 0
 
             Items["Indicator"].Instance.Position = UDim2New(0, 30, IndicatorAnchorY, IndicatorPositionY)
             Items["TextRow"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, ToggleContentTopPadding)
