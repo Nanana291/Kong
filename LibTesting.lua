@@ -5378,7 +5378,7 @@ local Library do
                 Page = self,
 
                 Name = Data.Name or Data.name or "Section",
-                Description = Data.Description or Data.desc or "",
+                Description = Data.Description or Data.description or Data.desc or "",
                 Icon = Data.Icon or Data.icon or "123944728972740",
                 Side = Data.Side or Data.side or 1,
 
@@ -6083,6 +6083,7 @@ local Library do
                 Section = self,
 
                 Name = Data.Name or Data.name or "Toggle",
+                Description = Data.Description or Data.description or Data.desc or "",
                 Flag = Data.Flag or Data.flag or Library:NextFlag(),
                 Default = Data.Default or Data.default or false,
                 Callback = Data.Callback or Data.callback or function() end,
@@ -6090,6 +6091,8 @@ local Library do
                 Value = false,
                 HasSettings = Data.HasSettings or Data.hasSettings or false,
             }
+
+            local ToggleHeight = Toggle.Description ~= "" and 34 or 18
 
             local Items = { } do 
                 local _ToggleParent = Toggle.Section.Items["Content"].Instance
@@ -6100,7 +6103,7 @@ local Library do
                         Name = "\0",
                         BackgroundTransparency = 1,
                         BorderSizePixel = 0,
-                        Size = UDim2New(1, 0, 0, 18),
+                        Size = UDim2New(1, 0, 0, ToggleHeight),
                         ZIndex = 2,
                         BackgroundColor3 = FromRGB(255, 255, 255)
                     })
@@ -6117,7 +6120,7 @@ local Library do
                     AutoButtonColor = false,
                     BackgroundTransparency = 1,
                     BorderSizePixel = 0,
-                    Size = UDim2New(1, 0, 0, 18),
+                    Size = UDim2New(1, 0, 0, ToggleHeight),
                     ZIndex = 2,
                     TextSize = 14,
                     BackgroundColor3 = FromRGB(255, 255, 255)
@@ -6167,8 +6170,19 @@ local Library do
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })
                 
-                Items["Text"] = Instances:Create("TextLabel", {
+                Items["TextRow"] = Instances:Create("Frame", {
                     Parent = Items["Toggle"].Instance,
+                    Name = "\0",
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    Size = UDim2New(1, -60, 0, 15),
+                    Position = UDim2New(0, 24, 0, 0),
+                    ZIndex = 2,
+                    BackgroundColor3 = FromRGB(255, 255, 255)
+                })
+
+                Items["Text"] = Instances:Create("TextLabel", {
+                    Parent = Items["TextRow"].Instance,
                     Name = "\0",
                     FontFace = Library.Font,
                     TextColor3 = FromRGB(240, 240, 240),
@@ -6176,7 +6190,7 @@ local Library do
                     Text = Toggle.Name,
                     AutomaticSize = Enum.AutomaticSize.X,
                     Size = UDim2New(0, 0, 0, 15),
-                    Position = UDim2New(0, 24, 0, 0),
+                    Position = UDim2New(0, 0, 0, 0),
                     BorderSizePixel = 0,
                     BackgroundTransparency = 1,
                     TextXAlignment = Enum.TextXAlignment.Left,
@@ -6185,6 +6199,29 @@ local Library do
                     TextSize = 14,
                     BackgroundColor3 = FromRGB(255, 255, 255)
                 })  Items["Text"]:AddToTheme({TextColor3 = "Text"})
+
+                if Toggle.Description ~= "" then
+                    Items["Description"] = Instances:Create("TextLabel", {
+                        Parent = Items["Toggle"].Instance,
+                        Name = "\0",
+                        FontFace = Library.Font,
+                        TextColor3 = FromRGB(183, 183, 183),
+                        TextTransparency = 0.4,
+                        Text = Toggle.Description,
+                        AutomaticSize = Enum.AutomaticSize.Y,
+                        Size = UDim2New(1, -60, 0, 0),
+                        Position = UDim2New(0, 24, 0, 16),
+                        BorderSizePixel = 0,
+                        BackgroundTransparency = 1,
+                        TextWrapped = true,
+                        TextXAlignment = Enum.TextXAlignment.Left,
+                        TextYAlignment = Enum.TextYAlignment.Top,
+                        BorderColor3 = FromRGB(0, 0, 0),
+                        ZIndex = 2,
+                        TextSize = 12,
+                        BackgroundColor3 = FromRGB(255, 255, 255)
+                    })  Items["Description"]:AddToTheme({TextColor3 = "Text"})
+                end
 
                 Items["IndicatorGradient"] = Instances:Create("UIGradient", {
                     Parent = Items["Indicator"].Instance,
@@ -6209,17 +6246,26 @@ local Library do
             local _TextXOffset   = _IndicatorSize + 6  -- 24 mobile, 27 PC
 
             Items["Indicator"].Instance.Position = UDim2New(0, 30, 0.5, -math.floor(_IndicatorSize / 2))
-            Items["Text"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, 0)
+            Items["TextRow"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, 0)
+            if Items["Description"] then
+                Items["Description"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, 16)
+            end
 
             function Toggle:RefreshPosition(Bool)
                 local _IndicatorSize = IsMobile and 18 or 24
                 local _TextXOffset   = _IndicatorSize + 6
                 if Bool then
                     Items["Indicator"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, 0, 0.5, -math.floor(_IndicatorSize / 2))})
-                    Items["Text"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, _TextXOffset, 0, 0)})
+                    Items["TextRow"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, _TextXOffset, 0, 0)})
+                    if Items["Description"] then
+                        Items["Description"]:Tween(TweenInfo.new(1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2New(0, _TextXOffset, 0, 16)})
+                    end
                 else
                     Items["Indicator"].Instance.Position = UDim2New(0, 30, 0.5, -math.floor(_IndicatorSize / 2))
-                    Items["Text"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, 0)
+                    Items["TextRow"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, 0)
+                    if Items["Description"] then
+                        Items["Description"].Instance.Position = UDim2New(0, 30 + _TextXOffset, 0, 16)
+                    end
                 end
             end
 
@@ -6328,7 +6374,7 @@ local Library do
                     Name = "\0",
                     BackgroundTransparency = 0.75,
                     BorderSizePixel = 0,
-                    Position = UDim2New(0, 0, 0, 22),
+                    Position = UDim2New(0, 0, 0, ToggleHeight + 4),
                     Size = UDim2New(1, 0, 0, 1),
                     ZIndex = 2,
                     Visible = false,
@@ -6341,7 +6387,7 @@ local Library do
                     Name = "\0",
                     BackgroundTransparency = 1,
                     BorderSizePixel = 0,
-                    Position = UDim2New(0, 0, 0, 23),
+                    Position = UDim2New(0, 0, 0, ToggleHeight + 5),
                     Size = UDim2New(1, 0, 0, 0),
                     ClipsDescendants = true,
                     ZIndex = 2,
@@ -6444,7 +6490,7 @@ local Library do
                             Size = UDim2New(1, 0, 0, targetH)
                         }):Play()
                         TweenService:Create(Wrapper, TInfo, {
-                            Size = UDim2New(1, 0, 0, 23 + targetH)
+                            Size = UDim2New(1, 0, 0, ToggleHeight + 5 + targetH)
                         }):Play()
                     else
                         -- Rotate chevron back down
@@ -6454,7 +6500,7 @@ local Library do
                         })
                         collapseClipper:Play()
                         TweenService:Create(Wrapper, TInfo, {
-                            Size = UDim2New(1, 0, 0, 18)
+                            Size = UDim2New(1, 0, 0, ToggleHeight)
                         }):Play()
                         collapseClipper.Completed:Connect(function()
                             if not Library then return end
@@ -6473,7 +6519,7 @@ local Library do
                         Size = UDim2New(1, 0, 0, targetH)
                     }):Play()
                     TweenService:Create(Items["Wrapper"].Instance, ResizeInfo, {
-                        Size = UDim2New(1, 0, 0, 23 + targetH)
+                        Size = UDim2New(1, 0, 0, ToggleHeight + 5 + targetH)
                     }):Play()
                 end)
 
