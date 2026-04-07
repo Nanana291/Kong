@@ -6288,7 +6288,8 @@ local Library do
                 Items["TextRow"].Instance.Size = UDim2New(1, -(30 + _TextXOffset) - 8, 0, 0)
                 Items["Description"].Instance.Size = UDim2New(0, availableWidth, 0, 14)
 
-                local textStackHeight = math.max(BaseToggleHeight, Items["TextRow"].Instance.AbsoluteSize.Y)
+                local descriptionHeight = math.max(14, Items["Description"].Instance.TextBounds.Y)
+                local textStackHeight = 15 + 1 + descriptionHeight
                 CurrentToggleHeight = math.max(BaseToggleHeight, textStackHeight)
                 Items["Toggle"].Instance.Size = UDim2New(1, 0, 0, CurrentToggleHeight)
                 UpdateWrapperSize()
