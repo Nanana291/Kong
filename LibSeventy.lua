@@ -19683,7 +19683,11 @@ local Library do
 
             local layout = column:FindFirstChildOfClass("UIListLayout")
             if layout then
-                layout.Padding = UDimNew(0, 10)
+                if column == columns.Sidebar then
+                    layout.Padding = UDimNew(0, IsCompactLayout and 14 or 12)
+                else
+                    layout.Padding = UDimNew(0, IsCompactLayout and 8 or 10)
+                end
                 layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
                 layout.SortOrder = Enum.SortOrder.LayoutOrder
             end
