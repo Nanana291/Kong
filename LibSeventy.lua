@@ -19171,7 +19171,7 @@ local Library do
     -- ─────────────────────────────────────────────────────────────────────────
 
     Library.CreateSettingsPage = function(self, Window, KeybindList)
-        local Page = Window:Page({Name = "Settings", Icon = "122669828593160", Columns = 3})
+        local Page = Window:Page({Name = "Settings", Icon = "122669828593160", Columns = 2})
 
         local function Accent()
             return Library.Theme["Accent"] or FromRGB(151, 69, 186)
@@ -19460,11 +19460,11 @@ local Library do
         local HeaderThemeValue = CreateHeaderStat("Theme", "Default")
         local HeaderAutoloadValue = CreateHeaderStat("Autoload", "Disabled")
         local HeaderKeybindValue = CreateHeaderStat("Keybind Overlay", KeybindList and "Attached" or "Detached")
+        local IsCompactLayout = Window.Compact or (Camera and Camera.ViewportSize and Camera.ViewportSize.X < 1120) or false
 
         local columns = {
             Sidebar = Page.ColumnsData[1].Instance,
-            Main = Page.ColumnsData[2].Instance,
-            Right = Page.ColumnsData[3].Instance,
+            Content = Page.ColumnsData[2].Instance,
         }
 
         local columnDecor = {}
@@ -19699,9 +19699,24 @@ local Library do
             }
         end
 
-        SetupColumn(columns.Sidebar, UDim2New(0, 0, 0, 68), UDim2New(0.19, -2, 1, -68), 0.12, "Navigation", "Route the page and watch the live state.", "LIVE")
-        SetupColumn(columns.Main, UDim2New(0.205, 2, 0, 68), UDim2New(0.525, -6, 1, -68), 0.08, "UI & Motion", "Keybind, theme, transparency, fade, and tween tuning.", "ACTIVE")
-        SetupColumn(columns.Right, UDim2New(0.745, 4, 0, 68), UDim2New(0.255, -4, 1, -68), 0.12, "Config Control", "Saved setups, autoload, and workspace context.", "MANAGE")
+        SetupColumn(
+            columns.Sidebar,
+            UDim2New(0, 0, 0, 68),
+            IsCompactLayout and UDim2New(0.285, -4, 1, -68) or UDim2New(0.31, -4, 1, -68),
+            0.12,
+            "Overview",
+            IsCompactLayout and "Route, state, and flow." or "Navigation, snapshot, and workflow cues.",
+            "LIVE"
+        )
+        SetupColumn(
+            columns.Content,
+            IsCompactLayout and UDim2New(0.29, 4, 0, 68) or UDim2New(0.325, 4, 0, 68),
+            IsCompactLayout and UDim2New(0.71, -4, 1, -68) or UDim2New(0.675, -4, 1, -68),
+            0.08,
+            "Settings",
+            "All controls in one responsive workspace.",
+            "EDIT"
+        )
 
         local function CreateSidebarCard(title, subtitle, height)
             local card = Instances:Create("Frame", {
@@ -19805,27 +19820,62 @@ local Library do
 
         local NavigationCard, NavBody = CreateSidebarCard(
             "Navigation",
-            "Jump between the four settings groups without relying on the old stacked flow.",
-            254
+            IsCompactLayout and "Jump between the groups." or "Jump between the four settings groups without relying on the old stacked flow.",
+            IsCompactLayout and 214 or 254
         )
 
-        local SnapshotCard, SnapshotBody = CreateSidebarCard(
-            "Snapshot",
-            "Theme, autoload, and keybind status at a glance.",
-            134
+        local OverviewCard, OverviewBody = CreateSidebarCard(
+            "Overview",
+            "Theme, autoload, keybind, and the current flow.",
+            IsCompactLayout and 206 or 246
         )
 
-        local NotesCard, NotesBody = CreateSidebarCard(
-            "Workflow",
-            "Use UI first, tune motion second, then finish by saving or autoloading a config.",
-            136
-        )
-
-        local function CreateWorkflowRow(index, title, hint)
+        local function CreateSnapshotRow(parent, labelText, valueText)
             local row = Instances:Create("Frame", {
-                Parent = NotesBody.Instance,
+                Parent = parent,
                 Name = "\0",
-                Size = UDim2New(1, 0, 0, 16),
+                Size = UDim2New(1, 0, 0, IsCompactLayout and 13 or 15),
+                BackgroundTransparency = 1,
+                BorderSizePixel = 0,
+                ZIndex = 4
+            })
+
+            Instances:Create("TextLabel", {
+                Parent = row.Instance,
+                Name = "\0",
+                FontFace = Library.Font,
+                Text = labelText,
+                TextColor3 = FromRGB(132, 129, 148),
+                TextSize = IsCompactLayout and 9 or 10,
+                BackgroundTransparency = 1,
+                Size = UDim2New(0.48, 0, 1, 0),
+                TextXAlignment = Enum.TextXAlignment.Left,
+                ZIndex = 4
+            })
+
+            local value = Instances:Create("TextLabel", {
+                Parent = row.Instance,
+                Name = "\0",
+                FontFace = BoldFont,
+                Text = valueText,
+                TextColor3 = Txt(),
+                TextSize = IsCompactLayout and 9 or 10,
+                BackgroundTransparency = 1,
+                Position = UDim2New(0.48, 0, 0, 0),
+                Size = UDim2New(0.52, 0, 1, 0),
+                TextXAlignment = Enum.TextXAlignment.Right,
+                TextTruncate = Enum.TextTruncate.AtEnd,
+                ZIndex = 4
+            })
+            value:AddToTheme({TextColor3 = "Text"})
+            return value
+        end
+
+        local function CreateFlowRow(index, title, hint)
+            local row = Instances:Create("Frame", {
+                Parent = OverviewBody.Instance,
+                Name = "\0",
+                Size = UDim2New(1, 0, 0, IsCompactLayout and 14 or 16),
                 BackgroundTransparency = 1,
                 BorderSizePixel = 0,
                 ZIndex = 4
@@ -19834,7 +19884,7 @@ local Library do
             local dot = Instances:Create("Frame", {
                 Parent = row.Instance,
                 Name = "\0",
-                Size = UDim2New(0, 16, 0, 16),
+                Size = UDim2New(0, IsCompactLayout and 14 or 16, 0, IsCompactLayout and 14 or 16),
                 BackgroundColor3 = Accent(),
                 BackgroundTransparency = 0.12,
                 BorderSizePixel = 0,
@@ -19853,7 +19903,7 @@ local Library do
                 FontFace = BoldFont,
                 Text = tostring(index),
                 TextColor3 = FromRGB(255, 255, 255),
-                TextSize = 8,
+                TextSize = IsCompactLayout and 7 or 8,
                 BackgroundTransparency = 1,
                 Size = UDim2New(1, 0, 1, 0),
                 ZIndex = 5
@@ -19865,9 +19915,9 @@ local Library do
                 FontFace = BoldFont,
                 Text = title,
                 TextColor3 = Txt(),
-                TextSize = 9,
+                TextSize = IsCompactLayout and 8 or 9,
                 BackgroundTransparency = 1,
-                Position = UDim2New(0, 24, 0, 0),
+                Position = UDim2New(0, IsCompactLayout and 20 or 24, 0, 0),
                 Size = UDim2New(0.5, 0, 1, 0),
                 TextXAlignment = Enum.TextXAlignment.Left,
                 ZIndex = 4
@@ -19880,7 +19930,7 @@ local Library do
                 FontFace = Library.Font,
                 Text = hint,
                 TextColor3 = FromRGB(140, 137, 156),
-                TextSize = 8,
+                TextSize = IsCompactLayout and 7 or 8,
                 BackgroundTransparency = 1,
                 Position = UDim2New(0.5, 0, 0, 0),
                 Size = UDim2New(0.5, 0, 1, 0),
@@ -19890,54 +19940,36 @@ local Library do
             })
         end
 
-        CreateWorkflowRow(1, "UI", "Keybind + theme")
-        CreateWorkflowRow(2, "Motion", "Fade + tween")
-        CreateWorkflowRow(3, "Config", "Save + autoload")
+        local ThemeValue = CreateSnapshotRow(OverviewBody.Instance, "Theme", "Default")
+        local AutoloadValue = CreateSnapshotRow(OverviewBody.Instance, "Autoload", "Disabled")
+        local KeybindValue = CreateSnapshotRow(OverviewBody.Instance, "Keybind Overlay", KeybindList and "Attached" or "Detached")
 
-        local function CreateSnapshotRow(parent, labelText, valueText)
-            local row = Instances:Create("Frame", {
-                Parent = parent,
-                Name = "\0",
-                Size = UDim2New(1, 0, 0, 15),
-                BackgroundTransparency = 1,
-                BorderSizePixel = 0,
-                ZIndex = 4
-            })
+        Instances:Create("Frame", {
+            Parent = OverviewBody.Instance,
+            Name = "\0",
+            Size = UDim2New(1, 0, 0, 1),
+            BackgroundColor3 = Outline(),
+            BackgroundTransparency = 0.74,
+            BorderSizePixel = 0,
+            ZIndex = 4
+        })
 
-            Instances:Create("TextLabel", {
-                Parent = row.Instance,
-                Name = "\0",
-                FontFace = Library.Font,
-                Text = labelText,
-                TextColor3 = FromRGB(132, 129, 148),
-                TextSize = 10,
-                BackgroundTransparency = 1,
-                Size = UDim2New(0.48, 0, 1, 0),
-                TextXAlignment = Enum.TextXAlignment.Left,
-                ZIndex = 4
-            })
+        Instances:Create("TextLabel", {
+            Parent = OverviewBody.Instance,
+            Name = "\0",
+            FontFace = Library.Font,
+            Text = "Flow",
+            TextColor3 = FromRGB(154, 150, 172),
+            TextSize = 8,
+            BackgroundTransparency = 1,
+            Size = UDim2New(1, 0, 0, 10),
+            TextXAlignment = Enum.TextXAlignment.Left,
+            ZIndex = 4
+        })
 
-            local value = Instances:Create("TextLabel", {
-                Parent = row.Instance,
-                Name = "\0",
-                FontFace = BoldFont,
-                Text = valueText,
-                TextColor3 = Txt(),
-                TextSize = 10,
-                BackgroundTransparency = 1,
-                Position = UDim2New(0.48, 0, 0, 0),
-                Size = UDim2New(0.52, 0, 1, 0),
-                TextXAlignment = Enum.TextXAlignment.Right,
-                TextTruncate = Enum.TextTruncate.AtEnd,
-                ZIndex = 4
-            })
-            value:AddToTheme({TextColor3 = "Text"})
-            return value
-        end
-
-        local ThemeValue = CreateSnapshotRow(SnapshotBody.Instance, "Theme", "Default")
-        local AutoloadValue = CreateSnapshotRow(SnapshotBody.Instance, "Autoload", "Disabled")
-        local KeybindValue = CreateSnapshotRow(SnapshotBody.Instance, "Keybind Overlay", KeybindList and "Attached" or "Detached")
+        CreateFlowRow(1, "UI", "Keybind + theme")
+        CreateFlowRow(2, "Motion", "Fade + tween")
+        CreateFlowRow(3, "Config", "Save + autoload")
 
         local UISection = Page:Section({
             Name = "UI Settings",
@@ -20084,7 +20116,7 @@ local Library do
             Name = "Config Panel",
             Description = "Saved setups, autoload routing, and direct file actions in one cleaner stack.",
             Icon = "folder",
-            Side = 3
+            Side = 2
         }) do
             ConfigsDropdown = ConfigsSection:Listbox({
                 Name = "Saved Configs",
@@ -20308,7 +20340,7 @@ local Library do
             Name = "Session Info",
             Description = "Storage paths and runtime context for the current settings workspace.",
             Icon = "info",
-            Side = 3
+            Side = 2
         }) do
             local autoloadInitial = NormalizeConfigName(GetAutoloadConfig())
 
@@ -20370,7 +20402,7 @@ local Library do
 
             local topLayout = items["TopBackground"].Instance:FindFirstChildOfClass("UIListLayout")
             if topLayout then
-                topLayout.Padding = UDimNew(0, 4)
+                topLayout.Padding = UDimNew(0, IsCompactLayout and 2 or 4)
             end
 
             local topPadding = items["TopBackground"].Instance:FindFirstChildOfClass("UIPadding")
@@ -20378,25 +20410,25 @@ local Library do
                 topPadding = InstanceNew("UIPadding")
                 topPadding.Parent = items["TopBackground"].Instance
             end
-            topPadding.PaddingTop = UDimNew(0, 8)
-            topPadding.PaddingBottom = UDimNew(0, 8)
-            topPadding.PaddingLeft = UDimNew(0, 8)
-            topPadding.PaddingRight = UDimNew(0, 8)
+            topPadding.PaddingTop = UDimNew(0, IsCompactLayout and 6 or 8)
+            topPadding.PaddingBottom = UDimNew(0, IsCompactLayout and 6 or 8)
+            topPadding.PaddingLeft = UDimNew(0, IsCompactLayout and 6 or 8)
+            topPadding.PaddingRight = UDimNew(0, IsCompactLayout and 6 or 8)
 
-            items["IconContainer"].Instance.Size = UDim2New(0, 32, 0, 0)
+            items["IconContainer"].Instance.Size = UDim2New(0, IsCompactLayout and 28 or 32, 0, 0)
             items["TextContainer"].Instance.Size = UDim2New(1, -74, 0, 0)
             items["ToggleContainer"].Instance.Size = UDim2New(0, 28, 0, 0)
-            items["Content"].Instance.Position = UDim2New(0, 12, 0, 10)
-            items["Content"].Instance.Size = UDim2New(1, -24, 0, 0)
+            items["Content"].Instance.Position = UDim2New(0, IsCompactLayout and 10 or 12, 0, 10)
+            items["Content"].Instance.Size = UDim2New(1, IsCompactLayout and -20 or -24, 0, 0)
 
             local contentLayout = items["Content"].Instance:FindFirstChildOfClass("UIListLayout")
             if contentLayout then
-                contentLayout.Padding = UDimNew(0, 8)
+                contentLayout.Padding = UDimNew(0, IsCompactLayout and 6 or 8)
             end
 
             local contentPadding = items["Content"].Instance:FindFirstChildOfClass("UIPadding")
             if contentPadding then
-                contentPadding.PaddingBottom = UDimNew(0, 10)
+                contentPadding.PaddingBottom = UDimNew(0, IsCompactLayout and 8 or 10)
             end
 
             local textLayout = items["TextContainer"].Instance:FindFirstChildOfClass("UIListLayout")
@@ -20506,7 +20538,7 @@ local Library do
                     FontFace = Library.Font,
                     Text = string.upper(items["Title"].Instance.Text),
                     TextColor3 = FromRGB(154, 150, 172),
-                    TextSize = 8,
+                    TextSize = IsCompactLayout and 7 or 8,
                     BackgroundTransparency = 1,
                     Size = UDim2New(1, 0, 0, 10),
                     TextXAlignment = Enum.TextXAlignment.Left,
@@ -20686,10 +20718,10 @@ local Library do
             end)
         end
 
-        CreateNavButton("monitor", "UI Settings", "Keybind, theme, unload", columns.Main, UISection)
-        CreateNavButton("sparkles", "Animations", "Transparency, fade, tween", columns.Main, AnimationSection)
-        CreateNavButton("folder", "Config Panel", "Saved setups and autoload", columns.Right, ConfigsSection)
-        CreateNavButton("info", "Workspace Info", "Storage and context", columns.Right, InfoSection)
+        CreateNavButton("monitor", "UI Settings", "Keybind, theme, unload", columns.Content, UISection)
+        CreateNavButton("sparkles", "Animations", "Transparency, fade, tween", columns.Content, AnimationSection)
+        CreateNavButton("folder", "Config Panel", "Saved setups and autoload", columns.Content, ConfigsSection)
+        CreateNavButton("info", "Workspace Info", "Storage and context", columns.Content, InfoSection)
         SetNavActive(navEntries[1])
 
         local initialTheme = Library.Flags["UI_ThemePreset"] or "Default"
