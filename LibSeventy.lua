@@ -19822,6 +19822,16 @@ local Library do
             return card, body
         end
 
+        local function FitSidebarCard(card, body, minHeight)
+            local layout = body.Instance:FindFirstChildOfClass("UIListLayout")
+            if not layout then
+                return
+            end
+
+            local targetHeight = math.max(minHeight or 0, layout.AbsoluteContentSize.Y + 70)
+            card.Instance.Size = UDim2New(1, 0, 0, targetHeight)
+        end
+
         local NavigationCard, NavBody = CreateSidebarCard(
             "Navigation",
             IsCompactLayout and "Jump between the groups." or "Jump between the four settings groups without relying on the old stacked flow.",
@@ -20726,6 +20736,16 @@ local Library do
         CreateNavButton("sparkles", "Animations", "Transparency, fade, tween", columns.Content, AnimationSection)
         CreateNavButton("folder", "Config Panel", "Saved setups and autoload", columns.Content, ConfigsSection)
         CreateNavButton("info", "Workspace Info", "Storage and context", columns.Content, InfoSection)
+
+        task.defer(function()
+            if not Library then
+                return
+            end
+
+            FitSidebarCard(NavigationCard, NavBody, IsCompactLayout and 0 or 254)
+            FitSidebarCard(OverviewCard, OverviewBody, IsCompactLayout and 0 or 246)
+        end)
+
         SetNavActive(navEntries[1])
 
         local initialTheme = Library.Flags["UI_ThemePreset"] or "Default"
