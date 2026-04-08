@@ -19684,7 +19684,7 @@ local Library do
             local layout = column:FindFirstChildOfClass("UIListLayout")
             if layout then
                 if column == columns.Sidebar then
-                    layout.Padding = UDimNew(0, IsCompactLayout and 14 or 12)
+                    layout.Padding = UDimNew(0, IsCompactLayout and 22 or 16)
                 else
                     layout.Padding = UDimNew(0, IsCompactLayout and 8 or 10)
                 end
@@ -19825,7 +19825,7 @@ local Library do
         local NavigationCard, NavBody = CreateSidebarCard(
             "Navigation",
             IsCompactLayout and "Jump between the groups." or "Jump between the four settings groups without relying on the old stacked flow.",
-            IsCompactLayout and 214 or 254
+            IsCompactLayout and 196 or 254
         )
 
         local OverviewCard, OverviewBody = CreateSidebarCard(
