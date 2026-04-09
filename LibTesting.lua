@@ -672,7 +672,7 @@ local Library do
 
         self.ConfigManager.List = DisplayList
         self.ConfigManager.Files = Files
-        self.ConfigManager.Autoload = self:GetAutoloadConfigName()
+        self:SyncAutoloadState()
 
         return DisplayList, Files
     end
@@ -837,8 +837,28 @@ local Library do
 
         local Success, Err = Library:LoadConfig(ConfigName)
         if not Success then
+            if not self.ConfigManager.Files[ConfigName] then
+                self:SetAutoloadConfigName(nil)
+                self:SyncAutoloadState()
+            end
             warn("Failed to load autoload config: " .. tostring(Err))
+            return false, Err
         end
+
+        self:SyncAutoloadState()
+        return true, ConfigName
+    end
+
+    Library.SyncAutoloadState = function(self)
+        local ConfigName = self:GetAutoloadConfigName()
+        if not ConfigName then
+            self.ConfigManager.Autoload = nil
+            return nil
+        end
+
+        self.ConfigManager.Autoload = ConfigName
+        self:RefreshConfigsList(nil, ConfigName)
+        return ConfigName
     end
 
     Library.DeleteConfig = function(self, Config)
@@ -2812,6 +2832,15 @@ local Library do
             local AccentColor = Library.Theme["Accent"] or FromRGB(151, 69, 186)
             local Outline     = Library.Theme["Outline"] or FromRGB(58, 55, 72)
             local BgColor     = FromRGB(36, 34, 44)
+            local BaseTransparency = tonumber(
+                Library.Flags["UI_BackgroundTransparency"]
+                or Library.Flags["BackgroundTransparency"]
+                or 0.12
+            ) or 0.12
+            local RootTransparency = math.clamp(BaseTransparency, 0, 1)
+            local StrokeTransparency = math.clamp(BaseTransparency + 0.12, 0, 1)
+            local TrackTransparency = math.clamp(BaseTransparency + 0.18, 0, 1)
+            local IconTransparency = math.clamp(BaseTransparency + 0.7, 0, 0.92)
 
             local CurrentCamera = Workspace.CurrentCamera
             local ViewportX = (CurrentCamera and CurrentCamera.ViewportSize.X) or 420
@@ -2847,7 +2876,7 @@ local Library do
                 Position = UDim2New(0, Width + 24, 0, 0),
                 Size = UDim2New(0, Width, 0, 0),
                 AutomaticSize = Enum.AutomaticSize.Y,
-                BackgroundTransparency = 0,
+                BackgroundTransparency = RootTransparency,
                 ZIndex = 10,
             })
 
@@ -2860,7 +2889,7 @@ local Library do
                 Parent = Root.Instance,
                 Color = Outline,
                 Thickness = 1,
-                Transparency = 0,
+                Transparency = StrokeTransparency,
             })
 
             local ContentRow = Instances:Create("Frame", {
@@ -2908,7 +2937,7 @@ local Library do
                     Parent = IconWrap.Instance,
                     Name = "\0",
                     BackgroundColor3 = AccentColor,
-                    BackgroundTransparency = 0.82,
+                    BackgroundTransparency = IconTransparency,
                     BorderSizePixel = 0,
                     Size = UDim2New(0, 38, 0, 38),
                     Position = UDim2New(0, 0, 0, 0),
@@ -3043,6 +3072,7 @@ local Library do
                 Position = UDim2New(0, 0, 1, 0),
                 Size = UDim2New(1, 0, 0, PROG_H),
                 ClipsDescendants = true,
+                BackgroundTransparency = TrackTransparency,
                 ZIndex = 11,
             })
 
