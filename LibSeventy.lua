@@ -6425,10 +6425,10 @@ local Library do
                     Items["Description"].Instance.TextTransparency = parentEnabled and (Toggle.IsSubToggle and 0.5 or 0.4) or 0.74
                 end
 
-                Items["Indicator"].Instance.BackgroundTransparency = parentEnabled and 0 or 0.25
-                Items["IndicatorStroke"].Instance.Transparency = parentEnabled and (Toggle.Value and 1 or 0.5) or 0.72
+                Items["Indicator"].Instance.BackgroundTransparency = Toggle.Value and 0 or 0.25
+                Items["IndicatorStroke"].Instance.Transparency = Toggle.Value and 1 or 0.5
                 if Toggle.Value then
-                    Items["CheckImage"].Instance.ImageTransparency = parentEnabled and 0 or 0.45
+                    Items["CheckImage"].Instance.ImageTransparency = 0
                 else
                     Items["CheckImage"].Instance.ImageTransparency = 1
                 end
@@ -6453,10 +6453,6 @@ local Library do
             end
 
             function Toggle:Set(Value, Instant)
-                if Toggle.ParentToggle and not Toggle.ParentToggle.Value and Value == true then
-                    return
-                end
-
                 Toggle.Value = Value 
                 Library.Flags[Toggle.Flag] = Value 
 
