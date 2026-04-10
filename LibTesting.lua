@@ -6788,6 +6788,30 @@ local Library do
                     return math.max(_MeasureSettingsHeight(), _GetSettingsHeight())
                 end
 
+                local function _ApplyExpandedSettingsHeight(immediate)
+                    if not Toggle._settingsExpanded or not Library then
+                        return
+                    end
+
+                    local targetH = _ResolveSettingsHeight()
+                    if targetH <= 10 then
+                        return
+                    end
+
+                    Toggle._settingsHeight = targetH
+
+                    if immediate then
+                        Items["SettingsClipper"].Instance.Size = UDim2New(1, 0, 0, targetH)
+                    else
+                        local ResizeInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+                        TweenService:Create(Items["SettingsClipper"].Instance, ResizeInfo, {
+                            Size = UDim2New(1, 0, 0, targetH)
+                        }):Play()
+                    end
+
+                    UpdateWrapperSize()
+                end
+
                 -- Core expand/collapse animation
                 function Toggle:SetSettingsExpanded(Expanded)
                     Toggle._settingsExpanded = Expanded
@@ -6806,6 +6830,15 @@ local Library do
                             Size = UDim2New(1, 0, 0, targetH)
                         }):Play()
                         UpdateWrapperSize()
+
+                        -- Some settings children resolve AutomaticSize a frame later.
+                        -- Re-measure after the first layout pass so the last control is not clipped.
+                        task.defer(function()
+                            _ApplyExpandedSettingsHeight(false)
+                        end)
+                        task.delay(0.05, function()
+                            _ApplyExpandedSettingsHeight(false)
+                        end)
                     else
                         -- Rotate chevron back down
                         TweenService:Create(Chevron, TInfo, { Rotation = 0 }):Play()
@@ -6824,15 +6857,11 @@ local Library do
 
                 -- Auto-resize when child elements are added/removed while panel is open
                 SettingsLayout.Instance:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-                    if not Toggle._settingsExpanded or not Library then return end
-                    local targetH = _ResolveSettingsHeight()
-                    if targetH <= 10 then return end
-                    Toggle._settingsHeight = targetH
-                    local ResizeInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
-                    TweenService:Create(Items["SettingsClipper"].Instance, ResizeInfo, {
-                        Size = UDim2New(1, 0, 0, targetH)
-                    }):Play()
-                    UpdateWrapperSize()
+                    _ApplyExpandedSettingsHeight(false)
+                end)
+
+                Items["SettingsContent"].Instance:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+                    _ApplyExpandedSettingsHeight(false)
                 end)
 
                 -- ── Child element factories ──────────────────────────────
