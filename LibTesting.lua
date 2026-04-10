@@ -6695,11 +6695,13 @@ local Library do
                 Items["SettingsClipper"] = Instances:Create("Frame", {
                     Parent = Items["Wrapper"].Instance,
                     Name = "\0",
+                    Visible = false,
                     BackgroundTransparency = 1,
                     BorderSizePixel = 0,
                     Position = UDim2New(0, 0, 0, CurrentToggleHeight + 6),
                     Size = UDim2New(1, 0, 0, 0),
-                    ClipsDescendants = true,
+                    AutomaticSize = Enum.AutomaticSize.Y,
+                    ClipsDescendants = false,
                     ZIndex = 2,
                     BackgroundColor3 = FromRGB(255, 255, 255),
                 })
@@ -6758,57 +6760,18 @@ local Library do
 
                 -- Track expand state separately (Toggle.Value drives this)
                 Toggle._settingsExpanded = false
-
-                local function _MeasureSettingsHeight()
-                    local Content = Items["SettingsContent"].Instance
-                    local totalH = 10
-                    local count = 0
-                    for _, child in ipairs(Content:GetChildren()) do
-                        if child:IsA("GuiObject") and child.Visible then
-                            local h = child.Size.Y.Offset
-                            if h <= 0 then h = 18 end
-                            totalH = totalH + h
-                            count = count + 1
-                        end
-                    end
-                    if count > 1 then
-                        totalH = totalH + (count - 1) * 5
-                    end
-                    return totalH
+                local function _GetResolvedSettingsPanelHeight()
+                    local clipperHeight = Items["SettingsClipper"].Instance.AbsoluteSize.Y
+                    local contentHeight = Items["SettingsContent"].Instance.AbsoluteSize.Y
+                    return math.max(clipperHeight, contentHeight)
                 end
 
-                local function _GetSettingsHeight()
-                    local h = SettingsLayout.Instance.AbsoluteContentSize.Y
-                    return (h > 0 and h or 0) + 10
-                end
-
-                local function _ResolveSettingsHeight()
-                    -- Prefer the layout's resolved content height so AutomaticSize children
-                    -- such as Paragraph/Textbox blocks do not get clipped at the bottom.
-                    return math.max(_MeasureSettingsHeight(), _GetSettingsHeight())
-                end
-
-                local function _ApplyExpandedSettingsHeight(immediate)
+                local function _ApplyExpandedSettingsHeight()
                     if not Toggle._settingsExpanded or not Library then
                         return
                     end
 
-                    local targetH = _ResolveSettingsHeight()
-                    if targetH <= 10 then
-                        return
-                    end
-
-                    Toggle._settingsHeight = targetH
-
-                    if immediate then
-                        Items["SettingsClipper"].Instance.Size = UDim2New(1, 0, 0, targetH)
-                    else
-                        local ResizeInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
-                        TweenService:Create(Items["SettingsClipper"].Instance, ResizeInfo, {
-                            Size = UDim2New(1, 0, 0, targetH)
-                        }):Play()
-                    end
-
+                    Toggle._settingsHeight = _GetResolvedSettingsPanelHeight()
                     UpdateWrapperSize()
                 end
 
@@ -6816,52 +6779,44 @@ local Library do
                 function Toggle:SetSettingsExpanded(Expanded)
                     Toggle._settingsExpanded = Expanded
 
-                    local Clipper  = Items["SettingsClipper"].Instance
                     local Sep      = Items["SettingsSeparator"].Instance
                     local Chevron  = Items["SettingsChevron"].Instance
                     local TInfo    = TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
 
                     if Expanded then
                         Sep.Visible = true
+                        Items["SettingsClipper"].Instance.Visible = true
                         TweenService:Create(Chevron, TInfo, { Rotation = 180 }):Play()
-                        local targetH = _ResolveSettingsHeight()
-                        Toggle._settingsHeight = targetH
-                        TweenService:Create(Clipper, TInfo, {
-                            Size = UDim2New(1, 0, 0, targetH)
-                        }):Play()
                         UpdateWrapperSize()
 
-                        -- Some settings children resolve AutomaticSize a frame later.
-                        -- Re-measure after the first layout pass so the last control is not clipped.
                         task.defer(function()
-                            _ApplyExpandedSettingsHeight(false)
+                            _ApplyExpandedSettingsHeight()
                         end)
                         task.delay(0.05, function()
-                            _ApplyExpandedSettingsHeight(false)
+                            _ApplyExpandedSettingsHeight()
+                        end)
+                        task.delay(0.12, function()
+                            _ApplyExpandedSettingsHeight()
                         end)
                     else
-                        -- Rotate chevron back down
                         TweenService:Create(Chevron, TInfo, { Rotation = 0 }):Play()
                         Toggle._settingsHeight = 0
-                        local collapseClipper = TweenService:Create(Clipper, TInfo, {
-                            Size = UDim2New(1, 0, 0, 0)
-                        })
-                        collapseClipper:Play()
+                        Items["SettingsClipper"].Instance.Visible = false
                         UpdateWrapperSize()
-                        collapseClipper.Completed:Connect(function()
-                            if not Library then return end
-                            Sep.Visible = false
-                        end)
+                        Sep.Visible = false
                     end
                 end
 
-                -- Auto-resize when child elements are added/removed while panel is open
                 SettingsLayout.Instance:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-                    _ApplyExpandedSettingsHeight(false)
+                    _ApplyExpandedSettingsHeight()
                 end)
 
                 Items["SettingsContent"].Instance:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-                    _ApplyExpandedSettingsHeight(false)
+                    _ApplyExpandedSettingsHeight()
+                end)
+
+                Items["SettingsClipper"].Instance:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+                    _ApplyExpandedSettingsHeight()
                 end)
 
                 -- ── Child element factories ──────────────────────────────
