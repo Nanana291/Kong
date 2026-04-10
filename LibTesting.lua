@@ -6691,20 +6691,26 @@ local Library do
                     BackgroundColor3 = FromRGB(255, 255, 255),
                 })  Items["SettingsSeparator"]:AddToTheme({BackgroundColor3 = "Outline"})
 
-                -- Clip frame: ClipsDescendants + manually tweened height
-                Items["SettingsClipper"] = Instances:Create("Frame", {
+                -- Inline settings viewport: clamps to screen and scrolls when content is long
+                Items["SettingsClipper"] = Instances:Create("ScrollingFrame", {
                     Parent = Items["Wrapper"].Instance,
                     Name = "\0",
+                    Active = true,
                     Visible = false,
                     BackgroundTransparency = 1,
                     BorderSizePixel = 0,
                     Position = UDim2New(0, 0, 0, CurrentToggleHeight + 6),
                     Size = UDim2New(1, 0, 0, 0),
-                    AutomaticSize = Enum.AutomaticSize.Y,
+                    ScrollingDirection = Enum.ScrollingDirection.Y,
                     ClipsDescendants = true,
+                    AutomaticCanvasSize = Enum.AutomaticSize.Y,
+                    CanvasSize = UDim2New(0, 0, 0, 0),
+                    ScrollBarThickness = 2,
+                    ScrollBarImageColor3 = Library.Theme and Library.Theme.Accent or FromRGB(124, 163, 255),
                     ZIndex = 2,
                     BackgroundColor3 = FromRGB(255, 255, 255),
                 })
+                Items["SettingsClipper"]:AddToTheme({ScrollBarImageColor3 = "Accent"})
 
                 -- Accent bar on the left edge of the settings panel
                 Items["SettingsAccentBar"] = Instances:Create("Frame", {
@@ -6762,18 +6768,41 @@ local Library do
                 Toggle._settingsExpanded = false
                 local SettingsResizeQueued = false
 
+                local function _GetExpandedSettingsVisibleHeight()
+                    local contentHeight = 0
+
+                    if SettingsLayout and SettingsLayout.Instance then
+                        contentHeight = math.max(0, math.floor(SettingsLayout.Instance.AbsoluteContentSize.Y + 0.5)) + 10
+                    end
+
+                    if contentHeight <= 0 and Items["SettingsContent"] then
+                        contentHeight = math.max(0, math.floor(Items["SettingsContent"].Instance.AbsoluteSize.Y + 0.5))
+                    end
+
+                    local screenHeight = (Workspace.CurrentCamera and Workspace.CurrentCamera.ViewportSize.Y) or 600
+                    local clipperTop = 0
+
+                    if Items["SettingsClipper"] and Items["SettingsClipper"].Instance then
+                        clipperTop = math.floor(Items["SettingsClipper"].Instance.AbsolutePosition.Y + 0.5)
+                    end
+
+                    local maxVisibleHeight = math.max(120, screenHeight - clipperTop - 18)
+                    return math.max(0, math.min(contentHeight, maxVisibleHeight))
+                end
+
                 local function _SyncExpandedSettingsHeight()
                     if not Toggle._settingsExpanded or not Library or not Items["SettingsClipper"] then
                         return
                     end
 
-                    local targetH = math.floor((Items["SettingsClipper"].Instance.AbsoluteSize.Y or 0) + 0.5)
+                    local targetH = _GetExpandedSettingsVisibleHeight()
                     if targetH <= 0 then
                         return
                     end
 
                     if Toggle._settingsHeight ~= targetH then
                         Toggle._settingsHeight = targetH
+                        Items["SettingsClipper"].Instance.Size = UDim2New(1, 0, 0, targetH)
                         UpdateWrapperSize()
                     end
                 end
@@ -6790,6 +6819,7 @@ local Library do
                             return
                         end
 
+                        Items["SettingsClipper"].Instance.CanvasPosition = Vector2New(0, 0)
                         task.wait()
                         _SyncExpandedSettingsHeight()
                         task.wait()
@@ -6812,6 +6842,7 @@ local Library do
                         Sep.Visible = true
                         Items["SettingsClipper"].Instance.Visible = true
                         Items["SettingsClipper"].Instance.Size = UDim2New(1, 0, 0, 0)
+                        Items["SettingsClipper"].Instance.CanvasPosition = Vector2New(0, 0)
                         TweenService:Create(Chevron, TInfo, { Rotation = 180 }):Play()
                         UpdateWrapperSize()
                         _QueueExpandedSettingsHeight()
