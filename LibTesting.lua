@@ -6762,10 +6762,11 @@ local Library do
                 Toggle._settingsExpanded = false
                 local function _GetResolvedSettingsPanelHeight()
                     local contentHeight = 0
+                    local contentTop = Items["SettingsContent"].Instance.AbsolutePosition.Y
 
                     for _, child in ipairs(Items["SettingsContent"].Instance:GetChildren()) do
                         if child:IsA("GuiObject") and child.Visible then
-                            local bottom = child.Position.Y.Offset + child.AbsoluteSize.Y
+                            local bottom = (child.AbsolutePosition.Y - contentTop) + child.AbsoluteSize.Y
                             if bottom > contentHeight then
                                 contentHeight = bottom
                             end
