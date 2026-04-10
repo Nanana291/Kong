@@ -6761,11 +6761,25 @@ local Library do
                 -- Track expand state separately (Toggle.Value drives this)
                 Toggle._settingsExpanded = false
                 local function _GetResolvedSettingsPanelHeight()
-                    local contentHeight = math.max(0, Items["SettingsContent"].Instance.AbsoluteSize.Y)
-                    if contentHeight <= 0 then
-                        contentHeight = math.max(0, SettingsLayout.Instance.AbsoluteContentSize.Y + 10)
+                    local contentHeight = 0
+
+                    for _, child in ipairs(Items["SettingsContent"].Instance:GetChildren()) do
+                        if child:IsA("GuiObject") and child.Visible then
+                            local bottom = child.Position.Y.Offset + child.AbsoluteSize.Y
+                            if bottom > contentHeight then
+                                contentHeight = bottom
+                            end
+                        end
                     end
-                    return contentHeight
+
+                    if contentHeight <= 0 then
+                        contentHeight = math.max(0, Items["SettingsContent"].Instance.AbsoluteSize.Y)
+                    end
+                    if contentHeight <= 0 then
+                        contentHeight = math.max(0, SettingsLayout.Instance.AbsoluteContentSize.Y)
+                    end
+
+                    return contentHeight + 10
                 end
 
                 local function _ApplyExpandedSettingsHeight()
