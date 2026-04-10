@@ -6760,38 +6760,92 @@ local Library do
 
                 -- Track expand state separately (Toggle.Value drives this)
                 Toggle._settingsExpanded = false
+                local SettingsFitToken = 0
+                local SettingsFitRunning = false
+
                 local function _GetResolvedSettingsPanelHeight()
                     local contentHeight = 0
-                    local contentTop = Items["SettingsContent"].Instance.AbsolutePosition.Y
 
-                    for _, child in ipairs(Items["SettingsContent"].Instance:GetChildren()) do
-                        if child:IsA("GuiObject") and child.Visible then
-                            local bottom = (child.AbsolutePosition.Y - contentTop) + child.AbsoluteSize.Y
-                            if bottom > contentHeight then
-                                contentHeight = bottom
-                            end
-                        end
-                    end
-
-                    if contentHeight <= 0 then
-                        contentHeight = math.max(0, Items["SettingsContent"].Instance.AbsoluteSize.Y)
-                    end
-                    if contentHeight <= 0 then
+                    if SettingsLayout and SettingsLayout.Instance then
                         contentHeight = math.max(0, SettingsLayout.Instance.AbsoluteContentSize.Y)
+                    end
+
+                    if contentHeight <= 0 and Items["SettingsContent"] then
+                        contentHeight = math.max(0, Items["SettingsContent"].Instance.AbsoluteSize.Y)
                     end
 
                     return contentHeight + 10
                 end
 
                 local function _ApplyExpandedSettingsHeight()
+                    if not Toggle._settingsExpanded or not Library or not Items["SettingsClipper"] then
+                        return
+                    end
+
+                    local targetH = math.floor(_GetResolvedSettingsPanelHeight() + 0.5)
+                    if targetH <= 0 then
+                        return
+                    end
+
+                    if Toggle._settingsHeight ~= targetH then
+                        Toggle._settingsHeight = targetH
+                        Items["SettingsClipper"].Instance.Size = UDim2New(1, 0, 0, targetH)
+                        UpdateWrapperSize()
+                    end
+                end
+
+                local function _ScheduleExpandedSettingsHeight()
                     if not Toggle._settingsExpanded or not Library then
                         return
                     end
 
-                    local targetH = _GetResolvedSettingsPanelHeight()
-                    Toggle._settingsHeight = targetH
-                    Items["SettingsClipper"].Instance.Size = UDim2New(1, 0, 0, targetH)
-                    UpdateWrapperSize()
+                    SettingsFitToken += 1
+                    local token = SettingsFitToken
+                    if SettingsFitRunning then
+                        return
+                    end
+
+                    SettingsFitRunning = true
+                    task.spawn(function()
+                        local lastHeight = -1
+                        local stablePasses = 0
+
+                        for _ = 1, 8 do
+                            if not Library or not Toggle._settingsExpanded or token ~= SettingsFitToken then
+                                break
+                            end
+
+                            task.wait()
+
+                            local targetH = math.floor(_GetResolvedSettingsPanelHeight() + 0.5)
+                            if targetH > 0 then
+                                if targetH ~= lastHeight then
+                                    stablePasses = 0
+                                    lastHeight = targetH
+                                else
+                                    stablePasses += 1
+                                end
+
+                                if Toggle._settingsHeight ~= targetH then
+                                    Toggle._settingsHeight = targetH
+                                    Items["SettingsClipper"].Instance.Size = UDim2New(1, 0, 0, targetH)
+                                    UpdateWrapperSize()
+                                end
+
+                                if stablePasses >= 2 then
+                                    break
+                                end
+                            end
+                        end
+
+                        SettingsFitRunning = false
+
+                        if Library and Toggle._settingsExpanded and token == SettingsFitToken then
+                            _ApplyExpandedSettingsHeight()
+                        elseif Library and Toggle._settingsExpanded and token ~= SettingsFitToken then
+                            _ScheduleExpandedSettingsHeight()
+                        end
+                    end)
                 end
 
                 -- Core expand/collapse animation
@@ -6807,16 +6861,7 @@ local Library do
                         Items["SettingsClipper"].Instance.Visible = true
                         TweenService:Create(Chevron, TInfo, { Rotation = 180 }):Play()
                         UpdateWrapperSize()
-
-                        task.defer(function()
-                            _ApplyExpandedSettingsHeight()
-                        end)
-                        task.delay(0.05, function()
-                            _ApplyExpandedSettingsHeight()
-                        end)
-                        task.delay(0.12, function()
-                            _ApplyExpandedSettingsHeight()
-                        end)
+                        _ScheduleExpandedSettingsHeight()
                     else
                         TweenService:Create(Chevron, TInfo, { Rotation = 0 }):Play()
                         Toggle._settingsHeight = 0
@@ -6828,15 +6873,7 @@ local Library do
                 end
 
                 SettingsLayout.Instance:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-                    _ApplyExpandedSettingsHeight()
-                end)
-
-                Items["SettingsContent"].Instance:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-                    _ApplyExpandedSettingsHeight()
-                end)
-
-                Items["SettingsClipper"].Instance:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-                    _ApplyExpandedSettingsHeight()
+                    _ScheduleExpandedSettingsHeight()
                 end)
 
                 -- ── Child element factories ──────────────────────────────
