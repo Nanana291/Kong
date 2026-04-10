@@ -6782,6 +6782,12 @@ local Library do
                     return (h > 0 and h or 0) + 10
                 end
 
+                local function _ResolveSettingsHeight()
+                    -- Prefer the layout's resolved content height so AutomaticSize children
+                    -- such as Paragraph/Textbox blocks do not get clipped at the bottom.
+                    return math.max(_MeasureSettingsHeight(), _GetSettingsHeight())
+                end
+
                 -- Core expand/collapse animation
                 function Toggle:SetSettingsExpanded(Expanded)
                     Toggle._settingsExpanded = Expanded
@@ -6794,7 +6800,7 @@ local Library do
                     if Expanded then
                         Sep.Visible = true
                         TweenService:Create(Chevron, TInfo, { Rotation = 180 }):Play()
-                        local targetH = _MeasureSettingsHeight()
+                        local targetH = _ResolveSettingsHeight()
                         Toggle._settingsHeight = targetH
                         TweenService:Create(Clipper, TInfo, {
                             Size = UDim2New(1, 0, 0, targetH)
@@ -6819,7 +6825,7 @@ local Library do
                 -- Auto-resize when child elements are added/removed while panel is open
                 SettingsLayout.Instance:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
                     if not Toggle._settingsExpanded or not Library then return end
-                    local targetH = _MeasureSettingsHeight()
+                    local targetH = _ResolveSettingsHeight()
                     if targetH <= 10 then return end
                     Toggle._settingsHeight = targetH
                     local ResizeInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
