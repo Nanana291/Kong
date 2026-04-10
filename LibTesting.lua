@@ -6437,7 +6437,7 @@ local Library do
 
                 local targetHeight = baseHeight
                 if Toggle.HasSettings and Toggle._settingsExpanded then
-                    targetHeight = baseHeight + 5 + (Toggle._settingsHeight or 0)
+                    targetHeight = baseHeight + 6 + (Toggle._settingsHeight or 0)
                 end
 
                 Items["Wrapper"].Instance.Size = UDim2New(1, 0, 0, targetHeight)
@@ -6700,8 +6700,8 @@ local Library do
                     BorderSizePixel = 0,
                     Position = UDim2New(0, 0, 0, CurrentToggleHeight + 6),
                     Size = UDim2New(1, 0, 0, 0),
-                    AutomaticSize = Enum.AutomaticSize.Y,
-                    ClipsDescendants = false,
+                    AutomaticSize = Enum.AutomaticSize.None,
+                    ClipsDescendants = true,
                     ZIndex = 2,
                     BackgroundColor3 = FromRGB(255, 255, 255),
                 })
@@ -6761,9 +6761,11 @@ local Library do
                 -- Track expand state separately (Toggle.Value drives this)
                 Toggle._settingsExpanded = false
                 local function _GetResolvedSettingsPanelHeight()
-                    local clipperHeight = Items["SettingsClipper"].Instance.AbsoluteSize.Y
-                    local contentHeight = Items["SettingsContent"].Instance.AbsoluteSize.Y
-                    return math.max(clipperHeight, contentHeight)
+                    local contentHeight = math.max(0, Items["SettingsContent"].Instance.AbsoluteSize.Y)
+                    if contentHeight <= 0 then
+                        contentHeight = math.max(0, SettingsLayout.Instance.AbsoluteContentSize.Y + 10)
+                    end
+                    return contentHeight
                 end
 
                 local function _ApplyExpandedSettingsHeight()
@@ -6771,7 +6773,9 @@ local Library do
                         return
                     end
 
-                    Toggle._settingsHeight = _GetResolvedSettingsPanelHeight()
+                    local targetH = _GetResolvedSettingsPanelHeight()
+                    Toggle._settingsHeight = targetH
+                    Items["SettingsClipper"].Instance.Size = UDim2New(1, 0, 0, targetH)
                     UpdateWrapperSize()
                 end
 
@@ -6801,6 +6805,7 @@ local Library do
                     else
                         TweenService:Create(Chevron, TInfo, { Rotation = 0 }):Play()
                         Toggle._settingsHeight = 0
+                        Items["SettingsClipper"].Instance.Size = UDim2New(1, 0, 0, 0)
                         Items["SettingsClipper"].Instance.Visible = false
                         UpdateWrapperSize()
                         Sep.Visible = false
