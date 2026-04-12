@@ -2812,6 +2812,7 @@ local Library do
             local AccentColor = Library.Theme["Accent"] or FromRGB(151, 69, 186)
             local Outline     = Library.Theme["Outline"] or FromRGB(58, 55, 72)
             local BgColor     = FromRGB(36, 34, 44)
+            local BgTransparency = MathClamp(tonumber(Library.Flags["BackgroundTransparency"]) or 0.12, 0, 1)
 
             local CurrentCamera = Workspace.CurrentCamera
             local ViewportX = (CurrentCamera and CurrentCamera.ViewportSize.X) or 420
@@ -2847,7 +2848,7 @@ local Library do
                 Position = UDim2New(0, Width + 24, 0, 0),
                 Size = UDim2New(0, Width, 0, 0),
                 AutomaticSize = Enum.AutomaticSize.Y,
-                BackgroundTransparency = 0,
+                BackgroundTransparency = BgTransparency,
                 ZIndex = 10,
             })
 
@@ -2908,7 +2909,7 @@ local Library do
                     Parent = IconWrap.Instance,
                     Name = "\0",
                     BackgroundColor3 = AccentColor,
-                    BackgroundTransparency = 0.82,
+                    BackgroundTransparency = MathClamp(BgTransparency + 0.7, 0, 1),
                     BorderSizePixel = 0,
                     Size = UDim2New(0, 38, 0, 38),
                     Position = UDim2New(0, 0, 0, 0),
@@ -3038,6 +3039,7 @@ local Library do
                 Parent = Root.Instance,
                 Name = "\0",
                 BackgroundColor3 = FromRGB(48, 45, 60),
+                BackgroundTransparency = BgTransparency,
                 BorderSizePixel = 0,
                 AnchorPoint = Vector2New(0, 1),
                 Position = UDim2New(0, 0, 1, 0),
@@ -20111,10 +20113,6 @@ local Library do
             end
 
             local currentAutoload = NormalizeConfigName(GetAutoloadConfig())
-            if currentAutoload and not Library.ConfigManager.Files[currentAutoload] then
-                SetAutoloadConfig(nil)
-                currentAutoload = nil
-            end
 
             UpdateAutoloadSnapshot(currentAutoload)
             SetAutoloadToggle(currentAutoload ~= nil)
@@ -20307,7 +20305,7 @@ local Library do
             AutoloadToggle = ConfigsSection:Toggle({
                 Name = "Autoload Selected Config",
                 Flag = "UI_AutoloadConfig",
-                Default = false,
+                Default = GetAutoloadConfig() ~= nil,
                 ToolTip = "When enabled, the selected config becomes the autoload target.",
                 Callback = function(Value)
                     if suppressAutoloadCallback then
