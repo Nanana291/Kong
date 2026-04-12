@@ -672,7 +672,7 @@ local Library do
 
         self.ConfigManager.List = DisplayList
         self.ConfigManager.Files = Files
-        self:SyncAutoloadState()
+        self.ConfigManager.Autoload = self:GetAutoloadConfigName()
 
         return DisplayList, Files
     end
@@ -837,28 +837,8 @@ local Library do
 
         local Success, Err = Library:LoadConfig(ConfigName)
         if not Success then
-            if not self.ConfigManager.Files[ConfigName] then
-                self:SetAutoloadConfigName(nil)
-                self:SyncAutoloadState()
-            end
             warn("Failed to load autoload config: " .. tostring(Err))
-            return false, Err
         end
-
-        self:SyncAutoloadState()
-        return true, ConfigName
-    end
-
-    Library.SyncAutoloadState = function(self)
-        local ConfigName = self:GetAutoloadConfigName()
-        if not ConfigName then
-            self.ConfigManager.Autoload = nil
-            return nil
-        end
-
-        self.ConfigManager.Autoload = ConfigName
-        self:RefreshConfigsList(nil, ConfigName)
-        return ConfigName
     end
 
     Library.DeleteConfig = function(self, Config)
@@ -2832,15 +2812,7 @@ local Library do
             local AccentColor = Library.Theme["Accent"] or FromRGB(151, 69, 186)
             local Outline     = Library.Theme["Outline"] or FromRGB(58, 55, 72)
             local BgColor     = FromRGB(36, 34, 44)
-            local BaseTransparency = tonumber(
-                Library.Flags["UI_BackgroundTransparency"]
-                or Library.Flags["BackgroundTransparency"]
-                or 0.12
-            ) or 0.12
-            local RootTransparency = math.clamp(BaseTransparency, 0, 1)
-            local StrokeTransparency = math.clamp(BaseTransparency + 0.12, 0, 1)
-            local TrackTransparency = math.clamp(BaseTransparency + 0.18, 0, 1)
-            local IconTransparency = math.clamp(BaseTransparency + 0.7, 0, 0.92)
+            local BgTransparency = MathClamp(tonumber(Library.Flags["BackgroundTransparency"]) or 0.12, 0, 1)
 
             local CurrentCamera = Workspace.CurrentCamera
             local ViewportX = (CurrentCamera and CurrentCamera.ViewportSize.X) or 420
@@ -2876,7 +2848,7 @@ local Library do
                 Position = UDim2New(0, Width + 24, 0, 0),
                 Size = UDim2New(0, Width, 0, 0),
                 AutomaticSize = Enum.AutomaticSize.Y,
-                BackgroundTransparency = RootTransparency,
+                BackgroundTransparency = BgTransparency,
                 ZIndex = 10,
             })
 
@@ -2889,7 +2861,7 @@ local Library do
                 Parent = Root.Instance,
                 Color = Outline,
                 Thickness = 1,
-                Transparency = StrokeTransparency,
+                Transparency = 0,
             })
 
             local ContentRow = Instances:Create("Frame", {
@@ -2937,7 +2909,7 @@ local Library do
                     Parent = IconWrap.Instance,
                     Name = "\0",
                     BackgroundColor3 = AccentColor,
-                    BackgroundTransparency = IconTransparency,
+                    BackgroundTransparency = MathClamp(BgTransparency + 0.7, 0, 1),
                     BorderSizePixel = 0,
                     Size = UDim2New(0, 38, 0, 38),
                     Position = UDim2New(0, 0, 0, 0),
@@ -3067,12 +3039,12 @@ local Library do
                 Parent = Root.Instance,
                 Name = "\0",
                 BackgroundColor3 = FromRGB(48, 45, 60),
+                BackgroundTransparency = BgTransparency,
                 BorderSizePixel = 0,
                 AnchorPoint = Vector2New(0, 1),
                 Position = UDim2New(0, 0, 1, 0),
                 Size = UDim2New(1, 0, 0, PROG_H),
                 ClipsDescendants = true,
-                BackgroundTransparency = TrackTransparency,
                 ZIndex = 11,
             })
 
@@ -6437,7 +6409,7 @@ local Library do
 
                 local targetHeight = baseHeight
                 if Toggle.HasSettings and Toggle._settingsExpanded then
-                    targetHeight = baseHeight + 6 + (Toggle._settingsHeight or 0)
+                    targetHeight = baseHeight + 5 + (Toggle._settingsHeight or 0)
                 end
 
                 Items["Wrapper"].Instance.Size = UDim2New(1, 0, 0, targetHeight)
@@ -6691,26 +6663,18 @@ local Library do
                     BackgroundColor3 = FromRGB(255, 255, 255),
                 })  Items["SettingsSeparator"]:AddToTheme({BackgroundColor3 = "Outline"})
 
-                -- Inline settings viewport: clamps to screen and scrolls when content is long
-                Items["SettingsClipper"] = Instances:Create("ScrollingFrame", {
+                -- Clip frame: ClipsDescendants + manually tweened height
+                Items["SettingsClipper"] = Instances:Create("Frame", {
                     Parent = Items["Wrapper"].Instance,
                     Name = "\0",
-                    Active = true,
-                    Visible = false,
                     BackgroundTransparency = 1,
                     BorderSizePixel = 0,
                     Position = UDim2New(0, 0, 0, CurrentToggleHeight + 6),
                     Size = UDim2New(1, 0, 0, 0),
-                    ScrollingDirection = Enum.ScrollingDirection.Y,
                     ClipsDescendants = true,
-                    AutomaticCanvasSize = Enum.AutomaticSize.Y,
-                    CanvasSize = UDim2New(0, 0, 0, 0),
-                    ScrollBarThickness = 2,
-                    ScrollBarImageColor3 = Library.Theme and Library.Theme.Accent or FromRGB(124, 163, 255),
                     ZIndex = 2,
                     BackgroundColor3 = FromRGB(255, 255, 255),
                 })
-                Items["SettingsClipper"]:AddToTheme({ScrollBarImageColor3 = "Accent"})
 
                 -- Accent bar on the left edge of the settings panel
                 Items["SettingsAccentBar"] = Instances:Create("Frame", {
@@ -6766,106 +6730,75 @@ local Library do
 
                 -- Track expand state separately (Toggle.Value drives this)
                 Toggle._settingsExpanded = false
-                local SettingsResizeQueued = false
 
-                local function _GetExpandedSettingsVisibleHeight()
-                    local contentHeight = 0
-
-                    if SettingsLayout and SettingsLayout.Instance then
-                        contentHeight = math.max(0, math.floor(SettingsLayout.Instance.AbsoluteContentSize.Y + 0.5)) + 10
-                    end
-
-                    if contentHeight <= 0 and Items["SettingsContent"] then
-                        contentHeight = math.max(0, math.floor(Items["SettingsContent"].Instance.AbsoluteSize.Y + 0.5))
-                    end
-
-                    local screenHeight = (Workspace.CurrentCamera and Workspace.CurrentCamera.ViewportSize.Y) or 600
-                    local clipperTop = 0
-
-                    if Items["SettingsClipper"] and Items["SettingsClipper"].Instance then
-                        clipperTop = math.floor(Items["SettingsClipper"].Instance.AbsolutePosition.Y + 0.5)
-                    end
-
-                    local maxVisibleHeight = math.max(120, screenHeight - clipperTop - 18)
-                    return math.max(0, math.min(contentHeight, maxVisibleHeight))
-                end
-
-                local function _SyncExpandedSettingsHeight()
-                    if not Toggle._settingsExpanded or not Library or not Items["SettingsClipper"] then
-                        return
-                    end
-
-                    local targetH = _GetExpandedSettingsVisibleHeight()
-                    if targetH <= 0 then
-                        return
-                    end
-
-                    if Toggle._settingsHeight ~= targetH then
-                        Toggle._settingsHeight = targetH
-                        Items["SettingsClipper"].Instance.Size = UDim2New(1, 0, 0, targetH)
-                        UpdateWrapperSize()
-                    end
-                end
-
-                local function _QueueExpandedSettingsHeight()
-                    if not Toggle._settingsExpanded or not Library or SettingsResizeQueued then
-                        return
-                    end
-
-                    SettingsResizeQueued = true
-                    task.defer(function()
-                        if not Library then
-                            SettingsResizeQueued = false
-                            return
+                local function _MeasureSettingsHeight()
+                    local Content = Items["SettingsContent"].Instance
+                    local totalH = 10
+                    local count = 0
+                    for _, child in ipairs(Content:GetChildren()) do
+                        if child:IsA("GuiObject") and child.Visible then
+                            local h = child.Size.Y.Offset
+                            if h <= 0 then h = 18 end
+                            totalH = totalH + h
+                            count = count + 1
                         end
+                    end
+                    if count > 1 then
+                        totalH = totalH + (count - 1) * 5
+                    end
+                    return totalH
+                end
 
-                        Items["SettingsClipper"].Instance.CanvasPosition = Vector2New(0, 0)
-                        task.wait()
-                        _SyncExpandedSettingsHeight()
-                        task.wait()
-                        _SyncExpandedSettingsHeight()
-                        task.wait()
-                        _SyncExpandedSettingsHeight()
-                        SettingsResizeQueued = false
-                    end)
+                local function _GetSettingsHeight()
+                    local h = SettingsLayout.Instance.AbsoluteContentSize.Y
+                    return (h > 0 and h or 0) + 10
                 end
 
                 -- Core expand/collapse animation
                 function Toggle:SetSettingsExpanded(Expanded)
                     Toggle._settingsExpanded = Expanded
 
+                    local Clipper  = Items["SettingsClipper"].Instance
                     local Sep      = Items["SettingsSeparator"].Instance
                     local Chevron  = Items["SettingsChevron"].Instance
                     local TInfo    = TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
 
                     if Expanded then
                         Sep.Visible = true
-                        Items["SettingsClipper"].Instance.Visible = true
-                        Items["SettingsClipper"].Instance.Size = UDim2New(1, 0, 0, 0)
-                        Items["SettingsClipper"].Instance.CanvasPosition = Vector2New(0, 0)
                         TweenService:Create(Chevron, TInfo, { Rotation = 180 }):Play()
+                        local targetH = _MeasureSettingsHeight()
+                        Toggle._settingsHeight = targetH
+                        TweenService:Create(Clipper, TInfo, {
+                            Size = UDim2New(1, 0, 0, targetH)
+                        }):Play()
                         UpdateWrapperSize()
-                        _QueueExpandedSettingsHeight()
                     else
+                        -- Rotate chevron back down
                         TweenService:Create(Chevron, TInfo, { Rotation = 0 }):Play()
                         Toggle._settingsHeight = 0
-                        Items["SettingsClipper"].Instance.Size = UDim2New(1, 0, 0, 0)
-                        Items["SettingsClipper"].Instance.Visible = false
+                        local collapseClipper = TweenService:Create(Clipper, TInfo, {
+                            Size = UDim2New(1, 0, 0, 0)
+                        })
+                        collapseClipper:Play()
                         UpdateWrapperSize()
-                        Sep.Visible = false
+                        collapseClipper.Completed:Connect(function()
+                            if not Library then return end
+                            Sep.Visible = false
+                        end)
                     end
                 end
 
+                -- Auto-resize when child elements are added/removed while panel is open
                 SettingsLayout.Instance:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-                    _QueueExpandedSettingsHeight()
-                end)
-
-                Items["SettingsClipper"].Instance:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-                    _SyncExpandedSettingsHeight()
-                end)
-
-                Items["SettingsContent"].Instance:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-                    _QueueExpandedSettingsHeight()
+                    if not Toggle._settingsExpanded or not Library then return end
+                    local targetH = _MeasureSettingsHeight()
+                    if targetH <= 10 then return end
+                    Toggle._settingsHeight = targetH
+                    local ResizeInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+                    TweenService:Create(Items["SettingsClipper"].Instance, ResizeInfo, {
+                        Size = UDim2New(1, 0, 0, targetH)
+                    }):Play()
+                    UpdateWrapperSize()
                 end)
 
                 -- ── Child element factories ──────────────────────────────
@@ -20180,10 +20113,6 @@ local Library do
             end
 
             local currentAutoload = NormalizeConfigName(GetAutoloadConfig())
-            if currentAutoload and not Library.ConfigManager.Files[currentAutoload] then
-                SetAutoloadConfig(nil)
-                currentAutoload = nil
-            end
 
             UpdateAutoloadSnapshot(currentAutoload)
             SetAutoloadToggle(currentAutoload ~= nil)
@@ -20376,7 +20305,7 @@ local Library do
             AutoloadToggle = ConfigsSection:Toggle({
                 Name = "Autoload Selected Config",
                 Flag = "UI_AutoloadConfig",
-                Default = false,
+                Default = GetAutoloadConfig() ~= nil,
                 ToolTip = "When enabled, the selected config becomes the autoload target.",
                 Callback = function(Value)
                     if suppressAutoloadCallback then
