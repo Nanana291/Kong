@@ -1,5 +1,6 @@
 --[[
 	WARNING: Heads up! This script has not been verified by ScriptBlox. Use at your own risk!
+	LibSeventy compatibility build for Imp Hub X.
 ]]
 
 local Library do 
