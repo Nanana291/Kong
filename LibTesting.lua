@@ -337,7 +337,7 @@ local Library do
         local ScaleObject = Frame:FindFirstChildOfClass("UIScale")
         if not ScaleObject then
             ScaleObject = InstanceNew("UIScale")
-            ScaleObject.Name = " "
+            ScaleObject.Name = "\0"
             ScaleObject.Parent = Frame
         end
 
