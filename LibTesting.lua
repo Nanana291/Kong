@@ -238,14 +238,14 @@ local Library do
         ScaleTargets = { },
         ScaleConfig = {
             BaseSize = Vector2New(1920, 1080),
-            AbsoluteMinScale = 0.42,
-            MinScale = 0.58,
-            MaxScale = 1.65,
-            MobileMinScale = 0.54,
-            MobileMaxScale = 0.72,
-            MobileLandscapeMaxScale = 0.90,
-            TabletMinScale = 0.62,
-            TabletMaxScale = 1.00,
+            AbsoluteMinScale = 0.55,
+            MinScale = 0.85,
+            MaxScale = 2.00,
+            MobileMinScale = 0.80,
+            MobileMaxScale = 1.10,
+            MobileLandscapeMaxScale = 1.30,
+            TabletMinScale = 0.90,
+            TabletMaxScale = 1.40,
             SafePadding = Vector2New(72, 72),
             MobileSafePadding = Vector2New(96, 104),
             ReferenceWindow = Vector2New(677, 644),
@@ -305,10 +305,10 @@ local Library do
         end
 
         if DesiredScale < MinScale then
-            return MathClamp(DesiredScale, Config.AbsoluteMinScale, MaxScale)
+            return MathClamp(DesiredScale, Config.AbsoluteMinScale, MaxScale) * 1.50
         end
 
-        return MathClamp(DesiredScale, MinScale, MaxScale)
+        return MathClamp(DesiredScale, MinScale, MaxScale) * 1.50
     end
 
     Library.GetUIScale = function(self)
