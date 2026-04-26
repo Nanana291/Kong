@@ -238,11 +238,16 @@ local Library do
         ScaleTargets = { },
         ScaleConfig = {
             BaseSize = Vector2New(1920, 1080),
-            MinScale = 0.52,
-            MaxScale = 1.45,
-            MobileMinScale = 0.62,
-            TabletMinScale = 0.72,
-            SafePadding = Vector2New(36, 36),
+            AbsoluteMinScale = 0.42,
+            MinScale = 0.58,
+            MaxScale = 1.22,
+            MobileMinScale = 0.54,
+            MobileMaxScale = 0.72,
+            MobileLandscapeMaxScale = 0.78,
+            TabletMinScale = 0.62,
+            TabletMaxScale = 0.94,
+            SafePadding = Vector2New(72, 72),
+            MobileSafePadding = Vector2New(96, 104),
             ReferenceWindow = Vector2New(677, 644),
         }
     }
@@ -264,21 +269,46 @@ local Library do
         local ViewportSize = GetViewportSize()
         local Config = Library.ScaleConfig
         local BaseSize = Config.BaseSize
-        local SafePadding = Config.SafePadding
         local ReferenceWindow = Config.ReferenceWindow
+        local SafePadding = Config.SafePadding
         local FitScale = MathMin(
             (ViewportSize.X - SafePadding.X) / ReferenceWindow.X,
             (ViewportSize.Y - SafePadding.Y) / ReferenceWindow.Y
         )
         local AreaScale = MathSqrt((ViewportSize.X * ViewportSize.Y) / (BaseSize.X * BaseSize.Y))
         local MinScale = Config.MinScale
+        local MaxScale = Config.MaxScale
+        local DesiredScale = MathMin(AreaScale, FitScale)
 
         if UserInputService.TouchEnabled then
             local ShortSide = MathMin(ViewportSize.X, ViewportSize.Y)
-            MinScale = ShortSide >= 700 and Config.TabletMinScale or Config.MobileMinScale
+            local LongSide = MathMax(ViewportSize.X, ViewportSize.Y)
+            local AspectRatio = LongSide / MathMax(ShortSide, 1)
+            local MobileSafePadding = Config.MobileSafePadding
+            local MobileFitScale = MathMin(
+                (ViewportSize.X - MobileSafePadding.X) / ReferenceWindow.X,
+                (ViewportSize.Y - MobileSafePadding.Y) / ReferenceWindow.Y
+            )
+
+            if ShortSide >= 820 and AspectRatio < 1.7 then
+                MinScale = Config.TabletMinScale
+                MaxScale = Config.TabletMaxScale
+            elseif ViewportSize.X >= ViewportSize.Y then
+                MinScale = Config.MobileMinScale
+                MaxScale = Config.MobileLandscapeMaxScale
+            else
+                MinScale = Config.MobileMinScale
+                MaxScale = Config.MobileMaxScale
+            end
+
+            DesiredScale = MathMin(MobileFitScale, MaxScale)
         end
 
-        return MathClamp(MathMin(AreaScale, FitScale), MinScale, Config.MaxScale)
+        if DesiredScale < MinScale then
+            return MathClamp(DesiredScale, Config.AbsoluteMinScale, MaxScale)
+        end
+
+        return MathClamp(DesiredScale, MinScale, MaxScale)
     end
 
     Library.GetUIScale = function(self)
@@ -3264,7 +3294,8 @@ local Library do
                 Pages = { },
                 Items = { },
                 IsOpen = false,
-                CurrentAlignment = "LeftTabs"
+                CurrentAlignment = "LeftTabs",
+                UserMoved = false
             }
 
             Window.ActivePage    = nil
@@ -3305,7 +3336,7 @@ local Library do
                     BorderColor3 = FromRGB(0, 0, 0),
                     AnchorPoint = Vector2New(0.5, 0.5),
                     BackgroundTransparency = 0.12,
-                    Position = UDim2New(0.5519999861717224, 0, 0.5, 0),
+                    Position = UDim2New(0.5, 0, 0.5, 0),
                     Size = UDim2New(0, 677, 0, 644),
                     ZIndex = 2,
                     BorderSizePixel = 0,
@@ -3350,6 +3381,7 @@ local Library do
                 Items["MainFrame"]:Connect("InputBegan", function(Input)
                     if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
                         Dragging = true
+                        Window.UserMoved = true
     
                         DragStart = Input.Position
                         StartPosition = Gui.Position
@@ -3365,6 +3397,7 @@ local Library do
                 Items["LeftTabs"]:Connect("InputBegan", function(Input)
                     if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
                         Dragging = true
+                        Window.UserMoved = true
     
                         DragStart = Input.Position
                         StartPosition = Gui.Position
@@ -4307,12 +4340,14 @@ local Library do
                 end
             end
 
-            function Window:SetCenter()
-                local CenterPosition = Items["MainFrame"].Instance.AbsolutePosition
-                task.wait()
-                Items["MainFrame"].Instance.AnchorPoint = Vector2New(0, 0)
+            function Window:SetCenter(Force)
+                if Window.UserMoved and not Force then
+                    return
+                end
 
-                Items["MainFrame"].Instance.Position = UDim2New(0, CenterPosition.X, 0, CenterPosition.Y)
+                local MainFrame = Items["MainFrame"].Instance
+                MainFrame.AnchorPoint = Vector2New(0.5, 0.5)
+                MainFrame.Position = UDim2New(0.5, 0, 0.5, 0)
             end
 
             function Window:SetOpen(Bool)
@@ -4531,7 +4566,14 @@ local Library do
                 end
             end)]]
 
-            Window:SetCenter()
+            Window:SetCenter(true)
+
+            if Camera then
+                Library:Connect(Camera:GetPropertyChangedSignal("ViewportSize"), function()
+                    Window:SetCenter(false)
+                end)
+            end
+
             if Window.Compact then
                 Window:SetCompact(true)
             end
