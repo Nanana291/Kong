@@ -1,6 +1,5 @@
 --[[
 	WARNING: Heads up! This script has not been verified by ScriptBlox. Use at your own risk!
-	LibSeventy compatibility build for Imp Hub X.
 ]]
 
 local Library do 
@@ -164,9 +163,6 @@ local Library do
     local MathFloor = math.floor
     local MathAbs = math.abs
     local MathSin = math.sin
-    local MathSqrt = math.sqrt
-    local MathMin = math.min
-    local MathMax = math.max
 
     local TableInsert = table.insert
     local TableFind = table.find
@@ -232,156 +228,10 @@ local Library do
 
         Font = nil,
 
-        MinSize = Vector2New(480, 360),
-
-        Scale = 1,
-        ScaleTargets = { },
-        ScaleConfig = {
-            BaseSize = Vector2New(1920, 1080),
-            AbsoluteMinScale = 0.42,
-            MinScale = 0.58,
-            MaxScale = 1.28,
-            MobileMinScale = 0.54,
-            MobileMaxScale = 0.72,
-            MobileLandscapeMaxScale = 0.90,
-            TabletMinScale = 0.62,
-            TabletMaxScale = 1.00,
-            SafePadding = Vector2New(72, 72),
-            MobileSafePadding = Vector2New(96, 104),
-            ReferenceWindow = Vector2New(677, 644),
-        }
+        MinSize = Vector2New(480, 360)
     }
 
     local Tween, Instances
-
-    local function GetViewportSize()
-        local CurrentCamera = Workspace.CurrentCamera or Camera
-        local ViewportSize = CurrentCamera and CurrentCamera.ViewportSize
-
-        if ViewportSize and ViewportSize.X > 0 and ViewportSize.Y > 0 then
-            return ViewportSize
-        end
-
-        return Vector2New(1280, 720)
-    end
-
-    local function GetAdaptiveScale()
-        local ViewportSize = GetViewportSize()
-        local Config = Library.ScaleConfig
-        local BaseSize = Config.BaseSize
-        local ReferenceWindow = Config.ReferenceWindow
-        local SafePadding = Config.SafePadding
-        local FitScale = MathMin(
-            (ViewportSize.X - SafePadding.X) / ReferenceWindow.X,
-            (ViewportSize.Y - SafePadding.Y) / ReferenceWindow.Y
-        )
-        local AreaScale = MathSqrt((ViewportSize.X * ViewportSize.Y) / (BaseSize.X * BaseSize.Y))
-        local MinScale = Config.MinScale
-        local MaxScale = Config.MaxScale
-        local DesiredScale = MathMin(AreaScale, FitScale)
-
-        if UserInputService.TouchEnabled then
-            local ShortSide = MathMin(ViewportSize.X, ViewportSize.Y)
-            local LongSide = MathMax(ViewportSize.X, ViewportSize.Y)
-            local AspectRatio = LongSide / MathMax(ShortSide, 1)
-            local MobileSafePadding = Config.MobileSafePadding
-            local MobileFitScale = MathMin(
-                (ViewportSize.X - MobileSafePadding.X) / ReferenceWindow.X,
-                (ViewportSize.Y - MobileSafePadding.Y) / ReferenceWindow.Y
-            )
-
-            if ShortSide >= 820 and AspectRatio < 1.7 then
-                MinScale = Config.TabletMinScale
-                MaxScale = Config.TabletMaxScale
-            elseif ViewportSize.X >= ViewportSize.Y then
-                MinScale = Config.MobileMinScale
-                MaxScale = Config.MobileLandscapeMaxScale
-            else
-                MinScale = Config.MobileMinScale
-                MaxScale = Config.MobileMaxScale
-            end
-
-            DesiredScale = MathMin(MobileFitScale, MaxScale)
-        end
-
-        if DesiredScale < MinScale then
-            return MathClamp(DesiredScale, Config.AbsoluteMinScale, MaxScale)
-        end
-
-        return MathClamp(DesiredScale, MinScale, MaxScale)
-    end
-
-    Library.GetUIScale = function(self)
-        return self.Scale or 1
-    end
-
-    Library.UpdateUIScale = function(self)
-        local NewScale = GetAdaptiveScale()
-        self.Scale = NewScale
-
-        for Index = #self.ScaleTargets, 1, -1 do
-            local Target = self.ScaleTargets[Index]
-            local ScaleObject = Target and Target.Scale
-
-            if not (ScaleObject and ScaleObject.Parent) then
-                TableRemove(self.ScaleTargets, Index)
-            else
-                ScaleObject.Scale = NewScale * (Target.Multiplier or 1)
-
-                local Frame = Target.Frame
-                if Frame and Frame.Parent and Target.KeepOnScreen then
-                    local ViewportSize = GetViewportSize()
-                    local AbsoluteSize = Frame.AbsoluteSize
-                    local Position = Frame.Position
-                    local AnchorPoint = Frame.AnchorPoint
-                    local X = Position.X.Offset
-                    local Y = Position.Y.Offset
-
-                    if Position.X.Scale ~= 0 then
-                        X = (ViewportSize.X * Position.X.Scale) + X - (AbsoluteSize.X * AnchorPoint.X)
-                    end
-                    if Position.Y.Scale ~= 0 then
-                        Y = (ViewportSize.Y * Position.Y.Scale) + Y - (AbsoluteSize.Y * AnchorPoint.Y)
-                    end
-
-                    if AbsoluteSize.X > 0 and AbsoluteSize.Y > 0 then
-                        X = MathClamp(X, 8, MathMax(8, ViewportSize.X - AbsoluteSize.X - 8))
-                        Y = MathClamp(Y, 8, MathMax(8, ViewportSize.Y - AbsoluteSize.Y - 8))
-
-                        if Position.X.Scale == 0 and Position.Y.Scale == 0 then
-                            Frame.Position = UDim2FromOffset(X, Y)
-                        end
-                    end
-                end
-            end
-        end
-
-        return NewScale
-    end
-
-    Library.RegisterScaleTarget = function(self, Frame, Multiplier, KeepOnScreen)
-        if not Frame then
-            return nil
-        end
-
-        local ScaleObject = Frame:FindFirstChildOfClass("UIScale")
-        if not ScaleObject then
-            ScaleObject = InstanceNew("UIScale")
-            ScaleObject.Name = "\0"
-            ScaleObject.Parent = Frame
-        end
-
-        local Target = {
-            Frame = Frame,
-            Scale = ScaleObject,
-            Multiplier = Multiplier or 1,
-            KeepOnScreen = KeepOnScreen == true,
-        }
-
-        TableInsert(self.ScaleTargets, Target)
-        ScaleObject.Scale = (self.Scale or GetAdaptiveScale()) * Target.Multiplier
-        return ScaleObject
-    end
 
     Library.GetIcon = function(self, IconName)
         if not FetchIcons then
@@ -1818,8 +1668,7 @@ local Library do
         Name = "\0",
         ZIndexBehavior = Enum.ZIndexBehavior.Global,
         DisplayOrder = 2,
-        ResetOnSpawn = false,
-        IgnoreGuiInset = true
+        ResetOnSpawn = false
     })
 
     Library.UnusedHolder = Instances:Create("ScreenGui", {
@@ -1827,8 +1676,7 @@ local Library do
         Name = "\0",
         ZIndexBehavior = Enum.ZIndexBehavior.Global,
         Enabled = false,
-        ResetOnSpawn = false,
-        IgnoreGuiInset = true
+        ResetOnSpawn = false
     })
 
     Library.NotifHolder  = Instances:Create("Frame", {
@@ -1842,8 +1690,6 @@ local Library do
         BackgroundColor3 = FromRGB(255, 255, 255),
         ClipsDescendants = false,
     })
-
-    Library:RegisterScaleTarget(Library.NotifHolder.Instance, 1, false)
 
     Instances:Create("UIListLayout", {
         Parent = Library.NotifHolder.Instance,
@@ -1869,7 +1715,6 @@ local Library do
         AutomaticSize = Enum.AutomaticSize.XY
     })
     TooltipLabel:AddToTheme({BackgroundColor3 = "Background", TextColor3 = "Text"})
-    Library:RegisterScaleTarget(TooltipLabel.Instance, 1, false)
 
     Instances:Create("UICorner", {
         CornerRadius = UDimNew(0, 6),
@@ -1889,21 +1734,6 @@ local Library do
         PaddingTop = UDimNew(0, 4),
         Parent = TooltipLabel.Instance,
     })
-
-    Library:UpdateUIScale()
-
-    if Camera then
-        Library:Connect(Camera:GetPropertyChangedSignal("ViewportSize"), function()
-            Library:UpdateUIScale()
-        end)
-    end
-
-    Library:Connect(Workspace:GetPropertyChangedSignal("CurrentCamera"), function()
-        Camera = Workspace.CurrentCamera or Camera
-        if Camera then
-            Library:UpdateUIScale()
-        end
-    end)
 
     local CurrentHoverInstance
     function Library:AddTooltip(InfoStr, HoverInstance)
@@ -2058,7 +1888,6 @@ local Library do
                     BorderSizePixel = 0,
                     BackgroundColor3 = FromRGB(255, 255, 25)
                 })  Items["ColorpickerWindow"]:AddToTheme({BackgroundColor3 = "Background"})
-                Library:RegisterScaleTarget(Items["ColorpickerWindow"].Instance, 1, true)
                 
                 Instances:Create("UICorner", {
                     Parent = Items["ColorpickerWindow"].Instance,
@@ -3294,8 +3123,7 @@ local Library do
                 Pages = { },
                 Items = { },
                 IsOpen = false,
-                CurrentAlignment = "LeftTabs",
-                UserMoved = false
+                CurrentAlignment = "LeftTabs"
             }
 
             Window.ActivePage    = nil
@@ -3336,14 +3164,20 @@ local Library do
                     BorderColor3 = FromRGB(0, 0, 0),
                     AnchorPoint = Vector2New(0.5, 0.5),
                     BackgroundTransparency = 0.12,
-                    Position = UDim2New(0.5, 0, 0.5, 0),
+                    Position = UDim2New(0.5519999861717224, 0, 0.5, 0),
                     Size = UDim2New(0, 677, 0, 644),
                     ZIndex = 2,
                     BorderSizePixel = 0,
                     BackgroundColor3 = FromRGB(27, 25, 29)
                 })  Items["MainFrame"]:AddToTheme({BackgroundColor3 = "Background"})
 
-                Library:RegisterScaleTarget(Items["MainFrame"].Instance, 1, false)
+                do
+                    Instances:Create("UIScale", {
+                        Parent = Items["MainFrame"].Instance,
+                        Name = "\0",
+                        Scale = IsMobile and 0.55 or 1.125
+                    })
+                end
 
                 Items["MainFrame"]:MakeResizeable(Vector2New(Items["MainFrame"].Instance.AbsoluteSize.X, Items["MainFrame"].Instance.AbsoluteSize.Y), Vector2New(9999, 9999), OriginalSizes)
                 Library:MakeBlurred(Items["MainFrame"], Window)
@@ -3381,7 +3215,6 @@ local Library do
                 Items["MainFrame"]:Connect("InputBegan", function(Input)
                     if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
                         Dragging = true
-                        Window.UserMoved = true
     
                         DragStart = Input.Position
                         StartPosition = Gui.Position
@@ -3397,7 +3230,6 @@ local Library do
                 Items["LeftTabs"]:Connect("InputBegan", function(Input)
                     if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
                         Dragging = true
-                        Window.UserMoved = true
     
                         DragStart = Input.Position
                         StartPosition = Gui.Position
@@ -3433,7 +3265,6 @@ local Library do
                     ZIndex = 127,
                     BackgroundColor3 = Library.Theme.Background
                 })  Items["FloatingButton"]:AddToTheme({BackgroundColor3 = "Background"})
-                Library:RegisterScaleTarget(Items["FloatingButton"].Instance, 1, false)
 
                 local Gui = Items["FloatingButton"].Instance
 
@@ -4022,7 +3853,6 @@ local Library do
                         AutomaticSize = Enum.AutomaticSize.Y,
                         BackgroundColor3 = FromRGB(21, 21, 24)
                     }) SettingsItems["Settings"]:AddToTheme({BackgroundColor3 = "Section Background 2"})
-                    Library:RegisterScaleTarget(SettingsItems["Settings"].Instance, 1, true)
                     
                     Instances:Create("UICorner", {
                         Parent = SettingsItems["Settings"].Instance,
@@ -4340,14 +4170,12 @@ local Library do
                 end
             end
 
-            function Window:SetCenter(Force)
-                if Window.UserMoved and not Force then
-                    return
-                end
+            function Window:SetCenter()
+                local CenterPosition = Items["MainFrame"].Instance.AbsolutePosition
+                task.wait()
+                Items["MainFrame"].Instance.AnchorPoint = Vector2New(0, 0)
 
-                local MainFrame = Items["MainFrame"].Instance
-                MainFrame.AnchorPoint = Vector2New(0.5, 0.5)
-                MainFrame.Position = UDim2New(0.5, 0, 0.5, 0)
+                Items["MainFrame"].Instance.Position = UDim2New(0, CenterPosition.X, 0, CenterPosition.Y)
             end
 
             function Window:SetOpen(Bool)
@@ -4566,14 +4394,7 @@ local Library do
                 end
             end)]]
 
-            Window:SetCenter(true)
-
-            if Camera then
-                Library:Connect(Camera:GetPropertyChangedSignal("ViewportSize"), function()
-                    Window:SetCenter(false)
-                end)
-            end
-
+            Window:SetCenter()
             if Window.Compact then
                 Window:SetCompact(true)
             end
@@ -8308,7 +8129,6 @@ local Library do
                     BorderSizePixel = 0,
                     BackgroundColor3 = FromRGB(27, 25, 29)
                 })  Items["OptionHolder"]:AddToTheme({BackgroundColor3 = "Background"})
-                Library:RegisterScaleTarget(Items["OptionHolder"].Instance, 1, true)
                  
                 Instances:Create("UIStroke", {
                     Parent = Items["OptionHolder"].Instance,
@@ -9041,7 +8861,6 @@ local Library do
                     BorderSizePixel = 0,
                     BackgroundColor3 = FromRGB(27, 25, 29)
                 })  Items["OptionHolder"]:AddToTheme({BackgroundColor3 = "Background"})
-                Library:RegisterScaleTarget(Items["OptionHolder"].Instance, 1, true)
 
                 Instances:Create("UIStroke", {
                     Parent = Items["OptionHolder"].Instance,
@@ -9702,7 +9521,6 @@ local Library do
                     BorderSizePixel = 0,
                     BackgroundColor3 = FromRGB(27, 25, 29)
                 })  Items["OptionHolder"]:AddToTheme({BackgroundColor3 = "Background"})
-                Library:RegisterScaleTarget(Items["OptionHolder"].Instance, 1, true)
 
                 Instances:Create("UIStroke", {
                     Parent = Items["OptionHolder"].Instance,
@@ -14725,7 +14543,6 @@ local Library do
                 BorderSizePixel = 0,
                 BackgroundColor3 = FromRGB(27, 25, 29),
             })  Items["OptionHolder"]:AddToTheme({BackgroundColor3 = "Background"})
-            Library:RegisterScaleTarget(Items["OptionHolder"].Instance, 1, true)
 
             Instances:Create("UIStroke", {
                 Parent = Items["OptionHolder"].Instance,
