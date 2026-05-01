@@ -3337,11 +3337,17 @@ local Library do
                     AnchorPoint = Vector2New(0.5, 0.5),
                     BackgroundTransparency = 0.12,
                     Position = UDim2New(0.5, 0, 0.5, 0),
-                    Size = UDim2New(0, 677, 0, 644),
+                    Size = UDim2New(0, 902, 0, 644),
                     ZIndex = 2,
                     BorderSizePixel = 0,
+                    ClipsDescendants = true,
                     BackgroundColor3 = FromRGB(27, 25, 29)
                 })  Items["MainFrame"]:AddToTheme({BackgroundColor3 = "Background"})
+
+                Instances:Create("UICorner", {
+                    Parent = Items["MainFrame"].Instance,
+                    CornerRadius = UDimNew(0, 8)
+                })
 
                 Library:RegisterScaleTarget(Items["MainFrame"].Instance, 1, false)
 
@@ -3598,8 +3604,8 @@ local Library do
                     Name = "\0",
                     BorderColor3 = FromRGB(0, 0, 0),
                     BackgroundTransparency = 0.75,
-                    Position = UDim2New(0, 0, 0, 55),
-                    Size = UDim2New(1, 0, 1, -55),
+                    Position = UDim2New(0, 225, 0, 55),
+                    Size = UDim2New(1, -225, 1, -55),
                     ZIndex = 2,
                     BorderSizePixel = 0,
                     BackgroundColor3 = FromRGB(27, 25, 29)
@@ -21004,6 +21010,11 @@ local Library do
         end
 
         return Page
+    end
+end
+return Library
+eturn Library
+n Page
     end
 end
 return Library
