@@ -658,15 +658,15 @@ local function __INIT__()
     })
     Corner(AvatarImage, 35)
 
-    do
+    task.spawn(function()
         local userId = LP.UserId
         local thumbType = Enum.ThumbnailType.HeadShot
         local thumbSize = Enum.ThumbnailSize.Size150x150
         local ok, content = pcall(Players.GetUserThumbnailAsync, Players, userId, thumbType, thumbSize)
-        if ok and content then
+        if ok and content and AvatarImage and AvatarImage.Parent then
             AvatarImage.Image = content
         end
-    end
+    end)
 
     local NameSection = New("Frame", {
         Name = "NameSection",
@@ -1058,7 +1058,7 @@ local function __INIT__()
     local LucideIcons = nil
     local LucideFetched = false
 
-    do
+    task.spawn(function()
         local fetchOk, source = pcall(function()
             return game:HttpGet(
                 "https://raw.githubusercontent.com/deividcomsono/lucide-roblox-direct/refs/heads/main/source.lua"
@@ -1077,7 +1077,7 @@ local function __INIT__()
                 end
             end
         end
-    end
+    end)
 
     local function GetLucideIcon(name)
         if not LucideFetched or not LucideIcons then
