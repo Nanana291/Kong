@@ -1744,78 +1744,70 @@ local function __INIT__()
     end))
 
     do
-        Window.BackgroundTransparency = 1
-        WindowStroke.Transparency = 1
-        Overlay.BackgroundTransparency = 1
+        Window.BackgroundTransparency = 0
+        WindowStroke.Transparency = 0
+        Overlay.BackgroundTransparency = 0.35
 
-        local allDesc = Window:GetDescendants()
-        local origTransparency = {}
-        local origTextTransparency = {}
-        local origStrokeTransparency = {}
-
-        for _, desc in ipairs(allDesc) do
-            if desc:IsA("GuiObject") then
-                origTransparency[desc] = desc.BackgroundTransparency
-                desc.BackgroundTransparency = 1
-            end
-            if desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox") then
-                origTextTransparency[desc] = desc.TextTransparency
-                desc.TextTransparency = 1
-            end
-            if desc:IsA("UIStroke") then
-                origStrokeTransparency[desc] = desc.Transparency
-                desc.Transparency = 1
+        local function ForceVisible(root)
+            for _, desc in ipairs(root:GetDescendants()) do
+                if desc:IsA("GuiObject") and desc ~= LoadingScreen then
+                    if desc:GetAttribute("KeepHidden") ~= true then
+                        if desc.BackgroundTransparency >= 1 and desc.BackgroundColor3 ~= nil then
+                            -- Leave intentionally transparent layout/text containers alone.
+                        end
+                        desc.Visible = desc.Visible ~= false
+                    end
+                end
+                if desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox") then
+                    if desc ~= StatusLabel and desc ~= ExpiryLabel and desc ~= WelcomeLabel then
+                        desc.TextTransparency = 0
+                    end
+                elseif desc:IsA("ImageLabel") or desc:IsA("ImageButton") then
+                    desc.ImageTransparency = 0
+                elseif desc:IsA("UIStroke") then
+                    desc.Transparency = 0
+                end
             end
         end
 
-        task.delay(0.1, function()
-            Tween(Window, TI.FadeIn, { BackgroundTransparency = 0 })
-            Tween(WindowStroke, TI.FadeIn, { Transparency = 0 })
+        ForceVisible(Window)
+        LoadingScreen.Visible = false
+        LoadingScreen.BackgroundTransparency = 1
+        StatusLabel.TextTransparency = 1
+        ExpiryFrame.Visible = false
+        ExpiryLabel.TextTransparency = 1
+        WelcomeLabel.TextTransparency = 0
 
-            task.delay(0.15, function()
-                for desc, orig in pairs(origTransparency) do
-                    if desc and desc.Parent then
-                        Tween(desc, TI.FadeIn, { BackgroundTransparency = orig })
-                    end
+        task.delay(0.25, function()
+            ForceVisible(Window)
+            LoadingScreen.Visible = false
+            StatusLabel.TextTransparency = 1
+
+            local fullText = "WELCOME, " .. LP.DisplayName:upper()
+            local strSub = string.sub
+            WelcomeLabel.TextTransparency = 0
+            WelcomeLabel.Text = ""
+
+            for i = 1, #fullText do
+                WelcomeLabel.Text = strSub(fullText, 1, i) .. '<font color="#555">|</font>'
+                task.wait(0.025)
+            end
+
+            WelcomeLabel.Text = fullText
+
+            task.delay(0.3, function()
+                local ok, glowTween = pcall(
+                    TS.Create,
+                    TS,
+                    WelcomeLabel,
+                    TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+                    {
+                        TextColor3 = Theme.AccentGlow,
+                    }
+                )
+                if ok and glowTween then
+                    glowTween:Play()
                 end
-                for desc, orig in pairs(origTextTransparency) do
-                    if desc and desc.Parent and desc ~= WelcomeLabel then
-                        Tween(desc, TI.FadeIn, { TextTransparency = orig })
-                    end
-                end
-                for desc, orig in pairs(origStrokeTransparency) do
-                    if desc and desc.Parent then
-                        Tween(desc, TI.FadeIn, { Transparency = orig })
-                    end
-                end
-
-                origTransparency = nil
-                origTextTransparency = nil
-                origStrokeTransparency = nil
-
-                task.delay(0.4, function()
-                    local fullText = "WELCOME, " .. LP.DisplayName:upper()
-                    local strSub = string.sub
-                    WelcomeLabel.TextTransparency = 0
-
-                    for i = 1, #fullText do
-                        WelcomeLabel.Text = strSub(fullText, 1, i) .. '<font color="#555">|</font>'
-                        task.wait(0.035)
-                    end
-
-                    WelcomeLabel.Text = fullText
-
-                    task.delay(0.3, function()
-                        local glowTween = TS:Create(
-                            WelcomeLabel,
-                            TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
-                            {
-                                TextColor3 = Theme.AccentGlow,
-                            }
-                        )
-                        glowTween:Play()
-                    end)
-                end)
             end)
         end)
     end
