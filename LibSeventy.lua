@@ -202,6 +202,7 @@ local Library do
             Directory = "lyapossss",
             Configs = "lyapossss/Configs",
             Assets = "lyapossss/Assets",
+            Autoload = "lyapossss/Configs/autoload.json",
         },
 
         -- Ignore below
@@ -442,6 +443,7 @@ local Library do
         self.Folders.Directory = Folder
         self.Folders.Configs = Folder .. "/Configs"
         self.Folders.Assets = Folder .. "/Assets"
+        self.Folders.Autoload = self.Folders.Configs .. "/autoload.json"
 
         local function RecursiveMakeFolder(Path)
             local Segments = Path:split("/")
@@ -586,23 +588,118 @@ local Library do
         Elements = {},
         List = {},
         Files = {},
-        Autoload = nil
+        Autoload = nil,
+        AutoloadMeta = nil,
+        Loading = false,
+        PendingAutoload = false,
+        PendingValues = {},
+        LastLoad = nil,
+        Ready = false,
+        Version = 2,
     }
+
+    Library.GetAutoloadMetadataPath = function(self)
+        return (self.Folders and (self.Folders.Autoload or (self.Folders.Configs .. "/autoload.json"))) or "lyapossss/Configs/autoload.json"
+    end
+
+    local ConfigIgnoredFlags = {
+        ConfigsList = true,
+        ConfigsName = true,
+        UI_AutoloadConfig = true,
+    }
+
+    local function TrimString(Value)
+        return tostring(Value):match("^%s*(.-)%s*$")
+    end
+
+    local function SafeIsFile(Path)
+        local Success, Result = pcall(isfile, Path)
+        return Success and Result == true
+    end
+
+    local function SafeIsFolder(Path)
+        local Success, Result = pcall(isfolder, Path)
+        return Success and Result == true
+    end
+
+    local function SafeDeleteFile(Path)
+        if SafeIsFile(Path) then
+            pcall(delfile, Path)
+        end
+    end
+
+    local function SafeWriteFile(Path, Contents)
+        local TempPath = Path .. ".tmp"
+        local Success, Result = pcall(writefile, TempPath, Contents)
+        if not Success then
+            return false, Result
+        end
+
+        Success, Result = pcall(writefile, Path, Contents)
+        SafeDeleteFile(TempPath)
+        if not Success then
+            return false, Result
+        end
+
+        return true
+    end
+
+    local function SanitizeConfigValue(Value, Depth)
+        local ValueType = type(Value)
+        if ValueType == "boolean" or ValueType == "number" or ValueType == "string" or Value == nil then
+            return Value
+        end
+
+        if ValueType ~= "table" then
+            return nil
+        end
+
+        Depth = (Depth or 0) + 1
+        if Depth > 8 then
+            return nil
+        end
+
+        local Clean = {}
+        local HasValue = false
+        for Key, SubValue in Value do
+            local KeyType = type(Key)
+            if KeyType == "string" or KeyType == "number" then
+                local CleanValue = SanitizeConfigValue(SubValue, Depth)
+                if CleanValue ~= nil then
+                    Clean[Key] = CleanValue
+                    HasValue = true
+                end
+            end
+        end
+
+        return HasValue and Clean or {}
+    end
 
     Library.NormalizeConfigName = function(self, Name, KeepExtension)
         if not Name or Name == "" then
             return nil
         end
 
-        local Cleaned = tostring(Name):match("^%s*(.-)%s*$")
+        local Cleaned = TrimString(Name)
         Cleaned = Cleaned:gsub("\\", "/"):match("[^/]+$") or Cleaned
-        if Cleaned == "" or Cleaned == "autoload.txt" then
+        if Cleaned == "" then
             return nil
         end
 
-        local HasJson = Cleaned:sub(-5):lower() == ".json"
+        local Lower = Cleaned:lower()
+        if Lower == "autoload.txt" or Lower == "autoload.json" then
+            return nil
+        end
+
+        local HasJson = Lower:sub(-5) == ".json"
         if HasJson then
-            return KeepExtension and Cleaned or Cleaned:sub(1, -6)
+            Cleaned = Cleaned:sub(1, -6)
+        end
+
+        Cleaned = Cleaned:gsub("[%c]", ""):gsub("[/\\:*?\"<>|]", "_")
+        Cleaned = TrimString(Cleaned)
+        if Cleaned == "" then
+            return nil
         end
 
         return KeepExtension and (Cleaned .. ".json") or Cleaned
@@ -622,45 +719,125 @@ local Library do
             end
         end
 
-        local FileName = Library:NormalizeConfigName(Name, true)
+        local FileName = Library:NormalizeConfigName(DisplayName, true)
         return DisplayName, FileName, self.Folders.Configs .. "/" .. FileName
     end
 
-    Library.GetAutoloadConfigName = function(self)
-        local Path = self.Folders.Configs .. "/autoload.txt"
-        if not isfile(Path) then
-            return nil
+    Library.ReadAutoloadMetadata = function(self)
+        local Path = self:GetAutoloadMetadataPath()
+        local Metadata
+
+        if SafeIsFile(Path) then
+            local ReadSuccess, Contents = pcall(readfile, Path)
+            if ReadSuccess and type(Contents) == "string" and TrimString(Contents) ~= "" then
+                local DecodeSuccess, Decoded = pcall(function()
+                    return HttpService:JSONDecode(Contents)
+                end)
+                if DecodeSuccess and type(Decoded) == "table" then
+                    Metadata = Decoded
+                else
+                    SafeDeleteFile(Path)
+                end
+            else
+                SafeDeleteFile(Path)
+            end
         end
 
-        return Library:NormalizeConfigName(readfile(Path), false)
+        -- Backward compatibility: migrate the legacy autoload.txt target once.
+        local LegacyPath = self.Folders.Configs .. "/autoload.txt"
+        if not Metadata and SafeIsFile(LegacyPath) then
+            local ReadSuccess, LegacyName = pcall(readfile, LegacyPath)
+            local DisplayName = ReadSuccess and Library:NormalizeConfigName(LegacyName, false) or nil
+            if DisplayName then
+                Metadata = {
+                    version = self.ConfigManager.Version,
+                    config = DisplayName,
+                    file = Library:NormalizeConfigName(DisplayName, true),
+                    migratedFrom = "autoload.txt",
+                    updatedAt = os.time(),
+                }
+                SafeWriteFile(Path, HttpService:JSONEncode(Metadata))
+            else
+                SafeDeleteFile(LegacyPath)
+            end
+        end
+
+        if Metadata then
+            Metadata.config = Library:NormalizeConfigName(Metadata.config or Metadata.name or Metadata.file, false)
+            Metadata.file = Metadata.config and Library:NormalizeConfigName(Metadata.config, true) or nil
+            if not Metadata.config then
+                Metadata = nil
+                SafeDeleteFile(Path)
+            end
+        end
+
+        self.ConfigManager.AutoloadMeta = Metadata
+        self.ConfigManager.Autoload = Metadata and Metadata.config or nil
+        return Metadata
+    end
+
+    Library.WriteAutoloadMetadata = function(self, ConfigName)
+        local Path = self:GetAutoloadMetadataPath()
+        local DisplayName = Library:NormalizeConfigName(ConfigName, false)
+
+        if not DisplayName then
+            SafeDeleteFile(Path)
+            SafeDeleteFile(self.Folders.Configs .. "/autoload.txt")
+            self.ConfigManager.Autoload = nil
+            self.ConfigManager.AutoloadMeta = nil
+            return true, nil
+        end
+
+        local _, FileName, ConfigPath = self:ResolveConfigPath(DisplayName)
+        local Metadata = {
+            version = self.ConfigManager.Version,
+            config = DisplayName,
+            file = FileName,
+            path = ConfigPath,
+            updatedAt = os.time(),
+        }
+
+        local Success, Result = SafeWriteFile(Path, HttpService:JSONEncode(Metadata))
+        if not Success then
+            return false, Result
+        end
+
+        -- Keep legacy readers functional without using it as runtime truth.
+        SafeWriteFile(self.Folders.Configs .. "/autoload.txt", FileName)
+        self.ConfigManager.Autoload = DisplayName
+        self.ConfigManager.AutoloadMeta = Metadata
+        return true, DisplayName
+    end
+
+    Library.GetAutoloadConfigName = function(self)
+        local Metadata = self:ReadAutoloadMetadata()
+        return Metadata and Metadata.config or nil
     end
 
     Library.SetAutoloadConfigName = function(self, Name)
-        local Path = self.Folders.Configs .. "/autoload.txt"
-        local DisplayName, FileName = Library:ResolveConfigPath(Name)
-
-        if FileName then
-            writefile(Path, FileName)
-        elseif isfile(Path) then
-            delfile(Path)
+        local Success, Result = self:WriteAutoloadMetadata(Name)
+        if not Success then
+            warn(Result)
+            return nil, Result
         end
-
-        self.ConfigManager.Autoload = DisplayName
-        return DisplayName
+        return Result
     end
 
     Library.ListConfigs = function(self)
         local DisplayList = {}
         local Files = {}
 
-        if isfolder(self.Folders.Configs) then
-            for _, Path in ipairs(listfiles(self.Folders.Configs)) do
-                local FileName = Path:match("[^/\\]+$")
-                if FileName and FileName:sub(-5):lower() == ".json" then
-                    local DisplayName = Library:NormalizeConfigName(FileName, false)
-                    if DisplayName then
-                        Files[DisplayName] = Path
-                        TableInsert(DisplayList, DisplayName)
+        if SafeIsFolder(self.Folders.Configs) then
+            local ListSuccess, Paths = pcall(listfiles, self.Folders.Configs)
+            if ListSuccess and type(Paths) == "table" then
+                for _, Path in ipairs(Paths) do
+                    local FileName = tostring(Path):match("[^/\\]+$")
+                    if FileName and FileName:sub(-5):lower() == ".json" and FileName:lower() ~= "autoload.json" then
+                        local DisplayName = Library:NormalizeConfigName(FileName, false)
+                        if DisplayName then
+                            Files[DisplayName] = Path
+                            TableInsert(DisplayList, DisplayName)
+                        end
                     end
                 end
             end
@@ -679,7 +856,7 @@ local Library do
 
     Library.ReadConfigFile = function(self, Name)
         local DisplayName, _, Path = Library:ResolveConfigPath(Name)
-        if not DisplayName or not Path or not isfile(Path) then
+        if not DisplayName or not Path or not SafeIsFile(Path) then
             return false, "Config file not found"
         end
 
@@ -689,7 +866,45 @@ local Library do
             return false, Result
         end
 
-        return true, Result
+        if type(Result) ~= "string" or TrimString(Result) == "" then
+            return false, "Config file is empty"
+        end
+
+        return true, Result, DisplayName, Path
+    end
+
+    Library.DecodeConfigPayload = function(self, Payload)
+        if type(Payload) ~= "string" or TrimString(Payload) == "" then
+            return false, "Invalid config payload"
+        end
+
+        local DecodeSuccess, Decoded = pcall(function()
+            return HttpService:JSONDecode(Payload)
+        end)
+
+        if not DecodeSuccess then
+            return false, Decoded
+        end
+
+        if type(Decoded) ~= "table" then
+            return false, "Config data must be a JSON object"
+        end
+
+        return true, Decoded
+    end
+
+    Library.ValidateConfigFile = function(self, Name)
+        local ReadSuccess, Contents, DisplayName, Path = self:ReadConfigFile(Name)
+        if not ReadSuccess then
+            return false, Contents
+        end
+
+        local DecodeSuccess, Decoded = self:DecodeConfigPayload(Contents)
+        if not DecodeSuccess then
+            return false, Decoded
+        end
+
+        return true, Decoded, DisplayName, Path
     end
 
     Library.CreateConfigFile = function(self, Name)
@@ -698,11 +913,11 @@ local Library do
             return false, "Invalid config name"
         end
 
-        if isfile(Path) then
+        if SafeIsFile(Path) then
             return false, "Config already exists"
         end
 
-        local Success, Result = pcall(writefile, Path, Library:GetConfig())
+        local Success, Result = SafeWriteFile(Path, Library:GetConfig())
         if not Success then
             warn(Result)
             return false, Result
@@ -718,7 +933,7 @@ local Library do
             return false, "Invalid config name"
         end
 
-        local Success, Result = pcall(writefile, Path, Library:GetConfig())
+        local Success, Result = SafeWriteFile(Path, Library:GetConfig())
         if not Success then
             warn(Result)
             return false, Result
@@ -729,95 +944,62 @@ local Library do
     end
 
     Library.GetConfig = function(self)
-        local Config = { } 
-        local IgnoredFlags = {
-            ConfigsList = true,
-            ConfigsName = true,
-            UI_AutoloadConfig = true
-        }
+        local Config = {}
 
-        local Success, Result = Library:SafeCall(function()
-            for Index, Value in Library.Flags do 
-                if IgnoredFlags[Index] then
+        local Success, Result = pcall(function()
+            for Index, Value in Library.Flags do
+                if ConfigIgnoredFlags[Index] then
                     continue
                 end
 
-                if type(Value) == "table" and Value.Key then
-                    Config[Index] = {Key = tostring(Value.Key), Mode = Value.Mode}
-                elseif type(Value) == "table" and Value.Color then
-                    Config[Index] = {Color = "#" .. Value.HexValue, Alpha = Value.Alpha}
+                local ValueType = type(Value)
+                if ValueType == "table" and Value.Key then
+                    Config[Index] = {Key = tostring(Value.Key), Mode = SanitizeConfigValue(Value.Mode)}
+                elseif ValueType == "table" and Value.Color then
+                    Config[Index] = {Color = "#" .. tostring(Value.HexValue or "FFFFFF"), Alpha = SanitizeConfigValue(Value.Alpha)}
                 else
-                    Config[Index] = Value
+                    Config[Index] = SanitizeConfigValue(Value)
                 end
             end
             Config["__ThemePreset"] = Library.ActiveThemePreset or "Default"
         end)
 
+        if not Success then
+            warn(Result)
+        end
+
         return HttpService:JSONEncode(Config)
     end
 
-    Library.LoadConfig = function(self, Config)
-        if type(Config) ~= "string" or Config == "" then
-            return false, "Invalid config payload"
-        end
-
-        local IgnoredFlags = {
-            ConfigsList = true,
-            ConfigsName = true,
-            UI_AutoloadConfig = true
-        }
-
-        local RawConfig = Config
-        local Trimmed = RawConfig:match("^%s*(.-)%s*$")
-
-        if Trimmed ~= "" and Trimmed:sub(1, 1) ~= "{" and Trimmed:sub(1, 1) ~= "[" then
-            local ReadSuccess, ReadResult = Library:ReadConfigFile(Trimmed)
-            if not ReadSuccess then
-                return false, ReadResult
+    Library.ApplyConfigValue = function(self, Index, Value, SetFunction)
+        if Index == "__ThemePreset" then
+            if type(Value) == "string" then
+                Library:ApplyThemePreset(Value)
             end
-
-            RawConfig = ReadResult
+            return true
         end
 
-        local DecodeSuccess, Decoded = pcall(function()
-            return HttpService:JSONDecode(RawConfig)
-        end)
+        if ConfigIgnoredFlags[Index] then
+            return true
+        end
 
-        if not DecodeSuccess then
-            warn(Decoded)
-            return false, Decoded
+        SetFunction = SetFunction or Library.SetFlags[Index]
+        if not SetFunction then
+            self.ConfigManager.PendingValues[Index] = Value
+            return true, "pending"
         end
 
         local Success, Result = pcall(function()
-            for Index, Value in Decoded do
-                if Index == "__ThemePreset" then
-                    if type(Value) == "string" then
-                        Library:ApplyThemePreset(Value)
-                    end
-                    continue
+            if type(Value) == "table" and Value.Key then
+                SetFunction(Value)
+            elseif type(Value) == "table" and Value.Color then
+                local Color = Value.Color
+                if type(Color) == "string" and Color:sub(1, 1) == "#" then
+                    Color = FromHex(Color)
                 end
-
-                if IgnoredFlags[Index] then
-                    continue
-                end
-
-                local SetFunction = Library.SetFlags[Index]
-
-                if not SetFunction then
-                    continue
-                end
-
-                if type(Value) == "table" and Value.Key then 
-                    SetFunction(Value)
-                elseif type(Value) == "table" and Value.Color then
-                    local Color = Value.Color
-                    if type(Color) == "string" and Color:sub(1, 1) == "#" then
-                        Color = FromHex(Color)
-                    end
-                    SetFunction(Color, Value.Alpha)
-                else
-                    SetFunction(Value)
-                end
+                SetFunction(Color, Value.Alpha)
+            else
+                SetFunction(Value)
             end
         end)
 
@@ -826,24 +1008,134 @@ local Library do
             return false, Result
         end
 
+        self.ConfigManager.PendingValues[Index] = nil
         return true
     end
 
-    Library.LoadAutoloadConfig = function(self)
-        local ConfigName = Library:GetAutoloadConfigName()
-        if not ConfigName then
-            return
+    setmetatable(Library.SetFlags, {
+        __newindex = function(Table, Index, SetFunction)
+            rawset(Table, Index, SetFunction)
+            if Library and Library.ConfigManager and Library.ConfigManager.PendingValues[Index] ~= nil then
+                local PendingValue = Library.ConfigManager.PendingValues[Index]
+                task.defer(function()
+                    if Library and Library.SetFlags[Index] == SetFunction then
+                        Library:ApplyConfigValue(Index, PendingValue, SetFunction)
+                    end
+                end)
+            end
+        end
+    })
+
+    Library.LoadConfig = function(self, Config, Options)
+        Options = Options or {}
+        if type(Config) ~= "string" or Config == "" then
+            return false, "Invalid config payload"
         end
 
-        local Success, Err = Library:LoadConfig(ConfigName)
-        if not Success then
-            warn("Failed to load autoload config: " .. tostring(Err))
+        local RawConfig = Config
+        local DisplayName
+        local Trimmed = TrimString(RawConfig)
+
+        if Trimmed ~= "" and Trimmed:sub(1, 1) ~= "{" and Trimmed:sub(1, 1) ~= "[" then
+            local ReadSuccess, ReadResult, ResolvedName = Library:ReadConfigFile(Trimmed)
+            if not ReadSuccess then
+                return false, ReadResult
+            end
+
+            RawConfig = ReadResult
+            DisplayName = ResolvedName
         end
+
+        local DecodeSuccess, Decoded = self:DecodeConfigPayload(RawConfig)
+        if not DecodeSuccess then
+            warn(Decoded)
+            return false, Decoded
+        end
+
+        self.ConfigManager.Loading = true
+        local Success, Result = pcall(function()
+            for Index, Value in Decoded do
+                Library:ApplyConfigValue(Index, Value)
+            end
+        end)
+        self.ConfigManager.Loading = false
+
+        if not Success then
+            warn(Result)
+            return false, Result
+        end
+
+        self.ConfigManager.LastLoad = {
+            config = DisplayName,
+            at = os.time(),
+            autoload = Options.Autoload == true,
+        }
+
+        return true, DisplayName or true
+    end
+
+    Library.ClearAutoloadConfig = function(self, Reason)
+        local Success, Result = self:WriteAutoloadMetadata(nil)
+        if not Success then
+            warn(Result)
+        end
+        self.ConfigManager.PendingAutoload = false
+        self.ConfigManager.LastAutoloadError = Reason
+    end
+
+    Library.LoadAutoloadConfig = function(self, Options)
+        Options = Options or {}
+        local Metadata = self:ReadAutoloadMetadata()
+        local ConfigName = Metadata and Metadata.config or nil
+        if not ConfigName then
+            return false, "No autoload config set"
+        end
+
+        local Valid, Decoded, DisplayName = self:ValidateConfigFile(ConfigName)
+        if not Valid then
+            self:ClearAutoloadConfig(Decoded)
+            if Options.Notify == true then
+                Library:Notification({
+                    Title = "Autoload Disabled",
+                    Description = tostring(Decoded or "Saved autoload config is no longer valid"),
+                    Duration = 5
+                })
+            end
+            return false, Decoded
+        end
+
+        local function ApplyAutoload()
+            if not Library then
+                return
+            end
+
+            Library.ConfigManager.PendingAutoload = false
+            local Success, Result = Library:LoadConfig(HttpService:JSONEncode(Decoded), {Autoload = true})
+            if Success then
+                Library.ConfigManager.Autoload = DisplayName
+                return
+            end
+
+            Library:ClearAutoloadConfig(Result)
+            if Options.Notify == true then
+                Library:Notification({
+                    Title = "Autoload Failed",
+                    Description = tostring(Result or "Failed to load autoload config"),
+                    Duration = 5
+                })
+            end
+        end
+
+        -- Defer by state, not by arbitrary time: this lets the caller finish registering
+        -- late controls in the current execution frame before persisted flags are applied.
+        self.ConfigManager.PendingAutoload = true
+        task.defer(ApplyAutoload)
+        return true, DisplayName
     end
 
     Library.DeleteConfig = function(self, Config)
         local DisplayName, _, Path = Library:ResolveConfigPath(Config)
-        if not DisplayName or not Path or not isfile(Path) then
+        if not DisplayName or not Path or not SafeIsFile(Path) then
             return false, "Config file not found"
         end
 
@@ -854,11 +1146,11 @@ local Library do
         end
 
         if self:GetAutoloadConfigName() == DisplayName then
-            self:SetAutoloadConfigName(nil)
+            self:ClearAutoloadConfig("Autoload config was deleted")
         end
 
         Library:RefreshConfigsList(nil)
-        return true
+        return true, DisplayName
     end
 
     Library.RefreshConfigsList = function(self, Element, SelectedValue)
@@ -19209,7 +19501,11 @@ local Library do
         end
 
         local function SetAutoloadConfig(configName)
-            return Library:SetAutoloadConfigName(configName)
+            local result, err = Library:SetAutoloadConfigName(configName)
+            if err then
+                return false, err
+            end
+            return true, result
         end
 
         local PageFr = Page.Items["Page"].Instance
@@ -20075,6 +20371,7 @@ local Library do
         local AutoloadToggle
         local AutoloadInfoParagraph
         local suppressAutoloadCallback = false
+        local settingsPanelReady = false
 
         local function UpdateAutoloadSnapshot(configName)
             local current = NormalizeConfigName(configName or GetAutoloadConfig())
@@ -20084,6 +20381,7 @@ local Library do
             if AutoloadInfoParagraph then
                 AutoloadInfoParagraph:SetText(current or "No autoload config is set right now.")
             end
+            return current
         end
 
         local function SetAutoloadToggle(value)
@@ -20097,7 +20395,14 @@ local Library do
         end
 
         local function RefreshConfigPanel(selectedValue)
-            local desiredSelection = NormalizeConfigName(selectedValue or ConfigSelected)
+            local currentAutoload = NormalizeConfigName(GetAutoloadConfig())
+            Library:ListConfigs()
+            if currentAutoload and not Library.ConfigManager.Files[currentAutoload] then
+                Library:ClearAutoloadConfig("Autoload config is missing")
+                currentAutoload = nil
+            end
+
+            local desiredSelection = NormalizeConfigName(selectedValue or ConfigSelected or currentAutoload)
             Library:RefreshConfigsList(ConfigsDropdown, desiredSelection)
 
             if desiredSelection and Library.ConfigManager.Files[desiredSelection] then
@@ -20112,9 +20417,7 @@ local Library do
                 end
             end
 
-            local currentAutoload = NormalizeConfigName(GetAutoloadConfig())
-
-            UpdateAutoloadSnapshot(currentAutoload)
+            currentAutoload = UpdateAutoloadSnapshot(currentAutoload)
             SetAutoloadToggle(currentAutoload ~= nil)
 
             return ConfigSelected, currentAutoload
@@ -20135,9 +20438,17 @@ local Library do
                 Callback = function(Value)
                     ConfigSelected = NormalizeConfigName(Value)
 
-                    if AutoloadToggle and AutoloadToggle:Get() and ConfigSelected then
-                        SetAutoloadConfig(ConfigSelected)
-                        UpdateAutoloadSnapshot(ConfigSelected)
+                    if settingsPanelReady and AutoloadToggle and AutoloadToggle:Get() and ConfigSelected then
+                        local Success, Result = SetAutoloadConfig(ConfigSelected)
+                        if Success then
+                            UpdateAutoloadSnapshot(Result)
+                        else
+                            Library:Notification({
+                                Title = "Autoload Error",
+                                Description = tostring(Result or "Failed to save autoload metadata"),
+                                Duration = 5
+                            })
+                        end
                     end
                 end
             })
@@ -20302,46 +20613,71 @@ local Library do
                 end
             })
 
+            suppressAutoloadCallback = true
             AutoloadToggle = ConfigsSection:Toggle({
-                Name = "Autoload Selected Config",
+                Name = "Set As Autoload Config",
                 Flag = "UI_AutoloadConfig",
                 Default = GetAutoloadConfig() ~= nil,
-                ToolTip = "When enabled, the selected config becomes the autoload target.",
+                ToolTip = "Persist the selected config as the startup autoload target.",
                 Callback = function(Value)
                     if suppressAutoloadCallback then
                         return
                     end
 
                     if Value then
-                        if not ConfigSelected then
+                        local currentAutoload = NormalizeConfigName(GetAutoloadConfig())
+                        local targetConfig = NormalizeConfigName(ConfigSelected or currentAutoload)
+
+                        if not targetConfig or not Library.ConfigManager.Files[targetConfig] then
                             Library:Notification({
                                 Title = "Autoload Error",
-                                Description = "Select a config before enabling autoload",
+                                Description = "Select an existing config before enabling autoload",
                                 Duration = 5
                             })
                             SetAutoloadToggle(false)
-                            UpdateAutoloadSnapshot(GetAutoloadConfig())
+                            UpdateAutoloadSnapshot(currentAutoload)
                             return
                         end
 
-                        SetAutoloadConfig(ConfigSelected)
-                        RefreshConfigPanel(ConfigSelected)
+                        local Success, Result = SetAutoloadConfig(targetConfig)
+                        if not Success then
+                            SetAutoloadToggle(false)
+                            Library:Notification({
+                                Title = "Autoload Error",
+                                Description = tostring(Result or "Failed to save autoload metadata"),
+                                Duration = 5
+                            })
+                            return
+                        end
+
+                        ConfigSelected = Result
+                        RefreshConfigPanel(Result)
                         Library:Notification({
                             Title = "Autoload Set",
-                            Description = strFormat("Set %q as autoload config", ConfigSelected),
+                            Description = strFormat("Set %q as autoload config", Result),
                             Duration = 5
                         })
                     else
-                        SetAutoloadConfig(nil)
+                        local hadAutoload = NormalizeConfigName(GetAutoloadConfig())
+                        local Success, Result = SetAutoloadConfig(nil)
                         RefreshConfigPanel(ConfigSelected)
-                        Library:Notification({
-                            Title = "Autoload Disabled",
-                            Description = "Cleared the autoload config",
-                            Duration = 5
-                        })
+                        if not Success then
+                            Library:Notification({
+                                Title = "Autoload Error",
+                                Description = tostring(Result or "Failed to clear autoload metadata"),
+                                Duration = 5
+                            })
+                        elseif hadAutoload then
+                            Library:Notification({
+                                Title = "Autoload Disabled",
+                                Description = "Cleared the autoload config",
+                                Duration = 5
+                            })
+                        end
                     end
                 end
             })
+            suppressAutoloadCallback = false
         end
 
         local InfoSection = Page:Section({
@@ -20745,6 +21081,7 @@ local Library do
         local initialTheme = Library.Flags["UI_ThemePreset"] or "Default"
         ThemeValue.Instance.Text = tostring(initialTheme)
         HeaderThemeValue.Instance.Text = tostring(initialTheme)
+        settingsPanelReady = true
         RefreshConfigPanel(GetAutoloadConfig())
 
         HeaderKeybindValue.Instance.Text = KeybindList and "Attached" or "Detached"
