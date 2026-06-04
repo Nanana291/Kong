@@ -586,23 +586,24 @@ local function setStatus(kind, message)
         return
     end
     local color = Theme.TextDim
+    local lineTransparency = kind == "idle" and 0.74 or 0.5
     if kind == "success" then
-        color = Theme.Success
+        color = Color3.fromRGB(202, 208, 236)
+        lineTransparency = 0.54
     elseif kind == "error" then
-        color = Theme.Error
+        color = Color3.fromRGB(205, 198, 224)
+        lineTransparency = 0.48
     elseif kind == "loading" then
-        color = Theme.AccentHot
+        color = Color3.fromRGB(204, 211, 250)
+        lineTransparency = 0.44
     elseif kind == "warning" then
-        color = Theme.Warning
+        color = Color3.fromRGB(205, 198, 224)
+        lineTransparency = 0.48
     end
     UI.StatusText.Text = message or "Status"
     UI.StatusText.TextColor3 = color
     if UI.StatusLine then
-        tween(
-            UI.StatusLine,
-            TweenInfoSet.Soft,
-            { BackgroundColor3 = color, BackgroundTransparency = kind == "idle" and 0.74 or 0.34 }
-        )
+        tween(UI.StatusLine, TweenInfoSet.Soft, { BackgroundColor3 = color, BackgroundTransparency = lineTransparency })
     end
 end
 
@@ -622,8 +623,21 @@ local function setInputLocked(locked)
 end
 
 local function startLoadingVisual()
-    if UI.LoadingDot then
-        UI.LoadingDot.Visible = true
+    State.LoadingTick = 0
+    if UI.StatusText then
+        tween(UI.StatusText, TweenInfoSet.Fast, { TextTransparency = 1 })
+    end
+    if UI.StatusLine then
+        tween(UI.StatusLine, TweenInfoSet.Fast, { BackgroundTransparency = 1 })
+    end
+    if UI.ValidationOverlay then
+        UI.ValidationOverlay.Visible = true
+        UI.ValidationOverlay.GroupTransparency = 1
+        tween(UI.ValidationOverlay, TweenInfoSet.Soft, { GroupTransparency = 0 })
+    end
+    if UI.ValidationOverlayScale then
+        UI.ValidationOverlayScale.Scale = 0.94
+        tween(UI.ValidationOverlayScale, TweenInfoSet.Soft, { Scale = 1 })
     end
     if UI.ValidateLabel then
         UI.ValidateLabel.Text = "Validating"
@@ -631,24 +645,40 @@ local function startLoadingVisual()
     disconnect(State.LoadingConnection)
     State.LoadingConnection = connect(RunService.RenderStepped, function(dt)
         State.LoadingTick += dt
-        if UI.LoadingDot then
-            UI.LoadingDot.Rotation = (State.LoadingTick * 220) % 360
-            UI.LoadingDot.BackgroundTransparency = 0.18 + math.sin(State.LoadingTick * 6) * 0.08
+        if UI.ValidationSpinner then
+            UI.ValidationSpinner.Rotation = (State.LoadingTick * 178) % 360
+        end
+        if UI.SpinnerSegments then
+            for index, segment in ipairs(UI.SpinnerSegments) do
+                local wave = (math.sin(State.LoadingTick * 7.2 + index * 0.7) + 1) * 0.5
+                segment.BackgroundTransparency = 0.38 + wave * 0.42
+            end
         end
     end)
 end
-
 local function stopLoadingVisual()
     disconnect(State.LoadingConnection)
     State.LoadingConnection = nil
-    if UI.LoadingDot then
-        UI.LoadingDot.Visible = false
+    if UI.ValidationOverlay then
+        local overlay = UI.ValidationOverlay
+        local outTween = tween(overlay, TweenInfoSet.Fast, { GroupTransparency = 1 })
+        if outTween then
+            outTween.Completed:Once(function()
+                if not State.Validating and overlay.Parent then
+                    overlay.Visible = false
+                end
+            end)
+        else
+            overlay.Visible = false
+        end
+    end
+    if UI.ValidationOverlayScale then
+        tween(UI.ValidationOverlayScale, TweenInfoSet.Fast, { Scale = 0.96 })
     end
     if UI.ValidateLabel then
         UI.ValidateLabel.Text = "Validate"
     end
 end
-
 local function shake(object)
     if not object then
         return
@@ -729,8 +759,8 @@ local function createButton(parent, name, text, position, size, primary, callbac
         Position = position,
         Size = size,
         AutoButtonColor = false,
-        BackgroundColor3 = primary and Color3.fromRGB(118, 129, 205) or Color3.fromRGB(12, 15, 24),
-        BackgroundTransparency = primary and 0.1 or 0.72,
+        BackgroundColor3 = primary and Color3.fromRGB(183, 192, 255) or Color3.fromRGB(10, 13, 21),
+        BackgroundTransparency = primary and 0.2 or 0.76,
         BorderSizePixel = 0,
         ClipsDescendants = false,
         Text = "",
@@ -739,91 +769,132 @@ local function createButton(parent, name, text, position, size, primary, callbac
     })
     corner(button, primary and 24 or 18)
 
-    local shadow = new("Frame", {
-        Name = "AmbientBloom",
-        Size = primary and UDim2.new(1, 22, 1, 18) or UDim2.new(1, 12, 1, 10),
+    local glow = new("Frame", {
+        Name = "Glow Layer",
+        Size = primary and UDim2.new(1, 30, 1, 24) or UDim2.new(1, 12, 1, 10),
         AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.55),
-        BackgroundColor3 = primary and Theme.AccentHot or Theme.AccentDeep,
-        BackgroundTransparency = primary and 0.83 or 0.94,
+        Position = UDim2.fromScale(0.5, 0.56),
+        BackgroundColor3 = primary and Color3.fromRGB(176, 190, 255) or Theme.AccentDeep,
+        BackgroundTransparency = primary and 0.78 or 0.95,
         BorderSizePixel = 0,
-        ZIndex = 46,
+        ZIndex = 45,
         Parent = button,
     })
-    corner(shadow, primary and 32 or 24)
+    corner(glow, primary and 34 or 24)
     gradient(
-        shadow,
-        ColorSequence.new(Theme.AccentHot, Theme.AccentDeep),
+        glow,
+        ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(247, 247, 255)),
+            ColorSequenceKeypoint.new(0.46, Color3.fromRGB(182, 190, 255)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(126, 145, 230)),
+        }),
         0,
         NumberSequence.new({
-            NumberSequenceKeypoint.new(0, primary and 0.58 or 0.84),
-            NumberSequenceKeypoint.new(0.48, primary and 0.28 or 0.72),
+            NumberSequenceKeypoint.new(0, primary and 0.7 or 0.92),
+            NumberSequenceKeypoint.new(0.48, primary and 0.34 or 0.82),
             NumberSequenceKeypoint.new(1, 1),
         })
     )
 
-    local surface = new("Frame", {
-        Name = "IlluminatedSurface",
+    local base = new("Frame", {
+        Name = "Base Layer",
         Size = UDim2.fromScale(1, 1),
-        BackgroundColor3 = primary and Color3.fromRGB(128, 140, 218) or Color3.fromRGB(10, 13, 21),
-        BackgroundTransparency = primary and 0.04 or 0.76,
+        BackgroundColor3 = primary and Color3.fromRGB(150, 163, 237) or Color3.fromRGB(8, 11, 18),
+        BackgroundTransparency = primary and 0.1 or 0.78,
         BorderSizePixel = 0,
         ZIndex = 48,
         Parent = button,
     })
-    corner(surface, primary and 24 or 18)
-    gradient(
-        surface,
-        ColorSequence.new({
-            ColorSequenceKeypoint.new(0, primary and Color3.fromRGB(109, 124, 202) or Color3.fromRGB(17, 21, 32)),
-            ColorSequenceKeypoint.new(0.5, primary and Color3.fromRGB(171, 181, 250) or Color3.fromRGB(12, 15, 24)),
-            ColorSequenceKeypoint.new(1, primary and Color3.fromRGB(104, 114, 194) or Color3.fromRGB(7, 9, 15)),
-        }),
-        0,
-        NumberSequence.new({
-            NumberSequenceKeypoint.new(0, primary and 0.05 or 0.38),
-            NumberSequenceKeypoint.new(0.5, primary and 0 or 0.22),
-            NumberSequenceKeypoint.new(1, primary and 0.1 or 0.48),
-        })
-    )
+    corner(base, primary and 24 or 18)
 
-    local topReflection = new("Frame", {
-        Name = "TopReflection",
-        Size = UDim2.new(1, -18, 0.42, 0),
-        Position = UDim2.fromOffset(9, 3),
-        BackgroundColor3 = Color3.new(1, 1, 1),
-        BackgroundTransparency = primary and 0.82 or 0.94,
+    local gradientLayer = new("Frame", {
+        Name = "Gradient Layer",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = primary and Color3.fromRGB(206, 211, 255) or Color3.fromRGB(12, 15, 24),
+        BackgroundTransparency = primary and 0.02 or 0.74,
         BorderSizePixel = 0,
         ZIndex = 49,
         Parent = button,
     })
-    corner(topReflection, primary and 20 or 14)
+    corner(gradientLayer, primary and 24 or 18)
     gradient(
-        topReflection,
-        ColorSequence.new(Color3.new(1, 1, 1), primary and Theme.AccentHot or Theme.TextDim),
+        gradientLayer,
+        ColorSequence.new({
+            ColorSequenceKeypoint.new(0, primary and Color3.fromRGB(244, 244, 255) or Color3.fromRGB(20, 24, 36)),
+            ColorSequenceKeypoint.new(0.18, primary and Color3.fromRGB(218, 222, 255) or Color3.fromRGB(16, 19, 30)),
+            ColorSequenceKeypoint.new(0.58, primary and Color3.fromRGB(178, 187, 255) or Color3.fromRGB(11, 14, 23)),
+            ColorSequenceKeypoint.new(1, primary and Color3.fromRGB(137, 157, 239) or Color3.fromRGB(6, 8, 14)),
+        }),
         90,
         NumberSequence.new({
-            NumberSequenceKeypoint.new(0, primary and 0.5 or 0.82),
-            NumberSequenceKeypoint.new(0.52, 0.96),
-            NumberSequenceKeypoint.new(1, 1),
+            NumberSequenceKeypoint.new(0, primary and 0.06 or 0.42),
+            NumberSequenceKeypoint.new(0.44, primary and 0.01 or 0.24),
+            NumberSequenceKeypoint.new(1, primary and 0.08 or 0.48),
         })
     )
 
-    local innerLight = new("Frame", {
-        Name = "InnerLight",
-        Size = UDim2.new(1, -4, 1, -4),
-        Position = UDim2.fromOffset(2, 2),
-        BackgroundTransparency = 1,
+    local highlight = new("Frame", {
+        Name = "Highlight Layer",
+        Size = UDim2.new(1, -18, 0, primary and 16 or 10),
+        Position = UDim2.fromOffset(9, primary and 4 or 3),
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+        BackgroundTransparency = primary and 0.6 or 0.92,
         BorderSizePixel = 0,
         ZIndex = 50,
         Parent = button,
     })
-    corner(innerLight, primary and 22 or 16)
-    local innerStroke = stroke(innerLight, Color3.fromRGB(232, 236, 255), 1, primary and 0.74 or 0.88)
-    innerStroke.Name = "InnerEdge"
+    corner(highlight, primary and 16 or 12)
+    gradient(
+        highlight,
+        ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(218, 224, 255)),
+        90,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, primary and 0.34 or 0.86),
+            NumberSequenceKeypoint.new(0.62, primary and 0.86 or 0.98),
+            NumberSequenceKeypoint.new(1, 1),
+        })
+    )
 
-    local buttonStroke =
-        stroke(button, primary and Color3.fromRGB(218, 224, 255) or Theme.Line, 1, primary and 0.42 or 0.72)
+    local reflection = new("Frame", {
+        Name = "Reflection Layer",
+        Size = UDim2.new(0.54, 0, 0.72, 0),
+        AnchorPoint = Vector2.new(0, 0.5),
+        Position = UDim2.fromScale(0.08, 0.44),
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+        BackgroundTransparency = primary and 0.84 or 0.96,
+        BorderSizePixel = 0,
+        Rotation = -10,
+        ZIndex = 51,
+        Parent = button,
+    })
+    corner(reflection, primary and 24 or 18)
+    gradient(
+        reflection,
+        ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(185, 196, 255)),
+        0,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, primary and 0.7 or 0.96),
+            NumberSequenceKeypoint.new(0.38, primary and 0.88 or 1),
+            NumberSequenceKeypoint.new(1, 1),
+        })
+    )
+
+    local edgeLight = new("Frame", {
+        Name = "Edge Light Layer",
+        Size = UDim2.new(1, -4, 1, -4),
+        Position = UDim2.fromOffset(2, 2),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ZIndex = 52,
+        Parent = button,
+    })
+    corner(edgeLight, primary and 22 or 16)
+    local edgeStroke = stroke(edgeLight, Color3.fromRGB(252, 253, 255), 1, primary and 0.54 or 0.88)
+    edgeStroke.Name = "EdgeLightStroke"
+
+    local borderStroke =
+        stroke(button, primary and Color3.fromRGB(224, 229, 255) or Theme.Line, 1, primary and 0.28 or 0.72)
+    borderStroke.Name = "Border Layer"
     local scale = new("UIScale", { Scale = 1, Parent = button })
 
     local label = new("TextLabel", {
@@ -831,13 +902,13 @@ local function createButton(parent, name, text, position, size, primary, callbac
         Size = UDim2.fromScale(1, 1),
         BackgroundTransparency = 1,
         Text = text,
-        TextColor3 = primary and Color3.fromRGB(252, 253, 255) or Color3.fromRGB(186, 194, 244),
-        TextTransparency = primary and 0.02 or 0.18,
+        TextColor3 = primary and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(185, 193, 240),
+        TextTransparency = primary and 0.04 or 0.2,
         Font = Enum.Font.GothamMedium,
         TextSize = primary and 15 or 13,
         TextXAlignment = Enum.TextXAlignment.Center,
         TextYAlignment = Enum.TextYAlignment.Center,
-        ZIndex = 54,
+        ZIndex = 55,
         Parent = button,
     })
 
@@ -848,58 +919,54 @@ local function createButton(parent, name, text, position, size, primary, callbac
         Position = UDim2.new(1, -88, 0.5, 0),
         BackgroundTransparency = 1,
         Text = "→",
-        TextColor3 = primary and Color3.fromRGB(252, 253, 255) or Theme.AccentHot,
-        TextTransparency = primary and 0.18 or 0.35,
+        TextColor3 = primary and Color3.fromRGB(255, 255, 255) or Theme.AccentHot,
+        TextTransparency = primary and 0.16 or 0.38,
         Font = Enum.Font.GothamMedium,
         TextSize = primary and 22 or 16,
-        ZIndex = 54,
+        ZIndex = 55,
         Parent = button,
     })
     if not primary then
         arrow.Visible = false
     end
 
-    local normalButtonTransparency = primary and 0.1 or 0.72
-    local normalSurfaceTransparency = primary and 0.04 or 0.76
-    local normalBloomTransparency = primary and 0.83 or 0.94
     connect(button.MouseEnter, function()
         if not button.Active then
             return
         end
-        tween(scale, TweenInfoSet.Fast, { Scale = 1.018 })
-        tween(buttonStroke, TweenInfoSet.Fast, { Transparency = primary and 0.24 or 0.48 })
-        tween(innerStroke, TweenInfoSet.Fast, { Transparency = primary and 0.52 or 0.76 })
-        tween(button, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0.04 or 0.62 })
-        tween(surface, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0 or 0.66 })
-        tween(shadow, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0.74 or 0.88 })
-        tween(topReflection, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0.76 or 0.9 })
+        tween(scale, TweenInfoSet.Fast, { Scale = 1.015 })
+        tween(glow, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0.68 or 0.9 })
+        tween(highlight, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0.52 or 0.9 })
+        tween(reflection, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0.78 or 0.94 })
+        tween(edgeStroke, TweenInfoSet.Fast, { Transparency = primary and 0.38 or 0.78 })
+        tween(borderStroke, TweenInfoSet.Fast, { Transparency = primary and 0.16 or 0.54 })
     end)
     connect(button.MouseLeave, function()
         tween(scale, TweenInfoSet.Fast, { Scale = 1 })
-        tween(buttonStroke, TweenInfoSet.Fast, { Transparency = primary and 0.42 or 0.72 })
-        tween(innerStroke, TweenInfoSet.Fast, { Transparency = primary and 0.74 or 0.88 })
-        tween(button, TweenInfoSet.Fast, { BackgroundTransparency = normalButtonTransparency })
-        tween(surface, TweenInfoSet.Fast, { BackgroundTransparency = normalSurfaceTransparency })
-        tween(shadow, TweenInfoSet.Fast, { BackgroundTransparency = normalBloomTransparency })
-        tween(topReflection, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0.82 or 0.94 })
+        tween(glow, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0.78 or 0.95 })
+        tween(highlight, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0.6 or 0.92 })
+        tween(reflection, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0.84 or 0.96 })
+        tween(edgeStroke, TweenInfoSet.Fast, { Transparency = primary and 0.54 or 0.88 })
+        tween(borderStroke, TweenInfoSet.Fast, { Transparency = primary and 0.28 or 0.72 })
     end)
     connect(button.MouseButton1Down, function()
         if button.Active then
-            tween(scale, TweenInfoSet.Fast, { Scale = 0.976 })
-            tween(surface, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0.08 or 0.72 })
+            tween(scale, TweenInfoSet.Fast, { Scale = 0.978 })
+            tween(glow, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0.74 or 0.94 })
+            tween(gradientLayer, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0.07 or 0.78 })
         end
     end)
     connect(button.MouseButton1Up, function()
         if button.Active then
-            tween(scale, TweenInfoSet.Fast, { Scale = 1.012 })
-            tween(surface, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0.01 or 0.68 })
+            tween(scale, TweenInfoSet.Fast, { Scale = 1.008 })
+            tween(glow, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0.7 or 0.9 })
+            tween(gradientLayer, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0.02 or 0.74 })
         end
     end)
     connect(button.MouseButton1Click, callback)
 
     return button, label
 end
-
 local function openKeyLink()
     local url = State.KeyLink
     if type(url) ~= "string" or url == "" then
@@ -945,45 +1012,65 @@ local function openKeyLink()
 end
 
 local function finishValidation(success, message)
-    State.Validating = false
-    setInputLocked(false)
-    stopLoadingVisual()
     if success then
-        setStatus("success", message or "Welcome back!")
-        Loader:Toast({
-            Type = "success",
-            Icon = "shield-check",
-            Title = "Key Accepted",
-            Subtitle = message or "Welcome back",
-            Duration = 3,
-        })
-        if UI.WindowAcrylic and UI.WindowAcrylic.Border then
-            tween(UI.WindowAcrylic.Border, TweenInfoSet.Soft, { Color = Theme.Success, Transparency = 0.32 })
+        State.Validating = false
+        stopLoadingVisual()
+        if UI.ValidateButton then
+            tween(UI.ValidateButton, TweenInfoSet.Soft, { BackgroundTransparency = 0.12 })
         end
-    else
-        setStatus("error", message or "Validation failed")
-        Loader:Toast({
-            Type = "error",
-            Title = "Key Rejected",
-            Subtitle = message or "Validation failed",
-            Duration = 3.5,
-        })
-        shake(UI.FormGroup)
         if UI.WindowAcrylic and UI.WindowAcrylic.Border then
-            tween(UI.WindowAcrylic.Border, TweenInfoSet.Soft, { Color = Theme.Error, Transparency = 0.28 })
-            task.delay(0.7, function()
-                if not State.Destroyed and UI.WindowAcrylic and UI.WindowAcrylic.Border then
-                    tween(
-                        UI.WindowAcrylic.Border,
-                        TweenInfoSet.Soft,
-                        { Color = Color3.fromRGB(57, 64, 92), Transparency = 0.36 }
-                    )
-                end
-            end)
+            tween(UI.WindowAcrylic.Border, TweenInfoSet.Soft, {
+                Color = Color3.fromRGB(210, 218, 255),
+                Transparency = 0.34,
+            })
         end
+        if UI.WindowScale then
+            tween(
+                UI.WindowScale,
+                TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+                { Scale = State.ScaleTarget * 0.985 }
+            )
+        end
+        task.delay(0.18, function()
+            if not State.Destroyed then
+                Loader:Close()
+            end
+        end)
+        return
+    end
+
+    State.Validating = false
+    stopLoadingVisual()
+    setInputLocked(false)
+    if UI.StatusText then
+        UI.StatusText.TextTransparency = 1
+    end
+    if UI.StatusLine then
+        UI.StatusLine.BackgroundTransparency = 1
+    end
+    setStatus("error", message or "Validation failed")
+    if UI.StatusText then
+        tween(UI.StatusText, TweenInfoSet.Soft, { TextTransparency = 0.14 })
+    end
+    if UI.StatusLine then
+        tween(UI.StatusLine, TweenInfoSet.Soft, { BackgroundTransparency = 0.46 })
+    end
+    if UI.FormGroup then
+        local original = UI.FormGroup.Position
+        tween(UI.FormGroup, TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Position = original + UDim2.fromOffset(0, 2),
+        })
+        task.delay(0.08, function()
+            if UI.FormGroup and UI.FormGroup.Parent then
+                tween(
+                    UI.FormGroup,
+                    TweenInfo.new(0.16, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+                    { Position = original }
+                )
+            end
+        end)
     end
 end
-
 local function validateKey()
     if State.Validating or State.Destroyed then
         return
@@ -992,29 +1079,27 @@ local function validateKey()
     key = tostring(key):gsub("^%s+", ""):gsub("%s+$", "")
     if key == "" then
         setStatus("error", "Enter your key first")
-        shake(UI.FormGroup)
-        Loader:Toast({
-            Type = "error",
-            Title = "Missing Key",
-            Subtitle = "Enter a key before validating",
-            Duration = 2.5,
-        })
+        if UI.StatusText then
+            tween(UI.StatusText, TweenInfoSet.Soft, { TextTransparency = 0.14 })
+        end
+        if UI.StatusLine then
+            tween(UI.StatusLine, TweenInfoSet.Soft, { BackgroundTransparency = 0.46 })
+        end
         return
     end
     if type(State.ValidateCallback) ~= "function" then
         setStatus("error", "Validator unavailable")
-        Loader:Toast({
-            Type = "error",
-            Title = "Validator Missing",
-            Subtitle = "SetOnValidate has not been configured",
-            Duration = 3,
-        })
+        if UI.StatusText then
+            tween(UI.StatusText, TweenInfoSet.Soft, { TextTransparency = 0.14 })
+        end
+        if UI.StatusLine then
+            tween(UI.StatusLine, TweenInfoSet.Soft, { BackgroundTransparency = 0.46 })
+        end
         return
     end
 
     State.Validating = true
     setInputLocked(true)
-    setStatus("loading", "Validating key...")
     startLoadingVisual()
 
     task.spawn(function()
@@ -1032,7 +1117,6 @@ local function validateKey()
         end
     end)
 end
-
 local function setWordmark(text)
     State.Title = tostring(text or "KRONOS")
     if UI.RenderLeftWordmark then
@@ -1282,6 +1366,119 @@ local function createShadow(parent)
     end
 end
 
+local function createValidationOverlay(parent)
+    local overlay = new("CanvasGroup", {
+        Name = "ValidationOverlay",
+        Size = UDim2.fromScale(1, 1),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        BackgroundColor3 = Color3.fromRGB(2, 3, 6),
+        BackgroundTransparency = 0.72,
+        GroupTransparency = 1,
+        Visible = false,
+        BorderSizePixel = 0,
+        ZIndex = 250,
+        Parent = parent,
+    })
+    corner(overlay, 12)
+    UI.ValidationOverlayScale = new("UIScale", { Scale = 0.94, Parent = overlay })
+
+    local diffusion = new("Frame", {
+        Name = "OverlayDiffusion",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = Color3.fromRGB(16, 20, 32),
+        BackgroundTransparency = 0.86,
+        BorderSizePixel = 0,
+        ZIndex = 251,
+        Parent = overlay,
+    })
+    corner(diffusion, 12)
+    gradient(
+        diffusion,
+        ColorSequence.new(Color3.fromRGB(44, 50, 72), Color3.fromRGB(3, 4, 8)),
+        90,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.7),
+            NumberSequenceKeypoint.new(0.56, 0.92),
+            NumberSequenceKeypoint.new(1, 0.82),
+        })
+    )
+
+    local spinner = new("Frame", {
+        Name = "RouletteSpinner",
+        Size = UDim2.fromOffset(76, 76),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ZIndex = 260,
+        Parent = overlay,
+    })
+    UI.ValidationSpinner = spinner
+    UI.SpinnerSegments = {}
+
+    local bloom = new("Frame", {
+        Name = "SpinnerGlow",
+        Size = UDim2.fromOffset(82, 82),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        BackgroundColor3 = Color3.fromRGB(178, 190, 255),
+        BackgroundTransparency = 0.9,
+        BorderSizePixel = 0,
+        ZIndex = 258,
+        Parent = spinner,
+    })
+    corner(bloom, 82)
+    gradient(
+        bloom,
+        ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(130, 150, 235)),
+        0,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.72),
+            NumberSequenceKeypoint.new(0.48, 0.42),
+            NumberSequenceKeypoint.new(1, 1),
+        })
+    )
+
+    for index = 1, 14 do
+        local angle = (index - 1) * (360 / 14)
+        local segment = new("Frame", {
+            Name = "Segment" .. index,
+            Size = UDim2.fromOffset(3, 15),
+            AnchorPoint = Vector2.new(0.5, 1),
+            Position = UDim2.fromScale(0.5, 0.5),
+            BackgroundColor3 = Color3.fromRGB(230, 234, 255),
+            BackgroundTransparency = 0.42 + index * 0.026,
+            BorderSizePixel = 0,
+            Rotation = angle,
+            ZIndex = 261,
+            Parent = spinner,
+        })
+        segment.Position = UDim2.new(0.5, math.sin(math.rad(angle)) * 28, 0.5, -math.cos(math.rad(angle)) * 28)
+        corner(segment, 3)
+        UI.SpinnerSegments[index] = segment
+    end
+
+    local label = new("TextLabel", {
+        Name = "LoadingText",
+        Size = UDim2.fromOffset(240, 24),
+        AnchorPoint = Vector2.new(0.5, 0),
+        Position = UDim2.new(0.5, 0, 0.5, 52),
+        BackgroundTransparency = 1,
+        Text = letterSpaced("Validating Access"),
+        TextColor3 = Color3.fromRGB(198, 204, 232),
+        TextTransparency = 0.42,
+        Font = Enum.Font.GothamMedium,
+        TextSize = 11,
+        TextXAlignment = Enum.TextXAlignment.Center,
+        ZIndex = 261,
+        Parent = overlay,
+    })
+
+    UI.ValidationOverlay = overlay
+    return overlay
+end
+
 local function buildInterface()
     UI.ScreenGui = new("ScreenGui", {
         Name = "KRONOS_KeySystem",
@@ -1522,21 +1719,6 @@ local function buildInterface()
         true,
         validateKey
     )
-    UI.LoadingDot = new("Frame", {
-        Name = "LoadingDot",
-        Size = UDim2.fromOffset(14, 14),
-        AnchorPoint = Vector2.new(0, 0.5),
-        Position = UDim2.fromOffset(80, 24),
-        BackgroundColor3 = Color3.fromRGB(248, 250, 255),
-        BackgroundTransparency = 0.2,
-        BorderSizePixel = 0,
-        Visible = false,
-        ZIndex = 50,
-        Parent = UI.ValidateButton,
-    })
-    corner(UI.LoadingDot, 14)
-    stroke(UI.LoadingDot, Color3.fromRGB(255, 255, 255), 2, 0.55)
-
     UI.GetKeyButton = nil
     UI.GetKeyLabel = nil
     UI.GetKeyButton, UI.GetKeyLabel = createButton(
@@ -1548,6 +1730,8 @@ local function buildInterface()
         false,
         openKeyLink
     )
+
+    createValidationOverlay(UI.Window)
 
     UI.ToastLayer = new("Frame", {
         Name = "ToastLayer",
