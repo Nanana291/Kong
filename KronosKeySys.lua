@@ -168,25 +168,7 @@ local function getViewport()
 end
 
 local function clampCenter(center)
-    local viewport = getViewport()
-    local scale = State.ScaleTarget
-    local visual = BASE_SIZE * scale
-    local minX = visual.X * 0.5 + SAFE_PAD
-    local maxX = viewport.X - visual.X * 0.5 - SAFE_PAD
-    local minY = visual.Y * 0.5 + SAFE_PAD
-    local maxY = viewport.Y - visual.Y * 0.5 - SAFE_PAD
-
-    local x = viewport.X * 0.5
-    local y = viewport.Y * 0.5
-
-    if maxX > minX then
-        x = math.clamp(center.X, minX, maxX)
-    end
-    if maxY > minY then
-        y = math.clamp(center.Y, minY, maxY)
-    end
-
-    return Vector2.new(x, y)
+    return Vector2.new(center.X, center.Y)
 end
 
 local function applyWindowPosition(center)
@@ -274,106 +256,171 @@ local function buildNoise(parent, zIndex, dotCount)
 end
 
 local function createAcrylic(parent, zIndex, radius, tint, tintTransparency)
-    local background = new("Frame", {
-        Name = "Background Layer",
+    local depth = new("Frame", {
+        Name = "Depth Layer",
         Size = UDim2.fromScale(1, 1),
-        BackgroundColor3 = Theme.Ink,
-        BackgroundTransparency = 0.08,
+        BackgroundColor3 = Color3.fromRGB(0, 1, 4),
+        BackgroundTransparency = 0.18,
         BorderSizePixel = 0,
         ZIndex = zIndex,
         Parent = parent,
     })
-    corner(background, radius)
+    corner(depth, radius)
+    gradient(
+        depth,
+        ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(14, 18, 28)),
+            ColorSequenceKeypoint.new(0.55, Color3.fromRGB(6, 8, 13)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(1, 2, 5)),
+        }),
+        90,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.1),
+            NumberSequenceKeypoint.new(0.55, 0.03),
+            NumberSequenceKeypoint.new(1, 0.16),
+        })
+    )
 
-    local blur = new("Frame", {
-        Name = "Blur Layer",
+    local glassTint = new("Frame", {
+        Name = "Glass Tint Layer",
         Size = UDim2.fromScale(1, 1),
-        BackgroundColor3 = Theme.PanelBlue,
-        BackgroundTransparency = 0.72,
+        BackgroundColor3 = tint or Theme.Panel,
+        BackgroundTransparency = tintTransparency or 0.64,
         BorderSizePixel = 0,
         ZIndex = zIndex + 1,
         Parent = parent,
     })
-    corner(blur, radius)
-    gradient(
-        blur,
-        ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(30, 38, 58)),
-            ColorSequenceKeypoint.new(0.52, Color3.fromRGB(12, 14, 22)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(3, 4, 8)),
-        }),
-        22,
-        NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.12),
-            NumberSequenceKeypoint.new(1, 0.45),
-        })
-    )
+    corner(glassTint, radius)
 
-    local tintLayer = new("Frame", {
-        Name = "Tint Layer",
+    local diffusion = new("Frame", {
+        Name = "Light Diffusion Layer",
         Size = UDim2.fromScale(1, 1),
-        BackgroundColor3 = tint or Theme.Panel,
-        BackgroundTransparency = tintTransparency or 0.58,
+        BackgroundColor3 = Theme.PanelBlue,
+        BackgroundTransparency = 0.82,
         BorderSizePixel = 0,
         ZIndex = zIndex + 2,
         Parent = parent,
     })
-    corner(tintLayer, radius)
+    corner(diffusion, radius)
+    gradient(
+        diffusion,
+        ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(62, 72, 100)),
+            ColorSequenceKeypoint.new(0.42, Color3.fromRGB(18, 22, 34)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(5, 7, 13)),
+        }),
+        26,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.62),
+            NumberSequenceKeypoint.new(0.45, 0.91),
+            NumberSequenceKeypoint.new(1, 0.78),
+        })
+    )
 
-    local noise = buildNoise(parent, zIndex + 3, 130)
-
-    local highlight = new("Frame", {
-        Name = "Highlight Layer",
+    local ambient = new("Frame", {
+        Name = "Ambient Lighting Layer",
         Size = UDim2.fromScale(1, 1),
-        BackgroundColor3 = Color3.new(1, 1, 1),
-        BackgroundTransparency = 0.94,
+        BackgroundColor3 = Theme.AccentDeep,
+        BackgroundTransparency = 0.9,
+        BorderSizePixel = 0,
+        ZIndex = zIndex + 3,
+        Parent = parent,
+    })
+    corner(ambient, radius)
+    gradient(
+        ambient,
+        ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(117, 126, 190)),
+            ColorSequenceKeypoint.new(0.48, Color3.fromRGB(20, 24, 38)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(6, 8, 14)),
+        }),
+        -38,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.72),
+            NumberSequenceKeypoint.new(0.5, 0.97),
+            NumberSequenceKeypoint.new(1, 0.88),
+        })
+    )
+
+    local materialGradient = new("Frame", {
+        Name = "Gradient Layer",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = Color3.fromRGB(19, 23, 34),
+        BackgroundTransparency = 0.74,
         BorderSizePixel = 0,
         ZIndex = zIndex + 4,
         Parent = parent,
     })
-    corner(highlight, radius)
+    corner(materialGradient, radius)
     gradient(
-        highlight,
-        ColorSequence.new(Color3.new(1, 1, 1), Theme.Accent),
-        -34,
+        materialGradient,
+        ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(43, 51, 76)),
+            ColorSequenceKeypoint.new(0.34, Color3.fromRGB(10, 13, 22)),
+            ColorSequenceKeypoint.new(0.7, Color3.fromRGB(4, 6, 11)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(21, 25, 39)),
+        }),
+        118,
         NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.83),
-            NumberSequenceKeypoint.new(0.44, 0.98),
+            NumberSequenceKeypoint.new(0, 0.66),
+            NumberSequenceKeypoint.new(0.4, 0.92),
+            NumberSequenceKeypoint.new(1, 0.72),
+        })
+    )
+
+    local noise = buildNoise(parent, zIndex + 5, 168)
+
+    local reflection = new("Frame", {
+        Name = "Reflection Layer",
+        Size = UDim2.new(1, 0, 0.42, 0),
+        BackgroundColor3 = Color3.new(1, 1, 1),
+        BackgroundTransparency = 0.91,
+        BorderSizePixel = 0,
+        ZIndex = zIndex + 6,
+        Parent = parent,
+    })
+    corner(reflection, radius)
+    gradient(
+        reflection,
+        ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(148, 160, 220)),
+        90,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.74),
+            NumberSequenceKeypoint.new(0.42, 0.96),
             NumberSequenceKeypoint.new(1, 1),
         })
     )
 
-    local glow = new("Frame", {
-        Name = "Glow Layer",
+    local edgeHighlight = new("Frame", {
+        Name = "Edge Highlight Layer",
         Size = UDim2.fromScale(1, 1),
-        BackgroundColor3 = Theme.Accent,
-        BackgroundTransparency = 0.88,
+        BackgroundColor3 = Color3.new(1, 1, 1),
+        BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        ZIndex = zIndex + 5,
+        ZIndex = zIndex + 7,
         Parent = parent,
     })
-    corner(glow, radius)
-    gradient(
-        glow,
-        ColorSequence.new(Theme.AccentHot, Theme.Ink),
-        90,
-        NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.72),
-            NumberSequenceKeypoint.new(0.58, 1),
-            NumberSequenceKeypoint.new(1, 0.9),
-        })
-    )
+    corner(edgeHighlight, radius)
+    local edgeStroke = stroke(edgeHighlight, Color3.fromRGB(175, 185, 230), 1, 0.72)
+    edgeStroke.Name = "EdgeHighlightStroke"
 
-    local border = stroke(parent, Color3.fromRGB(57, 64, 92), 1, 0.36)
+    local border = stroke(parent, Color3.fromRGB(66, 73, 104), 1, 0.48)
     border.Name = "Border Layer"
 
     return {
-        Background = background,
-        Blur = blur,
-        Tint = tintLayer,
+        Background = depth,
+        Depth = depth,
+        Tint = glassTint,
+        GlassTint = glassTint,
+        Blur = diffusion,
+        LightDiffusion = diffusion,
+        AmbientLighting = ambient,
+        Gradient = materialGradient,
         Noise = noise,
-        Highlight = highlight,
-        Glow = glow,
+        Reflection = reflection,
+        Highlight = edgeHighlight,
+        EdgeHighlight = edgeHighlight,
+        Glow = ambient,
         Border = border,
     }
 end
@@ -682,41 +729,115 @@ local function createButton(parent, name, text, position, size, primary, callbac
         Position = position,
         Size = size,
         AutoButtonColor = false,
-        BackgroundColor3 = primary and Theme.AccentDeep or Theme.PanelDeep,
-        BackgroundTransparency = primary and 0 or 0.42,
+        BackgroundColor3 = primary and Color3.fromRGB(118, 129, 205) or Color3.fromRGB(12, 15, 24),
+        BackgroundTransparency = primary and 0.1 or 0.72,
         BorderSizePixel = 0,
+        ClipsDescendants = false,
         Text = "",
         ZIndex = 48,
         Parent = parent,
     })
     corner(button, primary and 24 or 18)
-    local buttonStroke = stroke(button, primary and Theme.AccentHot or Theme.LineSoft, 1, primary and 0.58 or 0.48)
+
+    local shadow = new("Frame", {
+        Name = "AmbientBloom",
+        Size = primary and UDim2.new(1, 22, 1, 18) or UDim2.new(1, 12, 1, 10),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.55),
+        BackgroundColor3 = primary and Theme.AccentHot or Theme.AccentDeep,
+        BackgroundTransparency = primary and 0.83 or 0.94,
+        BorderSizePixel = 0,
+        ZIndex = 46,
+        Parent = button,
+    })
+    corner(shadow, primary and 32 or 24)
+    gradient(
+        shadow,
+        ColorSequence.new(Theme.AccentHot, Theme.AccentDeep),
+        0,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, primary and 0.58 or 0.84),
+            NumberSequenceKeypoint.new(0.48, primary and 0.28 or 0.72),
+            NumberSequenceKeypoint.new(1, 1),
+        })
+    )
+
+    local surface = new("Frame", {
+        Name = "IlluminatedSurface",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = primary and Color3.fromRGB(128, 140, 218) or Color3.fromRGB(10, 13, 21),
+        BackgroundTransparency = primary and 0.04 or 0.76,
+        BorderSizePixel = 0,
+        ZIndex = 48,
+        Parent = button,
+    })
+    corner(surface, primary and 24 or 18)
+    gradient(
+        surface,
+        ColorSequence.new({
+            ColorSequenceKeypoint.new(0, primary and Color3.fromRGB(109, 124, 202) or Color3.fromRGB(17, 21, 32)),
+            ColorSequenceKeypoint.new(0.5, primary and Color3.fromRGB(171, 181, 250) or Color3.fromRGB(12, 15, 24)),
+            ColorSequenceKeypoint.new(1, primary and Color3.fromRGB(104, 114, 194) or Color3.fromRGB(7, 9, 15)),
+        }),
+        0,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, primary and 0.05 or 0.38),
+            NumberSequenceKeypoint.new(0.5, primary and 0 or 0.22),
+            NumberSequenceKeypoint.new(1, primary and 0.1 or 0.48),
+        })
+    )
+
+    local topReflection = new("Frame", {
+        Name = "TopReflection",
+        Size = UDim2.new(1, -18, 0.42, 0),
+        Position = UDim2.fromOffset(9, 3),
+        BackgroundColor3 = Color3.new(1, 1, 1),
+        BackgroundTransparency = primary and 0.82 or 0.94,
+        BorderSizePixel = 0,
+        ZIndex = 49,
+        Parent = button,
+    })
+    corner(topReflection, primary and 20 or 14)
+    gradient(
+        topReflection,
+        ColorSequence.new(Color3.new(1, 1, 1), primary and Theme.AccentHot or Theme.TextDim),
+        90,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, primary and 0.5 or 0.82),
+            NumberSequenceKeypoint.new(0.52, 0.96),
+            NumberSequenceKeypoint.new(1, 1),
+        })
+    )
+
+    local innerLight = new("Frame", {
+        Name = "InnerLight",
+        Size = UDim2.new(1, -4, 1, -4),
+        Position = UDim2.fromOffset(2, 2),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ZIndex = 50,
+        Parent = button,
+    })
+    corner(innerLight, primary and 22 or 16)
+    local innerStroke = stroke(innerLight, Color3.fromRGB(232, 236, 255), 1, primary and 0.74 or 0.88)
+    innerStroke.Name = "InnerEdge"
+
+    local buttonStroke =
+        stroke(button, primary and Color3.fromRGB(218, 224, 255) or Theme.Line, 1, primary and 0.42 or 0.72)
     local scale = new("UIScale", { Scale = 1, Parent = button })
-    if primary then
-        gradient(
-            button,
-            ColorSequence.new({
-                ColorSequenceKeypoint.new(0, Color3.fromRGB(121, 139, 220)),
-                ColorSequenceKeypoint.new(0.46, Color3.fromRGB(151, 162, 245)),
-                ColorSequenceKeypoint.new(1, Color3.fromRGB(118, 128, 214)),
-            }),
-            0,
-            NumberSequence.new(0)
-        )
-    end
 
     local label = new("TextLabel", {
         Name = "Label",
         Size = UDim2.fromScale(1, 1),
         BackgroundTransparency = 1,
         Text = text,
-        TextColor3 = primary and Color3.fromRGB(249, 250, 255) or Theme.AccentHot,
-        TextTransparency = primary and 0.03 or 0.14,
+        TextColor3 = primary and Color3.fromRGB(252, 253, 255) or Color3.fromRGB(186, 194, 244),
+        TextTransparency = primary and 0.02 or 0.18,
         Font = Enum.Font.GothamMedium,
         TextSize = primary and 15 or 13,
         TextXAlignment = Enum.TextXAlignment.Center,
         TextYAlignment = Enum.TextYAlignment.Center,
-        ZIndex = 49,
+        ZIndex = 54,
         Parent = button,
     })
 
@@ -727,38 +848,51 @@ local function createButton(parent, name, text, position, size, primary, callbac
         Position = UDim2.new(1, -88, 0.5, 0),
         BackgroundTransparency = 1,
         Text = "→",
-        TextColor3 = primary and Color3.fromRGB(246, 247, 255) or Theme.AccentHot,
-        TextTransparency = primary and 0.12 or 0.25,
+        TextColor3 = primary and Color3.fromRGB(252, 253, 255) or Theme.AccentHot,
+        TextTransparency = primary and 0.18 or 0.35,
         Font = Enum.Font.GothamMedium,
         TextSize = primary and 22 or 16,
-        ZIndex = 49,
+        ZIndex = 54,
         Parent = button,
     })
     if not primary then
         arrow.Visible = false
     end
 
+    local normalButtonTransparency = primary and 0.1 or 0.72
+    local normalSurfaceTransparency = primary and 0.04 or 0.76
+    local normalBloomTransparency = primary and 0.83 or 0.94
     connect(button.MouseEnter, function()
         if not button.Active then
             return
         end
         tween(scale, TweenInfoSet.Fast, { Scale = 1.018 })
-        tween(buttonStroke, TweenInfoSet.Fast, { Transparency = primary and 0.26 or 0.18 })
-        tween(button, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0 or 0.24 })
+        tween(buttonStroke, TweenInfoSet.Fast, { Transparency = primary and 0.24 or 0.48 })
+        tween(innerStroke, TweenInfoSet.Fast, { Transparency = primary and 0.52 or 0.76 })
+        tween(button, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0.04 or 0.62 })
+        tween(surface, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0 or 0.66 })
+        tween(shadow, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0.74 or 0.88 })
+        tween(topReflection, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0.76 or 0.9 })
     end)
     connect(button.MouseLeave, function()
         tween(scale, TweenInfoSet.Fast, { Scale = 1 })
-        tween(buttonStroke, TweenInfoSet.Fast, { Transparency = primary and 0.58 or 0.48 })
-        tween(button, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0 or 0.42 })
+        tween(buttonStroke, TweenInfoSet.Fast, { Transparency = primary and 0.42 or 0.72 })
+        tween(innerStroke, TweenInfoSet.Fast, { Transparency = primary and 0.74 or 0.88 })
+        tween(button, TweenInfoSet.Fast, { BackgroundTransparency = normalButtonTransparency })
+        tween(surface, TweenInfoSet.Fast, { BackgroundTransparency = normalSurfaceTransparency })
+        tween(shadow, TweenInfoSet.Fast, { BackgroundTransparency = normalBloomTransparency })
+        tween(topReflection, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0.82 or 0.94 })
     end)
     connect(button.MouseButton1Down, function()
         if button.Active then
-            tween(scale, TweenInfoSet.Fast, { Scale = 0.975 })
+            tween(scale, TweenInfoSet.Fast, { Scale = 0.976 })
+            tween(surface, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0.08 or 0.72 })
         end
     end)
     connect(button.MouseButton1Up, function()
         if button.Active then
             tween(scale, TweenInfoSet.Fast, { Scale = 1.012 })
+            tween(surface, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0.01 or 0.68 })
         end
     end)
     connect(button.MouseButton1Click, callback)
@@ -968,27 +1102,39 @@ local function updateDragInput(input)
     local delta = pointer - State.Drag.StartPointer
     local now = os.clock()
     local dt = math.max(now - State.Drag.LastTime, 1 / 240)
-    State.Drag.Velocity = (pointer - State.Drag.LastPointer) / dt
+    local velocity = (pointer - State.Drag.LastPointer) / dt
+    if velocity.Magnitude > 4200 then
+        velocity = velocity.Unit * 4200
+    end
+    local nextCenter = State.Drag.StartCenter + delta
+    State.Drag.Velocity = velocity
     State.Drag.LastPointer = pointer
     State.Drag.LastTime = now
-    State.Drag.TargetCenter = clampCenter(State.Drag.StartCenter + delta)
+    State.Drag.TargetCenter = nextCenter
+    State.Drag.CurrentCenter = nextCenter
+    State.Center = nextCenter
+    if UI.WindowHost then
+        UI.WindowHost.Position = UDim2.fromOffset(nextCenter.X, nextCenter.Y)
+    end
 end
 
 local function updateDrag(dt)
-    if State.Destroyed or not UI.Window then
+    if State.Destroyed or not UI.WindowHost then
         return
     end
     local drag = State.Drag
-    local alpha = 1 - math.exp(-dt * (drag.Active and 34 or 22))
-
-    if not drag.Active and drag.Velocity.Magnitude > 8 then
-        drag.TargetCenter = clampCenter(drag.TargetCenter + drag.Velocity * dt * 0.42)
-        drag.Velocity *= math.exp(-dt * 8.5)
+    if drag.Active then
+        return
     end
 
-    drag.CurrentCenter = drag.CurrentCenter:Lerp(drag.TargetCenter, alpha)
-    State.Center = clampCenter(drag.CurrentCenter)
-    UI.WindowHost.Position = UDim2.fromOffset(State.Center.X, State.Center.Y)
+    if drag.Velocity.Magnitude > 8 then
+        local nextCenter = drag.CurrentCenter + drag.Velocity * dt * 0.34
+        drag.CurrentCenter = nextCenter
+        drag.TargetCenter = nextCenter
+        State.Center = nextCenter
+        UI.WindowHost.Position = UDim2.fromOffset(nextCenter.X, nextCenter.Y)
+        drag.Velocity *= math.exp(-dt * 9.8)
+    end
 end
 
 local function createField(parent, name, y, isInput)
@@ -997,68 +1143,100 @@ local function createField(parent, name, y, isInput)
         Size = UDim2.fromOffset(270, 54),
         Position = UDim2.fromOffset(122, y),
         BackgroundColor3 = Color3.fromRGB(4, 6, 10),
-        BackgroundTransparency = 0.76,
+        BackgroundTransparency = 1,
         BorderSizePixel = 0,
         ZIndex = 42,
         Parent = parent,
     })
-    corner(field, 6)
+
+    local aura = new("Frame", {
+        Name = "FocusAura",
+        Size = UDim2.new(1, -10, 0, 22),
+        AnchorPoint = Vector2.new(0.5, 1),
+        Position = UDim2.new(0.5, 0, 1, -3),
+        BackgroundColor3 = Theme.AccentHot,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ZIndex = 42,
+        Parent = field,
+    })
+    corner(aura, 18)
+    gradient(
+        aura,
+        ColorSequence.new(Theme.AccentHot, Theme.AccentDeep),
+        0,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.78),
+            NumberSequenceKeypoint.new(0.52, 0.52),
+            NumberSequenceKeypoint.new(1, 1),
+        })
+    )
 
     local line = new("Frame", {
         Name = "BottomLine",
-        Size = UDim2.new(1, -20, 0, 1),
+        Size = UDim2.new(1, -18, 0, 1),
         AnchorPoint = Vector2.new(0.5, 1),
         Position = UDim2.new(0.5, 0, 1, -6),
         BackgroundColor3 = Theme.LineSoft,
-        BackgroundTransparency = 0.42,
+        BackgroundTransparency = 0.68,
         BorderSizePixel = 0,
-        ZIndex = 43,
+        ZIndex = 44,
         Parent = field,
     })
 
     local caption = new("TextLabel", {
         Name = "Caption",
         Size = UDim2.new(1, -58, 0, 18),
-        Position = UDim2.fromOffset(18, 7),
+        Position = UDim2.fromOffset(18, 6),
         BackgroundTransparency = 1,
         Text = isInput and "Enter Key" or "Status",
         TextColor3 = Theme.TextMuted,
-        TextTransparency = 0.18,
+        TextTransparency = 0.34,
         Font = Enum.Font.GothamMedium,
         TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Center,
-        ZIndex = 44,
+        ZIndex = 45,
         Parent = field,
     })
 
     if isInput then
         local box = new("TextBox", {
             Name = "Input",
-            Size = UDim2.new(1, -68, 0, 24),
-            Position = UDim2.fromOffset(18, 25),
+            Size = UDim2.new(1, -68, 0, 25),
+            Position = UDim2.fromOffset(18, 24),
             BackgroundTransparency = 1,
             ClearTextOnFocus = false,
             Text = "",
             PlaceholderText = "Enter your key...",
-            PlaceholderColor3 = Color3.fromRGB(75, 81, 102),
+            PlaceholderColor3 = Color3.fromRGB(88, 94, 116),
             TextColor3 = Theme.Text,
-            TextTransparency = 0.08,
+            TextTransparency = 0.07,
             Font = Enum.Font.Gotham,
-            TextSize = 13,
+            TextSize = 14,
             TextXAlignment = Enum.TextXAlignment.Left,
             TextYAlignment = Enum.TextYAlignment.Center,
-            ZIndex = 45,
+            ZIndex = 46,
             Parent = field,
         })
-        createTinyUserIcon(field, 45)
+        createTinyUserIcon(field, 46)
         connect(box.Focused, function()
-            tween(line, TweenInfoSet.Soft, { BackgroundColor3 = Theme.AccentHot, BackgroundTransparency = 0.16 })
-            tween(field, TweenInfoSet.Soft, { BackgroundTransparency = 0.62 })
+            tween(line, TweenInfoSet.Soft, {
+                BackgroundColor3 = Color3.fromRGB(225, 230, 255),
+                BackgroundTransparency = 0.1,
+                Size = UDim2.new(1, -10, 0, 1),
+            })
+            tween(aura, TweenInfoSet.Soft, { BackgroundTransparency = 0.88 })
+            tween(caption, TweenInfoSet.Soft, { TextTransparency = 0.18 })
         end)
         connect(box.FocusLost, function(enterPressed)
-            tween(line, TweenInfoSet.Soft, { BackgroundColor3 = Theme.LineSoft, BackgroundTransparency = 0.42 })
-            tween(field, TweenInfoSet.Soft, { BackgroundTransparency = 0.76 })
+            tween(line, TweenInfoSet.Soft, {
+                BackgroundColor3 = Theme.LineSoft,
+                BackgroundTransparency = 0.68,
+                Size = UDim2.new(1, -18, 0, 1),
+            })
+            tween(aura, TweenInfoSet.Soft, { BackgroundTransparency = 1 })
+            tween(caption, TweenInfoSet.Soft, { TextTransparency = 0.34 })
             if enterPressed then
                 validateKey()
             end
@@ -1068,39 +1246,39 @@ local function createField(parent, name, y, isInput)
 
     local value = new("TextLabel", {
         Name = "Value",
-        Size = UDim2.new(1, -68, 0, 24),
-        Position = UDim2.fromOffset(18, 25),
+        Size = UDim2.new(1, -68, 0, 25),
+        Position = UDim2.fromOffset(18, 24),
         BackgroundTransparency = 1,
         Text = "Status",
         TextColor3 = Theme.TextDim,
-        TextTransparency = 0.12,
+        TextTransparency = 0.14,
         Font = Enum.Font.Gotham,
-        TextSize = 13,
+        TextSize = 14,
         TextTruncate = Enum.TextTruncate.AtEnd,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Center,
-        ZIndex = 45,
+        ZIndex = 46,
         Parent = field,
     })
-    createTinyKeyIcon(field, 45)
+    createTinyKeyIcon(field, 46)
     return field, value, line, caption
 end
 
 local function createShadow(parent)
-    for index = 1, 5 do
-        local spread = 8 + index * 9
+    for index = 1, 7 do
+        local spread = 16 + index * 12
         local shadow = new("Frame", {
             Name = "SoftShadow",
             Size = UDim2.new(1, spread, 1, spread),
             AnchorPoint = Vector2.new(0.5, 0.5),
-            Position = UDim2.new(0.5, 0, 0.5, 4 + index * 2),
-            BackgroundColor3 = Color3.new(0, 0, 0),
-            BackgroundTransparency = 0.86 + index * 0.018,
+            Position = UDim2.new(0.5, 0, 0.5, 7 + index * 2),
+            BackgroundColor3 = index <= 2 and Color3.fromRGB(6, 8, 14) or Color3.new(0, 0, 0),
+            BackgroundTransparency = 0.82 + index * 0.018,
             BorderSizePixel = 0,
             ZIndex = 2,
             Parent = parent,
         })
-        corner(shadow, 16 + index * 4)
+        corner(shadow, 18 + index * 5)
     end
 end
 
@@ -1119,13 +1297,13 @@ local function buildInterface()
         Size = 0,
         Parent = Lighting,
     })
-    tween(UI.Blur, TweenInfoSet.Open, { Size = 10 })
+    tween(UI.Blur, TweenInfoSet.Open, { Size = 8 })
 
     UI.Root = new("Frame", {
         Name = "Root",
         Size = UDim2.fromScale(1, 1),
         BackgroundColor3 = Color3.new(0, 0, 0),
-        BackgroundTransparency = 0.44,
+        BackgroundTransparency = 0.5,
         BorderSizePixel = 0,
         ZIndex = 0,
         Parent = UI.ScreenGui,
@@ -1147,7 +1325,7 @@ local function buildInterface()
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.28, 0.44),
         BackgroundColor3 = Theme.AccentDeep,
-        BackgroundTransparency = 0.84,
+        BackgroundTransparency = 0.9,
         BorderSizePixel = 0,
         ZIndex = 1,
         Parent = UI.Root,
@@ -1159,7 +1337,7 @@ local function buildInterface()
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.74, 0.42),
         BackgroundColor3 = Theme.Accent,
-        BackgroundTransparency = 0.88,
+        BackgroundTransparency = 0.93,
         BorderSizePixel = 0,
         ZIndex = 1,
         Parent = UI.Root,
@@ -1191,26 +1369,26 @@ local function buildInterface()
     })
     corner(UI.Window, 12)
     UI.WindowScale = new("UIScale", { Scale = 1, Parent = UI.WindowHost })
-    UI.WindowAcrylic = createAcrylic(UI.Window, 8, 12, Theme.Panel, 0.52)
+    UI.WindowAcrylic = createAcrylic(UI.Window, 8, 12, Theme.Panel, 0.64)
 
     UI.LeftPanel = new("Frame", {
         Name = "LeftPanel",
         Size = UDim2.new(0, 490, 1, 0),
         BackgroundColor3 = Theme.InkSoft,
-        BackgroundTransparency = 0.4,
+        BackgroundTransparency = 0.62,
         BorderSizePixel = 0,
         ClipsDescendants = true,
         ZIndex = 20,
         Parent = UI.Window,
     })
-    createAcrylic(UI.LeftPanel, 20, 12, Color3.fromRGB(7, 10, 18), 0.48)
+    createAcrylic(UI.LeftPanel, 20, 12, Color3.fromRGB(7, 10, 18), 0.66)
 
     UI.SplitLine = new("Frame", {
         Name = "PanelSplit",
         Size = UDim2.new(0, 1, 1, -34),
         Position = UDim2.fromOffset(490, 17),
         BackgroundColor3 = Color3.fromRGB(18, 23, 36),
-        BackgroundTransparency = 0.36,
+        BackgroundTransparency = 0.68,
         BorderSizePixel = 0,
         ZIndex = 38,
         Parent = UI.Window,
@@ -1221,18 +1399,18 @@ local function buildInterface()
         Size = UDim2.new(1, -490, 1, 0),
         Position = UDim2.fromOffset(490, 0),
         BackgroundColor3 = Color3.fromRGB(5, 7, 12),
-        BackgroundTransparency = 0.26,
+        BackgroundTransparency = 0.54,
         BorderSizePixel = 0,
         ClipsDescendants = true,
         ZIndex = 30,
         Parent = UI.Window,
     })
-    createAcrylic(UI.RightPanel, 30, 12, Color3.fromRGB(5, 7, 12), 0.34)
+    createAcrylic(UI.RightPanel, 30, 12, Color3.fromRGB(5, 7, 12), 0.58)
 
     for index, spec in ipairs({
-        { 90, 125, 160, 0.9 },
-        { 320, 155, 74, 0.92 },
-        { 360, 386, 118, 0.93 },
+        { 96, 130, 132, 0.955 },
+        { 318, 156, 58, 0.965 },
+        { 358, 386, 92, 0.96 },
     }) do
         local orb = new("Frame", {
             Name = "AcrylicOrb",
