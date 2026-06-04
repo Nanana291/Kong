@@ -260,7 +260,7 @@ local function createAcrylic(parent, zIndex, radius, tint, tintTransparency)
         Name = "Depth Layer",
         Size = UDim2.fromScale(1, 1),
         BackgroundColor3 = Color3.fromRGB(0, 1, 4),
-        BackgroundTransparency = 0.18,
+        BackgroundTransparency = 0.36,
         BorderSizePixel = 0,
         ZIndex = zIndex,
         Parent = parent,
@@ -285,7 +285,7 @@ local function createAcrylic(parent, zIndex, radius, tint, tintTransparency)
         Name = "Glass Tint Layer",
         Size = UDim2.fromScale(1, 1),
         BackgroundColor3 = tint or Theme.Panel,
-        BackgroundTransparency = tintTransparency or 0.64,
+        BackgroundTransparency = tintTransparency or 0.72,
         BorderSizePixel = 0,
         ZIndex = zIndex + 1,
         Parent = parent,
@@ -296,7 +296,7 @@ local function createAcrylic(parent, zIndex, radius, tint, tintTransparency)
         Name = "Light Diffusion Layer",
         Size = UDim2.fromScale(1, 1),
         BackgroundColor3 = Theme.PanelBlue,
-        BackgroundTransparency = 0.82,
+        BackgroundTransparency = 0.88,
         BorderSizePixel = 0,
         ZIndex = zIndex + 2,
         Parent = parent,
@@ -321,7 +321,7 @@ local function createAcrylic(parent, zIndex, radius, tint, tintTransparency)
         Name = "Ambient Lighting Layer",
         Size = UDim2.fromScale(1, 1),
         BackgroundColor3 = Theme.AccentDeep,
-        BackgroundTransparency = 0.9,
+        BackgroundTransparency = 0.94,
         BorderSizePixel = 0,
         ZIndex = zIndex + 3,
         Parent = parent,
@@ -346,7 +346,7 @@ local function createAcrylic(parent, zIndex, radius, tint, tintTransparency)
         Name = "Gradient Layer",
         Size = UDim2.fromScale(1, 1),
         BackgroundColor3 = Color3.fromRGB(19, 23, 34),
-        BackgroundTransparency = 0.74,
+        BackgroundTransparency = 0.84,
         BorderSizePixel = 0,
         ZIndex = zIndex + 4,
         Parent = parent,
@@ -374,7 +374,7 @@ local function createAcrylic(parent, zIndex, radius, tint, tintTransparency)
         Name = "Reflection Layer",
         Size = UDim2.new(1, 0, 0.42, 0),
         BackgroundColor3 = Color3.new(1, 1, 1),
-        BackgroundTransparency = 0.91,
+        BackgroundTransparency = 0.93,
         BorderSizePixel = 0,
         ZIndex = zIndex + 6,
         Parent = parent,
@@ -401,10 +401,10 @@ local function createAcrylic(parent, zIndex, radius, tint, tintTransparency)
         Parent = parent,
     })
     corner(edgeHighlight, radius)
-    local edgeStroke = stroke(edgeHighlight, Color3.fromRGB(175, 185, 230), 1, 0.72)
+    local edgeStroke = stroke(edgeHighlight, Color3.fromRGB(185, 195, 230), 1, 0.78)
     edgeStroke.Name = "EdgeHighlightStroke"
 
-    local border = stroke(parent, Color3.fromRGB(66, 73, 104), 1, 0.48)
+    local border = stroke(parent, Color3.fromRGB(82, 90, 120), 1, 0.56)
     border.Name = "Border Layer"
 
     return {
@@ -1516,31 +1516,6 @@ local function buildInterface()
         NumberSequence.new(0)
     )
 
-    UI.AmbientLeft = new("Frame", {
-        Name = "AmbientLightingLeft",
-        Size = UDim2.fromOffset(560, 560),
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.28, 0.44),
-        BackgroundColor3 = Theme.AccentDeep,
-        BackgroundTransparency = 0.9,
-        BorderSizePixel = 0,
-        ZIndex = 1,
-        Parent = UI.Root,
-    })
-    corner(UI.AmbientLeft, 560)
-    UI.AmbientRight = new("Frame", {
-        Name = "AmbientLightingRight",
-        Size = UDim2.fromOffset(440, 440),
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.74, 0.42),
-        BackgroundColor3 = Theme.Accent,
-        BackgroundTransparency = 0.93,
-        BorderSizePixel = 0,
-        ZIndex = 1,
-        Parent = UI.Root,
-    })
-    corner(UI.AmbientRight, 440)
-
     UI.WindowHost = new("Frame", {
         Name = "WindowHost",
         Size = UDim2.fromOffset(BASE_SIZE.X, BASE_SIZE.Y),
@@ -1566,19 +1541,19 @@ local function buildInterface()
     })
     corner(UI.Window, 12)
     UI.WindowScale = new("UIScale", { Scale = 1, Parent = UI.WindowHost })
-    UI.WindowAcrylic = createAcrylic(UI.Window, 8, 12, Theme.Panel, 0.64)
+    UI.WindowAcrylic = createAcrylic(UI.Window, 8, 12, Theme.Panel, 0.74)
 
     UI.LeftPanel = new("Frame", {
         Name = "LeftPanel",
         Size = UDim2.new(0, 490, 1, 0),
         BackgroundColor3 = Theme.InkSoft,
-        BackgroundTransparency = 0.62,
+        BackgroundTransparency = 0.74,
         BorderSizePixel = 0,
         ClipsDescendants = true,
         ZIndex = 20,
         Parent = UI.Window,
     })
-    createAcrylic(UI.LeftPanel, 20, 12, Color3.fromRGB(7, 10, 18), 0.66)
+    createAcrylic(UI.LeftPanel, 20, 12, Color3.fromRGB(7, 10, 18), 0.78)
 
     UI.SplitLine = new("Frame", {
         Name = "PanelSplit",
@@ -1596,31 +1571,13 @@ local function buildInterface()
         Size = UDim2.new(1, -490, 1, 0),
         Position = UDim2.fromOffset(490, 0),
         BackgroundColor3 = Color3.fromRGB(5, 7, 12),
-        BackgroundTransparency = 0.54,
+        BackgroundTransparency = 0.7,
         BorderSizePixel = 0,
         ClipsDescendants = true,
         ZIndex = 30,
         Parent = UI.Window,
     })
-    createAcrylic(UI.RightPanel, 30, 12, Color3.fromRGB(5, 7, 12), 0.58)
-
-    for index, spec in ipairs({
-        { 96, 130, 132, 0.955 },
-        { 318, 156, 58, 0.965 },
-        { 358, 386, 92, 0.96 },
-    }) do
-        local orb = new("Frame", {
-            Name = "AcrylicOrb",
-            Size = UDim2.fromOffset(spec[3], spec[3]),
-            Position = UDim2.fromOffset(spec[1], spec[2]),
-            BackgroundColor3 = Color3.fromRGB(82, 101, 150),
-            BackgroundTransparency = spec[4],
-            BorderSizePixel = 0,
-            ZIndex = 35 + index,
-            Parent = UI.LeftPanel,
-        })
-        corner(orb, spec[3])
-    end
+    createAcrylic(UI.RightPanel, 30, 12, Color3.fromRGB(5, 7, 12), 0.74)
 
     local leftWordmark, leftRender = buildWordmark(UI.LeftPanel, State.Title, {
         Name = "LeftWordmark",
@@ -1765,7 +1722,7 @@ local function buildInterface()
     updateScale()
     UI.Window.GroupTransparency = 1
     tween(UI.Window, TweenInfoSet.Open, { GroupTransparency = 0 })
-    tween(UI.Root, TweenInfoSet.Open, { BackgroundTransparency = 0.34 })
+    tween(UI.Root, TweenInfoSet.Open, { BackgroundTransparency = 0.48 })
 end
 
 function Loader:SetTitle(title)
@@ -1936,37 +1893,87 @@ function Loader:Toast(config)
     return card
 end
 
+local function cleanupVisuals()
+    disconnect(State.LoadingConnection)
+    State.LoadingConnection = nil
+    disconnect(State.CameraViewportConnection)
+    State.CameraViewportConnection = nil
+
+    for _, connection in ipairs(State.Connections) do
+        disconnect(connection)
+    end
+    table.clear(State.Connections)
+
+    for _, tweenObject in ipairs(State.Tweens) do
+        cancelTween(tweenObject)
+    end
+    table.clear(State.Tweens)
+
+    if UI.Blur then
+        UI.Blur:Destroy()
+        UI.Blur = nil
+    end
+    if UI.ScreenGui then
+        UI.ScreenGui:Destroy()
+        UI.ScreenGui = nil
+    end
+    table.clear(State.Toasts)
+    table.clear(State.ToastQueue)
+    table.clear(UI)
+    State.Destroyed = true
+end
+
 function Loader:Close(callback)
-    if State.Destroyed or not State.Open then
+    if State.Destroyed then
         if type(callback) == "function" then
             task.defer(callback)
         end
         return self
     end
+    if not State.Open then
+        if type(callback) == "function" then
+            task.defer(callback)
+        end
+        return self
+    end
+
     State.Open = false
     State.Validating = false
     setInputLocked(true)
-    stopLoadingVisual()
+    disconnect(State.LoadingConnection)
+    State.LoadingConnection = nil
+
+    if UI.ValidationOverlay then
+        UI.ValidationOverlay.Visible = false
+    end
     if UI.Blur then
         tween(UI.Blur, TweenInfoSet.Close, { Size = 0 })
     end
     if UI.Root then
         tween(UI.Root, TweenInfoSet.Close, { BackgroundTransparency = 1 })
     end
+    if UI.WindowScale then
+        tween(UI.WindowScale, TweenInfo.new(0.24, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {
+            Scale = math.max((State.ScaleTarget or 1) * 0.982, 0.01),
+        })
+    end
+
+    local function finalizeClose()
+        cleanupVisuals()
+        if type(callback) == "function" then
+            callback()
+        end
+    end
+
     if UI.Window then
         local closeTween = tween(UI.Window, TweenInfoSet.Close, { GroupTransparency = 1 })
         if closeTween then
-            closeTween.Completed:Once(function()
-                if UI.Window then
-                    UI.Window.Visible = false
-                end
-                if type(callback) == "function" then
-                    callback()
-                end
-            end)
-        elseif type(callback) == "function" then
-            callback()
+            closeTween.Completed:Once(finalizeClose)
+        else
+            finalizeClose()
         end
+    else
+        finalizeClose()
     end
     return self
 end
@@ -1975,23 +1982,9 @@ function Loader:Destroy()
     if State.Destroyed then
         return self
     end
-    State.Destroyed = true
-    for _, connection in ipairs(State.Connections) do
-        disconnect(connection)
-    end
-    table.clear(State.Connections)
-    for _, tweenObject in ipairs(State.Tweens) do
-        cancelTween(tweenObject)
-    end
-    table.clear(State.Tweens)
-    if UI.Blur then
-        UI.Blur:Destroy()
-    end
-    if UI.ScreenGui then
-        UI.ScreenGui:Destroy()
-    end
-    table.clear(State.Toasts)
-    table.clear(State.ToastQueue)
+    State.Open = false
+    State.Validating = false
+    cleanupVisuals()
     return self
 end
 
