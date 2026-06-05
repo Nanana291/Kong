@@ -70,6 +70,8 @@ local State = {
 local UI = {}
 local BASE_SIZE = Vector2.new(980, 582)
 local SAFE_PAD = 18
+local DISCORD_CONTACT_URL = "https://dsc.gg/kronoshub"
+local DISCORD_ICON_ASSET = "rbxassetid://15850960878"
 
 local function connect(signal, callback)
     local connection = signal:Connect(callback)
@@ -1133,6 +1135,298 @@ local function createButton(parent, name, text, position, size, primary, callbac
 
     return button, label
 end
+
+local function copyDiscordLink()
+    local copied = false
+    pcall(function()
+        if typeof(setclipboard) == "function" then
+            setclipboard(DISCORD_CONTACT_URL)
+            copied = true
+        elseif typeof(toclipboard) == "function" then
+            toclipboard(DISCORD_CONTACT_URL)
+            copied = true
+        end
+    end)
+
+    if copied then
+        Loader:Toast({
+            Type = "success",
+            Icon = "shield-check",
+            Title = "Discord Link Copied",
+            Subtitle = DISCORD_CONTACT_URL,
+            Duration = 3,
+        })
+    else
+        Loader:Toast({
+            Type = "warning",
+            Icon = "info",
+            Title = "Discord Link",
+            Subtitle = DISCORD_CONTACT_URL,
+            Duration = 5,
+        })
+    end
+end
+
+local function createContactSection(parent)
+    local title = new("TextLabel", {
+        Name = "ContactTitle",
+        Size = UDim2.fromOffset(286, 18),
+        Position = UDim2.fromOffset(105, 475),
+        BackgroundTransparency = 1,
+        Text = letterSpaced("OUR CONTACTS"),
+        TextColor3 = Theme.TextDim,
+        TextTransparency = 0.47,
+        Font = Enum.Font.GothamMedium,
+        TextSize = 10,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Center,
+        ZIndex = 64,
+        Parent = parent,
+    })
+
+    local row = new("Frame", {
+        Name = "ContactRow",
+        Size = UDim2.fromOffset(286, 44),
+        Position = UDim2.fromOffset(105, 507),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ZIndex = 64,
+        Parent = parent,
+    })
+
+    local button = new("TextButton", {
+        Name = "DiscordContactButton",
+        Size = UDim2.fromOffset(46, 42),
+        Position = UDim2.fromOffset(0, 0),
+        AutoButtonColor = false,
+        BackgroundColor3 = Color3.fromRGB(9, 12, 20),
+        BackgroundTransparency = 0.58,
+        BorderSizePixel = 0,
+        ClipsDescendants = false,
+        Text = "",
+        ZIndex = 66,
+        Parent = row,
+    })
+    corner(button, 17)
+
+    local scale = new("UIScale", {
+        Scale = 1,
+        Parent = button,
+    })
+
+    local shadow = new("Frame", {
+        Name = "Shadow Layer",
+        Size = UDim2.new(1, 20, 1, 18),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.58),
+        BackgroundColor3 = Color3.fromRGB(2, 4, 10),
+        BackgroundTransparency = 0.62,
+        BorderSizePixel = 0,
+        ZIndex = 63,
+        Parent = button,
+    })
+    corner(shadow, 24)
+    gradient(
+        shadow,
+        ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(76, 86, 170)),
+            ColorSequenceKeypoint.new(0.52, Color3.fromRGB(9, 12, 24)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 0, 0)),
+        }),
+        90,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.9),
+            NumberSequenceKeypoint.new(0.56, 0.34),
+            NumberSequenceKeypoint.new(1, 0.86),
+        })
+    )
+
+    local tint = new("Frame", {
+        Name = "Tint Layer",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = Color3.fromRGB(10, 13, 22),
+        BackgroundTransparency = 0.28,
+        BorderSizePixel = 0,
+        ZIndex = 67,
+        Parent = button,
+    })
+    corner(tint, 17)
+    gradient(
+        tint,
+        ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(24, 28, 43)),
+            ColorSequenceKeypoint.new(0.48, Color3.fromRGB(11, 14, 25)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(5, 7, 14)),
+        }),
+        90,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.2),
+            NumberSequenceKeypoint.new(0.5, 0.1),
+            NumberSequenceKeypoint.new(1, 0.28),
+        })
+    )
+
+    local depth = new("Frame", {
+        Name = "Depth Layer",
+        Size = UDim2.new(1, -4, 1, -4),
+        Position = UDim2.fromOffset(2, 2),
+        BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+        BackgroundTransparency = 0.88,
+        BorderSizePixel = 0,
+        ZIndex = 68,
+        Parent = button,
+    })
+    corner(depth, 15)
+    gradient(
+        depth,
+        ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(0, 0, 0)),
+        90,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 1),
+            NumberSequenceKeypoint.new(0.66, 0.94),
+            NumberSequenceKeypoint.new(1, 0.72),
+        })
+    )
+
+    local reflection = new("Frame", {
+        Name = "Reflection Layer",
+        Size = UDim2.new(0.64, 0, 0, 16),
+        Position = UDim2.fromOffset(8, 5),
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+        BackgroundTransparency = 0.9,
+        BorderSizePixel = 0,
+        Rotation = -8,
+        ZIndex = 69,
+        Parent = button,
+    })
+    corner(reflection, 16)
+    gradient(
+        reflection,
+        ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(185, 196, 255)),
+        0,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.84),
+            NumberSequenceKeypoint.new(0.58, 0.97),
+            NumberSequenceKeypoint.new(1, 1),
+        })
+    )
+
+    local arc = new("Frame", {
+        Name = "Neptune Edge Arc",
+        Size = UDim2.fromOffset(34, 2),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0.58, 0, 1, -5),
+        BackgroundColor3 = Color3.fromRGB(190, 203, 255),
+        BackgroundTransparency = 0.72,
+        BorderSizePixel = 0,
+        Rotation = -10,
+        ZIndex = 72,
+        Parent = button,
+    })
+    corner(arc, 3)
+    gradient(
+        arc,
+        ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(128, 154, 255)),
+        0,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 1),
+            NumberSequenceKeypoint.new(0.22, 0.34),
+            NumberSequenceKeypoint.new(0.72, 0.12),
+            NumberSequenceKeypoint.new(1, 1),
+        })
+    )
+
+    local iconGlow = new("Frame", {
+        Name = "Icon Glow",
+        Size = UDim2.fromOffset(30, 30),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        BackgroundColor3 = Theme.AccentHot,
+        BackgroundTransparency = 0.9,
+        BorderSizePixel = 0,
+        ZIndex = 70,
+        Parent = button,
+    })
+    corner(iconGlow, 999)
+    gradient(
+        iconGlow,
+        ColorSequence.new(Theme.AccentHot, Color3.fromRGB(83, 109, 210)),
+        0,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.54),
+            NumberSequenceKeypoint.new(0.56, 0.82),
+            NumberSequenceKeypoint.new(1, 1),
+        })
+    )
+
+    local icon = new("ImageLabel", {
+        Name = "DiscordIcon",
+        Size = UDim2.fromOffset(22, 22),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        BackgroundTransparency = 1,
+        Image = DISCORD_ICON_ASSET,
+        ImageColor3 = Color3.fromRGB(184, 192, 255),
+        ImageTransparency = 0.08,
+        ScaleType = Enum.ScaleType.Fit,
+        ZIndex = 73,
+        Parent = button,
+    })
+
+    local border = stroke(button, Color3.fromRGB(92, 100, 134), 1, 0.58)
+    border.Name = "Border Layer"
+    local innerEdge = stroke(tint, Color3.fromRGB(232, 238, 255), 1, 0.86)
+    innerEdge.Name = "Inner Edge Light"
+
+    connect(button.MouseEnter, function()
+        tween(scale, TweenInfoSet.Fast, { Scale = 1.045 })
+        tween(shadow, TweenInfoSet.Fast, { BackgroundTransparency = 0.48 })
+        tween(tint, TweenInfoSet.Fast, { BackgroundTransparency = 0.22 })
+        tween(reflection, TweenInfoSet.Fast, { BackgroundTransparency = 0.82 })
+        tween(arc, TweenInfoSet.Fast, { BackgroundTransparency = 0.16 })
+        tween(iconGlow, TweenInfoSet.Fast, { BackgroundTransparency = 0.78 })
+        tween(icon, TweenInfoSet.Fast, {
+            ImageColor3 = Color3.fromRGB(226, 231, 255),
+            ImageTransparency = 0,
+        })
+        tween(border, TweenInfoSet.Fast, {
+            Color = Color3.fromRGB(145, 157, 224),
+            Transparency = 0.38,
+        })
+        tween(innerEdge, TweenInfoSet.Fast, { Transparency = 0.68 })
+    end)
+    connect(button.MouseLeave, function()
+        tween(scale, TweenInfoSet.Fast, { Scale = 1 })
+        tween(shadow, TweenInfoSet.Fast, { BackgroundTransparency = 0.62 })
+        tween(tint, TweenInfoSet.Fast, { BackgroundTransparency = 0.28 })
+        tween(reflection, TweenInfoSet.Fast, { BackgroundTransparency = 0.9 })
+        tween(arc, TweenInfoSet.Fast, { BackgroundTransparency = 0.72 })
+        tween(iconGlow, TweenInfoSet.Fast, { BackgroundTransparency = 0.9 })
+        tween(icon, TweenInfoSet.Fast, {
+            ImageColor3 = Color3.fromRGB(184, 192, 255),
+            ImageTransparency = 0.08,
+        })
+        tween(border, TweenInfoSet.Fast, {
+            Color = Color3.fromRGB(92, 100, 134),
+            Transparency = 0.58,
+        })
+        tween(innerEdge, TweenInfoSet.Fast, { Transparency = 0.86 })
+    end)
+    connect(button.MouseButton1Down, function()
+        tween(scale, TweenInfoSet.Fast, { Scale = 0.94 })
+        tween(arc, TweenInfoSet.Fast, { BackgroundTransparency = 0.05 })
+        tween(iconGlow, TweenInfoSet.Fast, { BackgroundTransparency = 0.68 })
+    end)
+    connect(button.MouseButton1Up, function()
+        tween(scale, TweenInfoSet.Fast, { Scale = 1.025 })
+        tween(arc, TweenInfoSet.Fast, { BackgroundTransparency = 0.2 })
+        tween(iconGlow, TweenInfoSet.Fast, { BackgroundTransparency = 0.78 })
+    end)
+    connect(button.MouseButton1Click, copyDiscordLink)
+
+    return title, row, button
+end
+
 local function openKeyLink()
     local url = State.KeyLink
     if type(url) ~= "string" or url == "" then
@@ -1316,6 +1610,7 @@ local function beginDrag(input)
         or pointInObject(UI.StatusField, point)
         or pointInObject(UI.ValidateButton, point)
         or pointInObject(UI.GetKeyButton, point)
+        or pointInObject(UI.ContactDiscordButton, point)
     then
         return
     end
@@ -1857,6 +2152,7 @@ local function buildInterface()
         false,
         openKeyLink
     )
+    UI.ContactTitle, UI.ContactRow, UI.ContactDiscordButton = createContactSection(UI.FormGroup)
 
     createValidationOverlay(UI.Window)
 
