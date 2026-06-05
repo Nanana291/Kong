@@ -71,7 +71,6 @@ local UI = {}
 local BASE_SIZE = Vector2.new(980, 582)
 local SAFE_PAD = 18
 local DISCORD_CONTACT_URL = "https://dsc.gg/kronoshub"
-local DISCORD_ICON_ASSET = "rbxassetid://15850960878"
 
 local function connect(signal, callback)
     local connection = signal:Connect(callback)
@@ -1359,19 +1358,113 @@ local function createContactSection(parent)
         })
     )
 
-    local icon = new("ImageLabel", {
+    local icon = new("Frame", {
         Name = "DiscordIcon",
-        Size = UDim2.fromOffset(22, 22),
+        Size = UDim2.fromOffset(30, 25),
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5),
         BackgroundTransparency = 1,
-        Image = DISCORD_ICON_ASSET,
-        ImageColor3 = Color3.fromRGB(184, 192, 255),
-        ImageTransparency = 0.08,
-        ScaleType = Enum.ScaleType.Fit,
-        ZIndex = 73,
+        BorderSizePixel = 0,
+        ZIndex = 76,
         Parent = button,
     })
+
+    local iconLeftEar = new("Frame", {
+        Name = "DiscordLeftEar",
+        Size = UDim2.fromOffset(8, 8),
+        Position = UDim2.fromOffset(4, 0),
+        BackgroundColor3 = Color3.fromRGB(238, 242, 255),
+        BackgroundTransparency = 0.02,
+        BorderSizePixel = 0,
+        ZIndex = 77,
+        Parent = icon,
+    })
+    corner(iconLeftEar, 999)
+
+    local iconRightEar = new("Frame", {
+        Name = "DiscordRightEar",
+        Size = UDim2.fromOffset(8, 8),
+        Position = UDim2.fromOffset(18, 0),
+        BackgroundColor3 = Color3.fromRGB(238, 242, 255),
+        BackgroundTransparency = 0.02,
+        BorderSizePixel = 0,
+        ZIndex = 77,
+        Parent = icon,
+    })
+    corner(iconRightEar, 999)
+
+    local iconBody = new("Frame", {
+        Name = "DiscordBody",
+        Size = UDim2.fromOffset(30, 20),
+        Position = UDim2.fromOffset(0, 5),
+        BackgroundColor3 = Color3.fromRGB(238, 242, 255),
+        BackgroundTransparency = 0.02,
+        BorderSizePixel = 0,
+        ZIndex = 78,
+        Parent = icon,
+    })
+    corner(iconBody, 9)
+
+    local iconCutLeft = new("Frame", {
+        Name = "DiscordLeftCut",
+        Size = UDim2.fromOffset(5, 7),
+        Position = UDim2.fromOffset(-1, 13),
+        BackgroundColor3 = Color3.fromRGB(9, 12, 20),
+        BackgroundTransparency = 0,
+        BorderSizePixel = 0,
+        ZIndex = 79,
+        Parent = icon,
+    })
+    corner(iconCutLeft, 999)
+
+    local iconCutRight = new("Frame", {
+        Name = "DiscordRightCut",
+        Size = UDim2.fromOffset(5, 7),
+        Position = UDim2.fromOffset(26, 13),
+        BackgroundColor3 = Color3.fromRGB(9, 12, 20),
+        BackgroundTransparency = 0,
+        BorderSizePixel = 0,
+        ZIndex = 79,
+        Parent = icon,
+    })
+    corner(iconCutRight, 999)
+
+    local iconMouthCut = new("Frame", {
+        Name = "DiscordSmileCut",
+        Size = UDim2.fromOffset(12, 4),
+        AnchorPoint = Vector2.new(0.5, 0),
+        Position = UDim2.fromOffset(15, 20),
+        BackgroundColor3 = Color3.fromRGB(9, 12, 20),
+        BackgroundTransparency = 0,
+        BorderSizePixel = 0,
+        ZIndex = 79,
+        Parent = icon,
+    })
+    corner(iconMouthCut, 999)
+
+    local iconLeftEye = new("Frame", {
+        Name = "DiscordLeftEye",
+        Size = UDim2.fromOffset(4, 5),
+        Position = UDim2.fromOffset(9, 12),
+        BackgroundColor3 = Color3.fromRGB(9, 12, 20),
+        BackgroundTransparency = 0,
+        BorderSizePixel = 0,
+        ZIndex = 80,
+        Parent = icon,
+    })
+    corner(iconLeftEye, 999)
+
+    local iconRightEye = new("Frame", {
+        Name = "DiscordRightEye",
+        Size = UDim2.fromOffset(4, 5),
+        Position = UDim2.fromOffset(17, 12),
+        BackgroundColor3 = Color3.fromRGB(9, 12, 20),
+        BackgroundTransparency = 0,
+        BorderSizePixel = 0,
+        ZIndex = 80,
+        Parent = icon,
+    })
+    corner(iconRightEye, 999)
 
     local border = stroke(button, Color3.fromRGB(92, 100, 134), 1, 0.58)
     border.Name = "Border Layer"
@@ -1385,10 +1478,21 @@ local function createContactSection(parent)
         tween(reflection, TweenInfoSet.Fast, { BackgroundTransparency = 0.82 })
         tween(arc, TweenInfoSet.Fast, { BackgroundTransparency = 0.16 })
         tween(iconGlow, TweenInfoSet.Fast, { BackgroundTransparency = 0.78 })
-        tween(icon, TweenInfoSet.Fast, {
-            ImageColor3 = Color3.fromRGB(226, 231, 255),
-            ImageTransparency = 0,
-        })
+        tween(
+            iconBody,
+            TweenInfoSet.Fast,
+            { BackgroundColor3 = Color3.fromRGB(246, 248, 255), BackgroundTransparency = 0 }
+        )
+        tween(
+            iconLeftEar,
+            TweenInfoSet.Fast,
+            { BackgroundColor3 = Color3.fromRGB(246, 248, 255), BackgroundTransparency = 0 }
+        )
+        tween(
+            iconRightEar,
+            TweenInfoSet.Fast,
+            { BackgroundColor3 = Color3.fromRGB(246, 248, 255), BackgroundTransparency = 0 }
+        )
         tween(border, TweenInfoSet.Fast, {
             Color = Color3.fromRGB(145, 157, 224),
             Transparency = 0.38,
@@ -1402,10 +1506,21 @@ local function createContactSection(parent)
         tween(reflection, TweenInfoSet.Fast, { BackgroundTransparency = 0.9 })
         tween(arc, TweenInfoSet.Fast, { BackgroundTransparency = 0.72 })
         tween(iconGlow, TweenInfoSet.Fast, { BackgroundTransparency = 0.9 })
-        tween(icon, TweenInfoSet.Fast, {
-            ImageColor3 = Color3.fromRGB(184, 192, 255),
-            ImageTransparency = 0.08,
-        })
+        tween(
+            iconBody,
+            TweenInfoSet.Fast,
+            { BackgroundColor3 = Color3.fromRGB(238, 242, 255), BackgroundTransparency = 0.02 }
+        )
+        tween(
+            iconLeftEar,
+            TweenInfoSet.Fast,
+            { BackgroundColor3 = Color3.fromRGB(238, 242, 255), BackgroundTransparency = 0.02 }
+        )
+        tween(
+            iconRightEar,
+            TweenInfoSet.Fast,
+            { BackgroundColor3 = Color3.fromRGB(238, 242, 255), BackgroundTransparency = 0.02 }
+        )
         tween(border, TweenInfoSet.Fast, {
             Color = Color3.fromRGB(92, 100, 134),
             Transparency = 0.58,
