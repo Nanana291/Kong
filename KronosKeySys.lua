@@ -1193,20 +1193,27 @@ local function createContactSection(parent)
         Parent = parent,
     })
 
+    local restPosition = UDim2.fromOffset(0, 0)
+    local hoverPosition = UDim2.fromOffset(0, -2)
+    local pressPosition = UDim2.fromOffset(0, -1)
+    local iconBase = Color3.fromRGB(210, 218, 255)
+    local iconHover = Color3.fromRGB(239, 244, 255)
+    local iconCut = Color3.fromRGB(9, 12, 20)
+
     local button = new("TextButton", {
         Name = "DiscordContactButton",
-        Size = UDim2.fromOffset(46, 42),
-        Position = UDim2.fromOffset(0, 0),
+        Size = UDim2.fromOffset(44, 40),
+        Position = restPosition,
         AutoButtonColor = false,
-        BackgroundColor3 = Color3.fromRGB(9, 12, 20),
-        BackgroundTransparency = 0.58,
+        BackgroundColor3 = Color3.fromRGB(7, 10, 17),
+        BackgroundTransparency = 0.48,
         BorderSizePixel = 0,
         ClipsDescendants = false,
         Text = "",
         ZIndex = 66,
         Parent = row,
     })
-    corner(button, 17)
+    corner(button, 16)
 
     local scale = new("UIScale", {
         Scale = 1,
@@ -1214,328 +1221,437 @@ local function createContactSection(parent)
     })
 
     local shadow = new("Frame", {
-        Name = "Shadow Layer",
+        Name = "Shadow Base",
         Size = UDim2.new(1, 20, 1, 18),
         AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.58),
-        BackgroundColor3 = Color3.fromRGB(2, 4, 10),
-        BackgroundTransparency = 0.62,
+        Position = UDim2.fromScale(0.5, 0.62),
+        BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+        BackgroundTransparency = 0.48,
         BorderSizePixel = 0,
-        ZIndex = 63,
+        ZIndex = 62,
         Parent = button,
     })
     corner(shadow, 24)
     gradient(
         shadow,
         ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(76, 86, 170)),
-            ColorSequenceKeypoint.new(0.52, Color3.fromRGB(9, 12, 24)),
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(74, 86, 158)),
+            ColorSequenceKeypoint.new(0.42, Color3.fromRGB(9, 12, 24)),
             ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 0, 0)),
         }),
         90,
         NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.9),
-            NumberSequenceKeypoint.new(0.56, 0.34),
-            NumberSequenceKeypoint.new(1, 0.86),
+            NumberSequenceKeypoint.new(0, 0.96),
+            NumberSequenceKeypoint.new(0.54, 0.36),
+            NumberSequenceKeypoint.new(1, 0.82),
         })
     )
 
-    local tint = new("Frame", {
-        Name = "Tint Layer",
+    local hoverGlow = new("Frame", {
+        Name = "Animated Hover Glow",
+        Size = UDim2.new(1, 18, 1, 16),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.44, 0.46),
+        BackgroundColor3 = Color3.fromRGB(118, 142, 255),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ZIndex = 64,
+        Parent = button,
+    })
+    corner(hoverGlow, 25)
+    gradient(
+        hoverGlow,
+        ColorSequence.new(Color3.fromRGB(202, 214, 255), Color3.fromRGB(65, 88, 180)),
+        18,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.54),
+            NumberSequenceKeypoint.new(0.45, 0.78),
+            NumberSequenceKeypoint.new(1, 1),
+        })
+    )
+
+    local body = new("Frame", {
+        Name = "Dark Acrylic Body",
         Size = UDim2.fromScale(1, 1),
-        BackgroundColor3 = Color3.fromRGB(10, 13, 22),
-        BackgroundTransparency = 0.28,
+        BackgroundColor3 = Color3.fromRGB(8, 11, 18),
+        BackgroundTransparency = 0.22,
         BorderSizePixel = 0,
         ZIndex = 67,
         Parent = button,
     })
-    corner(tint, 17)
+    corner(body, 16)
     gradient(
-        tint,
+        body,
         ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(24, 28, 43)),
-            ColorSequenceKeypoint.new(0.48, Color3.fromRGB(11, 14, 25)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(5, 7, 14)),
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(27, 31, 48)),
+            ColorSequenceKeypoint.new(0.34, Color3.fromRGB(12, 15, 26)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(4, 6, 12)),
         }),
         90,
         NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.2),
-            NumberSequenceKeypoint.new(0.5, 0.1),
-            NumberSequenceKeypoint.new(1, 0.28),
+            NumberSequenceKeypoint.new(0, 0.18),
+            NumberSequenceKeypoint.new(0.5, 0.04),
+            NumberSequenceKeypoint.new(1, 0.18),
         })
     )
 
-    local depth = new("Frame", {
-        Name = "Depth Layer",
-        Size = UDim2.new(1, -4, 1, -4),
-        Position = UDim2.fromOffset(2, 2),
-        BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-        BackgroundTransparency = 0.88,
+    local directionLight = new("Frame", {
+        Name = "Directional Light",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = Color3.fromRGB(150, 168, 255),
+        BackgroundTransparency = 0.94,
         BorderSizePixel = 0,
         ZIndex = 68,
         Parent = button,
     })
-    corner(depth, 15)
+    corner(directionLight, 16)
     gradient(
-        depth,
+        directionLight,
+        ColorSequence.new(Color3.fromRGB(210, 222, 255), Color3.fromRGB(20, 24, 42)),
+        0,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.7),
+            NumberSequenceKeypoint.new(0.42, 0.94),
+            NumberSequenceKeypoint.new(1, 1),
+        })
+    )
+
+    local innerShadow = new("Frame", {
+        Name = "Inner Shadow",
+        Size = UDim2.new(1, -4, 1, -4),
+        Position = UDim2.fromOffset(2, 2),
+        BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+        BackgroundTransparency = 0.86,
+        BorderSizePixel = 0,
+        ZIndex = 69,
+        Parent = button,
+    })
+    corner(innerShadow, 14)
+    gradient(
+        innerShadow,
         ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(0, 0, 0)),
         90,
         NumberSequence.new({
             NumberSequenceKeypoint.new(0, 1),
-            NumberSequenceKeypoint.new(0.66, 0.94),
-            NumberSequenceKeypoint.new(1, 0.72),
+            NumberSequenceKeypoint.new(0.58, 0.98),
+            NumberSequenceKeypoint.new(1, 0.64),
         })
     )
 
-    local reflection = new("Frame", {
-        Name = "Reflection Layer",
-        Size = UDim2.new(0.64, 0, 0, 16),
-        Position = UDim2.fromOffset(8, 5),
+    local topHighlight = new("Frame", {
+        Name = "Top Glass Highlight",
+        Size = UDim2.new(1, -12, 0, 12),
+        Position = UDim2.fromOffset(6, 4),
         BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-        BackgroundTransparency = 0.9,
-        BorderSizePixel = 0,
-        Rotation = -8,
-        ZIndex = 69,
-        Parent = button,
-    })
-    corner(reflection, 16)
-    gradient(
-        reflection,
-        ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(185, 196, 255)),
-        0,
-        NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.84),
-            NumberSequenceKeypoint.new(0.58, 0.97),
-            NumberSequenceKeypoint.new(1, 1),
-        })
-    )
-
-    local arc = new("Frame", {
-        Name = "Neptune Edge Arc",
-        Size = UDim2.fromOffset(34, 2),
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(0.58, 0, 1, -5),
-        BackgroundColor3 = Color3.fromRGB(190, 203, 255),
-        BackgroundTransparency = 0.72,
-        BorderSizePixel = 0,
-        Rotation = -10,
-        ZIndex = 72,
-        Parent = button,
-    })
-    corner(arc, 3)
-    gradient(
-        arc,
-        ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(128, 154, 255)),
-        0,
-        NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 1),
-            NumberSequenceKeypoint.new(0.22, 0.34),
-            NumberSequenceKeypoint.new(0.72, 0.12),
-            NumberSequenceKeypoint.new(1, 1),
-        })
-    )
-
-    local iconGlow = new("Frame", {
-        Name = "Icon Glow",
-        Size = UDim2.fromOffset(30, 30),
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.5),
-        BackgroundColor3 = Theme.AccentHot,
         BackgroundTransparency = 0.9,
         BorderSizePixel = 0,
         ZIndex = 70,
         Parent = button,
     })
-    corner(iconGlow, 999)
+    corner(topHighlight, 12)
     gradient(
-        iconGlow,
-        ColorSequence.new(Theme.AccentHot, Color3.fromRGB(83, 109, 210)),
-        0,
+        topHighlight,
+        ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(167, 184, 255)),
+        90,
         NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.54),
-            NumberSequenceKeypoint.new(0.56, 0.82),
+            NumberSequenceKeypoint.new(0, 0.66),
+            NumberSequenceKeypoint.new(0.52, 0.96),
             NumberSequenceKeypoint.new(1, 1),
         })
     )
 
-    local icon = new("Frame", {
-        Name = "DiscordIcon",
-        Size = UDim2.fromOffset(30, 25),
+    local bottomShade = new("Frame", {
+        Name = "Bottom Bevel Shadow",
+        Size = UDim2.new(1, -8, 0, 9),
+        Position = UDim2.new(0, 4, 1, -12),
+        BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+        BackgroundTransparency = 0.78,
+        BorderSizePixel = 0,
+        ZIndex = 70,
+        Parent = button,
+    })
+    corner(bottomShade, 10)
+    gradient(
+        bottomShade,
+        ColorSequence.new(Color3.fromRGB(0, 0, 0), Color3.fromRGB(42, 53, 100)),
+        90,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 1),
+            NumberSequenceKeypoint.new(0.48, 0.84),
+            NumberSequenceKeypoint.new(1, 0.52),
+        })
+    )
+
+    local edgeArcGlow = new("Frame", {
+        Name = "Neptune Edge Glow",
+        Size = UDim2.fromOffset(32, 6),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0.62, 0, 1, -5),
+        BackgroundColor3 = Color3.fromRGB(118, 148, 255),
+        BackgroundTransparency = 0.94,
+        BorderSizePixel = 0,
+        Rotation = -8,
+        ZIndex = 72,
+        Parent = button,
+    })
+    corner(edgeArcGlow, 8)
+    gradient(
+        edgeArcGlow,
+        ColorSequence.new(Color3.fromRGB(220, 232, 255), Color3.fromRGB(91, 121, 236)),
+        0,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 1),
+            NumberSequenceKeypoint.new(0.34, 0.52),
+            NumberSequenceKeypoint.new(0.72, 0.3),
+            NumberSequenceKeypoint.new(1, 1),
+        })
+    )
+
+    local edgeArc = new("Frame", {
+        Name = "Neptune Edge Arc",
+        Size = UDim2.fromOffset(29, 2),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0.6, 0, 1, -5),
+        BackgroundColor3 = Color3.fromRGB(211, 224, 255),
+        BackgroundTransparency = 0.74,
+        BorderSizePixel = 0,
+        Rotation = -8,
+        ZIndex = 73,
+        Parent = button,
+    })
+    corner(edgeArc, 4)
+    local arcGradient = gradient(
+        edgeArc,
+        ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(118, 148, 255)),
+        0,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 1),
+            NumberSequenceKeypoint.new(0.18, 0.42),
+            NumberSequenceKeypoint.new(0.7, 0.08),
+            NumberSequenceKeypoint.new(1, 1),
+        })
+    )
+    arcGradient.Offset = Vector2.new(-0.22, 0)
+
+    local iconBloom = new("Frame", {
+        Name = "Icon Bloom",
+        Size = UDim2.fromOffset(32, 28),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        BackgroundColor3 = Color3.fromRGB(160, 182, 255),
+        BackgroundTransparency = 0.96,
+        BorderSizePixel = 0,
+        ZIndex = 74,
+        Parent = button,
+    })
+    corner(iconBloom, 999)
+    gradient(
+        iconBloom,
+        ColorSequence.new(Color3.fromRGB(225, 232, 255), Color3.fromRGB(86, 111, 215)),
+        0,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.36),
+            NumberSequenceKeypoint.new(0.58, 0.72),
+            NumberSequenceKeypoint.new(1, 1),
+        })
+    )
+
+    local glyph = new("Frame", {
+        Name = "DiscordGlyph",
+        Size = UDim2.fromOffset(24, 20),
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        ZIndex = 76,
+        ZIndex = 78,
         Parent = button,
     })
 
-    local iconLeftEar = new("Frame", {
-        Name = "DiscordLeftEar",
-        Size = UDim2.fromOffset(8, 8),
-        Position = UDim2.fromOffset(4, 0),
-        BackgroundColor3 = Color3.fromRGB(238, 242, 255),
-        BackgroundTransparency = 0.02,
-        BorderSizePixel = 0,
-        ZIndex = 77,
-        Parent = icon,
-    })
-    corner(iconLeftEar, 999)
-
-    local iconRightEar = new("Frame", {
-        Name = "DiscordRightEar",
-        Size = UDim2.fromOffset(8, 8),
-        Position = UDim2.fromOffset(18, 0),
-        BackgroundColor3 = Color3.fromRGB(238, 242, 255),
-        BackgroundTransparency = 0.02,
-        BorderSizePixel = 0,
-        ZIndex = 77,
-        Parent = icon,
-    })
-    corner(iconRightEar, 999)
-
-    local iconBody = new("Frame", {
-        Name = "DiscordBody",
-        Size = UDim2.fromOffset(30, 20),
-        Position = UDim2.fromOffset(0, 5),
-        BackgroundColor3 = Color3.fromRGB(238, 242, 255),
-        BackgroundTransparency = 0.02,
+    local glyphTop = new("Frame", {
+        Name = "GlyphTopContour",
+        Size = UDim2.fromOffset(18, 7),
+        AnchorPoint = Vector2.new(0.5, 0),
+        Position = UDim2.fromOffset(12, 1),
+        BackgroundColor3 = iconBase,
+        BackgroundTransparency = 0.08,
         BorderSizePixel = 0,
         ZIndex = 78,
-        Parent = icon,
+        Parent = glyph,
     })
-    corner(iconBody, 9)
+    corner(glyphTop, 6)
 
-    local iconCutLeft = new("Frame", {
-        Name = "DiscordLeftCut",
-        Size = UDim2.fromOffset(5, 7),
-        Position = UDim2.fromOffset(-1, 13),
-        BackgroundColor3 = Color3.fromRGB(9, 12, 20),
-        BackgroundTransparency = 0,
+    local glyphBody = new("Frame", {
+        Name = "GlyphBody",
+        Size = UDim2.fromOffset(24, 16),
+        Position = UDim2.fromOffset(0, 4),
+        BackgroundColor3 = iconBase,
+        BackgroundTransparency = 0.08,
         BorderSizePixel = 0,
         ZIndex = 79,
-        Parent = icon,
+        Parent = glyph,
     })
-    corner(iconCutLeft, 999)
+    corner(glyphBody, 7)
 
-    local iconCutRight = new("Frame", {
-        Name = "DiscordRightCut",
-        Size = UDim2.fromOffset(5, 7),
-        Position = UDim2.fromOffset(26, 13),
-        BackgroundColor3 = Color3.fromRGB(9, 12, 20),
-        BackgroundTransparency = 0,
+    local leftCheek = new("Frame", {
+        Name = "GlyphLeftCheek",
+        Size = UDim2.fromOffset(6, 9),
+        Position = UDim2.fromOffset(-2, 7),
+        BackgroundColor3 = iconBase,
+        BackgroundTransparency = 0.08,
         BorderSizePixel = 0,
         ZIndex = 79,
-        Parent = icon,
+        Parent = glyph,
     })
-    corner(iconCutRight, 999)
+    corner(leftCheek, 999)
 
-    local iconMouthCut = new("Frame", {
-        Name = "DiscordSmileCut",
-        Size = UDim2.fromOffset(12, 4),
+    local rightCheek = new("Frame", {
+        Name = "GlyphRightCheek",
+        Size = UDim2.fromOffset(6, 9),
+        Position = UDim2.fromOffset(20, 7),
+        BackgroundColor3 = iconBase,
+        BackgroundTransparency = 0.08,
+        BorderSizePixel = 0,
+        ZIndex = 79,
+        Parent = glyph,
+    })
+    corner(rightCheek, 999)
+
+    local bottomCut = new("Frame", {
+        Name = "GlyphBottomCut",
+        Size = UDim2.fromOffset(10, 4),
         AnchorPoint = Vector2.new(0.5, 0),
-        Position = UDim2.fromOffset(15, 20),
-        BackgroundColor3 = Color3.fromRGB(9, 12, 20),
-        BackgroundTransparency = 0,
-        BorderSizePixel = 0,
-        ZIndex = 79,
-        Parent = icon,
-    })
-    corner(iconMouthCut, 999)
-
-    local iconLeftEye = new("Frame", {
-        Name = "DiscordLeftEye",
-        Size = UDim2.fromOffset(4, 5),
-        Position = UDim2.fromOffset(9, 12),
-        BackgroundColor3 = Color3.fromRGB(9, 12, 20),
+        Position = UDim2.fromOffset(12, 17),
+        BackgroundColor3 = iconCut,
         BackgroundTransparency = 0,
         BorderSizePixel = 0,
         ZIndex = 80,
-        Parent = icon,
+        Parent = glyph,
     })
-    corner(iconLeftEye, 999)
+    corner(bottomCut, 999)
 
-    local iconRightEye = new("Frame", {
-        Name = "DiscordRightEye",
-        Size = UDim2.fromOffset(4, 5),
-        Position = UDim2.fromOffset(17, 12),
-        BackgroundColor3 = Color3.fromRGB(9, 12, 20),
+    local leftEye = new("Frame", {
+        Name = "GlyphLeftEye",
+        Size = UDim2.fromOffset(3, 4),
+        Position = UDim2.fromOffset(7, 10),
+        BackgroundColor3 = iconCut,
         BackgroundTransparency = 0,
         BorderSizePixel = 0,
-        ZIndex = 80,
-        Parent = icon,
+        ZIndex = 81,
+        Parent = glyph,
     })
-    corner(iconRightEye, 999)
+    corner(leftEye, 999)
 
-    local border = stroke(button, Color3.fromRGB(92, 100, 134), 1, 0.58)
+    local rightEye = new("Frame", {
+        Name = "GlyphRightEye",
+        Size = UDim2.fromOffset(3, 4),
+        Position = UDim2.fromOffset(14, 10),
+        BackgroundColor3 = iconCut,
+        BackgroundTransparency = 0,
+        BorderSizePixel = 0,
+        ZIndex = 81,
+        Parent = glyph,
+    })
+    corner(rightEye, 999)
+
+    local glyphSheen = new("Frame", {
+        Name = "GlyphSheen",
+        Size = UDim2.new(1, -7, 0, 5),
+        Position = UDim2.fromOffset(4, 5),
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+        BackgroundTransparency = 0.88,
+        BorderSizePixel = 0,
+        ZIndex = 82,
+        Parent = glyph,
+    })
+    corner(glyphSheen, 5)
+    gradient(
+        glyphSheen,
+        ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(190, 205, 255)),
+        90,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.64),
+            NumberSequenceKeypoint.new(0.58, 0.96),
+            NumberSequenceKeypoint.new(1, 1),
+        })
+    )
+
+    local border = stroke(button, Color3.fromRGB(78, 86, 120), 1, 0.54)
     border.Name = "Border Layer"
-    local innerEdge = stroke(tint, Color3.fromRGB(232, 238, 255), 1, 0.86)
+    local innerEdge = stroke(body, Color3.fromRGB(226, 234, 255), 1, 0.86)
     innerEdge.Name = "Inner Edge Light"
 
+    local function tweenGlyph(color, transparency)
+        tween(glyphTop, TweenInfoSet.Fast, { BackgroundColor3 = color, BackgroundTransparency = transparency })
+        tween(glyphBody, TweenInfoSet.Fast, { BackgroundColor3 = color, BackgroundTransparency = transparency })
+        tween(leftCheek, TweenInfoSet.Fast, { BackgroundColor3 = color, BackgroundTransparency = transparency })
+        tween(rightCheek, TweenInfoSet.Fast, { BackgroundColor3 = color, BackgroundTransparency = transparency })
+    end
+
     connect(button.MouseEnter, function()
-        tween(scale, TweenInfoSet.Fast, { Scale = 1.045 })
-        tween(shadow, TweenInfoSet.Fast, { BackgroundTransparency = 0.48 })
-        tween(tint, TweenInfoSet.Fast, { BackgroundTransparency = 0.22 })
-        tween(reflection, TweenInfoSet.Fast, { BackgroundTransparency = 0.82 })
-        tween(arc, TweenInfoSet.Fast, { BackgroundTransparency = 0.16 })
-        tween(iconGlow, TweenInfoSet.Fast, { BackgroundTransparency = 0.78 })
-        tween(
-            iconBody,
-            TweenInfoSet.Fast,
-            { BackgroundColor3 = Color3.fromRGB(246, 248, 255), BackgroundTransparency = 0 }
-        )
-        tween(
-            iconLeftEar,
-            TweenInfoSet.Fast,
-            { BackgroundColor3 = Color3.fromRGB(246, 248, 255), BackgroundTransparency = 0 }
-        )
-        tween(
-            iconRightEar,
-            TweenInfoSet.Fast,
-            { BackgroundColor3 = Color3.fromRGB(246, 248, 255), BackgroundTransparency = 0 }
-        )
+        tween(button, TweenInfoSet.Fast, { Position = hoverPosition })
+        tween(scale, TweenInfoSet.Fast, { Scale = 1.025 })
+        tween(shadow, TweenInfoSet.Fast, { BackgroundTransparency = 0.36 })
+        tween(hoverGlow, TweenInfoSet.Fast, { BackgroundTransparency = 0.82, Position = UDim2.fromScale(0.4, 0.44) })
+        tween(body, TweenInfoSet.Fast, { BackgroundTransparency = 0.16 })
+        tween(directionLight, TweenInfoSet.Fast, { BackgroundTransparency = 0.84 })
+        tween(topHighlight, TweenInfoSet.Fast, { BackgroundTransparency = 0.82 })
+        tween(bottomShade, TweenInfoSet.Fast, { BackgroundTransparency = 0.68 })
+        tween(edgeArcGlow, TweenInfoSet.Fast, { BackgroundTransparency = 0.76 })
+        tween(edgeArc, TweenInfoSet.Fast, {
+            BackgroundTransparency = 0.18,
+            Position = UDim2.new(0.68, 0, 1, -5),
+            Rotation = -4,
+        })
+        tween(arcGradient, TweenInfo.new(0.36, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+            Offset = Vector2.new(0.24, 0),
+        })
+        tween(iconBloom, TweenInfoSet.Fast, { BackgroundTransparency = 0.82 })
+        tween(glyphSheen, TweenInfoSet.Fast, { BackgroundTransparency = 0.8 })
+        tweenGlyph(iconHover, 0.02)
         tween(border, TweenInfoSet.Fast, {
-            Color = Color3.fromRGB(145, 157, 224),
-            Transparency = 0.38,
+            Color = Color3.fromRGB(128, 145, 218),
+            Transparency = 0.34,
         })
         tween(innerEdge, TweenInfoSet.Fast, { Transparency = 0.68 })
     end)
     connect(button.MouseLeave, function()
+        tween(button, TweenInfoSet.Fast, { Position = restPosition })
         tween(scale, TweenInfoSet.Fast, { Scale = 1 })
-        tween(shadow, TweenInfoSet.Fast, { BackgroundTransparency = 0.62 })
-        tween(tint, TweenInfoSet.Fast, { BackgroundTransparency = 0.28 })
-        tween(reflection, TweenInfoSet.Fast, { BackgroundTransparency = 0.9 })
-        tween(arc, TweenInfoSet.Fast, { BackgroundTransparency = 0.72 })
-        tween(iconGlow, TweenInfoSet.Fast, { BackgroundTransparency = 0.9 })
-        tween(
-            iconBody,
-            TweenInfoSet.Fast,
-            { BackgroundColor3 = Color3.fromRGB(238, 242, 255), BackgroundTransparency = 0.02 }
-        )
-        tween(
-            iconLeftEar,
-            TweenInfoSet.Fast,
-            { BackgroundColor3 = Color3.fromRGB(238, 242, 255), BackgroundTransparency = 0.02 }
-        )
-        tween(
-            iconRightEar,
-            TweenInfoSet.Fast,
-            { BackgroundColor3 = Color3.fromRGB(238, 242, 255), BackgroundTransparency = 0.02 }
-        )
+        tween(shadow, TweenInfoSet.Fast, { BackgroundTransparency = 0.48 })
+        tween(hoverGlow, TweenInfoSet.Fast, { BackgroundTransparency = 1, Position = UDim2.fromScale(0.44, 0.46) })
+        tween(body, TweenInfoSet.Fast, { BackgroundTransparency = 0.22 })
+        tween(directionLight, TweenInfoSet.Fast, { BackgroundTransparency = 0.94 })
+        tween(topHighlight, TweenInfoSet.Fast, { BackgroundTransparency = 0.9 })
+        tween(bottomShade, TweenInfoSet.Fast, { BackgroundTransparency = 0.78 })
+        tween(edgeArcGlow, TweenInfoSet.Fast, { BackgroundTransparency = 0.94 })
+        tween(edgeArc, TweenInfoSet.Fast, {
+            BackgroundTransparency = 0.74,
+            Position = UDim2.new(0.6, 0, 1, -5),
+            Rotation = -8,
+        })
+        tween(arcGradient, TweenInfoSet.Fast, { Offset = Vector2.new(-0.22, 0) })
+        tween(iconBloom, TweenInfoSet.Fast, { BackgroundTransparency = 0.96 })
+        tween(glyphSheen, TweenInfoSet.Fast, { BackgroundTransparency = 0.88 })
+        tweenGlyph(iconBase, 0.08)
         tween(border, TweenInfoSet.Fast, {
-            Color = Color3.fromRGB(92, 100, 134),
-            Transparency = 0.58,
+            Color = Color3.fromRGB(78, 86, 120),
+            Transparency = 0.54,
         })
         tween(innerEdge, TweenInfoSet.Fast, { Transparency = 0.86 })
     end)
     connect(button.MouseButton1Down, function()
-        tween(scale, TweenInfoSet.Fast, { Scale = 0.94 })
-        tween(arc, TweenInfoSet.Fast, { BackgroundTransparency = 0.05 })
-        tween(iconGlow, TweenInfoSet.Fast, { BackgroundTransparency = 0.68 })
+        tween(button, TweenInfoSet.Fast, { Position = pressPosition })
+        tween(scale, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Scale = 0.96 })
+        tween(hoverGlow, TweenInfoSet.Fast, { BackgroundTransparency = 0.72 })
+        tween(edgeArc, TweenInfoSet.Fast, { BackgroundTransparency = 0.08 })
+        tween(iconBloom, TweenInfoSet.Fast, { BackgroundTransparency = 0.74 })
     end)
     connect(button.MouseButton1Up, function()
-        tween(scale, TweenInfoSet.Fast, { Scale = 1.025 })
-        tween(arc, TweenInfoSet.Fast, { BackgroundTransparency = 0.2 })
-        tween(iconGlow, TweenInfoSet.Fast, { BackgroundTransparency = 0.78 })
+        tween(button, TweenInfoSet.Fast, { Position = hoverPosition })
+        tween(scale, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1.025 })
+        tween(hoverGlow, TweenInfoSet.Fast, { BackgroundTransparency = 0.82 })
+        tween(edgeArc, TweenInfoSet.Fast, { BackgroundTransparency = 0.18 })
+        tween(iconBloom, TweenInfoSet.Fast, { BackgroundTransparency = 0.82 })
     end)
     connect(button.MouseButton1Click, copyDiscordLink)
 
