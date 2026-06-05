@@ -700,26 +700,55 @@ local function shake(object)
     end)
 end
 
+local function getToastMetrics()
+    local viewport = getViewport()
+    local safeInset = GuiService:GetGuiInset()
+    local width = math.clamp(viewport.X - 28, 280, 348)
+    local height = 92
+    local top = math.max(18, safeInset.Y + 14)
+    local right = math.max(14, UserInputService.TouchEnabled and 16 or 24)
+    return width, height, top, right
+end
+
+local function getToastPosition(index, offscreen)
+    local width, height, top, right = getToastMetrics()
+    local xOffset = offscreen and (width + 44) or -right
+    return UDim2.new(1, xOffset, 0, top + (index - 1) * (height + 12))
+end
+
 local function reflowToasts()
     for index, toast in ipairs(State.Toasts) do
         if toast.Gui and toast.Gui.Parent then
+            local width, height = getToastMetrics()
+            toast.Gui.Size = UDim2.fromOffset(width, height)
             tween(toast.Gui, TweenInfoSet.Toast, {
-                Position = UDim2.new(1, -24, 0, 22 + (index - 1) * 92),
+                Position = getToastPosition(index, false),
             })
         end
     end
 end
 
 local function removeToast(toast)
+    if toast.Removing then
+        return
+    end
+    toast.Removing = true
     local foundIndex = table.find(State.Toasts, toast)
     if foundIndex then
         table.remove(State.Toasts, foundIndex)
     end
+    if toast.ProgressTween then
+        cancelTween(toast.ProgressTween)
+        toast.ProgressTween = nil
+    end
     if toast.Gui and toast.Gui.Parent then
         local outTween = tween(toast.Gui, TweenInfoSet.ToastOut, {
-            Position = toast.Gui.Position + UDim2.fromOffset(32, 0),
+            Position = toast.Gui.Position + UDim2.fromOffset(34, -4),
             GroupTransparency = 1,
         })
+        if toast.Scale then
+            tween(toast.Scale, TweenInfoSet.ToastOut, { Scale = 0.975 })
+        end
         if outTween then
             outTween.Completed:Once(function()
                 if toast.Gui then
@@ -742,17 +771,154 @@ end
 
 local function toastColor(toastType)
     if toastType == "success" then
-        return Theme.Success, "✓"
+        return Color3.fromRGB(176, 235, 205), "✓"
     elseif toastType == "error" then
-        return Theme.Error, "!"
+        return Color3.fromRGB(238, 176, 192), "!"
     elseif toastType == "warning" then
-        return Theme.Warning, "!"
+        return Color3.fromRGB(238, 210, 158), "!"
     elseif toastType == "loading" then
-        return Theme.AccentHot, "…"
+        return Color3.fromRGB(196, 205, 255), "…"
     end
-    return Theme.AccentHot, "i"
+    return Color3.fromRGB(196, 205, 255), "i"
 end
 
+local function createToastMaterial(parent, accent)
+    local shadowLayer = new("Frame", {
+        Name = "Shadow Layer",
+        Size = UDim2.new(1, 18, 1, 20),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.55),
+        BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+        BackgroundTransparency = 0.76,
+        BorderSizePixel = 0,
+        ZIndex = 308,
+        Parent = parent,
+    })
+    corner(shadowLayer, 24)
+    gradient(
+        shadowLayer,
+        ColorSequence.new(Color3.fromRGB(0, 0, 0), accent),
+        90,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.42),
+            NumberSequenceKeypoint.new(0.58, 0.78),
+            NumberSequenceKeypoint.new(1, 1),
+        })
+    )
+
+    local card = new("CanvasGroup", {
+        Name = "ToastCard",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = Color3.fromRGB(7, 9, 15),
+        BackgroundTransparency = 0.34,
+        GroupTransparency = 0,
+        ClipsDescendants = true,
+        BorderSizePixel = 0,
+        ZIndex = 310,
+        Parent = parent,
+    })
+    corner(card, 18)
+
+    local backgroundLayer = new("Frame", {
+        Name = "Background Layer",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = Color3.fromRGB(4, 6, 11),
+        BackgroundTransparency = 0.34,
+        BorderSizePixel = 0,
+        ZIndex = 311,
+        Parent = card,
+    })
+    corner(backgroundLayer, 18)
+
+    local tintLayer = new("Frame", {
+        Name = "Tint Layer",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = Color3.fromRGB(13, 16, 26),
+        BackgroundTransparency = 0.42,
+        BorderSizePixel = 0,
+        ZIndex = 312,
+        Parent = card,
+    })
+    corner(tintLayer, 18)
+    gradient(
+        tintLayer,
+        ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(31, 36, 54)),
+            ColorSequenceKeypoint.new(0.46, Color3.fromRGB(11, 14, 24)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(4, 6, 12)),
+        }),
+        18,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.62),
+            NumberSequenceKeypoint.new(0.55, 0.76),
+            NumberSequenceKeypoint.new(1, 0.68),
+        })
+    )
+
+    local noiseLayer = buildNoise(card, 313, 76)
+    noiseLayer.Name = "Noise Layer"
+
+    local reflectionLayer = new("Frame", {
+        Name = "Reflection Layer",
+        Size = UDim2.new(1, -18, 0.42, 0),
+        Position = UDim2.fromOffset(9, 5),
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+        BackgroundTransparency = 0.9,
+        BorderSizePixel = 0,
+        ZIndex = 314,
+        Parent = card,
+    })
+    corner(reflectionLayer, 16)
+    gradient(
+        reflectionLayer,
+        ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(160, 170, 220)),
+        90,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.76),
+            NumberSequenceKeypoint.new(0.48, 0.96),
+            NumberSequenceKeypoint.new(1, 1),
+        })
+    )
+
+    local highlightLayer = new("Frame", {
+        Name = "Highlight Layer",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ZIndex = 315,
+        Parent = card,
+    })
+    corner(highlightLayer, 18)
+    local edge = stroke(highlightLayer, Color3.fromRGB(202, 210, 246), 1, 0.72)
+    edge.Name = "Edge Highlight"
+
+    local accentGlow = new("Frame", {
+        Name = "Accent Glow",
+        Size = UDim2.new(0, 70, 1, 18),
+        Position = UDim2.fromOffset(-26, -9),
+        BackgroundColor3 = accent,
+        BackgroundTransparency = 0.86,
+        BorderSizePixel = 0,
+        ZIndex = 316,
+        Parent = card,
+    })
+    corner(accentGlow, 36)
+    gradient(
+        accentGlow,
+        ColorSequence.new(accent, Color3.fromRGB(8, 10, 16)),
+        0,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.48),
+            NumberSequenceKeypoint.new(0.66, 0.96),
+            NumberSequenceKeypoint.new(1, 1),
+        })
+    )
+
+    local borderLayer = stroke(card, Color3.fromRGB(95, 104, 136), 1, 0.52)
+    borderLayer.Name = "Border Layer"
+
+    return card
+end
 local function createButton(parent, name, text, position, size, primary, callback)
     local button = new("TextButton", {
         Name = name,
@@ -1708,6 +1874,7 @@ local function buildInterface()
     connect(UserInputService.InputChanged, updateDragInput)
     connect(RunService.RenderStepped, updateDrag)
     connect(UI.Root:GetPropertyChangedSignal("AbsoluteSize"), updateScale)
+    connect(UI.Root:GetPropertyChangedSignal("AbsoluteSize"), reflowToasts)
     connect(workspace:GetPropertyChangedSignal("CurrentCamera"), function()
         disconnect(State.CameraViewportConnection)
         State.CameraViewportConnection = nil
@@ -1794,6 +1961,9 @@ function Loader:Toast(config)
     elseif type(config) ~= "table" then
         config = { Title = "Notification" }
     end
+    if not UI.ToastLayer then
+        return nil
+    end
 
     if #State.Toasts >= 4 then
         State.ToastQueue[#State.ToastQueue + 1] = config
@@ -1801,102 +1971,179 @@ function Loader:Toast(config)
     end
 
     local accent, icon = toastColor(string.lower(tostring(config.Type or "info")))
-    if config.Icon == "shield-check" then
-        icon = "✓"
+    if type(config.Icon) == "string" then
+        local iconName = string.lower(config.Icon)
+        if iconName == "shield-check" or iconName == "check" or iconName == "check-circle" then
+            icon = "✓"
+        elseif iconName == "x" or iconName == "x-circle" or iconName == "alert" then
+            icon = "!"
+        elseif iconName == "info" then
+            icon = "i"
+        elseif iconName == "loader" or iconName == "loading" then
+            icon = "…"
+        end
     end
 
-    local card = new("CanvasGroup", {
+    local width, height = getToastMetrics()
+    local wrapper = new("CanvasGroup", {
         Name = "Toast",
-        Size = UDim2.fromOffset(312, 82),
+        Size = UDim2.fromOffset(width, height),
         AnchorPoint = Vector2.new(1, 0),
-        Position = UDim2.new(1, 36, 0, 22 + #State.Toasts * 92),
-        BackgroundColor3 = Theme.PanelDeep,
-        BackgroundTransparency = 0.1,
+        Position = getToastPosition(1, true),
+        BackgroundTransparency = 1,
         GroupTransparency = 1,
-        ClipsDescendants = true,
-        ZIndex = 310,
+        ClipsDescendants = false,
+        ZIndex = 306,
         Parent = UI.ToastLayer,
     })
-    corner(card, 16)
-    createAcrylic(card, 310, 16, Color3.fromRGB(8, 10, 16), 0.42)
-    stroke(card, accent, 1, 0.62)
+    local wrapperScale = new("UIScale", { Scale = 0.965, Parent = wrapper })
+    local card = createToastMaterial(wrapper, accent)
 
     local iconFrame = new("Frame", {
         Name = "IconFrame",
         Size = UDim2.fromOffset(38, 38),
-        Position = UDim2.fromOffset(16, 21),
+        Position = UDim2.fromOffset(17, 18),
         BackgroundColor3 = accent,
-        BackgroundTransparency = 0.84,
+        BackgroundTransparency = 0.88,
         BorderSizePixel = 0,
-        ZIndex = 325,
+        ZIndex = 322,
         Parent = card,
     })
-    corner(iconFrame, 14)
-    stroke(iconFrame, accent, 1, 0.58)
+    corner(iconFrame, 13)
+    stroke(iconFrame, accent, 1, 0.66)
+    local iconGlow = new("Frame", {
+        Name = "IconGlow",
+        Size = UDim2.new(1, 10, 1, 10),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        BackgroundColor3 = accent,
+        BackgroundTransparency = 0.92,
+        BorderSizePixel = 0,
+        ZIndex = 321,
+        Parent = iconFrame,
+    })
+    corner(iconGlow, 18)
+
     new("TextLabel", {
         Name = "Icon",
         Size = UDim2.fromScale(1, 1),
         BackgroundTransparency = 1,
         Text = icon,
         TextColor3 = accent,
-        TextTransparency = 0.04,
-        TextSize = 19,
+        TextTransparency = 0.03,
+        TextSize = 18,
         Font = Enum.Font.GothamBold,
-        ZIndex = 326,
+        TextXAlignment = Enum.TextXAlignment.Center,
+        TextYAlignment = Enum.TextYAlignment.Center,
+        ZIndex = 323,
         Parent = iconFrame,
     })
 
-    new("TextLabel", {
+    local titleText = tostring(config.Title or "Notification")
+    local subtitleText = tostring(config.Subtitle or "")
+    local title = new("TextLabel", {
         Name = "Title",
-        Size = UDim2.new(1, -84, 0, 24),
-        Position = UDim2.fromOffset(68, 18),
+        Size = UDim2.new(1, -82, 0, subtitleText == "" and 32 or 22),
+        Position = UDim2.fromOffset(68, subtitleText == "" and 25 or 18),
         BackgroundTransparency = 1,
-        Text = tostring(config.Title or "Notification"),
-        TextColor3 = Theme.Text,
+        Text = titleText,
+        TextColor3 = Color3.fromRGB(240, 243, 255),
         TextTransparency = 0.02,
         TextSize = 14,
-        Font = Enum.Font.GothamBold,
+        Font = Enum.Font.GothamMedium,
         TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Center,
         TextTruncate = Enum.TextTruncate.AtEnd,
-        ZIndex = 326,
+        ZIndex = 323,
         Parent = card,
     })
 
-    new("TextLabel", {
-        Name = "Subtitle",
-        Size = UDim2.new(1, -84, 0, 28),
-        Position = UDim2.fromOffset(68, 42),
-        BackgroundTransparency = 1,
-        Text = tostring(config.Subtitle or ""),
-        TextColor3 = Theme.TextDim,
-        TextTransparency = 0.18,
-        TextSize = 12,
-        Font = Enum.Font.Gotham,
-        TextWrapped = true,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Top,
-        ZIndex = 326,
+    if subtitleText ~= "" then
+        new("TextLabel", {
+            Name = "Subtitle",
+            Size = UDim2.new(1, -82, 0, 32),
+            Position = UDim2.fromOffset(68, 42),
+            BackgroundTransparency = 1,
+            Text = subtitleText,
+            TextColor3 = Color3.fromRGB(154, 162, 190),
+            TextTransparency = 0.12,
+            TextSize = 12,
+            Font = Enum.Font.Gotham,
+            TextWrapped = true,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextYAlignment = Enum.TextYAlignment.Top,
+            ZIndex = 323,
+            Parent = card,
+        })
+    else
+        title.TextSize = 14
+    end
+
+    local progressTrack = new("Frame", {
+        Name = "LifetimeTrack",
+        Size = UDim2.new(1, -28, 0, 1),
+        AnchorPoint = Vector2.new(0.5, 1),
+        Position = UDim2.new(0.5, 0, 1, -8),
+        BackgroundColor3 = Color3.fromRGB(80, 88, 118),
+        BackgroundTransparency = 0.72,
+        BorderSizePixel = 0,
+        ZIndex = 324,
         Parent = card,
     })
+    corner(progressTrack, 1)
 
-    local toast = { Gui = card, Token = os.clock() }
-    State.Toasts[#State.Toasts + 1] = toast
+    local progressFill = new("Frame", {
+        Name = "LifetimeIndicator",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = accent,
+        BackgroundTransparency = 0.18,
+        BorderSizePixel = 0,
+        ZIndex = 325,
+        Parent = progressTrack,
+    })
+    corner(progressFill, 1)
+    gradient(
+        progressFill,
+        ColorSequence.new(Color3.fromRGB(245, 247, 255), accent),
+        0,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.12),
+            NumberSequenceKeypoint.new(1, 0.36),
+        })
+    )
+
+    local toast = { Gui = wrapper, Card = card, Scale = wrapperScale, Token = os.clock(), Removing = false }
+    table.insert(State.Toasts, 1, toast)
     reflowToasts()
-    tween(card, TweenInfoSet.Toast, {
-        Position = UDim2.new(1, -24, 0, 22 + (#State.Toasts - 1) * 92),
+    tween(wrapper, TweenInfoSet.Toast, {
+        Position = getToastPosition(1, false),
         GroupTransparency = 0,
     })
+    tween(wrapperScale, TweenInfoSet.Toast, { Scale = 1 })
 
-    local duration = tonumber(config.Duration) or 3
-    task.delay(math.max(duration, 0.5), function()
-        if not State.Destroyed then
-            removeToast(toast)
-        end
-    end)
+    local duration = math.max(tonumber(config.Duration) or 3, 0.5)
+    toast.ProgressTween = tween(
+        progressFill,
+        TweenInfo.new(duration, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
+        { Size = UDim2.new(0, 0, 1, 0) }
+    )
+    if toast.ProgressTween then
+        toast.ProgressTween.Completed:Once(function()
+            if not State.Destroyed then
+                removeToast(toast)
+            end
+        end)
+    else
+        task.delay(duration, function()
+            if not State.Destroyed then
+                removeToast(toast)
+            end
+        end)
+    end
 
-    return card
+    return wrapper
 end
-
 local function cleanupVisuals()
     disconnect(State.LoadingConnection)
     State.LoadingConnection = nil
