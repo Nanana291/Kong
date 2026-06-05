@@ -54,6 +54,8 @@ local State = {
     Center = nil,
     WasDragged = false,
     LoadingTick = 0,
+    DiscordModalOpen = false,
+    DiscordModalClosing = false,
     Drag = {
         Active = false,
         Input = nil,
@@ -70,7 +72,7 @@ local State = {
 local UI = {}
 local BASE_SIZE = Vector2.new(980, 582)
 local SAFE_PAD = 18
-local DISCORD_CONTACT_URL = "https://dsc.gg/kronoshub"
+local DISCORD_CONTACT_URL = "dsc.gg/kronoshub"
 
 local function connect(signal, callback)
     local connection = signal:Connect(callback)
@@ -1166,6 +1168,589 @@ local function copyDiscordLink()
     end
 end
 
+local function createModalCopyGlyph(parent, zIndex)
+    local glyph = new("Frame", {
+        Name = "CopyGlyph",
+        Size = UDim2.fromOffset(22, 22),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ZIndex = zIndex,
+        Parent = parent,
+    })
+
+    local backSheet = new("Frame", {
+        Name = "BackSheet",
+        Size = UDim2.fromOffset(10, 12),
+        Position = UDim2.fromOffset(4, 3),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ZIndex = zIndex,
+        Parent = glyph,
+    })
+    corner(backSheet, 4)
+    local backStroke = stroke(backSheet, Color3.fromRGB(214, 224, 255), 1, 0.74)
+
+    local frontSheet = new("Frame", {
+        Name = "FrontSheet",
+        Size = UDim2.fromOffset(11, 13),
+        Position = UDim2.fromOffset(8, 7),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ZIndex = zIndex + 1,
+        Parent = glyph,
+    })
+    corner(frontSheet, 4)
+    local frontStroke = stroke(frontSheet, Color3.fromRGB(230, 237, 255), 1, 0.68)
+
+    local check = new("Frame", {
+        Name = "CheckGlyph",
+        Size = UDim2.fromOffset(22, 22),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ZIndex = zIndex + 2,
+        Parent = glyph,
+    })
+
+    local checkA = new("Frame", {
+        Name = "CheckA",
+        Size = UDim2.fromOffset(7, 2),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromOffset(8, 13),
+        BackgroundColor3 = Color3.fromRGB(226, 240, 255),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Rotation = 42,
+        ZIndex = zIndex + 2,
+        Parent = check,
+    })
+    corner(checkA, 2)
+
+    local checkB = new("Frame", {
+        Name = "CheckB",
+        Size = UDim2.fromOffset(12, 2),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromOffset(14, 10),
+        BackgroundColor3 = Color3.fromRGB(226, 240, 255),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Rotation = -42,
+        ZIndex = zIndex + 2,
+        Parent = check,
+    })
+    corner(checkB, 2)
+
+    return {
+        Root = glyph,
+        Strokes = { backStroke, frontStroke },
+        Check = { checkA, checkB },
+    }
+end
+
+local function setModalCopyGlyphHover(hovered)
+    if not UI.DiscordModalCopyIcon then
+        return
+    end
+    local icon = UI.DiscordModalCopyIcon
+    tween(icon.Button, TweenInfoSet.Fast, {
+        Position = hovered and UDim2.new(1, -35, 0.5, 0) or UDim2.new(1, -30, 0.5, 0),
+    })
+    tween(icon.Scale, TweenInfoSet.Fast, { Scale = hovered and 1 or 0.95 })
+    tween(icon.Glow, TweenInfoSet.Fast, { BackgroundTransparency = hovered and 0.84 or 0.98 })
+    for _, line in ipairs(icon.Glyph.Strokes) do
+        tween(line, TweenInfoSet.Fast, {
+            Color = hovered and Color3.fromRGB(244, 248, 255) or Color3.fromRGB(214, 224, 255),
+            Transparency = hovered and 0.08 or 0.72,
+        })
+    end
+end
+
+local function playDiscordCopyFeedback()
+    if not UI.DiscordModalFieldStroke then
+        return
+    end
+
+    tween(UI.DiscordModalFieldStroke, TweenInfoSet.Fast, {
+        Color = Color3.fromRGB(135, 165, 255),
+        Transparency = 0.12,
+    })
+    if UI.DiscordModalFieldGlow then
+        tween(UI.DiscordModalFieldGlow, TweenInfoSet.Fast, { BackgroundTransparency = 0.72 })
+    end
+    if UI.DiscordModalCopyIcon then
+        local glyph = UI.DiscordModalCopyIcon.Glyph
+        for _, line in ipairs(glyph.Strokes) do
+            tween(line, TweenInfoSet.Fast, { Transparency = 1 })
+        end
+        for _, line in ipairs(glyph.Check) do
+            tween(line, TweenInfoSet.Fast, { BackgroundTransparency = 0 })
+        end
+    end
+
+    task.delay(0.72, function()
+        if State.Destroyed or not UI.DiscordModalFieldStroke or not UI.DiscordModalFieldStroke.Parent then
+            return
+        end
+        tween(UI.DiscordModalFieldStroke, TweenInfoSet.Soft, {
+            Color = Color3.fromRGB(86, 96, 132),
+            Transparency = 0.58,
+        })
+        if UI.DiscordModalFieldGlow then
+            tween(UI.DiscordModalFieldGlow, TweenInfoSet.Soft, { BackgroundTransparency = 0.92 })
+        end
+        if UI.DiscordModalCopyIcon then
+            local glyph = UI.DiscordModalCopyIcon.Glyph
+            for _, line in ipairs(glyph.Strokes) do
+                tween(line, TweenInfoSet.Soft, { Transparency = 0.72 })
+            end
+            for _, line in ipairs(glyph.Check) do
+                tween(line, TweenInfoSet.Soft, { BackgroundTransparency = 1 })
+            end
+        end
+    end)
+end
+
+local function copyDiscordFromModal()
+    copyDiscordLink()
+    playDiscordCopyFeedback()
+end
+
+local function createModalButton(parent, name, text, position, primary, callback)
+    local button = new("TextButton", {
+        Name = name,
+        Size = UDim2.fromOffset(166, 44),
+        Position = position,
+        AutoButtonColor = false,
+        BackgroundColor3 = primary and Color3.fromRGB(206, 214, 255) or Color3.fromRGB(13, 16, 25),
+        BackgroundTransparency = primary and 0.08 or 0.4,
+        BorderSizePixel = 0,
+        Text = "",
+        ZIndex = 244,
+        Parent = parent,
+    })
+    corner(button, 15)
+
+    local scale = new("UIScale", { Scale = 1, Parent = button })
+    local glow = new("Frame", {
+        Name = "ButtonGlow",
+        Size = UDim2.new(1, 20, 1, 18),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.55),
+        BackgroundColor3 = primary and Color3.fromRGB(143, 161, 255) or Color3.fromRGB(78, 93, 155),
+        BackgroundTransparency = primary and 0.78 or 0.96,
+        BorderSizePixel = 0,
+        ZIndex = 242,
+        Parent = button,
+    })
+    corner(glow, 21)
+    gradient(
+        glow,
+        ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(88, 112, 220)),
+        16,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.52),
+            NumberSequenceKeypoint.new(0.46, 0.78),
+            NumberSequenceKeypoint.new(1, 1),
+        })
+    )
+
+    local body = new("Frame", {
+        Name = "MaterialBody",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = primary and Color3.fromRGB(219, 224, 255) or Color3.fromRGB(13, 16, 25),
+        BackgroundTransparency = primary and 0.05 or 0.36,
+        BorderSizePixel = 0,
+        ZIndex = 245,
+        Parent = button,
+    })
+    corner(body, 15)
+    gradient(
+        body,
+        primary
+                and ColorSequence.new({
+                    ColorSequenceKeypoint.new(0, Color3.fromRGB(250, 249, 255)),
+                    ColorSequenceKeypoint.new(0.46, Color3.fromRGB(205, 212, 255)),
+                    ColorSequenceKeypoint.new(1, Color3.fromRGB(169, 191, 255)),
+                })
+            or ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.fromRGB(30, 35, 52)),
+                ColorSequenceKeypoint.new(0.52, Color3.fromRGB(12, 15, 24)),
+                ColorSequenceKeypoint.new(1, Color3.fromRGB(7, 9, 15)),
+            }),
+        90,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, primary and 0.02 or 0.2),
+            NumberSequenceKeypoint.new(0.55, primary and 0.05 or 0.02),
+            NumberSequenceKeypoint.new(1, primary and 0.12 or 0.22),
+        })
+    )
+
+    local highlight = new("Frame", {
+        Name = "GlassHighlight",
+        Size = UDim2.new(1, -18, 0, 15),
+        Position = UDim2.fromOffset(9, 5),
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+        BackgroundTransparency = primary and 0.52 or 0.9,
+        BorderSizePixel = 0,
+        ZIndex = 246,
+        Parent = button,
+    })
+    corner(highlight, 13)
+    gradient(
+        highlight,
+        ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(180, 193, 255)),
+        90,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.35),
+            NumberSequenceKeypoint.new(0.55, 0.92),
+            NumberSequenceKeypoint.new(1, 1),
+        })
+    )
+
+    local border = stroke(
+        button,
+        primary and Color3.fromRGB(245, 247, 255) or Color3.fromRGB(85, 93, 126),
+        1,
+        primary and 0.32 or 0.6
+    )
+    local label = new("TextLabel", {
+        Name = "Label",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        Text = text,
+        TextColor3 = primary and Color3.fromRGB(17, 22, 40) or Theme.Text,
+        TextTransparency = primary and 0.03 or 0.08,
+        Font = Enum.Font.GothamSemibold,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Center,
+        TextYAlignment = Enum.TextYAlignment.Center,
+        ZIndex = 248,
+        Parent = button,
+    })
+
+    connect(button.MouseEnter, function()
+        tween(scale, TweenInfoSet.Fast, { Scale = 1.012 })
+        tween(glow, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0.62 or 0.86 })
+        tween(body, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0.02 or 0.28 })
+        tween(highlight, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0.42 or 0.82 })
+        tween(border, TweenInfoSet.Fast, { Transparency = primary and 0.18 or 0.42 })
+    end)
+    connect(button.MouseLeave, function()
+        tween(scale, TweenInfoSet.Fast, { Scale = 1 })
+        tween(glow, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0.78 or 0.96 })
+        tween(body, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0.05 or 0.36 })
+        tween(highlight, TweenInfoSet.Fast, { BackgroundTransparency = primary and 0.52 or 0.9 })
+        tween(border, TweenInfoSet.Fast, { Transparency = primary and 0.32 or 0.6 })
+    end)
+    connect(button.MouseButton1Down, function()
+        tween(scale, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Scale = 0.97 })
+    end)
+    connect(button.MouseButton1Up, function()
+        tween(scale, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1.012 })
+    end)
+    connect(button.MouseButton1Click, callback)
+
+    return button, label
+end
+
+local function closeDiscordModal()
+    if not State.DiscordModalOpen or State.DiscordModalClosing then
+        return
+    end
+    State.DiscordModalClosing = true
+
+    if UI.DiscordModalBackdrop then
+        tween(UI.DiscordModalBackdrop, TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+            BackgroundTransparency = 1,
+        })
+    end
+    if UI.DiscordModalCard then
+        tween(UI.DiscordModalCard, TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+            GroupTransparency = 1,
+        })
+    end
+    if UI.DiscordModalScale then
+        tween(
+            UI.DiscordModalScale,
+            TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.In),
+            { Scale = 0.92 }
+        )
+    end
+
+    task.delay(0.24, function()
+        if State.Destroyed then
+            return
+        end
+        if UI.DiscordModalBackdrop then
+            UI.DiscordModalBackdrop.Visible = false
+        end
+        State.DiscordModalOpen = false
+        State.DiscordModalClosing = false
+    end)
+end
+
+local function createDiscordModal(parent)
+    local backdrop = new("Frame", {
+        Name = "DiscordModalBackdrop",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = Color3.fromRGB(1, 2, 6),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Visible = false,
+        ZIndex = 210,
+        Parent = parent,
+    })
+
+    local outside = new("TextButton", {
+        Name = "OutsideDismissLayer",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        AutoButtonColor = false,
+        Text = "",
+        ZIndex = 211,
+        Parent = backdrop,
+    })
+
+    local shadow = new("Frame", {
+        Name = "ModalShadow",
+        Size = UDim2.fromOffset(452, 274),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.515),
+        BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+        BackgroundTransparency = 0.46,
+        BorderSizePixel = 0,
+        ZIndex = 214,
+        Parent = backdrop,
+    })
+    corner(shadow, 28)
+    gradient(
+        shadow,
+        ColorSequence.new(Color3.fromRGB(75, 85, 145), Color3.fromRGB(0, 0, 0)),
+        90,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.9),
+            NumberSequenceKeypoint.new(0.48, 0.36),
+            NumberSequenceKeypoint.new(1, 0.78),
+        })
+    )
+
+    local card = new("CanvasGroup", {
+        Name = "DiscordModalCard",
+        Size = UDim2.fromOffset(420, 246),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.49),
+        BackgroundColor3 = Theme.Panel,
+        BackgroundTransparency = 1,
+        GroupTransparency = 1,
+        ClipsDescendants = true,
+        ZIndex = 220,
+        Parent = backdrop,
+    })
+    corner(card, 18)
+    createAcrylic(card, 220, 18, Color3.fromRGB(13, 17, 27), 0.48)
+    local cardBorder = stroke(card, Color3.fromRGB(95, 105, 145), 1, 0.48)
+    UI.DiscordModalScale = new("UIScale", { Scale = 0.92, Parent = card })
+
+    local title = new("TextLabel", {
+        Name = "DiscordTitle",
+        Size = UDim2.fromOffset(352, 34),
+        Position = UDim2.fromOffset(34, 28),
+        BackgroundTransparency = 1,
+        Text = "Discord",
+        TextColor3 = Theme.Text,
+        TextTransparency = 0.02,
+        Font = Enum.Font.GothamSemibold,
+        TextSize = 25,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Center,
+        ZIndex = 236,
+        Parent = card,
+    })
+
+    local field = new("Frame", {
+        Name = "DiscordLinkField",
+        Size = UDim2.fromOffset(352, 58),
+        Position = UDim2.fromOffset(34, 86),
+        BackgroundColor3 = Color3.fromRGB(8, 11, 18),
+        BackgroundTransparency = 0.34,
+        BorderSizePixel = 0,
+        ClipsDescendants = true,
+        ZIndex = 235,
+        Parent = card,
+    })
+    corner(field, 16)
+    gradient(
+        field,
+        ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(31, 36, 55)),
+            ColorSequenceKeypoint.new(0.55, Color3.fromRGB(9, 12, 20)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(5, 7, 12)),
+        }),
+        90,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.18),
+            NumberSequenceKeypoint.new(0.55, 0.04),
+            NumberSequenceKeypoint.new(1, 0.2),
+        })
+    )
+
+    local fieldGlow = new("Frame", {
+        Name = "FieldBlueGlow",
+        Size = UDim2.fromOffset(376, 76),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromOffset(210, 115),
+        BackgroundColor3 = Color3.fromRGB(100, 130, 255),
+        BackgroundTransparency = 0.92,
+        BorderSizePixel = 0,
+        ZIndex = 233,
+        Parent = card,
+    })
+    corner(fieldGlow, 22)
+    gradient(
+        fieldGlow,
+        ColorSequence.new(Color3.fromRGB(180, 196, 255), Color3.fromRGB(58, 78, 170)),
+        0,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.42),
+            NumberSequenceKeypoint.new(0.5, 0.76),
+            NumberSequenceKeypoint.new(1, 1),
+        })
+    )
+
+    local innerLight = new("Frame", {
+        Name = "FieldInnerLight",
+        Size = UDim2.new(1, -12, 0, 14),
+        Position = UDim2.fromOffset(6, 5),
+        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+        BackgroundTransparency = 0.9,
+        BorderSizePixel = 0,
+        ZIndex = 237,
+        Parent = field,
+    })
+    corner(innerLight, 12)
+    gradient(
+        innerLight,
+        ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(167, 184, 255)),
+        90,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.64),
+            NumberSequenceKeypoint.new(0.58, 0.96),
+            NumberSequenceKeypoint.new(1, 1),
+        })
+    )
+
+    local linkText = new("TextLabel", {
+        Name = "LinkText",
+        Size = UDim2.new(1, -82, 1, 0),
+        Position = UDim2.fromOffset(20, 0),
+        BackgroundTransparency = 1,
+        Text = DISCORD_CONTACT_URL,
+        TextColor3 = Color3.fromRGB(217, 224, 250),
+        TextTransparency = 0.08,
+        Font = Enum.Font.GothamMedium,
+        TextSize = 16,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Center,
+        ZIndex = 240,
+        Parent = field,
+    })
+
+    local copyButton = new("TextButton", {
+        Name = "CopyIconButton",
+        Size = UDim2.fromOffset(34, 34),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(1, -30, 0.5, 0),
+        BackgroundTransparency = 1,
+        AutoButtonColor = false,
+        Text = "",
+        ZIndex = 242,
+        Parent = field,
+    })
+    local copyScale = new("UIScale", { Scale = 0.95, Parent = copyButton })
+    local copyGlow = new("Frame", {
+        Name = "CopyIconGlow",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = Color3.fromRGB(116, 143, 255),
+        BackgroundTransparency = 0.98,
+        BorderSizePixel = 0,
+        ZIndex = 241,
+        Parent = copyButton,
+    })
+    corner(copyGlow, 12)
+    local copyGlyph = createModalCopyGlyph(copyButton, 244)
+
+    local fieldStroke = stroke(field, Color3.fromRGB(86, 96, 132), 1, 0.58)
+    fieldStroke.Name = "InputFieldStroke"
+
+    connect(field.MouseEnter, function()
+        setModalCopyGlyphHover(true)
+        tween(fieldStroke, TweenInfoSet.Fast, { Transparency = 0.38, Color = Color3.fromRGB(105, 116, 157) })
+        tween(field, TweenInfoSet.Fast, { BackgroundTransparency = 0.28 })
+    end)
+    connect(field.MouseLeave, function()
+        setModalCopyGlyphHover(false)
+        tween(fieldStroke, TweenInfoSet.Fast, { Transparency = 0.58, Color = Color3.fromRGB(86, 96, 132) })
+        tween(field, TweenInfoSet.Fast, { BackgroundTransparency = 0.34 })
+    end)
+    connect(copyButton.MouseButton1Click, copyDiscordFromModal)
+
+    createModalButton(card, "CopyButton", "Copy", UDim2.fromOffset(34, 172), true, copyDiscordFromModal)
+    createModalButton(card, "CloseButton", "Close", UDim2.fromOffset(220, 172), false, closeDiscordModal)
+
+    connect(outside.MouseButton1Click, closeDiscordModal)
+
+    UI.DiscordModalBackdrop = backdrop
+    UI.DiscordModalCard = card
+    UI.DiscordModalFieldStroke = fieldStroke
+    UI.DiscordModalFieldGlow = fieldGlow
+    UI.DiscordModalCopyIcon = {
+        Button = copyButton,
+        Scale = copyScale,
+        Glow = copyGlow,
+        Glyph = copyGlyph,
+    }
+
+    return backdrop, card, cardBorder, title, linkText
+end
+
+local function openDiscordModal()
+    if State.Destroyed or State.DiscordModalClosing then
+        return
+    end
+    if not UI.DiscordModalBackdrop or not UI.DiscordModalBackdrop.Parent then
+        if not UI.Window then
+            return
+        end
+        createDiscordModal(UI.Window)
+    end
+    if State.DiscordModalOpen then
+        return
+    end
+
+    State.DiscordModalOpen = true
+    UI.DiscordModalBackdrop.Visible = true
+    UI.DiscordModalBackdrop.BackgroundTransparency = 1
+    UI.DiscordModalCard.GroupTransparency = 1
+    UI.DiscordModalScale.Scale = 0.92
+    if UI.DiscordModalFieldStroke then
+        UI.DiscordModalFieldStroke.Color = Color3.fromRGB(86, 96, 132)
+        UI.DiscordModalFieldStroke.Transparency = 0.58
+    end
+    setModalCopyGlyphHover(false)
+
+    tween(UI.DiscordModalBackdrop, TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+        BackgroundTransparency = 0.42,
+    })
+    tween(UI.DiscordModalCard, TweenInfo.new(0.32, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+        GroupTransparency = 0,
+    })
+    tween(UI.DiscordModalScale, TweenInfo.new(0.38, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Scale = 1,
+    })
+end
+
 local function createContactSection(parent)
     local title = new("TextLabel", {
         Name = "ContactTitle",
@@ -1653,7 +2238,7 @@ local function createContactSection(parent)
         tween(edgeArc, TweenInfoSet.Fast, { BackgroundTransparency = 0.18 })
         tween(iconBloom, TweenInfoSet.Fast, { BackgroundTransparency = 0.82 })
     end)
-    connect(button.MouseButton1Click, copyDiscordLink)
+    connect(button.MouseButton1Click, openDiscordModal)
 
     return title, row, button
 end
@@ -1828,7 +2413,7 @@ local function pointInObject(guiObject, point)
 end
 
 local function beginDrag(input)
-    if State.Destroyed or State.Validating then
+    if State.Destroyed or State.Validating or State.DiscordModalOpen then
         return
     end
     local inputType = input.UserInputType
