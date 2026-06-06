@@ -349,8 +349,18 @@ local function formatNumber(value, precision)
 end
 
 local function getIcon(name)
-    if type(name) == "string" then
-        return Icons[name] or name
+    if type(name) ~= "string" then
+        return Icons.Default
+    end
+    local resolved = IconAliases[name] or name
+    if Icons[resolved] then
+        return Icons[resolved]
+    end
+    local lowered = string.lower(resolved)
+    for iconName, iconValue in pairs(Icons) do
+        if string.lower(iconName) == lowered then
+            return iconValue
+        end
     end
     return Icons.Default
 end
@@ -443,6 +453,49 @@ local function makeShadow(parent, radius, transparency)
     })
     corner(shadow, radius or 22)
     return shadow
+end
+
+local function addInnerDepth(parent, radius, red)
+    local top = create("Frame", {
+        BackgroundColor3 = Theme.White,
+        BackgroundTransparency = 0.968,
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, -2, 0, 1),
+        Position = UDim2.fromOffset(1, 1),
+        Parent = parent,
+    })
+    local bottom = create("Frame", {
+        BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+        BackgroundTransparency = 0.84,
+        BorderSizePixel = 0,
+        AnchorPoint = Vector2.new(0, 1),
+        Position = UDim2.new(0, 1, 1, -1),
+        Size = UDim2.new(1, -2, 0, 12),
+        Parent = parent,
+    })
+    corner(bottom, radius or 14)
+    gradient(
+        bottom,
+        Color3.fromRGB(0, 0, 0),
+        Color3.fromRGB(0, 0, 0),
+        90,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 1),
+            NumberSequenceKeypoint.new(1, 0.62),
+        })
+    )
+    if red then
+        local edge = create("Frame", {
+            BackgroundColor3 = Theme.Accent,
+            BackgroundTransparency = 0.92,
+            BorderSizePixel = 0,
+            Size = UDim2.new(0, 1, 1, -18),
+            Position = UDim2.fromOffset(0, 9),
+            Parent = parent,
+        })
+        corner(edge, 2)
+    end
+    return top, bottom
 end
 
 local function viewportSize()
