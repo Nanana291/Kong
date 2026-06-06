@@ -45,14 +45,16 @@ local Theme = {
 }
 
 local Icons = {
+    Crosshair = "⊙",
     Target = "◎",
-    Combat = "◎",
+    Combat = "⊙",
     Trigger = "◌",
     Eye = "◉",
     Visuals = "◉",
     Settings = "⚙",
+    Gear = "⚙",
     Search = "⌕",
-    User = "◍",
+    User = "•",
     Home = "⌂",
     Folder = "▱",
     Misc = "✦",
@@ -60,11 +62,134 @@ local Icons = {
     Color = "◐",
     Bell = "◒",
     Code = "<>",
-    Gear = "⚙",
     Star = "✦",
     NoRecoil = "◈",
+    Rocket = "▲",
+    Play = "▶",
+    ChevronDown = "⌄",
+    ChevronRight = "›",
+    PanelTop = "▤",
+    Sliders = "≡",
+    Palette = "◐",
+    Keyboard = "⌨",
+    MousePointer = "⌖",
+    Zap = "ϟ",
+    Sparkles = "✦",
+    Info = "i",
+    Circle = "○",
+    Check = "✓",
+    X = "×",
     Default = "•",
 }
+
+local IconAliases = {
+    Aimbot = "Crosshair",
+    Aim = "Crosshair",
+    Visual = "Eye",
+    Options = "Settings",
+    Config = "Settings",
+    Player = "User",
+    Library = "Folder",
+}
+
+local LucideFallbacks = {
+    Activity = "⌁",
+    Airplay = "▭",
+    AlarmClock = "◷",
+    AlignJustify = "≡",
+    Archive = "▣",
+    ArrowDown = "↓",
+    ArrowLeft = "←",
+    ArrowRight = "→",
+    ArrowUp = "↑",
+    Badge = "◇",
+    Ban = "⊘",
+    BellRing = "◒",
+    Book = "▤",
+    Bookmark = "▮",
+    Box = "□",
+    Briefcase = "▣",
+    Calendar = "□",
+    Camera = "◉",
+    ChartBar = "▥",
+    ChartLine = "⌁",
+    CheckCircle = "✓",
+    ChevronLeft = "‹",
+    ChevronsUpDown = "↕",
+    CircleDot = "⊙",
+    Clipboard = "▤",
+    Clock = "◷",
+    Cloud = "☁",
+    Cog = "⚙",
+    Command = "⌘",
+    Compass = "◎",
+    Copy = "▣",
+    Cpu = "◈",
+    Database = "▥",
+    Download = "↓",
+    Edit = "✎",
+    ExternalLink = "↗",
+    EyeOff = "◌",
+    File = "▤",
+    Filter = "⌯",
+    Flag = "⚑",
+    Flame = "♢",
+    Gauge = "◔",
+    Gift = "◇",
+    Globe = "○",
+    Heart = "♡",
+    Image = "▧",
+    Inbox = "▤",
+    Layers = "▦",
+    LayoutDashboard = "▦",
+    Link = "⌁",
+    List = "☰",
+    Lock = "◆",
+    LogOut = "↦",
+    Mail = "✉",
+    Map = "▱",
+    Menu = "☰",
+    Minus = "−",
+    Monitor = "▭",
+    Moon = "◐",
+    MoreHorizontal = "…",
+    MoreVertical = "⋮",
+    Mouse = "⌖",
+    Move = "✥",
+    Music = "♪",
+    Package = "▣",
+    Pause = "Ⅱ",
+    Pen = "✎",
+    Plus = "+",
+    Power = "⏻",
+    RefreshCcw = "↺",
+    Save = "▣",
+    Scan = "⌗",
+    Send = "↗",
+    Server = "▥",
+    Share = "↗",
+    ShoppingCart = "▱",
+    Signal = "⌁",
+    Skull = "☠",
+    Smartphone = "▯",
+    Sun = "☼",
+    Terminal = ">_",
+    Trash = "⌫",
+    Trophy = "♢",
+    Unlock = "◇",
+    Upload = "↑",
+    Volume2 = ")))",
+    Wand = "✦",
+    Wifi = "⌁",
+    Wrench = "⚒",
+    XCircle = "×",
+}
+
+for iconName, iconGlyph in pairs(LucideFallbacks) do
+    if Icons[iconName] == nil then
+        Icons[iconName] = iconGlyph
+    end
+end
 
 local function resolveParent()
     local ok, result = pcall(function()
@@ -257,27 +382,47 @@ end
 local function makeGlass(parent, radius, baseColor, strokeTransparency)
     local frame = create("Frame", {
         BackgroundColor3 = baseColor or Theme.Surface,
-        BackgroundTransparency = 0.06,
+        BackgroundTransparency = 0.025,
         BorderSizePixel = 0,
         ClipsDescendants = true,
         Parent = parent,
     })
-    corner(frame, radius or 16)
-    stroke(frame, Theme.StrokeSoft, strokeTransparency or 0.58, 1)
+    corner(frame, radius or 18)
+    stroke(frame, Theme.StrokeSoft, strokeTransparency or 0.48, 1)
     gradient(
         frame,
         Theme.Surface2,
         Theme.BackgroundSoft,
         90,
         NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.05),
-            NumberSequenceKeypoint.new(0.52, 0.12),
-            NumberSequenceKeypoint.new(1, 0.22),
+            NumberSequenceKeypoint.new(0, 0.02),
+            NumberSequenceKeypoint.new(0.45, 0.1),
+            NumberSequenceKeypoint.new(1, 0.24),
+        })
+    )
+    local depth = create("Frame", {
+        BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+        BackgroundTransparency = 0.9,
+        BorderSizePixel = 0,
+        Position = UDim2.fromOffset(0, 0),
+        Size = UDim2.fromScale(1, 1),
+        Parent = frame,
+    })
+    corner(depth, radius or 18)
+    gradient(
+        depth,
+        Color3.fromRGB(0, 0, 0),
+        Color3.fromRGB(0, 0, 0),
+        90,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 1),
+            NumberSequenceKeypoint.new(0.7, 0.94),
+            NumberSequenceKeypoint.new(1, 0.82),
         })
     )
     local reflection = create("Frame", {
         BackgroundColor3 = Theme.White,
-        BackgroundTransparency = 0.94,
+        BackgroundTransparency = 0.93,
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, 1),
         Position = UDim2.fromOffset(0, 0),
@@ -599,47 +744,49 @@ local function makeControlRow(section, titleText, description, height)
     local row = create("Frame", {
         Name = "ControlRow",
         BackgroundColor3 = Theme.Surface2,
-        BackgroundTransparency = 0.42,
+        BackgroundTransparency = 0.22,
         BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, height or 58),
+        Size = UDim2.new(1, 0, 0, height or 54),
         ClipsDescendants = true,
         Parent = section.Content,
     })
-    corner(row, 14)
-    stroke(row, Theme.StrokeSoft, 0.76, 1)
+    corner(row, 17)
+    stroke(row, Theme.StrokeSoft, 0.84, 1)
     gradient(
         row,
         Theme.Surface2,
         Theme.BackgroundSoft,
         90,
         NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.1),
-            NumberSequenceKeypoint.new(1, 0.28),
+            NumberSequenceKeypoint.new(0, 0.05),
+            NumberSequenceKeypoint.new(0.72, 0.18),
+            NumberSequenceKeypoint.new(1, 0.32),
         })
     )
+    addInnerDepth(row, 17, false)
 
-    local title = makeText(row, titleText or "Control", 13, Theme.Text, "bold")
-    title.Position = UDim2.fromOffset(16, description and 9 or 0)
-    title.Size = UDim2.new(0.58, -20, 0, 22)
+    local title = makeText(row, titleText or "Control", 12, Theme.Text, "bold")
+    title.Position = UDim2.fromOffset(15, description and 8 or 0)
+    title.Size = UDim2.new(0.58, -20, 0, 20)
     if not description then
         title.AnchorPoint = Vector2.new(0, 0.5)
-        title.Position = UDim2.new(0, 16, 0.5, 0)
-        title.Size = UDim2.new(0.58, -20, 0, 22)
+        title.Position = UDim2.new(0, 15, 0.5, 0)
+        title.Size = UDim2.new(0.58, -20, 0, 20)
     end
 
     local descLabel
     if description then
-        descLabel = makeText(row, description, 11, Theme.Muted)
-        descLabel.Position = UDim2.fromOffset(16, 31)
-        descLabel.Size = UDim2.new(0.62, -24, 0, 18)
+        descLabel = makeText(row, description, 10, Theme.Muted)
+        descLabel.Position = UDim2.fromOffset(15, 29)
+        descLabel.Size = UDim2.new(0.62, -24, 0, 16)
     end
 
     local holder = create("Frame", {
         Name = "ControlHolder",
         BackgroundTransparency = 1,
         AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, -14, 0.5, 0),
-        Size = UDim2.new(0.38, -8, 1, -12),
+        Position = UDim2.new(1, -12, 0.5, 0),
+        Size = UDim2.new(0.4, -8, 1, -12),
         Parent = row,
     })
 
@@ -648,13 +795,13 @@ local function makeControlRow(section, titleText, description, height)
     addConnection(
         section.Window,
         hover.MouseEnter:Connect(function()
-            tween(row, { BackgroundTransparency = 0.30 }, 0.16)
+            tween(row, { BackgroundTransparency = 0.14 }, 0.16)
         end)
     )
     addConnection(
         section.Window,
         hover.MouseLeave:Connect(function()
-            tween(row, { BackgroundTransparency = 0.42 }, 0.16)
+            tween(row, { BackgroundTransparency = 0.22 }, 0.16)
         end)
     )
 
@@ -677,46 +824,65 @@ function Section:CreateToggle(id, config)
         id = config.Id or config.Title
     end
     config = config or {}
-    local row, holder, _, _, hitbox = makeControlRow(self, config.Title or id or "Toggle", config.Description, 58)
+    local row, holder, _, _, hitbox = makeControlRow(self, config.Title or id or "Toggle", config.Description, 54)
     local toggle = setmetatable(
         { Value = not not config.Default, Callback = config.Callback, ChangedCallbacks = {}, Instance = row },
         BaseControl
     )
 
     local shell = create("Frame", {
-        BackgroundColor3 = toggle.Value and Theme.Accent or Theme.Surface3,
+        BackgroundColor3 = toggle.Value and Theme.AccentDark or Color3.fromRGB(19, 19, 27),
         BorderSizePixel = 0,
         AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, 0, 0.5, 0),
-        Size = UDim2.fromOffset(46, 26),
+        Position = UDim2.new(1, -2, 0.5, 0),
+        Size = UDim2.fromOffset(38, 20),
         Parent = holder,
     })
-    corner(shell, 18)
+    corner(shell, 20)
+    gradient(
+        shell,
+        toggle.Value and Theme.Accent or Theme.Surface3,
+        toggle.Value and Theme.AccentDark or Theme.BackgroundSoft,
+        0
+    )
     local shellStroke =
-        stroke(shell, toggle.Value and Theme.AccentSoft or Theme.Stroke, toggle.Value and 0.35 or 0.7, 1)
+        stroke(shell, toggle.Value and Theme.AccentSoft or Theme.StrokeSoft, toggle.Value and 0.28 or 0.78, 1)
+    local glow = create("Frame", {
+        BackgroundColor3 = Theme.Accent,
+        BackgroundTransparency = toggle.Value and 0.82 or 1,
+        BorderSizePixel = 0,
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.new(1, 8, 1, 8),
+        Parent = shell,
+    })
+    glow.ZIndex = shell.ZIndex - 1
+    corner(glow, 24)
     local thumb = create("Frame", {
         BackgroundColor3 = Theme.White,
         BorderSizePixel = 0,
-        Size = UDim2.fromOffset(18, 18),
-        Position = toggle.Value and UDim2.new(1, -22, 0.5, -9) or UDim2.new(0, 4, 0.5, -9),
+        Size = UDim2.fromOffset(16, 16),
+        Position = toggle.Value and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8),
         Parent = shell,
     })
-    corner(thumb, 18)
+    corner(thumb, 16)
+    stroke(thumb, Color3.fromRGB(255, 255, 255), 0.58, 1)
 
     function toggle:SetValue(value)
         value = not not value
         self.Value = value
-        tween(shell, { BackgroundColor3 = value and Theme.Accent or Theme.Surface3 }, 0.22)
+        tween(shell, { BackgroundColor3 = value and Theme.AccentDark or Color3.fromRGB(19, 19, 27) }, 0.2)
+        tween(glow, { BackgroundTransparency = value and 0.82 or 1 }, 0.2)
         tween(
             shellStroke,
-            { Color = value and Theme.AccentSoft or Theme.Stroke, Transparency = value and 0.35 or 0.7 },
-            0.22
+            { Color = value and Theme.AccentSoft or Theme.StrokeSoft, Transparency = value and 0.28 or 0.78 },
+            0.2
         )
         tween(
             thumb,
-            { Position = value and UDim2.new(1, -22, 0.5, -9) or UDim2.new(0, 4, 0.5, -9) },
+            { Position = value and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8) },
             0.22,
-            Enum.EasingStyle.Back
+            Enum.EasingStyle.Quint
         )
         self:_fire(value)
     end
@@ -751,8 +917,8 @@ function Section:CreateSlider(id, config)
     local max = tonumber(config.Max) or 100
     local default = clamp(tonumber(config.Default) or min, min, max)
     local precision = tonumber(config.Precision) or tonumber(config.Rounding) or 0
-    local row, holder = makeControlRow(self, config.Title or id or "Slider", config.Description, 76)
-    holder.Size = UDim2.new(0.46, -8, 1, -12)
+    local row, holder = makeControlRow(self, config.Title or id or "Slider", config.Description, 62)
+    holder.Size = UDim2.new(0.42, -8, 1, -12)
 
     local slider = setmetatable(
         { Value = default, Callback = config.Callback, ChangedCallbacks = {}, Instance = row },
@@ -761,25 +927,26 @@ function Section:CreateSlider(id, config)
     local valueLabel =
         makeText(row, formatNumber(default, precision) .. (config.Suffix or ""), 12, Theme.SubText, "bold")
     valueLabel.AnchorPoint = Vector2.new(1, 0)
-    valueLabel.Position = UDim2.new(1, -18, 0, 12)
+    valueLabel.Position = UDim2.new(1, -14, 0, 9)
     valueLabel.Size = UDim2.fromOffset(90, 18)
     valueLabel.TextXAlignment = Enum.TextXAlignment.Right
 
     local track = create("Frame", {
-        BackgroundColor3 = Theme.Surface3,
+        BackgroundColor3 = Color3.fromRGB(20, 20, 29),
+        BackgroundTransparency = 0.08,
         BorderSizePixel = 0,
         AnchorPoint = Vector2.new(0, 0.5),
-        Position = UDim2.new(0, 0, 0.62, 0),
-        Size = UDim2.new(1, 0, 0, 8),
+        Position = UDim2.new(0, 0, 0.64, 0),
+        Size = UDim2.new(1, 0, 0, 5),
         Parent = holder,
     })
-    corner(track, 8)
+    corner(track, 5)
     local fill = create(
         "Frame",
         { BackgroundColor3 = Theme.Accent, BorderSizePixel = 0, Size = UDim2.fromScale(0, 1), Parent = track }
     )
-    corner(fill, 8)
-    gradient(fill, Theme.AccentSoft, Theme.Accent, 0)
+    corner(fill, 5)
+    gradient(fill, Theme.AccentSoft, Theme.AccentDark, 0)
     local knob = create("Frame", {
         BackgroundColor3 = Theme.White,
         BorderSizePixel = 0,
@@ -788,7 +955,7 @@ function Section:CreateSlider(id, config)
         Position = UDim2.fromScale(0, 0.5),
         Parent = track,
     })
-    corner(knob, 8)
+    corner(knob, 15)
     stroke(knob, Theme.White, 0.55, 1)
 
     local dragging = false
@@ -826,7 +993,7 @@ function Section:CreateSlider(id, config)
             then
                 dragging = true
                 update(input)
-                tween(knob, { Size = UDim2.fromOffset(16, 20) }, 0.12)
+                tween(knob, { Size = UDim2.fromOffset(17, 17) }, 0.12)
             end
         end)
     )
@@ -855,7 +1022,7 @@ function Section:CreateSlider(id, config)
                 )
             then
                 dragging = false
-                tween(knob, { Size = UDim2.fromOffset(14, 18) }, 0.12)
+                tween(knob, { Size = UDim2.fromOffset(15, 15) }, 0.12)
             end
         end)
     )
@@ -869,14 +1036,14 @@ function Section:CreateInput(id, config)
         id = config.Id or config.Title
     end
     config = config or {}
-    local row, holder = makeControlRow(self, config.Title or id or "Input", config.Description, 58)
+    local row, holder = makeControlRow(self, config.Title or id or "Input", config.Description, 54)
     local input = setmetatable(
         { Value = config.Default or "", Callback = config.Callback, ChangedCallbacks = {}, Instance = row },
         BaseControl
     )
     local box = create("TextBox", {
-        BackgroundColor3 = Theme.Surface3,
-        BackgroundTransparency = 0.28,
+        BackgroundColor3 = Color3.fromRGB(22, 22, 31),
+        BackgroundTransparency = 0.16,
         BorderSizePixel = 0,
         ClearTextOnFocus = false,
         Font = Enum.Font.GothamMedium,
@@ -893,8 +1060,8 @@ function Section:CreateInput(id, config)
         Size = UDim2.new(1, 0, 0, 34),
         Parent = holder,
     })
-    corner(box, 11)
-    local boxStroke = stroke(box, Theme.Stroke, 0.7, 1)
+    corner(box, 16)
+    local boxStroke = stroke(box, Theme.StrokeSoft, 0.76, 1)
     padding(box, 12, 0, 12, 0)
 
     function input:SetValue(value)
@@ -907,14 +1074,14 @@ function Section:CreateInput(id, config)
         self.Window,
         box.Focused:Connect(function()
             tween(boxStroke, { Color = Theme.Accent, Transparency = 0.35 }, 0.16)
-            tween(box, { BackgroundTransparency = 0.16 }, 0.16)
+            tween(box, { BackgroundTransparency = 0.08 }, 0.16)
         end)
     )
     addConnection(
         self.Window,
         box.FocusLost:Connect(function(enterPressed)
             tween(boxStroke, { Color = Theme.Stroke, Transparency = 0.7 }, 0.16)
-            tween(box, { BackgroundTransparency = 0.28 }, 0.16)
+            tween(box, { BackgroundTransparency = 0.16 }, 0.16)
             input.Value = box.Text
             input:_fire(box.Text)
         end)
@@ -959,7 +1126,7 @@ function Section:CreateDropdown(id, config)
         default = values[1]
     end
 
-    local row, holder = makeControlRow(self, config.Title or id or "Dropdown", config.Description, 58)
+    local row, holder = makeControlRow(self, config.Title or id or "Dropdown", config.Description, 54)
     local dropdown = setmetatable({
         Value = default,
         Values = values,
@@ -970,8 +1137,8 @@ function Section:CreateDropdown(id, config)
     }, BaseControl)
 
     local button = create("TextButton", {
-        BackgroundColor3 = Theme.Surface3,
-        BackgroundTransparency = 0.28,
+        BackgroundColor3 = Color3.fromRGB(22, 22, 31),
+        BackgroundTransparency = 0.12,
         BorderSizePixel = 0,
         Text = "",
         AutoButtonColor = false,
@@ -980,12 +1147,13 @@ function Section:CreateDropdown(id, config)
         Size = UDim2.new(1, 0, 0, 34),
         Parent = holder,
     })
-    corner(button, 11)
-    local bstroke = stroke(button, Theme.Stroke, 0.7, 1)
+    corner(button, 17)
+    addInnerDepth(button, 17, false)
+    local bstroke = stroke(button, Theme.StrokeSoft, 0.72, 1)
     local label = makeText(button, "", 12, Theme.Text, "bold")
     label.Position = UDim2.fromOffset(12, 0)
     label.Size = UDim2.new(1, -36, 1, 0)
-    local arrow = makeText(button, "⌄", 14, Theme.SubText, "bold")
+    local arrow = makeText(button, getIcon(config.Icon or "ChevronDown"), 14, Theme.SubText, "bold")
     arrow.AnchorPoint = Vector2.new(1, 0.5)
     arrow.Position = UDim2.new(1, -12, 0.5, -1)
     arrow.Size = UDim2.fromOffset(16, 16)
@@ -1077,9 +1245,20 @@ function Section:CreateDropdown(id, config)
                 end
             end
         end))
-        local body = makeGlass(menu, 14, Theme.Surface, 0.42)
+        local dropShadow = create("Frame", {
+            BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+            BackgroundTransparency = 0.58,
+            BorderSizePixel = 0,
+            Position = UDim2.fromOffset(0, 10),
+            Size = UDim2.fromScale(1, 1),
+            Parent = menu,
+            ZIndex = 300,
+        })
+        corner(dropShadow, 16)
+        local body = makeGlass(menu, 16, Theme.Surface, 0.36)
         body.Size = UDim2.fromScale(1, 1)
         body.ZIndex = 301
+        addInnerDepth(body, 16, true)
         padding(body, 8, 8, 8, 8)
         local searchBox
         local topOffset = 0
@@ -1215,14 +1394,14 @@ function Section:CreateDropdown(id, config)
     addConnection(
         self.Window,
         button.MouseEnter:Connect(function()
-            tween(button, { BackgroundTransparency = 0.16 }, 0.14)
+            tween(button, { BackgroundTransparency = 0.06 }, 0.14)
             tween(bstroke, { Color = Theme.Accent, Transparency = 0.5 }, 0.14)
         end)
     )
     addConnection(
         self.Window,
         button.MouseLeave:Connect(function()
-            tween(button, { BackgroundTransparency = 0.28 }, 0.14)
+            tween(button, { BackgroundTransparency = 0.12 }, 0.14)
             tween(bstroke, { Color = Theme.Stroke, Transparency = 0.7 }, 0.14)
         end)
     )
@@ -1240,27 +1419,37 @@ function Section:CreateButton(id, config)
     local row = create("Frame", {
         Name = "ButtonRow",
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, 44),
+        Size = UDim2.new(1, 0, 0, 42),
         Parent = self.Content,
     })
-    local button = makeGlass(row, 14, Theme.Surface2, 0.58)
+    local button = makeGlass(row, 18, Theme.Surface2, 0.5)
     button.Size = UDim2.fromScale(1, 1)
-    local label = makeText(button, config.Title or id or "Button", 13, Theme.Text, "bold")
+    addInnerDepth(button, 18, config.Primary == true)
+    local label = makeText(button, config.Title or id or "Button", 12, Theme.Text, "bold")
     label.TextXAlignment = Enum.TextXAlignment.Center
     label.Size = UDim2.fromScale(1, 1)
+    if config.Icon then
+        local icon = makeText(button, getIcon(config.Icon), 13, Theme.Accent, "bold")
+        icon.AnchorPoint = Vector2.new(0, 0.5)
+        icon.Position = UDim2.new(0, 16, 0.5, 0)
+        icon.Size = UDim2.fromOffset(18, 18)
+        icon.TextXAlignment = Enum.TextXAlignment.Center
+        label.Position = UDim2.fromOffset(14, 0)
+        label.Size = UDim2.new(1, -18, 1, 0)
+    end
     local hit = makeHitbox(button)
     hit.ZIndex = 20
     local control = setmetatable({ Value = nil, Callback = config.Callback, Instance = row }, BaseControl)
     addConnection(
         self.Window,
         hit.MouseEnter:Connect(function()
-            tween(button, { BackgroundColor3 = Theme.SurfaceHover }, 0.16)
+            tween(button, { BackgroundColor3 = Theme.SurfaceHover, BackgroundTransparency = 0.01 }, 0.16)
         end)
     )
     addConnection(
         self.Window,
         hit.MouseLeave:Connect(function()
-            tween(button, { BackgroundColor3 = Theme.Surface2 }, 0.16)
+            tween(button, { BackgroundColor3 = Theme.Surface2, BackgroundTransparency = 0.025 }, 0.16)
         end)
     )
     addConnection(
@@ -1491,9 +1680,20 @@ function Section:CreateColorpicker(id, config)
                 end
             end
         end))
-        local body = makeGlass(menu, 18, Theme.Surface, 0.42)
+        local pickerShadow = create("Frame", {
+            BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+            BackgroundTransparency = 0.52,
+            BorderSizePixel = 0,
+            Position = UDim2.fromOffset(0, 12),
+            Size = UDim2.fromScale(1, 1),
+            Parent = menu,
+            ZIndex = 330,
+        })
+        corner(pickerShadow, 22)
+        local body = makeGlass(menu, 22, Theme.Surface, 0.32)
         body.Size = UDim2.fromScale(1, 1)
         body.ZIndex = 331
+        addInnerDepth(body, 22, true)
         padding(body, 14, 14, 14, 14)
 
         local h, s, v = picker.Value:ToHSV()
@@ -1796,7 +1996,7 @@ function SubTab:_updateCanvas()
         end
         local leftY = self.LeftLayout.AbsoluteContentSize.Y
         local rightY = self.RightLayout.AbsoluteContentSize.Y
-        local height = math.max(leftY, rightY) + 28
+        local height = math.max(leftY, rightY) + 34
         self.Content.Size = UDim2.new(1, -8, 0, height)
         self.Scroll.CanvasSize = UDim2.fromOffset(0, height)
     end)
@@ -1813,21 +2013,31 @@ function SubTab:CreateSection(config)
         { Window = self.Window, Tab = self.Tab, SubTab = self, Side = side, Controls = {}, Connections = {} },
         Section
     )
-    local frame = makeGlass(parent, 18, Theme.Surface, 0.64)
+    local frame = makeGlass(parent, 22, Theme.Surface, 0.5)
     frame.Name = "Section"
     frame.Size = UDim2.new(1, 0, 0, 80)
     frame.AutomaticSize = Enum.AutomaticSize.Y
-    padding(frame, 14, 13, 14, 14)
+    padding(frame, 16, 15, 16, 16)
+    addInnerDepth(frame, 22, true)
+    local titleX = 0
+    if config.Icon then
+        local sectionIcon = makeText(frame, getIcon(config.Icon), 13, Theme.Accent, "bold")
+        sectionIcon.Position = UDim2.fromOffset(0, 0)
+        sectionIcon.Size = UDim2.fromOffset(18, 22)
+        sectionIcon.TextXAlignment = Enum.TextXAlignment.Center
+        titleX = 26
+    end
     local title = makeText(frame, config.Title or "Section", 13, Theme.Text, "bold")
-    title.Size = UDim2.new(1, 0, 0, 22)
+    title.Position = UDim2.fromOffset(titleX, 0)
+    title.Size = UDim2.new(1, -titleX, 0, 22)
     local content = create("Frame", {
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(0, 32),
+        Position = UDim2.fromOffset(0, 34),
         Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
         Parent = frame,
     })
-    local layout = list(content, Enum.FillDirection.Vertical, 8)
+    local layout = list(content, Enum.FillDirection.Vertical, 10)
     section.Instance = frame
     section.Content = content
     section.Layout = layout
@@ -1904,18 +2114,24 @@ function Tab:CreateSubTab(config)
 
     local button = create("TextButton", {
         BackgroundColor3 = Theme.Surface2,
-        BackgroundTransparency = 0.62,
+        BackgroundTransparency = 0.74,
         BorderSizePixel = 0,
         Text = "",
         AutoButtonColor = false,
-        Size = UDim2.fromOffset(math.max(96, 42 + #sub.Title * 8), 42),
+        Size = UDim2.fromOffset(math.max(112, 62 + #sub.Title * 8), 42),
         Parent = self.SubTabBar,
     })
-    corner(button, 16)
-    local bstroke = stroke(button, Theme.StrokeSoft, 0.9, 1)
+    corner(button, 20)
+    addInnerDepth(button, 20, false)
+    local bstroke = stroke(button, Theme.StrokeSoft, 0.92, 1)
+    local subIcon = makeText(button, getIcon(config.Icon or "Circle"), 13, Theme.Muted, "bold")
+    subIcon.Position = UDim2.fromOffset(16, 0)
+    subIcon.Size = UDim2.fromOffset(18, 42)
+    subIcon.TextXAlignment = Enum.TextXAlignment.Center
     local label = makeText(button, sub.Title, 12, Theme.Muted, "bold")
-    label.TextXAlignment = Enum.TextXAlignment.Center
-    label.Size = UDim2.fromScale(1, 1)
+    label.Position = UDim2.fromOffset(40, 0)
+    label.Size = UDim2.new(1, -54, 1, 0)
+    label.TextXAlignment = Enum.TextXAlignment.Left
 
     local scroll = create("ScrollingFrame", {
         Name = "SubTabContent",
@@ -1956,6 +2172,7 @@ function Tab:CreateSubTab(config)
 
     sub.Button = button
     sub.ButtonLabel = label
+    sub.ButtonIcon = subIcon
     sub.ButtonStroke = bstroke
     sub.Scroll = scroll
     sub.Content = content
@@ -1987,7 +2204,7 @@ function Tab:CreateSubTab(config)
         self.Window,
         button.MouseEnter:Connect(function()
             if self.ActiveSubTab ~= sub then
-                tween(button, { BackgroundTransparency = 0.48 }, 0.14)
+                tween(button, { BackgroundTransparency = 0.58 }, 0.14)
             end
         end)
     )
@@ -1995,7 +2212,7 @@ function Tab:CreateSubTab(config)
         self.Window,
         button.MouseLeave:Connect(function()
             if self.ActiveSubTab ~= sub then
-                tween(button, { BackgroundTransparency = 0.62 }, 0.14)
+                tween(button, { BackgroundTransparency = 0.74 }, 0.14)
             end
         end)
     )
@@ -2016,9 +2233,12 @@ function Tab:SelectSubTab(sub, instant)
     end
     if self.ActiveSubTab then
         local old = self.ActiveSubTab
-        tween(old.Button, { BackgroundTransparency = 0.62 }, 0.18)
-        tween(old.ButtonStroke, { Transparency = 0.9, Color = Theme.StrokeSoft }, 0.18)
+        tween(old.Button, { BackgroundTransparency = 0.74, BackgroundColor3 = Theme.Surface2 }, 0.18)
+        tween(old.ButtonStroke, { Transparency = 0.92, Color = Theme.StrokeSoft }, 0.18)
         tween(old.ButtonLabel, { TextColor3 = Theme.Muted }, 0.18)
+        if old.ButtonIcon then
+            tween(old.ButtonIcon, { TextColor3 = Theme.Muted }, 0.18)
+        end
         old.Scroll.Visible = false
     end
     self.ActiveSubTab = sub
@@ -2030,8 +2250,11 @@ function Tab:SelectSubTab(sub, instant)
         instant and 0 or 0.22,
         Enum.EasingStyle.Quint
     )
-    tween(sub.ButtonStroke, { Transparency = 0.46, Color = Theme.Accent }, instant and 0 or 0.22)
+    tween(sub.ButtonStroke, { Transparency = 0.32, Color = Theme.Accent }, instant and 0 or 0.22)
     tween(sub.ButtonLabel, { TextColor3 = Theme.Text }, instant and 0 or 0.22)
+    if sub.ButtonIcon then
+        tween(sub.ButtonIcon, { TextColor3 = Theme.Accent }, instant and 0 or 0.22)
+    end
 end
 
 function Tab:Destroy()
@@ -2052,10 +2275,20 @@ function Window:_setActiveTabVisual(tab, active)
     if not tab then
         return
     end
-    tween(tab.Button, { BackgroundTransparency = active and 0.1 or 1 }, 0.22)
+    tween(tab.Button, { BackgroundTransparency = active and 0.08 or 1, BackgroundColor3 = Theme.Surface2 }, 0.22)
+    if tab.ButtonStroke then
+        tween(
+            tab.ButtonStroke,
+            { Transparency = active and 0.66 or 1, Color = active and Theme.StrokeSoft or Theme.StrokeSoft },
+            0.22
+        )
+    end
+    if tab.ActiveGlow then
+        tween(tab.ActiveGlow, { BackgroundTransparency = active and 0.88 or 1 }, 0.22)
+    end
     tween(tab.ActiveBar, {
         BackgroundTransparency = active and 0 or 1,
-        Size = active and UDim2.fromOffset(4, 30) or UDim2.fromOffset(4, 12),
+        Size = active and UDim2.fromOffset(5, 36) or UDim2.fromOffset(5, 12),
     }, 0.22, Enum.EasingStyle.Quint)
     tween(tab.IconLabel, { TextColor3 = active and Theme.Accent or Theme.Muted }, 0.22)
     tween(tab.TitleLabel, { TextColor3 = active and Theme.Text or Theme.Muted }, 0.22)
@@ -2096,27 +2329,39 @@ function Window:CreateTab(config)
         BorderSizePixel = 0,
         Text = "",
         AutoButtonColor = false,
-        Size = UDim2.new(1, 0, 0, 54),
+        Size = UDim2.new(1, 0, 0, 62),
         Parent = self.SidebarList,
     })
-    corner(button, 17)
+    corner(button, 20)
+    addInnerDepth(button, 20, false)
+    local tabStroke = stroke(button, Theme.StrokeSoft, 1, 1)
+    local activeGlow = create("Frame", {
+        BackgroundColor3 = Theme.Accent,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new(0, 5, 0.5, 0),
+        Size = UDim2.fromOffset(16, 42),
+        Parent = button,
+    })
+    corner(activeGlow, 10)
     local active = create("Frame", {
         BackgroundColor3 = Theme.Accent,
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         AnchorPoint = Vector2.new(0, 0.5),
         Position = UDim2.new(0, 0, 0.5, 0),
-        Size = UDim2.fromOffset(4, 12),
+        Size = UDim2.fromOffset(5, 14),
         Parent = button,
     })
-    corner(active, 4)
+    corner(active, 5)
     local icon = makeText(button, getIcon(config.Icon or config.Title), 17, Theme.Muted, "bold")
     icon.Position = UDim2.fromOffset(20, 0)
-    icon.Size = UDim2.fromOffset(24, 54)
+    icon.Size = UDim2.fromOffset(26, 62)
     icon.TextXAlignment = Enum.TextXAlignment.Center
     local title = makeText(button, tab.Title, 13, Theme.Muted, "bold")
-    title.Position = UDim2.fromOffset(58, 0)
-    title.Size = UDim2.new(1, -66, 1, 0)
+    title.Position = UDim2.fromOffset(60, 0)
+    title.Size = UDim2.new(1, -68, 1, 0)
 
     local page = create("Frame", {
         Name = "TabPage",
@@ -2138,6 +2383,8 @@ function Window:CreateTab(config)
 
     tab.Button = button
     tab.ActiveBar = active
+    tab.ActiveGlow = activeGlow
+    tab.ButtonStroke = tabStroke
     tab.IconLabel = icon
     tab.TitleLabel = title
     tab.Page = page
@@ -2154,7 +2401,7 @@ function Window:CreateTab(config)
         self,
         button.MouseEnter:Connect(function()
             if self.ActiveTab ~= tab then
-                tween(button, { BackgroundTransparency = 0.68 }, 0.14)
+                tween(button, { BackgroundTransparency = 0.78 }, 0.14)
             end
         end)
     )
@@ -2189,14 +2436,15 @@ function Window:_makeHeader(config)
     })
     local logoWrap = create("Frame", {
         BackgroundColor3 = Theme.Accent,
-        BackgroundTransparency = 0.92,
+        BackgroundTransparency = 0.9,
         BorderSizePixel = 0,
-        Size = UDim2.fromOffset(44, 44),
-        Position = UDim2.fromOffset(0, 10),
+        Size = UDim2.fromOffset(38, 38),
+        Position = UDim2.fromOffset(0, 12),
         Parent = header,
     })
-    corner(logoWrap, 15)
-    stroke(logoWrap, Theme.Accent, 0.54, 1)
+    corner(logoWrap, 14)
+    stroke(logoWrap, Theme.Accent, 0.42, 1)
+    addInnerDepth(logoWrap, 14, true)
     if config.Logo then
         create("ImageLabel", {
             BackgroundTransparency = 1,
@@ -2206,15 +2454,15 @@ function Window:_makeHeader(config)
             Parent = logoWrap,
         })
     else
-        local l = makeText(logoWrap, string.sub(config.Title or "T", 1, 1), 20, Theme.Accent, "bold")
+        local l = makeText(logoWrap, string.sub(config.Title or "T", 1, 1), 19, Theme.Accent, "bold")
         l.TextXAlignment = Enum.TextXAlignment.Center
         l.Size = UDim2.fromScale(1, 1)
     end
     local title = makeText(header, config.Title or "Testing UI", 15, Theme.Text, "bold")
-    title.Position = UDim2.fromOffset(58, 11)
+    title.Position = UDim2.fromOffset(52, 11)
     title.Size = UDim2.fromOffset(220, 22)
     local sub = makeText(header, config.SubTitle or config.Subtitle or "Premium UI Library", 11, Theme.Muted)
-    sub.Position = UDim2.fromOffset(58, 34)
+    sub.Position = UDim2.fromOffset(52, 34)
     sub.Size = UDim2.fromOffset(260, 18)
 
     local profile = create("Frame", {
@@ -2417,8 +2665,8 @@ Section.AddMultiDropdown = Section.CreateMultiDropdown
 function Library:CreateWindow(config)
     config = config or {}
     local gui = self:_ensureGui()
-    local width = config.Width or (config.Size and config.Size.X.Offset > 0 and config.Size.X.Offset) or 820
-    local height = config.Height or (config.Size and config.Size.Y.Offset > 0 and config.Size.Y.Offset) or 520
+    local width = config.Width or (config.Size and config.Size.X.Offset > 0 and config.Size.X.Offset) or 760
+    local height = config.Height or (config.Size and config.Size.Y.Offset > 0 and config.Size.Y.Offset) or 450
     local window = setmetatable(
         { Library = self, Width = width, Height = height, Tabs = {}, Connections = {}, Closed = false },
         Window
@@ -2435,13 +2683,15 @@ function Library:CreateWindow(config)
         ZIndex = 10,
     })
     local scale = create("UIScale", { Parent = root })
-    applyResponsiveScale(scale, 960, 640)
-    addConnection(
-        window,
-        Camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
-            applyResponsiveScale(scale, 960, 640)
-        end)
-    )
+    applyResponsiveScale(scale, 900, 560)
+    if workspace.CurrentCamera then
+        addConnection(
+            window,
+            workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+                applyResponsiveScale(scale, 900, 560)
+            end)
+        )
+    end
 
     local shadow1 = create("Frame", {
         BackgroundColor3 = Color3.new(0, 0, 0),
@@ -2453,7 +2703,7 @@ function Library:CreateWindow(config)
         ZIndex = 8,
     })
     corner(shadow1, 30)
-    local main = makeGlass(root, 26, Theme.Background, 0.28)
+    local main = makeGlass(root, 28, Theme.Background, 0.24)
     main.Name = "Main"
     main.Size = UDim2.fromScale(1, 1)
     main.ZIndex = 10
@@ -2467,22 +2717,22 @@ function Library:CreateWindow(config)
     window:_enableDrag(dragSurface)
     window:_makeHeader(config)
 
-    local sidebar = makeGlass(main, 22, Theme.Surface, 0.76)
+    local sidebar = makeGlass(main, 22, Theme.Surface, 0.58)
     sidebar.Name = "Sidebar"
-    sidebar.Position = UDim2.fromOffset(22, 112)
-    sidebar.Size = UDim2.new(0, 176, 1, -136)
+    sidebar.Position = UDim2.fromOffset(20, 108)
+    sidebar.Size = UDim2.new(0, 164, 1, -128)
     sidebar.ZIndex = 12
-    padding(sidebar, 12, 14, 12, 14)
+    padding(sidebar, 10, 16, 10, 16)
     local sidebarList = create("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = sidebar })
-    local sidebarLayout = list(sidebarList, Enum.FillDirection.Vertical, 8)
+    local sidebarLayout = list(sidebarList, Enum.FillDirection.Vertical, 14)
     window.Sidebar = sidebar
     window.SidebarList = sidebarList
 
     local content = create("Frame", {
         Name = "Content",
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(218, 112),
-        Size = UDim2.new(1, -244, 1, -134),
+        Position = UDim2.fromOffset(202, 108),
+        Size = UDim2.new(1, -226, 1, -128),
         Parent = main,
         ZIndex = 12,
     })
