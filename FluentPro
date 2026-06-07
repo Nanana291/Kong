@@ -111,44 +111,68 @@ local a, b = {
 local Animation
 do
     local _RunService = game:GetService("RunService")
-    local _conns = {}
+    local _conn = nil
+    local _gradients = {}
+    local _strokes = {}
+    local _time = 0
     Animation = {}
+    function Animation.Stop()
+        if _conn then
+            pcall(function() _conn:Disconnect() end)
+            _conn = nil
+        end
+        table.clear(_gradients)
+        table.clear(_strokes)
+        _time = 0
+    end
     function Animation.Apply(theme, root)
-        for _, c in ipairs(_conns) do pcall(function() c:Disconnect() end) end
-        table.clear(_conns)
+        Animation.Stop()
         if not theme or not root or not getgenv().ShineEnabled or not theme.ShineEnabled or not theme.Shine then return end
-        local ShineConfig   = theme.Shine
-        local Speed         = ShineConfig.Speed         or 0.5
+        local ShineConfig = theme.Shine
+        local Speed = ShineConfig.Speed or 0.5
         local RotationSpeed = ShineConfig.RotationSpeed or 25
-        local ColorSeq      = ShineConfig.ColorSequence
+        local ColorSeq = ShineConfig.ColorSequence
+        local strokeFrom = theme.StrokeDark or theme.AcrylicBorder
+        local strokeShine = theme.Accent
+        local useStroke = theme.StrokeShine and strokeFrom and strokeShine
         for _, obj in ipairs(root:GetDescendants()) do
             if obj:IsA("UIGradient") then
-                local conn
-                conn = _RunService.RenderStepped:Connect(function(dt)
-                    local t = (obj:GetAttribute("_t") or 0) + dt * Speed
-                    obj:SetAttribute("_t", t)
-                    obj.Rotation = (t * RotationSpeed) % 360
-                    obj.Color    = ColorSeq
-                end)
-                table.insert(_conns, conn)
-            end
-            if obj:IsA("UIStroke") and theme.StrokeShine then
-                local from  = theme.StrokeDark or theme.AcrylicBorder
-                local shine = theme.Accent
-                local conn
-                conn = _RunService.RenderStepped:Connect(function(dt)
-                    local t = (obj:GetAttribute("_t") or 0) + dt * Speed
-                    obj:SetAttribute("_t", t)
-                    obj.Thickness = 2
-                    obj.Color     = from:Lerp(shine, (math.sin(t) + 1) / 2)
-                end)
-                table.insert(_conns, conn)
+                _gradients[#_gradients + 1] = obj
+            elseif useStroke and obj:IsA("UIStroke") then
+                obj.Thickness = 2
+                _strokes[#_strokes + 1] = obj
             end
         end
+        if #_gradients == 0 and #_strokes == 0 then return end
+        _conn = _RunService.RenderStepped:Connect(function(dt)
+            _time = _time + dt * Speed
+            local rotation = (_time * RotationSpeed) % 360
+            local alpha = (math.sin(_time) + 1) / 2
+            for i = #_gradients, 1, -1 do
+                local obj = _gradients[i]
+                if obj and obj.Parent then
+                    obj.Rotation = rotation
+                    obj.Color = ColorSeq
+                else
+                    table.remove(_gradients, i)
+                end
+            end
+            for i = #_strokes, 1, -1 do
+                local obj = _strokes[i]
+                if obj and obj.Parent then
+                    obj.Color = strokeFrom:Lerp(strokeShine, alpha)
+                else
+                    table.remove(_strokes, i)
+                end
+            end
+            if #_gradients == 0 and #_strokes == 0 then
+                Animation.Stop()
+            end
+        end)
     end
 end
-if not Animation then Animation = {Apply = function() end} end
-getgenv().ShineEnabled = true
+if not Animation then Animation = {Apply = function() end, Stop = function() end} end
+if getgenv().ShineEnabled == nil then getgenv().ShineEnabled = false end
 getgenv().ButtonGradients = {
     Background = ColorSequence.new {
         ColorSequenceKeypoint.new(0, Color3.fromRGB(7, 42, 82)),
@@ -696,9 +720,13 @@ local aa = {
         function x.StartRGBMode()
             if rgbConn then rgbConn:Disconnect(); rgbConn = nil end
             local hue = 0
+            local elapsed = 0
             rgbConn = game:GetService("RunService").RenderStepped:Connect(function(dt)
                 if x.Theme ~= "RGB" then rgbConn:Disconnect(); rgbConn = nil; return end
                 hue = (hue + dt * 0.10) % 1
+                elapsed = elapsed + dt
+                if elapsed < 0.05 then return end
+                elapsed = 0
                 local col = Color3.fromHSV(hue, 1, 1)
                 local thm = e(o.Themes)["RGB"]
                 if thm then
@@ -1363,11 +1391,20 @@ local aa = {
                     o.CFrame = CFrame.fromMatrix((v + x) / 2, r.XVector, r.YVector, r.ZVector)
                     o.Mesh.Scale = Vector3.new(y, z, 0)
                 end
+            local updateQueued = false
+            local scheduleUpdate = function()
+                    if updateQueued then return end
+                    updateQueued = true
+                    task.defer(function()
+                        updateQueued = false
+                        q()
+                    end)
+                end
             local r, s = function(r)
                     local s = k()
                     local t, u = r.AbsoluteSize - Vector2.new(s, s), r.AbsolutePosition + Vector2.new(s / 2, s / 2)
                     p(t, u)
-                    task.spawn(q)
+                    scheduleUpdate()
                 end, function()
                     local r = game:GetService "Workspace".CurrentCamera
                     if not r then
@@ -1376,7 +1413,7 @@ local aa = {
                     table.insert(m, r:GetPropertyChangedSignal "CFrame":Connect(q))
                     table.insert(m, r:GetPropertyChangedSignal "ViewportSize":Connect(q))
                     table.insert(m, r:GetPropertyChangedSignal "FieldOfView":Connect(q))
-                    task.spawn(q)
+                    scheduleUpdate()
                 end
             o.Destroying:Connect(
                 function()
@@ -3308,6 +3345,10 @@ local aa = {
                 function(M)
                     if M.UserInputType == Enum.UserInputType.MouseButton1 or M.UserInputType == Enum.UserInputType.Touch then
                         w = true
+                        if v.AcrylicPaint and v.AcrylicPaint.Model then
+                            v._dragAcrylicTransparency = v.AcrylicPaint.Model.Transparency
+                            v.AcrylicPaint.Model.Transparency = 1
+                        end
                         y = M.Position
                         z = v.Root.Position
                         if v.Maximized then
@@ -3321,6 +3362,11 @@ local aa = {
                             function()
                                 if M.UserInputState == Enum.UserInputState.End then
                                     w = false
+                                    H:setGoal {X = r(v.Position.X.Offset), Y = r(v.Position.Y.Offset)}
+                                    if v.AcrylicPaint and v.AcrylicPaint.Model and v._dragAcrylicTransparency ~= nil then
+                                        v.AcrylicPaint.Model.Transparency = v._dragAcrylicTransparency
+                                        v._dragAcrylicTransparency = nil
+                                    end
                                 end
                             end
                         )
@@ -3343,6 +3389,10 @@ local aa = {
                 function(M)
                     if M.UserInputType == Enum.UserInputType.MouseButton1 or M.UserInputType == Enum.UserInputType.Touch then
                         A = true
+                        if v.AcrylicPaint and v.AcrylicPaint.Model then
+                            v._resizeAcrylicTransparency = v.AcrylicPaint.Model.Transparency
+                            v.AcrylicPaint.Model.Transparency = 1
+                        end
                         B = M.Position
                     end
                 end
@@ -3353,7 +3403,7 @@ local aa = {
                     if M == x and w then
                         local N = M.Position - y
                         v.Position = UDim2.fromOffset(z.X.Offset + N.X, z.Y.Offset + N.Y)
-                        H:setGoal {X = r(v.Position.X.Offset), Y = r(v.Position.Y.Offset)}
+                        v.Root.Position = v.Position
                         if v.Maximized then
                             v.Maximize(false, true, true)
                         end
@@ -3375,6 +3425,10 @@ local aa = {
                 function(M)
                     if A == true or M.UserInputType == Enum.UserInputType.Touch then
                         A = false
+                        if v.AcrylicPaint and v.AcrylicPaint.Model and v._resizeAcrylicTransparency ~= nil then
+                            v.AcrylicPaint.Model.Transparency = v._resizeAcrylicTransparency
+                            v._resizeAcrylicTransparency = nil
+                        end
                         v.Size = UDim2.fromOffset(G:getValue().X, G:getValue().Y)
                     end
                 end
@@ -3610,7 +3664,9 @@ local aa = {
             local o = #k.Registry + 1
             local p = {Object = m, Properties = n, Idx = o}
             k.Registry[m] = p
-            k.UpdateTheme()
+            for q, r in next, n do
+                m[q] = k.GetThemeProperty(r)
+            end
             return m
         end
         function k.OverrideTag(m, n)
