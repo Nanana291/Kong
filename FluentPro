@@ -332,14 +332,19 @@ local aa = {
         end
         for A, B in ipairs(q) do
             z["Add" .. B.__type] = function(C, D, E)
+                C._elementCount = (C._elementCount or 0) + 1
+                C._pendingElementLayoutOrder = C._elementCount
                 B.Container = C.Container
                 B.Type = C.Type
                 B.ScrollFrame = C.ScrollFrame
                 B.Library = x
+                B._pendingElementLayoutOrder = C._pendingElementLayoutOrder
                 local result = B:New(D, E)
+                local layoutOrder = C._pendingElementLayoutOrder
+                C._pendingElementLayoutOrder = nil
+                B._pendingElementLayoutOrder = nil
                 if result and result.Frame then
-                    C._elementCount = (C._elementCount or 0) + 1
-                    result.Frame.LayoutOrder = C._elementCount
+                    result.Frame.LayoutOrder = layoutOrder
                 end
                 if result and result.SetSection then
                     result:SetSection(C)
@@ -1814,6 +1819,7 @@ local aa = {
                         Enum.FontStyle.Normal
                     ),
                     Text = m,
+                    RichText = true,
                     TextColor3 = Color3.fromRGB(240, 240, 240),
                     TextSize = 13,
                     TextXAlignment = Enum.TextXAlignment.Left,
@@ -1829,6 +1835,7 @@ local aa = {
                 {
                     FontFace = Font.new "rbxasset://fonts/families/GothamSSm.json",
                     Text = n,
+                    RichText = true,
                     TextColor3 = Color3.fromRGB(200, 200, 200),
                     TextSize = 12,
                     TextWrapped = true,
@@ -6041,7 +6048,7 @@ local aa = {
             if not parent then return end
             local u  = ac(af.Creator).New
             local h = D.Height or 8
-            local sp = u("Frame",{Size=UDim2.new(1,0,0,h),BackgroundTransparency=1,BorderSizePixel=0,Parent=parent})
+            local sp = u("Frame",{Size=UDim2.new(1,0,0,h),BackgroundTransparency=1,BorderSizePixel=0,LayoutOrder=d._pendingElementLayoutOrder or 0,Parent=parent})
             local mod = {Frame=sp, Type="Space"}
             function mod:Destroy() sp:Destroy() end
             return mod
@@ -6058,7 +6065,7 @@ local aa = {
             local parent = d.Container
             if not parent then return end
             local u   = ac(af.Creator).New
-            local dv = u("Frame",{Size=UDim2.new(1,-10,0,1),BackgroundTransparency=0.5,BorderSizePixel=0,Parent=parent,ThemeTag={BackgroundColor3="TitleBarLine"}})
+            local dv = u("Frame",{Size=UDim2.new(1,-10,0,1),BackgroundTransparency=0.5,BorderSizePixel=0,LayoutOrder=d._pendingElementLayoutOrder or 0,Parent=parent,ThemeTag={BackgroundColor3="TitleBarLine"}})
             local mod = {Frame=dv, Type="Divider"}
             function mod:Destroy() dv:Destroy() end
             return mod
