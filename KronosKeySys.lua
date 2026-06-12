@@ -54,6 +54,7 @@ local State = {
     Center = nil,
     WasDragged = false,
     LoadingTick = 0,
+    ValidationToken = 0,
     DiscordModalOpen = false,
     DiscordModalClosing = false,
     Drag = {
@@ -625,8 +626,15 @@ local function setInputLocked(locked)
     end
 end
 
-local function startLoadingVisual()
+local function setLoadingMessage(message)
+    if UI.ValidationLoadingText then
+        UI.ValidationLoadingText.Text = letterSpaced(message or "Validating Access")
+    end
+end
+
+local function startLoadingVisual(message)
     State.LoadingTick = 0
+    setLoadingMessage(message)
     if UI.StatusText then
         tween(UI.StatusText, TweenInfoSet.Fast, { TextTransparency = 1 })
     end
@@ -2287,7 +2295,22 @@ local function openKeyLink()
     end
 end
 
-local function finishValidation(success, message)
+local function showStatusText(kind, message)
+    setStatus(kind, message)
+    if UI.StatusText then
+        tween(UI.StatusText, TweenInfoSet.Soft, { TextTransparency = 0.14 })
+    end
+    if UI.StatusLine then
+        tween(UI.StatusLine, TweenInfoSet.Soft, { BackgroundTransparency = kind == "success" and 0.54 or 0.46 })
+    end
+end
+
+local function finishValidation(success, message, options, token)
+    options = options or {}
+    if token and token ~= State.ValidationToken then
+        return
+    end
+
     if success then
         State.Validating = false
         stopLoadingVisual()
@@ -2307,8 +2330,11 @@ local function finishValidation(success, message)
                 { Scale = State.ScaleTarget * 0.985 }
             )
         end
-        task.delay(0.18, function()
-            if not State.Destroyed then
+        if options.Auto then
+            showStatusText("success", message or "Saved key validated")
+        end
+        task.delay(options.Auto and 0.5 or 0.18, function()
+            if not State.Destroyed and (not token or token == State.ValidationToken) then
                 Loader:Close()
             end
         end)
@@ -2324,13 +2350,7 @@ local function finishValidation(success, message)
     if UI.StatusLine then
         UI.StatusLine.BackgroundTransparency = 1
     end
-    setStatus("error", message or "Validation failed")
-    if UI.StatusText then
-        tween(UI.StatusText, TweenInfoSet.Soft, { TextTransparency = 0.14 })
-    end
-    if UI.StatusLine then
-        tween(UI.StatusLine, TweenInfoSet.Soft, { BackgroundTransparency = 0.46 })
-    end
+    showStatusText("error", message or (options.Auto and "Saved key invalid. Enter a new key" or "Validation failed"))
     if UI.FormGroup then
         local original = UI.FormGroup.Position
         tween(UI.FormGroup, TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
@@ -2347,51 +2367,59 @@ local function finishValidation(success, message)
         end)
     end
 end
-local function validateKey()
+
+local function beginValidationFlow(key, options)
+    options = options or {}
     if State.Validating or State.Destroyed then
-        return
+        return false
     end
-    local key = UI.KeyBox and UI.KeyBox.Text or ""
-    key = tostring(key):gsub("^%s+", ""):gsub("%s+$", "")
+    key = tostring(key or ""):gsub("^%s+", ""):gsub("%s+$", "")
     if key == "" then
-        setStatus("error", "Enter your key first")
-        if UI.StatusText then
-            tween(UI.StatusText, TweenInfoSet.Soft, { TextTransparency = 0.14 })
-        end
-        if UI.StatusLine then
-            tween(UI.StatusLine, TweenInfoSet.Soft, { BackgroundTransparency = 0.46 })
-        end
-        return
+        showStatusText("error", options.Auto and "Saved key was empty. Enter a new key" or "Enter your key first")
+        return false
     end
     if type(State.ValidateCallback) ~= "function" then
-        setStatus("error", "Validator unavailable")
-        if UI.StatusText then
-            tween(UI.StatusText, TweenInfoSet.Soft, { TextTransparency = 0.14 })
-        end
-        if UI.StatusLine then
-            tween(UI.StatusLine, TweenInfoSet.Soft, { BackgroundTransparency = 0.46 })
-        end
-        return
+        showStatusText("error", "Validator unavailable")
+        return false
     end
 
+    State.ValidationToken += 1
+    local token = State.ValidationToken
     State.Validating = true
     setInputLocked(true)
-    startLoadingVisual()
+
+    if UI.KeyBox and options.FillInput ~= false then
+        UI.KeyBox.Text = key
+    end
+
+    if options.Auto then
+        showStatusText("loading", options.StartMessage or "Saved key found — validating securely")
+        startLoadingVisual(options.LoadingMessage or "Validating Saved Key")
+    else
+        startLoadingVisual(options.LoadingMessage or "Validating Access")
+    end
 
     task.spawn(function()
         local ok, accepted, resultMessage = pcall(State.ValidateCallback, key)
-        if State.Destroyed then
+        if State.Destroyed or token ~= State.ValidationToken then
             return
         end
         if not ok then
-            finishValidation(false, tostring(accepted or "Validation error"))
+            finishValidation(false, tostring(accepted or "Validation error"), options, token)
         else
-            finishValidation(
-                accepted == true,
-                tostring(resultMessage or (accepted and "Welcome back!" or "Validation failed"))
-            )
+            local success = accepted == true
+            local fallback = success and (options.Auto and "Saved key validated" or "Welcome back!")
+                or (options.Auto and "Saved key invalid. Enter a new key" or "Validation failed")
+            finishValidation(success, tostring(resultMessage or fallback), options, token)
         end
     end)
+
+    return true
+end
+
+local function validateKey()
+    local key = UI.KeyBox and UI.KeyBox.Text or ""
+    return beginValidationFlow(key, { Auto = false, FillInput = false })
 end
 local function setWordmark(text)
     State.Title = tostring(text or "KRONOS")
@@ -2756,6 +2784,7 @@ local function createValidationOverlay(parent)
         Parent = overlay,
     })
 
+    UI.ValidationLoadingText = label
     UI.ValidationOverlay = overlay
     return overlay
 end
@@ -3062,6 +3091,19 @@ function Loader:SetOnValidate(callback)
         State.ValidateCallback = nil
     end
     return self
+end
+
+function Loader:AutoValidate(key)
+    return beginValidationFlow(key, {
+        Auto = true,
+        FillInput = true,
+        StartMessage = "Saved key found — validating securely",
+        LoadingMessage = "Validating Saved Key",
+    })
+end
+
+function Loader:ValidateSavedKey(key)
+    return self:AutoValidate(key)
 end
 
 function Loader:Toast(config)
