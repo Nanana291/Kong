@@ -210,14 +210,11 @@ local aa = {
 		local t, u, v = e(s.Notification), p.New, protectgui or (syn and syn.protect_gui) or function() end
 		local w = u("ScreenGui", { Parent = i:IsStudio() and j.PlayerGui or game:GetService("CoreGui") })
 		v(w)
-		local nw = u(
-			"ScreenGui",
-			{
-				Parent = i:IsStudio() and j.PlayerGui or game:GetService("CoreGui"),
-				DisplayOrder = 999,
-				ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-			}
-		)
+		local nw = u("ScreenGui", {
+			Parent = i:IsStudio() and j.PlayerGui or game:GetService("CoreGui"),
+			DisplayOrder = 999,
+			ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		})
 		v(nw)
 		t:Init(nw)
 		local x = {
@@ -652,6 +649,427 @@ local aa = {
 			vp.Frame = vpFrame
 			return vp
 		end
+
+		function x.UpdateFloatingControlAppearance(C)
+			local D = x.FloatingControl
+			if not D then
+				return
+			end
+			local E = p.GetThemeProperty("ElementTransparency") or 0.35
+			local F = p.GetThemeProperty("HoverChange") or 0.08
+			local G = x.Transparency ~= false
+			local H = G and E or 0
+			if D.Button then
+				D.Button.BackgroundTransparency = H
+			end
+			if D.Menu then
+				D.Menu.BackgroundTransparency = G and math.clamp(E + 0.04, 0, 0.92) or 0
+			end
+			if D.Stroke then
+				D.Stroke.Transparency = G and 0.42 or 0.25
+			end
+			if D.MenuStroke then
+				D.MenuStroke.Transparency = G and 0.5 or 0.32
+			end
+			if D.Shadow then
+				D.Shadow.ImageTransparency = x.Acrylic and 0.38 or (G and 0.48 or 0.55)
+			end
+			D.BaseTransparency = H
+			D.HoverTransparency = math.clamp(H - (F * 1.15), 0, 1)
+			D.PressTransparency = math.clamp(H + F, 0, 1)
+		end
+
+		function x.SetWindowVisibleAnimated(C, D)
+			local E = x.Window
+			if not E or not E.Root then
+				return
+			end
+			local F = E.Root
+			local G = x.FloatingControl or {}
+			if G.WindowTween then
+				G.WindowTween:Cancel()
+			end
+			if G.ScaleTween then
+				G.ScaleTween:Cancel()
+			end
+			if G.WindowConnection then
+				G.WindowConnection:Disconnect()
+				G.WindowConnection = nil
+			end
+			local H = F:FindFirstChild("__FloatingVisibilityScale")
+			if not H then
+				H = Instance.new("UIScale")
+				H.Name = "__FloatingVisibilityScale"
+				H.Scale = 1
+				H.Parent = F
+			end
+			local I = G.WindowPosition or F.Position
+			local J = TweenInfo.new(0.24, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+			local K = TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+			if D then
+				E.Minimized = false
+				F.Visible = true
+				F.Position = I + UDim2.fromOffset(0, 10)
+				H.Scale = 0.965
+				G.WindowTween = l:Create(F, J, { Position = I })
+				G.ScaleTween = l:Create(H, J, { Scale = 1 })
+				G.WindowTween:Play()
+				G.ScaleTween:Play()
+			else
+				G.WindowPosition = F.Position
+				E.Minimized = true
+				G.WindowTween = l:Create(F, K, { Position = F.Position + UDim2.fromOffset(0, 10) })
+				G.ScaleTween = l:Create(H, K, { Scale = 0.965 })
+				G.WindowConnection = G.WindowTween.Completed:Connect(function()
+					if G.WindowConnection then
+						G.WindowConnection:Disconnect()
+						G.WindowConnection = nil
+					end
+					if E.Minimized and F then
+						F.Visible = false
+						F.Position = G.WindowPosition or I
+						H.Scale = 1
+					end
+				end)
+				G.WindowTween:Play()
+				G.ScaleTween:Play()
+			end
+			x.FloatingControl = G
+		end
+
+		function x.DestroyFloatingControl(C)
+			local D = x.FloatingControl
+			if not D then
+				return
+			end
+			for _, E in
+				next,
+				{ D.WindowTween, D.ScaleTween, D.ButtonTween, D.ShadowTween, D.MenuTween, D.MenuFadeTween }
+			do
+				if E then
+					pcall(function()
+						E:Cancel()
+					end)
+				end
+			end
+			if D.WindowConnection then
+				D.WindowConnection:Disconnect()
+			end
+			if D.MenuConnection then
+				D.MenuConnection:Disconnect()
+			end
+			if D.Root then
+				D.Root:Destroy()
+			end
+			x.FloatingControl = nil
+		end
+
+		function x.CreateFloatingControl(C, D)
+			if x.FloatingControl or not D or not D.Root then
+				return
+			end
+			local E = 56
+			local F = 8
+			local G = TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+			local H = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+			local I = TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+			local J = u("Frame", {
+				Name = "FloatingControl",
+				Parent = w,
+				Size = UDim2.fromOffset(E, E),
+				Position = UDim2.fromOffset(24, 170),
+				BackgroundTransparency = 1,
+				BorderSizePixel = 0,
+				Active = true,
+				ZIndex = 1000,
+			})
+			local K = u("ImageLabel", {
+				Name = "Shadow",
+				Parent = J,
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromOffset(78, 78),
+				BackgroundTransparency = 1,
+				Image = "rbxassetid://5554236805",
+				ImageColor3 = Color3.fromRGB(0, 0, 0),
+				ImageTransparency = 0.48,
+				ScaleType = Enum.ScaleType.Slice,
+				SliceCenter = Rect.new(23, 23, 277, 277),
+				ZIndex = 999,
+			})
+			local L = u("ImageButton", {
+				Name = "Button",
+				Parent = J,
+				Size = UDim2.fromOffset(E, E),
+				BackgroundTransparency = 0.35,
+				AutoButtonColor = false,
+				Active = true,
+				Selectable = true,
+				ZIndex = 1001,
+				ThemeTag = { BackgroundColor3 = "Element" },
+			}, {
+				u("UICorner", { CornerRadius = UDim.new(0, 16) }),
+			})
+			local M = u("UIStroke", {
+				Parent = L,
+				Thickness = 1,
+				Transparency = 0.42,
+				ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+				ThemeTag = { Color = "ElementBorder" },
+			})
+			local N = u("ImageLabel", {
+				Name = "Icon",
+				Parent = L,
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromOffset(32, 32),
+				BackgroundTransparency = 1,
+				Image = "rbxassetid://94610411937126",
+				ScaleType = Enum.ScaleType.Fit,
+				ZIndex = 1002,
+				ThemeTag = { ImageColor3 = "Text" },
+			})
+			local O = u("UIScale", { Parent = L, Scale = 1 })
+			local P = u("Frame", {
+				Name = "Menu",
+				Parent = J,
+				Size = UDim2.fromOffset(144, 126),
+				Position = UDim2.fromOffset(66, -35),
+				BackgroundTransparency = 0.39,
+				Visible = false,
+				ClipsDescendants = true,
+				ZIndex = 1003,
+				ThemeTag = { BackgroundColor3 = "Element" },
+			}, {
+				u("UICorner", { CornerRadius = UDim.new(0, 14) }),
+				u("UIPadding", {
+					PaddingTop = UDim.new(0, 8),
+					PaddingBottom = UDim.new(0, 8),
+					PaddingLeft = UDim.new(0, 8),
+					PaddingRight = UDim.new(0, 8),
+				}),
+				u("UIListLayout", {
+					FillDirection = Enum.FillDirection.Vertical,
+					SortOrder = Enum.SortOrder.LayoutOrder,
+					Padding = UDim.new(0, 6),
+				}),
+			})
+			local Q = u("UIStroke", {
+				Parent = P,
+				Thickness = 1,
+				Transparency = 0.5,
+				ThemeTag = { Color = "ElementBorder" },
+			})
+			local R = u("UIScale", { Parent = P, Scale = 0.96 })
+			local function S(T, U, V)
+				local W = u("TextButton", {
+					Name = T,
+					Parent = P,
+					Size = UDim2.new(1, 0, 0, 32),
+					BackgroundTransparency = 1,
+					AutoButtonColor = false,
+					FontFace = Font.new(
+						"rbxasset://fonts/families/GothamSSm.json",
+						Enum.FontWeight.Medium,
+						Enum.FontStyle.Normal
+					),
+					Text = U,
+					TextSize = 13,
+					TextXAlignment = Enum.TextXAlignment.Left,
+					ZIndex = 1004,
+					ThemeTag = { TextColor3 = "Text", BackgroundColor3 = "Hover" },
+				}, {
+					u("UICorner", { CornerRadius = UDim.new(0, 9) }),
+					u("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }),
+				})
+				p.AddSignal(W.MouseEnter, function()
+					l:Create(W, G, { BackgroundTransparency = 0.86 }):Play()
+				end)
+				p.AddSignal(W.MouseLeave, function()
+					l:Create(W, G, { BackgroundTransparency = 1 }):Play()
+				end)
+				p.AddSignal(W.MouseButton1Down, function()
+					l:Create(W, H, { BackgroundTransparency = 0.78 }):Play()
+				end)
+				p.AddSignal(W.MouseButton1Up, function()
+					l:Create(W, G, { BackgroundTransparency = 0.86 }):Play()
+				end)
+				p.AddSignal(W.MouseButton1Click, V)
+				return W
+			end
+			local X = {
+				Root = J,
+				Shadow = K,
+				Button = L,
+				Icon = N,
+				Scale = O,
+				Menu = P,
+				MenuScale = R,
+				Stroke = M,
+				MenuStroke = Q,
+				WindowPosition = D.Root.Position,
+				MenuOpen = false,
+				Dragging = false,
+				Dragged = false,
+			}
+			local function Y(Z)
+				if X.ButtonTween then
+					X.ButtonTween:Cancel()
+				end
+				if X.ShadowTween then
+					X.ShadowTween:Cancel()
+				end
+				X.ButtonTween = l:Create(
+					O,
+					Z == "press" and H or G,
+					{ Scale = Z == "press" and 0.92 or (Z == "hover" and 1.055 or 1) }
+				)
+				X.ShadowTween =
+					l:Create(K, G, { Size = UDim2.fromOffset(Z == "hover" and 86 or 78, Z == "hover" and 86 or 78) })
+				X.ButtonTween:Play()
+				X.ShadowTween:Play()
+				if L then
+					local a0 = X.BaseTransparency or L.BackgroundTransparency
+					local a1 = Z == "press" and (X.PressTransparency or a0)
+						or (Z == "hover" and (X.HoverTransparency or a0) or a0)
+					l:Create(L, G, { BackgroundTransparency = a1 }):Play()
+				end
+			end
+			local function a2()
+				local Z = m and m.ViewportSize or Vector2.new(1280, 720)
+				local a0 = J.AbsolutePosition
+				local a1 = math.clamp(a0.X, F, math.max(F, Z.X - E - F))
+				local a3 = math.clamp(a0.Y, F, math.max(F, Z.Y - E - F))
+				J.Position = UDim2.fromOffset(a1, a3)
+				if a1 + E + 154 > Z.X then
+					P.Position = UDim2.fromOffset(-154, -35)
+				else
+					P.Position = UDim2.fromOffset(66, -35)
+				end
+			end
+			local function a4(Z)
+				X.MenuOpen = Z
+				if X.MenuConnection then
+					X.MenuConnection:Disconnect()
+					X.MenuConnection = nil
+				end
+				if X.MenuTween then
+					X.MenuTween:Cancel()
+				end
+				if X.MenuFadeTween then
+					X.MenuFadeTween:Cancel()
+				end
+				a2()
+				if Z then
+					P.Visible = true
+					R.Scale = 0.96
+					P.BackgroundTransparency = 1
+				end
+				X.MenuTween = l:Create(R, I, { Scale = Z and 1 or 0.96 })
+				X.MenuFadeTween = l:Create(
+					P,
+					I,
+					{
+						BackgroundTransparency = Z and (x.Transparency ~= false and math.clamp(
+							(p.GetThemeProperty("ElementTransparency") or 0.35) + 0.04,
+							0,
+							0.92
+						) or 0) or 1,
+					}
+				)
+				X.MenuTween:Play()
+				X.MenuFadeTween:Play()
+				if not Z then
+					X.MenuConnection = X.MenuFadeTween.Completed:Connect(function()
+						if X.MenuConnection then
+							X.MenuConnection:Disconnect()
+							X.MenuConnection = nil
+						end
+						if not X.MenuOpen then
+							P.Visible = false
+						end
+					end)
+				end
+			end
+			S("HideUI", "Hide UI", function()
+				a4(false)
+				x:SetWindowVisibleAnimated(false)
+			end)
+			S("ShowUI", "Show UI", function()
+				a4(false)
+				x:SetWindowVisibleAnimated(true)
+			end)
+			S("CloseUI", "Close UI", function()
+				a4(false)
+				x:Destroy()
+			end)
+			p.AddSignal(L.MouseEnter, function()
+				if not X.Dragging then
+					Y("hover")
+				end
+			end)
+			p.AddSignal(L.MouseLeave, function()
+				if not X.Dragging then
+					Y("idle")
+				end
+			end)
+			p.AddSignal(L.InputBegan, function(Z)
+				if
+					Z.UserInputType == Enum.UserInputType.MouseButton1
+					or Z.UserInputType == Enum.UserInputType.Touch
+				then
+					X.Dragging = true
+					X.Dragged = false
+					X.PressInput = Z
+					X.DragInput = Z
+					X.DragStart = Z.Position
+					X.StartPosition = J.AbsolutePosition
+					Y("press")
+				end
+			end)
+			p.AddSignal(L.InputChanged, function(Z)
+				if
+					Z.UserInputType == Enum.UserInputType.MouseMovement
+					or Z.UserInputType == Enum.UserInputType.Touch
+				then
+					X.DragInput = Z
+				end
+			end)
+			p.AddSignal(k.InputChanged, function(Z)
+				if X.Dragging and Z == X.DragInput and X.DragStart and X.StartPosition then
+					local a0 = Z.Position - X.DragStart
+					if math.abs(a0.X) > 3 or math.abs(a0.Y) > 3 then
+						X.Dragged = true
+					end
+					local a1 = m and m.ViewportSize or Vector2.new(1280, 720)
+					local a3 = math.clamp(X.StartPosition.X + a0.X, F, math.max(F, a1.X - E - F))
+					local a5 = math.clamp(X.StartPosition.Y + a0.Y, F, math.max(F, a1.Y - E - F))
+					J.Position = UDim2.fromOffset(a3, a5)
+					a2()
+				end
+			end)
+			p.AddSignal(k.InputEnded, function(Z)
+				local a0 = Z.UserInputType == Enum.UserInputType.MouseButton1
+					or Z.UserInputType == Enum.UserInputType.Touch
+				if X.Dragging and (Z == X.PressInput or Z == X.DragInput or a0) then
+					X.Dragging = false
+					X.PressInput = nil
+					X.DragInput = nil
+					Y("idle")
+					a2()
+					if not X.Dragged then
+						a4(not X.MenuOpen)
+					end
+				end
+			end)
+			if m then
+				p.AddSignal(m:GetPropertyChangedSignal("ViewportSize"), a2)
+			end
+			x.FloatingControl = X
+			x:UpdateFloatingControlAppearance()
+			a2()
+		end
+
 		function x.CreateWindow(C, D)
 			assert(D.Title, "Window - Missing Title")
 			if x.Window then
@@ -679,6 +1097,16 @@ local aa = {
 			})
 			x.Window = E
 			x:SetTheme(D.Theme)
+			x:CreateFloatingControl(E)
+			function E.Show(F)
+				x:SetWindowVisibleAnimated(true)
+			end
+			function E.Hide(F)
+				x:SetWindowVisibleAnimated(false)
+			end
+			function E.Minimize(F)
+				x:SetWindowVisibleAnimated(E.Minimized == true)
+			end
 			return E
 		end
 		function x.SetTheme(C, D)
@@ -707,16 +1135,25 @@ local aa = {
 					end
 				end
 			end
+			x:UpdateFloatingControlAppearance()
 		end
 		function x.Destroy(C)
 			if x.Window then
 				x.Unloaded = true
-				if x.UseAcrylic then
+				x:DestroyFloatingControl()
+				if x.UseAcrylic and x.Window.AcrylicPaint and x.Window.AcrylicPaint.Model then
 					x.Window.AcrylicPaint.Model:Destroy()
 				end
 				p.Disconnect()
-				x.GUI:Destroy()
+				if x.GUI then
+					x.GUI:Destroy()
+				end
+				if x.PopupGUI then
+					x.PopupGUI:Destroy()
+				end
+				x.Window = nil
 				x.GUI = nil
+				x.PopupGUI = nil
 			end
 		end
 		function x.ToggleAcrylic(C, D)
@@ -730,11 +1167,14 @@ local aa = {
 						r.Disable()
 					end
 				end
+				x:UpdateFloatingControlAppearance()
 			end
 		end
 		function x.ToggleTransparency(C, D)
+			x.Transparency = D
 			if x.Window then
 				x.Window.AcrylicPaint.Frame.Background.BackgroundTransparency = D and 0.35 or 0
+				x:UpdateFloatingControlAppearance()
 			end
 		end
 		local errorHints = {
@@ -1031,16 +1471,13 @@ local aa = {
 			assert(self.Library, "Must set SaveManager.Library")
 			local sec = tab:AddSection("Configuration")
 			sec:AddInput("SaveManager_ConfigName", { Title = "Config name", Icon = "solar/pen-new-round-bold" })
-			sec:AddDropdown(
-				"SaveManager_ConfigList",
-				{
-					Title = "Config list",
-					Values = self:RefreshConfigList(),
-					AllowNull = true,
-					NoSearch = true,
-					Icon = "solar/list-bold",
-				}
-			)
+			sec:AddDropdown("SaveManager_ConfigList", {
+				Title = "Config list",
+				Values = self:RefreshConfigList(),
+				AllowNull = true,
+				NoSearch = true,
+				Icon = "solar/list-bold",
+			})
 			sec:AddButton({
 				Title = "Create config",
 				Icon = "solar/diskette-bold",
@@ -1534,23 +1971,24 @@ local aa = {
 				"FB_ConfigName",
 				{ Title = "Layout name", Icon = "solar/widget-bold", Placeholder = "Enter name..." }
 			)
-			section:AddDropdown(
-				"FB_ConfigList",
-				{
-					Title = "Layouts list",
-					Values = self:RefreshConfigList(),
-					AllowNull = true,
-					NoSearch = true,
-					Icon = "solar/list-bold",
-				}
-			)
+			section:AddDropdown("FB_ConfigList", {
+				Title = "Layouts list",
+				Values = self:RefreshConfigList(),
+				AllowNull = true,
+				NoSearch = true,
+				Icon = "solar/list-bold",
+			})
 			section:AddButton({
 				Title = "Create layout",
 				Icon = "solar/diskette-bold",
 				Callback = function()
 					local name = self.Library.Options.FB_ConfigName.Value
 					if not name or name:gsub(" ", "") == "" then
-						return self.Library:Notify({ Title = "Floating Buttons", Content = "Invalid layout name", Duration = 5 })
+						return self.Library:Notify({
+							Title = "Floating Buttons",
+							Content = "Invalid layout name",
+							Duration = 5,
+						})
 					end
 					local ok, err = self:Save(name)
 					if not ok then
@@ -1575,7 +2013,11 @@ local aa = {
 				Callback = function()
 					local name = self.Library.Options.FB_ConfigList.Value
 					if not name or name == "" then
-						return self.Library:Notify({ Title = "Floating Buttons", Content = "No layout selected", Duration = 5 })
+						return self.Library:Notify({
+							Title = "Floating Buttons",
+							Content = "No layout selected",
+							Duration = 5,
+						})
 					end
 					local ok, err = self:Load(name)
 					if not ok then
@@ -1598,7 +2040,11 @@ local aa = {
 				Callback = function()
 					local name = self.Library.Options.FB_ConfigList.Value
 					if not name or name == "" then
-						return self.Library:Notify({ Title = "Floating Buttons", Content = "No layout selected", Duration = 5 })
+						return self.Library:Notify({
+							Title = "Floating Buttons",
+							Content = "No layout selected",
+							Duration = 5,
+						})
 					end
 					local ok, err = self:Save(name)
 					if not ok then
@@ -1621,7 +2067,11 @@ local aa = {
 				Callback = function()
 					local name = self.Library.Options.FB_ConfigList.Value
 					if not name or name == "" then
-						return self.Library:Notify({ Title = "Floating Buttons", Content = "No layout selected", Duration = 5 })
+						return self.Library:Notify({
+							Title = "Floating Buttons",
+							Content = "No layout selected",
+							Duration = 5,
+						})
 					end
 					local path = self.Folder .. "/settings/" .. name .. ".json"
 					if isfile(path) then
@@ -2180,58 +2630,45 @@ local aa = {
 				{ Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ThemeTag = { BackgroundColor3 = "Hover" } },
 				{
 					k("UICorner", { CornerRadius = UDim.new(0, 10) }),
-					k(
-						"UIGradient",
-						{
-							Rotation = 90,
-							Transparency = NumberSequence.new({
-								NumberSequenceKeypoint.new(0, 0.15),
-								NumberSequenceKeypoint.new(0.5, 0.75),
-								NumberSequenceKeypoint.new(1, 0.95),
-							}),
-						}
-					),
-				}
-			)
-			p.Frame = k(
-				"TextButton",
-				{
-					Size = UDim2.new(0, 0, 0, 34),
-					Parent = n,
-					BackgroundTransparency = 0.08,
-					ThemeTag = { BackgroundColor3 = "DialogButton" },
-				},
-				{
-					k("UICorner", { CornerRadius = UDim.new(0, 10) }),
-					k(
-						"UIGradient",
-						{
-							Rotation = 90,
-							Transparency = NumberSequence.new({
-								NumberSequenceKeypoint.new(0, 0.02),
-								NumberSequenceKeypoint.new(0.48, 0.12),
-								NumberSequenceKeypoint.new(1, 0.26),
-							}),
-						}
-					),
-					k(
-						"Frame",
-						{
-							Size = UDim2.new(1, -14, 0, 1),
-							Position = UDim2.fromOffset(7, 1),
-							BackgroundTransparency = 0.68,
-							ThemeTag = { BackgroundColor3 = "Text" },
-						}
-					),
-					k("UIStroke", {
-						ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-						Transparency = 0.38,
-						ThemeTag = { Color = "DialogButtonBorder" },
+					k("UIGradient", {
+						Rotation = 90,
+						Transparency = NumberSequence.new({
+							NumberSequenceKeypoint.new(0, 0.15),
+							NumberSequenceKeypoint.new(0.5, 0.75),
+							NumberSequenceKeypoint.new(1, 0.95),
+						}),
 					}),
-					p.HoverFrame,
-					p.Title,
 				}
 			)
+			p.Frame = k("TextButton", {
+				Size = UDim2.new(0, 0, 0, 34),
+				Parent = n,
+				BackgroundTransparency = 0.08,
+				ThemeTag = { BackgroundColor3 = "DialogButton" },
+			}, {
+				k("UICorner", { CornerRadius = UDim.new(0, 10) }),
+				k("UIGradient", {
+					Rotation = 90,
+					Transparency = NumberSequence.new({
+						NumberSequenceKeypoint.new(0, 0.02),
+						NumberSequenceKeypoint.new(0.48, 0.12),
+						NumberSequenceKeypoint.new(1, 0.26),
+					}),
+				}),
+				k("Frame", {
+					Size = UDim2.new(1, -14, 0, 1),
+					Position = UDim2.fromOffset(7, 1),
+					BackgroundTransparency = 0.68,
+					ThemeTag = { BackgroundColor3 = "Text" },
+				}),
+				k("UIStroke", {
+					ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+					Transparency = 0.38,
+					ThemeTag = { Color = "DialogButtonBorder" },
+				}),
+				p.HoverFrame,
+				p.Title,
+			})
 			local q, r = j.SpringMotor(1, p.HoverFrame, "BackgroundTransparency", o)
 			j.AddSignal(p.Frame.MouseEnter, function()
 				r(0.97)
@@ -2319,25 +2756,19 @@ local aa = {
 				ThemeTag = { BackgroundColor3 = "Dialog" },
 			}, {
 				p("UICorner", { CornerRadius = UDim.new(0, 14) }),
-				p(
-					"UIGradient",
-					{
-						Rotation = 90,
-						Transparency = NumberSequence.new({
-							NumberSequenceKeypoint.new(0, 0.03),
-							NumberSequenceKeypoint.new(1, 0.22),
-						}),
-					}
-				),
-				p(
-					"Frame",
-					{
-						Size = UDim2.new(1, -24, 0, 1),
-						Position = UDim2.fromOffset(12, 1),
-						BackgroundTransparency = 0.76,
-						ThemeTag = { BackgroundColor3 = "Text" },
-					}
-				),
+				p("UIGradient", {
+					Rotation = 90,
+					Transparency = NumberSequence.new({
+						NumberSequenceKeypoint.new(0, 0.03),
+						NumberSequenceKeypoint.new(1, 0.22),
+					}),
+				}),
+				p("Frame", {
+					Size = UDim2.new(1, -24, 0, 1),
+					Position = UDim2.fromOffset(12, 1),
+					BackgroundTransparency = 0.76,
+					ThemeTag = { BackgroundColor3 = "Text" },
+				}),
 				p("UIStroke", { Transparency = 0.38, ThemeTag = { Color = "DialogBorder" } }),
 				s.Scale,
 				s.Title,
@@ -2443,44 +2874,34 @@ local aa = {
 				Color = Color3.fromRGB(0, 0, 0),
 				ThemeTag = { Color = "ElementBorder" },
 			})
-			q.Frame = k(
-				"TextButton",
-				{
-					Size = UDim2.new(1, 0, 0, 0),
-					BackgroundTransparency = 0.93,
-					BackgroundColor3 = Color3.fromRGB(130, 130, 130),
-					Parent = o,
-					AutomaticSize = Enum.AutomaticSize.Y,
-					Text = "",
-					LayoutOrder = 7,
-					ThemeTag = { BackgroundColor3 = "Element", BackgroundTransparency = "ElementTransparency" },
-				},
-				{
-					k("UICorner", { CornerRadius = UDim.new(0, 11) }),
-					k(
-						"UIGradient",
-						{
-							Rotation = 90,
-							Transparency = NumberSequence.new({
-								NumberSequenceKeypoint.new(0, 0.02),
-								NumberSequenceKeypoint.new(0.55, 0.2),
-								NumberSequenceKeypoint.new(1, 0.36),
-							}),
-						}
-					),
-					k(
-						"Frame",
-						{
-							Size = UDim2.new(1, -18, 0, 1),
-							Position = UDim2.fromOffset(9, 1),
-							BackgroundTransparency = 0.86,
-							ThemeTag = { BackgroundColor3 = "Text" },
-						}
-					),
-					q.Border,
-					q.LabelHolder,
-				}
-			)
+			q.Frame = k("TextButton", {
+				Size = UDim2.new(1, 0, 0, 0),
+				BackgroundTransparency = 0.93,
+				BackgroundColor3 = Color3.fromRGB(130, 130, 130),
+				Parent = o,
+				AutomaticSize = Enum.AutomaticSize.Y,
+				Text = "",
+				LayoutOrder = 7,
+				ThemeTag = { BackgroundColor3 = "Element", BackgroundTransparency = "ElementTransparency" },
+			}, {
+				k("UICorner", { CornerRadius = UDim.new(0, 11) }),
+				k("UIGradient", {
+					Rotation = 90,
+					Transparency = NumberSequence.new({
+						NumberSequenceKeypoint.new(0, 0.02),
+						NumberSequenceKeypoint.new(0.55, 0.2),
+						NumberSequenceKeypoint.new(1, 0.36),
+					}),
+				}),
+				k("Frame", {
+					Size = UDim2.new(1, -18, 0, 1),
+					Position = UDim2.fromOffset(9, 1),
+					BackgroundTransparency = 0.86,
+					ThemeTag = { BackgroundColor3 = "Text" },
+				}),
+				q.Border,
+				q.LabelHolder,
+			})
 			function q.SetTitle(r, s)
 				q.TitleLabel.Text = s
 			end
@@ -2663,16 +3084,13 @@ local aa = {
 				Error = Color3.fromRGB(220, 55, 55),
 				Info = Color3.fromRGB(76, 194, 255),
 			})[q.Type or "Info"] or Color3.fromRGB(76, 194, 255)
-			local stripe = n(
-				"Frame",
-				{
-					Size = UDim2.new(0, 3, 1, -18),
-					Position = UDim2.new(0, 8, 0, 9),
-					BackgroundColor3 = stripeCol,
-					BorderSizePixel = 0,
-					ZIndex = 10,
-				}
-			)
+			local stripe = n("Frame", {
+				Size = UDim2.new(0, 3, 1, -18),
+				Position = UDim2.new(0, 8, 0, 9),
+				BackgroundColor3 = stripeCol,
+				BorderSizePixel = 0,
+				ZIndex = 10,
+			})
 			n("UICorner", { CornerRadius = UDim.new(1, 0), Parent = stripe })
 			r.Root = n(
 				"Frame",
@@ -2680,23 +3098,17 @@ local aa = {
 				{
 					r.AcrylicPaint.Frame,
 					n("UICorner", { CornerRadius = UDim.new(0, 13) }),
-					n(
-						"UIStroke",
-						{
-							Transparency = 0.66,
-							ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-							ThemeTag = { Color = "InElementBorder" },
-						}
-					),
-					n(
-						"Frame",
-						{
-							Size = UDim2.new(1, -22, 0, 1),
-							Position = UDim2.fromOffset(11, 1),
-							BackgroundTransparency = 0.82,
-							ThemeTag = { BackgroundColor3 = "Text" },
-						}
-					),
+					n("UIStroke", {
+						Transparency = 0.66,
+						ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+						ThemeTag = { Color = "InElementBorder" },
+					}),
+					n("Frame", {
+						Size = UDim2.new(1, -22, 0, 1),
+						Position = UDim2.fromOffset(11, 1),
+						BackgroundTransparency = 0.82,
+						ThemeTag = { BackgroundColor3 = "Text" },
+					}),
 					r.Title,
 					r.CloseButton,
 					notifCopyBtn,
@@ -2758,63 +3170,45 @@ local aa = {
 		return function(k, l)
 			local m = {}
 			m.Layout = j("UIListLayout", { Padding = UDim.new(0, 7), SortOrder = Enum.SortOrder.LayoutOrder })
-			m.Container = j(
-				"Frame",
-				{
-					Size = UDim2.new(1, -24, 0, 26),
-					Position = UDim2.fromOffset(12, 40),
-					BackgroundTransparency = 1,
-					Name = "Container",
-				},
-				{ m.Layout }
-			)
-			m.Root = j(
-				"Frame",
-				{
-					BackgroundTransparency = 0.92,
-					Size = UDim2.new(1, 0, 0, 48),
-					LayoutOrder = 7,
-					Parent = l,
-					ThemeTag = { BackgroundColor3 = "Element" },
-				},
-				{
-					j("UICorner", { CornerRadius = UDim.new(0, 12) }),
-					j(
-						"UIStroke",
-						{
-							Transparency = 0.68,
-							ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-							ThemeTag = { Color = "InElementBorder" },
-						}
-					),
-					j(
-						"Frame",
-						{
-							Size = UDim2.new(1, -22, 0, 1),
-							Position = UDim2.fromOffset(11, 1),
-							BackgroundTransparency = 0.84,
-							ThemeTag = { BackgroundColor3 = "Text" },
-						}
-					),
-					j("TextLabel", {
-						RichText = true,
-						Text = k,
-						TextTransparency = 0,
-						FontFace = Font.new(
-							"rbxassetid://12187365364",
-							Enum.FontWeight.SemiBold,
-							Enum.FontStyle.Normal
-						),
-						TextSize = 16,
-						TextXAlignment = "Left",
-						TextYAlignment = "Center",
-						Size = UDim2.new(1, -24, 0, 20),
-						Position = UDim2.fromOffset(12, 12),
-						ThemeTag = { TextColor3 = "Text" },
-					}),
-					m.Container,
-				}
-			)
+			m.Container = j("Frame", {
+				Size = UDim2.new(1, -24, 0, 26),
+				Position = UDim2.fromOffset(12, 40),
+				BackgroundTransparency = 1,
+				Name = "Container",
+			}, { m.Layout })
+			m.Root = j("Frame", {
+				BackgroundTransparency = 0.92,
+				Size = UDim2.new(1, 0, 0, 48),
+				LayoutOrder = 7,
+				Parent = l,
+				ThemeTag = { BackgroundColor3 = "Element" },
+			}, {
+				j("UICorner", { CornerRadius = UDim.new(0, 12) }),
+				j("UIStroke", {
+					Transparency = 0.68,
+					ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+					ThemeTag = { Color = "InElementBorder" },
+				}),
+				j("Frame", {
+					Size = UDim2.new(1, -22, 0, 1),
+					Position = UDim2.fromOffset(11, 1),
+					BackgroundTransparency = 0.84,
+					ThemeTag = { BackgroundColor3 = "Text" },
+				}),
+				j("TextLabel", {
+					RichText = true,
+					Text = k,
+					TextTransparency = 0,
+					FontFace = Font.new("rbxassetid://12187365364", Enum.FontWeight.SemiBold, Enum.FontStyle.Normal),
+					TextSize = 16,
+					TextXAlignment = "Left",
+					TextYAlignment = "Center",
+					Size = UDim2.new(1, -24, 0, 20),
+					Position = UDim2.fromOffset(12, 12),
+					ThemeTag = { TextColor3 = "Text" },
+				}),
+				m.Container,
+			})
 			i.AddSignal(m.Layout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
 				m.Container.Size = UDim2.new(1, -24, 0, m.Layout.AbsoluteContentSize.Y)
 				m.Root.Size = UDim2.new(1, 0, 0, m.Layout.AbsoluteContentSize.Y + 54)
@@ -2858,14 +3252,11 @@ local aa = {
 				ThemeTag = { BackgroundColor3 = "Tab" },
 			}, {
 				k("UICorner", { CornerRadius = UDim.new(0, 11) }),
-				k(
-					"UIStroke",
-					{
-						Transparency = 0.82,
-						ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-						ThemeTag = { Color = "InElementBorder" },
-					}
-				),
+				k("UIStroke", {
+					Transparency = 0.82,
+					ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+					ThemeTag = { Color = "InElementBorder" },
+				}),
 				k("TextLabel", {
 					AnchorPoint = Vector2.new(0, 0.5),
 					Position = (r ~= nil) and UDim2.new(0, 30, 0.5, 0) or UDim2.new(0, 12, 0.5, 0),
@@ -3035,16 +3426,13 @@ local aa = {
 				ThemeTag = { BackgroundColor3 = n and "Input" or "DialogInput" },
 			}, {
 				l("UICorner", { CornerRadius = UDim.new(0, 10) }),
-				l(
-					"UIGradient",
-					{
-						Rotation = 90,
-						Transparency = NumberSequence.new({
-							NumberSequenceKeypoint.new(0, 0.03),
-							NumberSequenceKeypoint.new(1, 0.25),
-						}),
-					}
-				),
+				l("UIGradient", {
+					Rotation = 90,
+					Transparency = NumberSequence.new({
+						NumberSequenceKeypoint.new(0, 0.03),
+						NumberSequenceKeypoint.new(1, 0.25),
+					}),
+				}),
 				l("UIStroke", {
 					ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
 					Transparency = n and 0.62 or 0.5,
@@ -3355,15 +3743,12 @@ local aa = {
 						Position = UDim2.new(0, 49, 0, 30),
 						ThemeTag = { TextColor3 = "SubText" },
 					}),
-					s(
-						"Frame",
-						{
-							Size = UDim2.new(1, -10, 0, 1),
-							Position = UDim2.new(0, 5, 1, -1),
-							BackgroundTransparency = 0.7,
-							ThemeTag = { BackgroundColor3 = "TitleBarLine" },
-						}
-					),
+					s("Frame", {
+						Size = UDim2.new(1, -10, 0, 1),
+						Position = UDim2.new(0, 5, 1, -1),
+						BackgroundTransparency = 0.7,
+						ThemeTag = { BackgroundColor3 = "TitleBarLine" },
+					}),
 				})
 
 				local eyeBtn = s("TextButton", {
@@ -3497,15 +3882,12 @@ local aa = {
 				}, {
 					mkCorner(8),
 					mkStroke(0.55),
-					s(
-						"Frame",
-						{
-							Size = UDim2.new(1, -10, 0, 1),
-							Position = UDim2.new(0, 5, 0, 0),
-							BackgroundTransparency = 0.7,
-							ThemeTag = { BackgroundColor3 = "TitleBarLine" },
-						}
-					),
+					s("Frame", {
+						Size = UDim2.new(1, -10, 0, 1),
+						Position = UDim2.new(0, 5, 0, 0),
+						BackgroundTransparency = 0.7,
+						ThemeTag = { BackgroundColor3 = "TitleBarLine" },
+					}),
 					s("ImageLabel", {
 						Size = UDim2.fromOffset(34, 34),
 						Position = UDim2.new(0, 7, 0.5, 0),
@@ -3728,25 +4110,19 @@ local aa = {
 				ThemeTag = { BackgroundColor3 = "AcrylicMain" },
 			}, sidebarChildren)
 			s("UICorner", { CornerRadius = UDim.new(0, 14), Parent = F })
-			s(
-				"UIStroke",
-				{
-					Transparency = 0.72,
-					ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-					ThemeTag = { Color = "AcrylicBorder" },
-					Parent = F,
-				}
-			)
-			s(
-				"Frame",
-				{
-					Size = UDim2.new(1, -20, 0, 1),
-					Position = UDim2.fromOffset(10, 1),
-					BackgroundTransparency = 0.84,
-					ThemeTag = { BackgroundColor3 = "Text" },
-					Parent = F,
-				}
-			)
+			s("UIStroke", {
+				Transparency = 0.72,
+				ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+				ThemeTag = { Color = "AcrylicBorder" },
+				Parent = F,
+			})
+			s("Frame", {
+				Size = UDim2.new(1, -20, 0, 1),
+				Position = UDim2.fromOffset(10, 1),
+				BackgroundTransparency = 0.84,
+				ThemeTag = { BackgroundColor3 = "Text" },
+				Parent = F,
+			})
 			v.TabDisplay = s("TextLabel", {
 				RichText = true,
 				Text = "Tab",
@@ -3760,26 +4136,19 @@ local aa = {
 				BackgroundTransparency = 1,
 				ThemeTag = { TextColor3 = "Text" },
 			})
-			v.ContainerHolder = s(
-				"CanvasGroup",
-				{
-					Size = UDim2.new(1, -t.TabWidth - 32, 1, -102),
-					Position = UDim2.fromOffset(t.TabWidth + 26, 90),
-					BackgroundTransparency = 0.965,
-					ThemeTag = { BackgroundColor3 = "AcrylicMain" },
-				},
-				{
-					s("UICorner", { CornerRadius = UDim.new(0, 14) }),
-					s(
-						"UIStroke",
-						{
-							Transparency = 0.86,
-							ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-							ThemeTag = { Color = "AcrylicBorder" },
-						}
-					),
-				}
-			)
+			v.ContainerHolder = s("CanvasGroup", {
+				Size = UDim2.new(1, -t.TabWidth - 32, 1, -102),
+				Position = UDim2.fromOffset(t.TabWidth + 26, 90),
+				BackgroundTransparency = 0.965,
+				ThemeTag = { BackgroundColor3 = "AcrylicMain" },
+			}, {
+				s("UICorner", { CornerRadius = UDim.new(0, 14) }),
+				s("UIStroke", {
+					Transparency = 0.86,
+					ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+					ThemeTag = { Color = "AcrylicBorder" },
+				}),
+			})
 			v.Root = s(
 				"Frame",
 				{ BackgroundTransparency = 1, Size = v.Size, Position = v.Position, Parent = t.Parent },
@@ -4790,24 +5159,18 @@ local aa = {
 			local uChildren = {
 				t,
 				e("UICorner", { CornerRadius = UDim.new(0, 12) }),
-				e(
-					"UIGradient",
-					{
-						Rotation = 90,
-						Transparency = NumberSequence.new({
-							NumberSequenceKeypoint.new(0, 0.04),
-							NumberSequenceKeypoint.new(1, 0.2),
-						}),
-					}
-				),
-				e(
-					"UIStroke",
-					{
-						Transparency = 0.36,
-						ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-						ThemeTag = { Color = "DropdownBorder" },
-					}
-				),
+				e("UIGradient", {
+					Rotation = 90,
+					Transparency = NumberSequence.new({
+						NumberSequenceKeypoint.new(0, 0.04),
+						NumberSequenceKeypoint.new(1, 0.2),
+					}),
+				}),
+				e("UIStroke", {
+					Transparency = 0.36,
+					ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+					ThemeTag = { Color = "DropdownBorder" },
+				}),
 				e("ImageLabel", {
 					BackgroundTransparency = 1,
 					Image = "http://www.roblox.com/asset/?id=5554236805",
@@ -4827,16 +5190,12 @@ local aa = {
 				{ Size = UDim2.fromScale(1, 0.6), ThemeTag = { BackgroundColor3 = "DropdownHolder" } },
 				uChildren
 			)
-			local v = e(
-				"Frame",
-				{
-					BackgroundTransparency = 1,
-					Size = UDim2.fromOffset(170, 300),
-					Parent = h.Library.PopupGUI or h.Library.GUI,
-					Visible = false,
-				},
-				{ u, e("UISizeConstraint", { MinSize = Vector2.new(170, 0) }) }
-			)
+			local v = e("Frame", {
+				BackgroundTransparency = 1,
+				Size = UDim2.fromOffset(170, 300),
+				Parent = h.Library.PopupGUI or h.Library.GUI,
+				Visible = false,
+			}, { u, e("UISizeConstraint", { MinSize = Vector2.new(170, 0) }) })
 			table.insert(k.OpenFrames, v)
 			local w, x =
 				function()
@@ -5027,28 +5386,20 @@ local aa = {
 								BackgroundTransparency = 1,
 								ZIndex = 25,
 							})
-							e(
-								"Frame",
-								{
-									Size = UDim2.fromOffset(19, 19),
-									Position = UDim2.fromOffset(0, 1),
-									BackgroundColor3 = bgC,
-									ZIndex = 25,
-									Parent = sw,
-								},
-								{ e("UICorner", { CornerRadius = UDim.new(0, 4) }) }
-							)
-							e(
-								"Frame",
-								{
-									Size = UDim2.fromOffset(19, 19),
-									Position = UDim2.fromOffset(22, 1),
-									BackgroundColor3 = elC,
-									ZIndex = 25,
-									Parent = sw,
-								},
-								{ e("UICorner", { CornerRadius = UDim.new(0, 4) }) }
-							)
+							e("Frame", {
+								Size = UDim2.fromOffset(19, 19),
+								Position = UDim2.fromOffset(0, 1),
+								BackgroundColor3 = bgC,
+								ZIndex = 25,
+								Parent = sw,
+							}, { e("UICorner", { CornerRadius = UDim.new(0, 4) }) })
+							e("Frame", {
+								Size = UDim2.fromOffset(19, 19),
+								Position = UDim2.fromOffset(22, 1),
+								BackgroundColor3 = elC,
+								ZIndex = 25,
+								Parent = sw,
+							}, { e("UICorner", { CornerRadius = UDim.new(0, 4) }) })
 							if #acC > 1 then
 								local sw2 = math.floor(19 / #acC)
 								for _ci, col in ipairs(acC) do
@@ -5061,24 +5412,22 @@ local aa = {
 											ZIndex = 25,
 											Parent = sw,
 										},
-										{ e(
-											"UICorner",
-											{ CornerRadius = UDim.new(0, (_ci == 1 or _ci == #acC) and 4 or 0) }
-										) }
+										{
+											e(
+												"UICorner",
+												{ CornerRadius = UDim.new(0, (_ci == 1 or _ci == #acC) and 4 or 0) }
+											),
+										}
 									)
 								end
 							else
-								e(
-									"Frame",
-									{
-										Size = UDim2.fromOffset(19, 19),
-										Position = UDim2.fromOffset(44, 1),
-										BackgroundColor3 = acC[1],
-										ZIndex = 25,
-										Parent = sw,
-									},
-									{ e("UICorner", { CornerRadius = UDim.new(0, 4) }) }
-								)
+								e("Frame", {
+									Size = UDim2.fromOffset(19, 19),
+									Position = UDim2.fromOffset(44, 1),
+									BackgroundColor3 = acC[1],
+									ZIndex = 25,
+									Parent = sw,
+								}, { e("UICorner", { CornerRadius = UDim.new(0, 4) }) })
 							end
 							table.insert(swatches, sw)
 							L.Size = UDim2.new(1, -82, 1, 0)
@@ -5596,23 +5945,16 @@ local aa = {
 					{ BackgroundTransparency = 1, Position = UDim2.fromOffset(10, 0), Size = UDim2.new(1, -20, 1, 0) },
 					{ k }
 				),
-				ai(
-					"Frame",
-					{ Size = UDim2.new(0, 0, 1, 0), ThemeTag = { BackgroundColor3 = "Accent" } },
-					{
-						ai("UICorner", { CornerRadius = UDim.new(1, 0) }),
-						ai(
-							"UIGradient",
-							{
-								Rotation = 0,
-								Transparency = NumberSequence.new({
-									NumberSequenceKeypoint.new(0, 0.0),
-									NumberSequenceKeypoint.new(1, 0.18),
-								}),
-							}
-						),
-					}
-				),
+				ai("Frame", { Size = UDim2.new(0, 0, 1, 0), ThemeTag = { BackgroundColor3 = "Accent" } }, {
+					ai("UICorner", { CornerRadius = UDim.new(1, 0) }),
+					ai("UIGradient", {
+						Rotation = 0,
+						Transparency = NumberSequence.new({
+							NumberSequenceKeypoint.new(0, 0.0),
+							NumberSequenceKeypoint.new(1, 0.18),
+						}),
+					}),
+				}),
 				ai("TextLabel", {
 					FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Medium),
 					Text = "Value",
@@ -5718,32 +6060,25 @@ local aa = {
 					ImageTransparency = 0.08,
 					ThemeTag = { ImageColor3 = "ToggleToggled" },
 				}), ai("UIStroke", { Transparency = 0.52, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, ThemeTag = { Color = "ToggleSlider" } })
-			local l = ai(
-				"Frame",
-				{
-					Size = UDim2.fromOffset(44, 22),
-					AnchorPoint = Vector2.new(1, 0.5),
-					Position = UDim2.new(1, -10, 0.5, 0),
-					Parent = i.Frame,
-					BackgroundTransparency = 0.86,
-					ThemeTag = { BackgroundColor3 = "Accent" },
-				},
-				{
-					ai("UICorner", { CornerRadius = UDim.new(1, 0) }),
-					ai(
-						"UIGradient",
-						{
-							Rotation = 90,
-							Transparency = NumberSequence.new({
-								NumberSequenceKeypoint.new(0, 0.05),
-								NumberSequenceKeypoint.new(1, 0.35),
-							}),
-						}
-					),
-					k,
-					j,
-				}
-			)
+			local l = ai("Frame", {
+				Size = UDim2.fromOffset(44, 22),
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -10, 0.5, 0),
+				Parent = i.Frame,
+				BackgroundTransparency = 0.86,
+				ThemeTag = { BackgroundColor3 = "Accent" },
+			}, {
+				ai("UICorner", { CornerRadius = UDim.new(1, 0) }),
+				ai("UIGradient", {
+					Rotation = 90,
+					Transparency = NumberSequence.new({
+						NumberSequenceKeypoint.new(0, 0.05),
+						NumberSequenceKeypoint.new(1, 0.35),
+					}),
+				}),
+				k,
+				j,
+			})
 			function h.OnChanged(m, n)
 				h.Changed = n
 				n(h.Value)
@@ -5970,33 +6305,33 @@ local aa = {
 				Parent = wrap,
 			})
 			u("UICorner", { CornerRadius = UDim.new(0, radius), Parent = controls })
-			u(
-				"UIListLayout",
-				{
-					FillDirection = Enum.FillDirection.Horizontal,
-					VerticalAlignment = Enum.VerticalAlignment.Center,
-					Padding = UDim.new(0, 4),
-					Parent = controls,
-				}
-			)
+			u("UIListLayout", {
+				FillDirection = Enum.FillDirection.Horizontal,
+				VerticalAlignment = Enum.VerticalAlignment.Center,
+				Padding = UDim.new(0, 4),
+				Parent = controls,
+			})
 			u("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6), Parent = controls })
 			local function ctrlBtn(iconName, cb)
 				local btn = u(
 					"TextButton",
-					{ Size = UDim2.fromOffset(22, 22), BackgroundTransparency = 1, Text = "", ZIndex = 5, Parent = controls }
-				)
-				local icImg = u(
-					"ImageLabel",
 					{
-						Size = UDim2.fromOffset(16, 16),
-						Position = UDim2.new(0.5, 0, 0.5, 0),
-						AnchorPoint = Vector2.new(0.5, 0.5),
+						Size = UDim2.fromOffset(22, 22),
 						BackgroundTransparency = 1,
-						ZIndex = 6,
-						Parent = btn,
-						ThemeTag = { ImageColor3 = "Text" },
+						Text = "",
+						ZIndex = 5,
+						Parent = controls,
 					}
 				)
+				local icImg = u("ImageLabel", {
+					Size = UDim2.fromOffset(16, 16),
+					Position = UDim2.new(0.5, 0, 0.5, 0),
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					BackgroundTransparency = 1,
+					ZIndex = 6,
+					Parent = btn,
+					ThemeTag = { ImageColor3 = "Text" },
+				})
 				applyIcon(icImg, iconName)
 				btn.MouseButton1Click:Connect(function()
 					pcall(cb)
@@ -6063,30 +6398,24 @@ local aa = {
 						end
 					end
 				end)
-				local volImg = u(
-					"ImageLabel",
-					{
-						Size = UDim2.fromOffset(14, 14),
-						BackgroundTransparency = 1,
-						ZIndex = 5,
-						Parent = controls,
-						ThemeTag = { ImageColor3 = "SubText" },
-					}
-				)
+				local volImg = u("ImageLabel", {
+					Size = UDim2.fromOffset(14, 14),
+					BackgroundTransparency = 1,
+					ZIndex = 5,
+					Parent = controls,
+					ThemeTag = { ImageColor3 = "SubText" },
+				})
 				applyIcon(volImg, "solar/volume-loud-bold")
-				local volLbl = u(
-					"TextLabel",
-					{
-						Size = UDim2.fromOffset(24, 22),
-						BackgroundTransparency = 1,
-						Text = tostring(math.floor(vol * 100)) .. "%",
-						TextSize = 10,
-						Font = Enum.Font.Gotham,
-						ZIndex = 5,
-						Parent = controls,
-						ThemeTag = { TextColor3 = "SubText" },
-					}
-				)
+				local volLbl = u("TextLabel", {
+					Size = UDim2.fromOffset(24, 22),
+					BackgroundTransparency = 1,
+					Text = tostring(math.floor(vol * 100)) .. "%",
+					TextSize = 10,
+					Font = Enum.Font.Gotham,
+					ZIndex = 5,
+					Parent = controls,
+					ThemeTag = { TextColor3 = "SubText" },
+				})
 				if auto and syncResolved ~= "" then
 					task.spawn(function()
 						task.wait(0.05)
@@ -6264,20 +6593,23 @@ local aa = {
 			if hasVideo and vid then
 				local floatToggleBtn = u(
 					"TextButton",
-					{ Size = UDim2.fromOffset(22, 22), BackgroundTransparency = 1, Text = "", ZIndex = 5, Parent = controls }
-				)
-				local floatIcWrap = u(
-					"ImageLabel",
 					{
-						Size = UDim2.fromOffset(16, 16),
-						Position = UDim2.new(0.5, 0, 0.5, 0),
-						AnchorPoint = Vector2.new(0.5, 0.5),
+						Size = UDim2.fromOffset(22, 22),
 						BackgroundTransparency = 1,
-						ZIndex = 6,
-						Parent = floatToggleBtn,
-						ThemeTag = { ImageColor3 = "Text" },
+						Text = "",
+						ZIndex = 5,
+						Parent = controls,
 					}
 				)
+				local floatIcWrap = u("ImageLabel", {
+					Size = UDim2.fromOffset(16, 16),
+					Position = UDim2.new(0.5, 0, 0.5, 0),
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					BackgroundTransparency = 1,
+					ZIndex = 6,
+					Parent = floatToggleBtn,
+					ThemeTag = { ImageColor3 = "Text" },
+				})
 				applyIcon(floatIcWrap, "solar/maximize-square-bold")
 				floatBtn = floatToggleBtn
 				local lp = game:GetService("Players").LocalPlayer
@@ -6756,102 +7088,81 @@ local aa = {
 			local code = D.Code or ""
 			local title = D.Title or ""
 			local cb = D.OnCopy
-			local wrap = u(
-				"Frame",
-				{
-					Size = UDim2.new(1, 0, 0, 0),
-					BackgroundTransparency = 0.88,
-					AutomaticSize = Enum.AutomaticSize.Y,
-					Parent = parent,
-					ThemeTag = { BackgroundColor3 = "Element" },
-				}
-			)
+			local wrap = u("Frame", {
+				Size = UDim2.new(1, 0, 0, 0),
+				BackgroundTransparency = 0.88,
+				AutomaticSize = Enum.AutomaticSize.Y,
+				Parent = parent,
+				ThemeTag = { BackgroundColor3 = "Element" },
+			})
 			u("UICorner", { CornerRadius = UDim.new(0, 8), Parent = wrap })
 			u(
 				"UIStroke",
 				{ Transparency = 0.7, Thickness = 1, ThemeTag = { Color = "InElementBorder" }, Parent = wrap }
 			)
-			u(
-				"UIPadding",
-				{
-					PaddingTop = UDim.new(0, 8),
-					PaddingBottom = UDim.new(0, 8),
-					PaddingLeft = UDim.new(0, 10),
-					PaddingRight = UDim.new(0, 36),
-					Parent = wrap,
-				}
-			)
+			u("UIPadding", {
+				PaddingTop = UDim.new(0, 8),
+				PaddingBottom = UDim.new(0, 8),
+				PaddingLeft = UDim.new(0, 10),
+				PaddingRight = UDim.new(0, 36),
+				Parent = wrap,
+			})
 			local lbl
 			if title ~= "" then
-				lbl = u(
-					"TextLabel",
-					{
-						FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold),
-						Text = title,
-						TextSize = 11,
-						TextXAlignment = Enum.TextXAlignment.Left,
-						BackgroundTransparency = 1,
-						Size = UDim2.new(1, 0, 0, 14),
-						AutomaticSize = Enum.AutomaticSize.None,
-						LayoutOrder = 1,
-						Parent = wrap,
-						ThemeTag = { TextColor3 = "SubText" },
-					}
-				)
-			end
-			local codeLabel = u(
-				"TextLabel",
-				{
-					FontFace = Font.new("rbxasset://fonts/families/RobotoMono.json"),
-					Text = code,
-					TextSize = 12,
+				lbl = u("TextLabel", {
+					FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.SemiBold),
+					Text = title,
+					TextSize = 11,
 					TextXAlignment = Enum.TextXAlignment.Left,
-					TextWrapped = true,
-					RichText = false,
 					BackgroundTransparency = 1,
-					Size = UDim2.new(1, 0, 0, 0),
-					AutomaticSize = Enum.AutomaticSize.Y,
-					LayoutOrder = 2,
+					Size = UDim2.new(1, 0, 0, 14),
+					AutomaticSize = Enum.AutomaticSize.None,
+					LayoutOrder = 1,
 					Parent = wrap,
-					ThemeTag = { TextColor3 = "Text" },
-				}
-			)
-			if title ~= "" then
-				u(
-					"UIListLayout",
-					{
-						FillDirection = Enum.FillDirection.Vertical,
-						Padding = UDim.new(0, 4),
-						SortOrder = Enum.SortOrder.LayoutOrder,
-						Parent = wrap,
-					}
-				)
+					ThemeTag = { TextColor3 = "SubText" },
+				})
 			end
-			local copyBtn = u(
-				"TextButton",
-				{
-					Size = UDim2.fromOffset(24, 24),
-					Position = UDim2.new(1, 4, 0, 6),
-					AnchorPoint = Vector2.new(0, 0),
-					BackgroundTransparency = 0.7,
-					Text = "",
-					ZIndex = 3,
+			local codeLabel = u("TextLabel", {
+				FontFace = Font.new("rbxasset://fonts/families/RobotoMono.json"),
+				Text = code,
+				TextSize = 12,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextWrapped = true,
+				RichText = false,
+				BackgroundTransparency = 1,
+				Size = UDim2.new(1, 0, 0, 0),
+				AutomaticSize = Enum.AutomaticSize.Y,
+				LayoutOrder = 2,
+				Parent = wrap,
+				ThemeTag = { TextColor3 = "Text" },
+			})
+			if title ~= "" then
+				u("UIListLayout", {
+					FillDirection = Enum.FillDirection.Vertical,
+					Padding = UDim.new(0, 4),
+					SortOrder = Enum.SortOrder.LayoutOrder,
 					Parent = wrap,
-					ThemeTag = { BackgroundColor3 = "Tab" },
-				}
-			)
+				})
+			end
+			local copyBtn = u("TextButton", {
+				Size = UDim2.fromOffset(24, 24),
+				Position = UDim2.new(1, 4, 0, 6),
+				AnchorPoint = Vector2.new(0, 0),
+				BackgroundTransparency = 0.7,
+				Text = "",
+				ZIndex = 3,
+				Parent = wrap,
+				ThemeTag = { BackgroundColor3 = "Tab" },
+			})
 			u("UICorner", { CornerRadius = UDim.new(0, 6), Parent = copyBtn })
-			local copyIconImg = u(
-				"ImageLabel",
-				{
-					Size = UDim2.fromOffset(14, 14),
-					Position = UDim2.new(0.5, 0, 0.5, 0),
-					AnchorPoint = Vector2.new(0.5, 0.5),
-					BackgroundTransparency = 1,
-					Parent = copyBtn,
-					ThemeTag = { ImageColor3 = "SubText" },
-				}
-			)
+			local copyIconImg = u("ImageLabel", {
+				Size = UDim2.fromOffset(14, 14),
+				Position = UDim2.new(0.5, 0, 0.5, 0),
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				BackgroundTransparency = 1,
+				Parent = copyBtn,
+				ThemeTag = { ImageColor3 = "SubText" },
+			})
 			local copyIc = d.Library and d.Library:GetIcon("solar/copy-bold")
 			if copyIc and type(copyIc) == "table" then
 				copyIconImg.Image = copyIc.Image or ""
@@ -6901,37 +7212,36 @@ local aa = {
 			local cols = D.Columns or 2
 			local wrap = u(
 				"Frame",
-				{ Size = UDim2.new(1, 0, 0, 0), BackgroundTransparency = 1, AutomaticSize = Enum.AutomaticSize.Y, Parent = parent }
+				{
+					Size = UDim2.new(1, 0, 0, 0),
+					BackgroundTransparency = 1,
+					AutomaticSize = Enum.AutomaticSize.Y,
+					Parent = parent,
+				}
 			)
 			local totalGap = gap * (cols - 1)
 			local colScale = 1 / cols
 			local colOffset = -math.floor(totalGap / cols + 0.5)
-			u(
-				"UIListLayout",
-				{
-					FillDirection = Enum.FillDirection.Horizontal,
-					HorizontalAlignment = Enum.HorizontalAlignment.Left,
-					VerticalAlignment = Enum.VerticalAlignment.Top,
-					Wraps = false,
-					Padding = UDim.new(0, gap),
-					Parent = wrap,
-				}
-			)
+			u("UIListLayout", {
+				FillDirection = Enum.FillDirection.Horizontal,
+				HorizontalAlignment = Enum.HorizontalAlignment.Left,
+				VerticalAlignment = Enum.VerticalAlignment.Top,
+				Wraps = false,
+				Padding = UDim.new(0, gap),
+				Parent = wrap,
+			})
 			local colW = colScale
 			local mod = { Frame = wrap, Type = "Group", Elements = {}, _section = nil }
 			function mod:SetSection(sec)
 				self._section = sec
 			end
 			function mod:AddElement()
-				local el = u(
-					"Frame",
-					{
-						Size = UDim2.new(colW, colOffset, 0, 0),
-						BackgroundTransparency = 1,
-						AutomaticSize = Enum.AutomaticSize.Y,
-						Parent = wrap,
-					}
-				)
+				local el = u("Frame", {
+					Size = UDim2.new(colW, colOffset, 0, 0),
+					BackgroundTransparency = 1,
+					AutomaticSize = Enum.AutomaticSize.Y,
+					Parent = wrap,
+				})
 				local sec = self._section
 				-- build a column proxy that shares all Add* methods from section
 				-- but points Container to this column frame
@@ -6965,16 +7275,13 @@ local aa = {
 			end
 			local u = ac(af.Creator).New
 			local h = D.Height or 8
-			local sp = u(
-				"Frame",
-				{
-					Size = UDim2.new(1, 0, 0, h),
-					BackgroundTransparency = 1,
-					BorderSizePixel = 0,
-					LayoutOrder = d._pendingElementLayoutOrder or 0,
-					Parent = parent,
-				}
-			)
+			local sp = u("Frame", {
+				Size = UDim2.new(1, 0, 0, h),
+				BackgroundTransparency = 1,
+				BorderSizePixel = 0,
+				LayoutOrder = d._pendingElementLayoutOrder or 0,
+				Parent = parent,
+			})
 			local mod = { Frame = sp, Type = "Space" }
 			function mod:Destroy()
 				sp:Destroy()
@@ -6995,17 +7302,14 @@ local aa = {
 				return
 			end
 			local u = ac(af.Creator).New
-			local dv = u(
-				"Frame",
-				{
-					Size = UDim2.new(1, -10, 0, 1),
-					BackgroundTransparency = 0.5,
-					BorderSizePixel = 0,
-					LayoutOrder = d._pendingElementLayoutOrder or 0,
-					Parent = parent,
-					ThemeTag = { BackgroundColor3 = "TitleBarLine" },
-				}
-			)
+			local dv = u("Frame", {
+				Size = UDim2.new(1, -10, 0, 1),
+				BackgroundTransparency = 0.5,
+				BorderSizePixel = 0,
+				LayoutOrder = d._pendingElementLayoutOrder or 0,
+				Parent = parent,
+				ThemeTag = { BackgroundColor3 = "TitleBarLine" },
+			})
 			local mod = { Frame = dv, Type = "Divider" }
 			function mod:Destroy()
 				dv:Destroy()
@@ -7115,16 +7419,13 @@ local aa = {
 				"UIStroke",
 				{ Transparency = 0.6, Thickness = 1, ThemeTag = { Color = "InElementBorder" }, Parent = wrap }
 			)
-			u(
-				"UIPadding",
-				{
-					PaddingLeft = UDim.new(0, 10),
-					PaddingRight = UDim.new(0, 10),
-					PaddingTop = UDim.new(0, 10),
-					PaddingBottom = UDim.new(0, 10),
-					Parent = wrap,
-				}
-			)
+			u("UIPadding", {
+				PaddingLeft = UDim.new(0, 10),
+				PaddingRight = UDim.new(0, 10),
+				PaddingTop = UDim.new(0, 10),
+				PaddingBottom = UDim.new(0, 10),
+				Parent = wrap,
+			})
 			local topRow = u("Frame", {
 				Size = UDim2.new(1, 0, 0, hasLabels and 38 or 28),
 				BackgroundTransparency = 1,
@@ -7185,33 +7486,33 @@ local aa = {
 				Visible = hasAudio,
 				Parent = topRow,
 			})
-			u(
-				"UIListLayout",
-				{
-					FillDirection = Enum.FillDirection.Horizontal,
-					VerticalAlignment = Enum.VerticalAlignment.Center,
-					HorizontalAlignment = Enum.HorizontalAlignment.Right,
-					Padding = UDim.new(0, 4),
-					Parent = controls,
-				}
-			)
+			u("UIListLayout", {
+				FillDirection = Enum.FillDirection.Horizontal,
+				VerticalAlignment = Enum.VerticalAlignment.Center,
+				HorizontalAlignment = Enum.HorizontalAlignment.Right,
+				Padding = UDim.new(0, 4),
+				Parent = controls,
+			})
 			local function ctrlBtn(iconName, cb)
 				local btn = u(
 					"TextButton",
-					{ Size = UDim2.fromOffset(24, 24), BackgroundTransparency = 1, Text = "", ZIndex = 3, Parent = controls }
-				)
-				local icImg = u(
-					"ImageLabel",
 					{
-						Size = UDim2.fromOffset(16, 16),
-						Position = UDim2.new(0.5, 0, 0.5, 0),
-						AnchorPoint = Vector2.new(0.5, 0.5),
+						Size = UDim2.fromOffset(24, 24),
 						BackgroundTransparency = 1,
-						ZIndex = 4,
-						Parent = btn,
-						ThemeTag = { ImageColor3 = "Text" },
+						Text = "",
+						ZIndex = 3,
+						Parent = controls,
 					}
 				)
+				local icImg = u("ImageLabel", {
+					Size = UDim2.fromOffset(16, 16),
+					Position = UDim2.new(0.5, 0, 0.5, 0),
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					BackgroundTransparency = 1,
+					ZIndex = 4,
+					Parent = btn,
+					ThemeTag = { ImageColor3 = "Text" },
+				})
 				applyAudioIcon(icImg, iconName)
 				btn.MouseButton1Click:Connect(function()
 					pcall(cb)
@@ -9234,7 +9535,11 @@ local aa = {
 			Background = nil,
 			BackgroundTransparency = 0,
 			IsRGB = true,
-			ThemeAccentColors = { Color3.fromRGB(0, 255, 180), Color3.fromRGB(120, 0, 255), Color3.fromRGB(255, 0, 150) },
+			ThemeAccentColors = {
+				Color3.fromRGB(0, 255, 180),
+				Color3.fromRGB(120, 0, 255),
+				Color3.fromRGB(255, 0, 150),
+			},
 		}
 
 		af["Neon Cyber"] = {
