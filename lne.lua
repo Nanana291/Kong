@@ -51,7 +51,11 @@ local function __INIT__()
         Success = Color3.fromRGB(64, 180, 80),
     }
 
-    local KEY_LINK = "https://imphub.vercel.app/GetKeyAccess"
+    local KEY_LINK_OPTIONS = {
+        "https://ads.luarmor.net/get_key?for=Linkvertise-sIZolnelAlpU",
+        "https://ads.luarmor.net/get_key?for=Rinku_Pro-usjtvfvsONpS",
+    }
+    local KEY_LINK = KEY_LINK_OPTIONS[math.random(1, #KEY_LINK_OPTIONS)]
 
     local State = {
         Dragging = false,
@@ -1825,7 +1829,8 @@ local function __INIT__()
     end
 
     function Loader:SetKeyLink(url)
-        KEY_LINK = tostring(url)
+        -- Ignorado a propósito: el link siempre se elige al azar entre
+        -- KEY_LINK_OPTIONS, sin importar lo que la API externa envíe aquí.
     end
 
     function Loader:SetExpiry(seconds)
