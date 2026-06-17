@@ -52,8 +52,8 @@ local function __INIT__()
     }
 
     local KEY_LINK_OPTIONS = {
-        "https://ads.luarmor.net/get_key?for=Linkvertise-sIZolnelAlpU",
-        "https://ads.luarmor.net/get_key?for=Rinku_Pro-usjtvfvsONpS",
+        "https://imphub.vercel.app/GetKeyAccess",
+        "https://imphub.vercel.app/GetKeyAccess",
     }
     local KEY_LINK = KEY_LINK_OPTIONS[math.random(1, #KEY_LINK_OPTIONS)]
 
