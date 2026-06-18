@@ -623,8 +623,6 @@ local function createWindow(config)
             passInput.CursorPosition = #passInput.Text + 1
         end)
     end)
-    -- Expose the real (unmasked) password value
-    passContainer.GetValue = function() return passBuffer end
 
     local continueBtn = makeButton({
         Parent     = content,
