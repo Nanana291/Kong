@@ -744,11 +744,10 @@ end
 
 -- ============================================================
 -- MODULE EXPORT
--- Returns a factory function so `loadfile("UI.lua")()` works.
+-- The file returns its table directly so that
+-- `local UI = loadfile("UI.lua")()` gives you the API table.
 -- ============================================================
-return function()
-    return {
-        CreateWindow = createWindow,
-        Theme        = Theme,
-    }
-end
+return {
+    CreateWindow = createWindow,
+    Theme        = Theme,
+}
