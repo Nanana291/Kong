@@ -573,14 +573,58 @@ local function createWindow(config)
         Name        = "Username",
     })
 
-    local _, passInput = makeInput({
+    local passContainer, passInput = makeInput({
         Parent      = content,
         Size        = UDim2.new(1, 0, 0, inputH),
         Position    = UDim2.new(0, 0, 0, formY + inputH + gap),
         Placeholder = "Enter password",
         Name        = "Password",
     })
-    passInput.TextSecure = true
+    -- Mask typed characters as dots (Roblox TextBox has no native
+    -- password mode, so we intercept keystrokes manually).
+    local passBuffer = ""
+    local masking    = false
+    passInput:GetPropertyChangedSignal("Text"):Connect(function()
+        if masking then return end
+        local new = passInput.Text
+        -- Determine what was added/removed by comparing to the buffer.
+        if #new > #passBuffer then
+            -- characters appended; only consume the trailing difference
+            local added = new:sub(#passBuffer + 1)
+            -- If the user pasted, treat all added chars as real
+            passBuffer = passBuffer .. added
+        elseif #new < #passBuffer then
+            -- characters deleted from the end
+            passBuffer = passBuffer:sub(1, #new)
+        elseif #new == #passBuffer and new ~= passBuffer then
+            -- some character was replaced in the middle; rebuild
+            -- by scanning for the changed index
+            local diffIdx
+            for i = 1, #new do
+                if new:sub(i, i) ~= ("●"):sub(i, i) then
+                    diffIdx = i
+                    break
+                end
+            end
+            if diffIdx then
+                passBuffer = passBuffer:sub(1, diffIdx - 1)
+                            .. new:sub(diffIdx, diffIdx)
+                            .. passBuffer:sub(diffIdx + 1)
+            end
+        end
+        masking = true
+        passInput.Text = ("●"):rep(#passBuffer)
+        passInput.CursorPosition = #passInput.Text + 1
+        masking = false
+    end)
+    -- Keep the cursor at the end on focus for nicer UX
+    passInput.Focused:Connect(function()
+        task.defer(function()
+            passInput.CursorPosition = #passInput.Text + 1
+        end)
+    end)
+    -- Expose the real (unmasked) password value
+    passContainer.GetValue = function() return passBuffer end
 
     local continueBtn = makeButton({
         Parent     = content,
@@ -647,12 +691,12 @@ local function createWindow(config)
     -- ===== Behavior wiring =====
     continueBtn.Activated:Connect(function()
         if callbacks.onLogin then
-            callbacks.onLogin(userInput.Text, passInput.Text)
+            callbacks.onLogin(userInput.Text, passBuffer)
         end
     end)
     passInput.FocusLost:Connect(function(enter)
         if enter and callbacks.onLogin then
-            callbacks.onLogin(userInput.Text, passInput.Text)
+            callbacks.onLogin(userInput.Text, passBuffer)
         end
     end)
     purchaseBtn.Activated:Connect(function()
