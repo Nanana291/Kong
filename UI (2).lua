@@ -1,925 +1,754 @@
 --[[
-    UI.lua — Premium split-panel login UI
-    -------------------------------------
-    Visual reference: 600x400 desktop-style login shell
-      • Left half: purple gradient panel with centered logo
-      • Right half: dark login form (title, subtitle, username, password,
-                     Continue button, OR separator, subscription link)
-      • Close button at top-right of the right panel
+========================================================================
+    UI.lua  —  Retina Login UI
+========================================================================
+    A clean, modern Roblox login interface built in a single file.
+    Premium animations, full drag support (mouse + touch), responsive
+    scaling, and a Kronos-style API.
 
-    API (Kronos-style):
-        local UI = loadfile("UI.lua")()
-        local Window = UI:CreateWindow({ Title = "RETINA" })
-        Window:SetSubtitle("Welcome again, please log in to continue.")
-        Window:SetLogo("rbxassetid://LOGO")
-        Window:OnClose(function() print("Closed") end)
-        Window:OnLogin(function(u, p) print(u, p) end)
-        Window:OnPurchase(function() print("Purchase") end)
-        Window:Show()
+------------------------------------------------------------------------
+    USAGE
+------------------------------------------------------------------------
+    local UI = loadfile("UI.lua")()
 
-    Design principles applied:
-      • ui-ux-luau/motion_mastery/choreography_ownership.md  — one owner per transition
-      • ui-ux-luau/motion_mastery/frame_rate_independence.md  — dt-driven spring, RenderStepped for visuals
-      • ui-ux-luau/motion_mastery/spring_vs_easing_decision_tree.md — springs for drag release, easing for events
-      • ui-ux-luau/component_language_mastery/button_craftsmanship_doctrine.md — illuminated primary CTA
-      • ui-ux-luau/input_intelligence_mastery/premium_input_state_systems.md — focus glow + border transition
-      • ui-ux-luau/accessibility_mastery/reduced_motion_mode.md — respect ReducedMotionEnabled
-      • luau-max-quality-mode — single owner per runtime path, explicit teardown
+    local Window = UI:CreateWindow({
+        Title = "RETINA",
+        Subtitle = "Welcome again, please log in to continue.",
+        Logo = "rbxassetid://LOGO",
+        Footer = "@PastOwl",
+    })
+
+    Window:OnClose(function()
+        print("Closed")
+    end)
+
+    Window:OnLogin(function(username, password)
+        print(username, password)
+    end)
+
+    Window:OnPurchase(function()
+        print("Purchase")
+    end)
+
+    Window:Show()
+
+------------------------------------------------------------------------
+    API REFERENCE
+------------------------------------------------------------------------
+    UI:CreateWindow(config)          -> Window
+        config.Title      (string)   — main title text ("RETINA")
+        config.Subtitle   (string)   — subtitle under the title
+        config.Logo       (string)   — rbxassetid for the left-panel logo
+        config.Footer     (string)   — small text at bottom of left panel
+
+    Window:SetTitle(text)
+    Window:SetSubtitle(text)
+    Window:SetLogo(assetId)
+    Window:SetFooter(text)
+    Window:OnClose(callback)         — fired after the close animation
+    Window:OnLogin(callback)         — callback(username, password)
+    Window:OnPurchase(callback)      — fired when subscription btn pressed
+    Window:Show()                    — plays the open animation
+    Window:Hide()                    — plays the close animation, then destroys
+    Window:Destroy()                 — instantly destroys the UI
+========================================================================
 ]]
 
 -- ============================================================
--- Services
+-- SERVICES
 -- ============================================================
-local TweenService = game:GetService("TweenService")
+local TweenService     = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local Players = game:GetService("Players")
-
--- UserGameSettings may be blocked or sandboxed in some executor environments.
--- Wrap access in pcall so the UI degrades gracefully to "no reduced motion" instead of erroring.
-local UserGameSettings
-pcall(function()
-    UserGameSettings = game:GetService("UserGameSettings")
-end)
--- Some executors return a non-functional stub; verify the property is actually readable.
-do
-    local ok = pcall(function()
-        if UserGameSettings then
-            -- Access the property to ensure it is not a sandbox stub that throws on read.
-            local _ = UserGameSettings.ReducedMotionEnabled
-        end
-    end)
-    if not ok then
-        UserGameSettings = nil
-    end
-end
+local RunService       = game:GetService("RunService")
+local Players          = game:GetService("Players")
 
 local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
 -- ============================================================
--- Theme
+-- THEME  (tuned to match the reference mockup)
 -- ============================================================
-local THEME = {
-    -- Left panel gradient (purple, top → bottom)
-    PurpleTop        = Color3.fromRGB(123, 104, 238),
-    PurpleBottom     = Color3.fromRGB(106, 90, 205),
-
-    -- Right panel
-    RightBg          = Color3.fromRGB(18, 18, 18),
-    RightBgAccent    = Color3.fromRGB(24, 24, 28),
-
-    -- Inputs
-    InputBg          = Color3.fromRGB(30, 30, 30),
-    InputBgFocus     = Color3.fromRGB(36, 32, 48),
-    InputBorder      = Color3.fromRGB(51, 51, 51),
-    InputBorderFocus = Color3.fromRGB(123, 104, 238),
-    InputPlaceholder = Color3.fromRGB(136, 136, 136),
-    InputText        = Color3.fromRGB(255, 255, 255),
-
-    -- Text
-    TitleColor       = Color3.fromRGB(255, 255, 255),
-    SubtitleColor    = Color3.fromRGB(204, 204, 204),
-    ButtonText       = Color3.fromRGB(255, 255, 255),
-    OrText           = Color3.fromRGB(136, 136, 136),
-    Separator        = Color3.fromRGB(51, 51, 51),
-    SubscriptionText = Color3.fromRGB(204, 204, 204),
-    SubscriptionLink = Color3.fromRGB(123, 104, 238),
-
-    -- Close button
-    CloseIdle        = Color3.fromRGB(170, 170, 180),
-    CloseHover       = Color3.fromRGB(255, 255, 255),
-
-    -- Misc
-    DropShadow       = Color3.fromRGB(0, 0, 0),
-    Attribution      = Color3.fromRGB(255, 255, 255),
+local Theme = {
+    Window        = Color3.fromRGB(20, 20, 26),
+    LeftPanelTop  = Color3.fromRGB(140, 122, 255),
+    LeftPanelBot  = Color3.fromRGB(98, 80, 200),
+    RightPanel    = Color3.fromRGB(20, 20, 26),
+    Accent        = Color3.fromRGB(124, 105, 240),
+    AccentHover   = Color3.fromRGB(140, 122, 255),
+    Text          = Color3.fromRGB(255, 255, 255),
+    TextDim       = Color3.fromRGB(160, 160, 170),
+    Border        = Color3.fromRGB(48, 48, 56),
+    BorderFocus   = Color3.fromRGB(124, 105, 240),
+    Secondary     = Color3.fromRGB(36, 36, 44),
+    SecondaryHov  = Color3.fromRGB(52, 52, 62),
+    Close         = Color3.fromRGB(160, 160, 170),
+    CloseHover    = Color3.fromRGB(232, 72, 72),
+    Divider       = Color3.fromRGB(60, 60, 70),
 }
 
 -- ============================================================
--- Dimensions (base design is 600 x 400; everything scales via UIScale)
+-- TWEEN HELPER
 -- ============================================================
-local DIM = {
-    BaseWidth    = 600,
-    BaseHeight   = 400,
-    WindowRadius = 12,
-    InputRadius  = 8,
-    ButtonRadius = 8,
-    InputHeight  = 48,
-    InputWidth   = 260,
-    CloseSize    = 28,
-    LogoSize     = 80,
-    Padding      = 24,
-}
-
--- ============================================================
--- Motion specs (reduced-motion aware)
--- ============================================================
-local MOTION = {
-    WindowOpen  = { duration = 0.45, style = Enum.EasingStyle.Back,  dir = Enum.EasingDirection.Out },  -- slight spring
-    WindowClose = { duration = 0.28, style = Enum.EasingStyle.Quint, dir = Enum.EasingDirection.In },
-    Hover       = { duration = 0.15, style = Enum.EasingStyle.Sine,  dir = Enum.EasingDirection.Out },
-    Press       = { duration = 0.08, style = Enum.EasingStyle.Quad,  dir = Enum.EasingDirection.In },
-    Focus       = { duration = 0.20, style = Enum.EasingStyle.Quint, dir = Enum.EasingDirection.Out },
-    Fade        = { duration = 0.18, style = Enum.EasingStyle.Sine,  dir = Enum.EasingDirection.Out },
-}
-
-local function isReducedMotion()
-    if not UserGameSettings then return false end
-    local ok, value = pcall(function()
-        return UserGameSettings.ReducedMotionEnabled
-    end)
-    return ok and value == true
-end
-
-local function resolve(spec)
-    if isReducedMotion() then
-        return { duration = math.min(spec.duration, 0.08), style = Enum.EasingStyle.Linear, dir = Enum.EasingDirection.In }
-    end
-    return spec
-end
-
--- ============================================================
--- Animation utilities
--- ============================================================
-local function tween(object, spec, target)
-    local resolved = resolve(spec)
-    local t = TweenService:Create(object, TweenInfo.new(resolved.duration, resolved.style, resolved.dir), target)
+local function tween(instance, props, duration, style, direction)
+    local info = TweenInfo.new(
+        duration  or 0.2,
+        style     or Enum.EasingStyle.Quad,
+        direction or Enum.EasingDirection.Out
+    )
+    local t = TweenService:Create(instance, info, props)
     t:Play()
     return t
 end
 
--- Frame-rate-independent spring — used for drag-release settle.
--- See motion_mastery/frame_rate_independence.md and spring_vs_easing_decision_tree.md.
-local Spring = {}
-Spring.__index = Spring
-
-function Spring.new(initial, stiffness, damping)
-    local self = setmetatable({}, Spring)
-    self.value = initial
-    self.target = initial
-    self.velocity = 0
-    self.stiffness = stiffness or 220
-    self.damping = damping or 26
-    self.connection = nil
-    self.onUpdate = nil
-    self.onSettle = nil
-    return self
-end
-
-function Spring:setTarget(target)
-    self.target = target
-    if not self.connection then
-        self:_run()
+-- ============================================================
+-- RESPONSIVE UTILITY
+-- Scales the window down on small viewports so it never clips.
+-- ============================================================
+local function bindResponsiveScale(uiscale, baseW, baseH, margin)
+    local camera = workspace.CurrentCamera
+    local function update()
+        local vp = camera.ViewportSize
+        local availX = vp.X - (margin or 32)
+        local availY = vp.Y - (margin or 32)
+        local s = math.min(availX / baseW, availY / baseH, 1)
+        uiscale.Scale = s
     end
-end
-
-function Spring:_run()
-    self.connection = RunService.RenderStepped:Connect(function(dt)
-        local force = (self.target - self.value) * self.stiffness
-        local damp = self.velocity * self.damping
-        local accel = force - damp
-        self.velocity = self.velocity + accel * dt
-        self.value = self.value + self.velocity * dt
-
-        if math.abs(self.target - self.value) < 0.1 and math.abs(self.velocity) < 1 then
-            self.value = self.target
-            self.velocity = 0
-            self.connection:Disconnect()
-            self.connection = nil
-            if self.onUpdate then self.onUpdate(self.value) end
-            if self.onSettle then self.onSettle() end
-            return
-        end
-
-        if self.onUpdate then self.onUpdate(self.value) end
-    end)
-end
-
-function Spring:cancel()
-    if self.connection then
-        self.connection:Disconnect()
-        self.connection = nil
-    end
+    update()
+    camera:GetPropertyChangedSignal("ViewportSize"):Connect(update)
 end
 
 -- ============================================================
--- Dragging utility (mouse + touch, 1:1 tracking, spring-back on inertia-less release)
--- See motion_mastery/gesture_driven_animation.md
+-- DRAGGING UTILITY
+-- Smooth, jitter-free dragging for mouse + touch. Skips drag when
+-- the press lands on an interactive element (button / textbox).
 -- ============================================================
 local function makeDraggable(frame, handle)
     handle = handle or frame
     local dragging = false
-    local dragStart = nil
-    local origin = nil
-    local springX = nil
-    local springY = nil
+    local dragInput, dragStart, startPos
 
-    local function onInputBegan(input)
+    local function isOverInteractive(pos)
+        local objects = UserInputService:GetGuiObjectsAtPosition(pos.X, pos.Y)
+        for _, obj in ipairs(objects) do
+            if obj:IsA("TextButton") or obj:IsA("TextBox") or obj:IsA("ImageButton") then
+                return true
+            end
+        end
+        return false
+    end
+
+    handle.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1
-           or input.UserInputType == Enum.UserInputType.Touch then
+        or input.UserInputType == Enum.UserInputType.Touch then
+            if isOverInteractive(input.Position) then return end
             dragging = true
             dragStart = input.Position
-            origin = frame.Position
-            if springX then springX:cancel() springX = nil end
-            if springY then springY:cancel() springY = nil end
+            startPos  = frame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
         end
-    end
+    end)
 
-    local function onInputChanged(input)
-        if not dragging then return end
-        if input.UserInputType ~= Enum.UserInputType.MouseMovement
-           and input.UserInputType ~= Enum.UserInputType.Touch then
-            return
+    handle.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement
+        or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
         end
-        local dx = input.Position.X - dragStart.X
-        local dy = input.Position.Y - dragStart.Y
-        -- 1:1 tracking — no easing during the gesture (motion_mastery/gesture_driven_animation.md)
-        frame.Position = UDim2.fromOffset(origin.X.Offset + dx, origin.Y.Offset + dy)
-    end
+    end)
 
-    local function onInputEnded(input)
-        if not dragging then return end
-        if input.UserInputType ~= Enum.UserInputType.MouseButton1
-           and input.UserInputType ~= Enum.UserInputType.Touch then
-            return
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            frame.Position = UDim2.new(
+                startPos.X.Scale, startPos.X.Offset + delta.X,
+                startPos.Y.Scale, startPos.Y.Offset + delta.Y
+            )
         end
-        dragging = false
-        -- Clamp into viewport so the window stays reachable
-        local absPos = frame.AbsolutePosition
-        local absSize = frame.AbsoluteSize
-        local viewport = workspace.CurrentCamera.ViewportSize
-        local targetX = absPos.X
-        local targetY = absPos.Y
-        local changed = false
-        if targetX < 0 then targetX = 0 changed = true end
-        if targetY < 0 then targetY = 0 changed = true end
-        if targetX + absSize.X > viewport.X then targetX = viewport.X - absSize.X changed = true end
-        if targetY + absSize.Y > viewport.Y then targetY = viewport.Y - absSize.Y changed = true end
-
-        if changed then
-            local curX = frame.Position.X.Offset
-            local curY = frame.Position.Y.Offset
-            springX = Spring.new(curX, 220, 26)
-            springX.target = targetX
-            springX.onUpdate = function(v)
-                frame.Position = UDim2.fromOffset(v, frame.Position.Y.Offset)
-            end
-            springX:_run()
-            springY = Spring.new(curY, 220, 26)
-            springY.target = targetY
-            springY.onUpdate = function(v)
-                frame.Position = UDim2.fromOffset(frame.Position.X.Offset, v)
-            end
-            springY:_run()
-        end
-    end
-
-    handle.InputBegan:Connect(onInputBegan)
-    UserInputService.InputChanged:Connect(onInputChanged)
-    UserInputService.InputEnded:Connect(onInputEnded)
-
-    return function()
-        dragging = false
-        if springX then springX:cancel() end
-        if springY then springY:cancel() end
-    end
+    end)
 end
 
 -- ============================================================
--- Responsive scaling
--- Maintains 3:2 aspect ratio; scales down on small viewports.
+-- PRIMITIVE FACTORIES
 -- ============================================================
-local function computeScale()
-    local viewport = workspace.CurrentCamera.ViewportSize
-    local sw = viewport.X / DIM.BaseWidth
-    local sh = viewport.Y / DIM.BaseHeight
-    local scale = math.min(sw, sh)
-    -- On desktop, don't upscale beyond 1.0 — the design is fixed at 600x400.
-    -- On mobile / tablet, allow up to 1.1 so the window still feels usable.
-    if scale > 1.0 then
-        scale = math.min(scale, 1.0)
-    end
-    -- Don't shrink beyond readability
-    scale = math.max(scale, 0.55)
-    return scale
-end
-
-local function applyScale(uiScale)
-    uiScale.Scale = computeScale()
-end
-
--- ============================================================
--- Builder helpers
--- ============================================================
-local function newFrame(name, parent, props)
-    local f = Instance.new("Frame")
-    f.Name = name
-    f.Parent = parent
-    for k, v in pairs(props or {}) do
-        f[k] = v
-    end
-    return f
-end
-
-local function newLabel(name, parent, props)
-    local l = Instance.new("TextLabel")
-    l.Name = name
-    l.Parent = parent
-    l.BackgroundTransparency = 1
-    for k, v in pairs(props or {}) do
-        l[k] = v
-    end
-    return l
-end
-
-local function newButton(name, parent, props)
-    local b = Instance.new("TextButton")
-    b.Name = name
-    b.Parent = parent
-    b.AutoButtonColor = false
-    b.BackgroundTransparency = 1
-    for k, v in pairs(props or {}) do
-        b[k] = v
-    end
-    return b
-end
-
-local function newImage(name, parent, props)
-    local i = Instance.new("ImageLabel")
-    i.Name = name
-    i.Parent = parent
-    i.BackgroundTransparency = 1
-    for k, v in pairs(props or {}) do
-        i[k] = v
-    end
-    return i
-end
-
-local function newCorner(radius, parent)
+local function corner(parent, radius)
     local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, radius)
+    c.CornerRadius = UDim.new(0, radius or 8)
     c.Parent = parent
     return c
 end
 
-local function newStroke(color, thickness, parent, transparency)
+local function stroke(parent, color, thickness, transparency)
     local s = Instance.new("UIStroke")
-    s.Color = color
+    s.Color = color or Theme.Border
     s.Thickness = thickness or 1
     s.Transparency = transparency or 0
+    s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     s.Parent = parent
     return s
 end
 
-local function newGradient(colorSeq, rotation, parent)
+local function gradient(parent, c1, c2, rotation)
     local g = Instance.new("UIGradient")
-    g.Color = colorSeq
+    g.Color = ColorSequence.new(c1, c2)
     g.Rotation = rotation or 90
     g.Parent = parent
     return g
 end
 
-local function newPadding(pad, parent)
-    local p = Instance.new("UIPadding")
-    p.PaddingLeft = UDim.new(0, pad)
-    p.PaddingRight = UDim.new(0, pad)
-    p.PaddingTop = UDim.new(0, pad)
-    p.PaddingBottom = UDim.new(0, pad)
-    p.Parent = parent
-    return p
+-- ============================================================
+-- BUTTON FACTORY
+-- Hover: color fade + 1.02 scale. Press: 0.96 scale with a small
+-- spring-back on release.
+-- ============================================================
+local function makeButton(props)
+    local b = Instance.new("TextButton")
+    b.Name             = props.Name or "Button"
+    b.AutoButtonColor  = false
+    b.BackgroundColor3 = props.Color or Theme.Accent
+    b.BackgroundTransparency = props.Transparency or 0
+    b.BorderSizePixel  = 0
+    b.Text             = props.Text or ""
+    b.TextColor3       = props.TextColor or Theme.Text
+    b.Font             = props.Font or Enum.Font.GothamMedium
+    b.TextSize         = props.TextSize or 15
+    b.Size             = props.Size or UDim2.new(1, 0, 0, 44)
+    b.Position         = props.Position or UDim2.new(0, 0, 0, 0)
+    b.AnchorPoint      = props.AnchorPoint or Vector2.new(0, 0)
+    b.LayoutOrder      = props.LayoutOrder or 0
+    b.Parent           = props.Parent
+    corner(b, props.Radius or 10)
+
+    if props.Stroke then
+        stroke(b, props.Stroke.Color, props.Stroke.Thickness, props.Stroke.Transparency)
+    end
+    if props.Gradient then
+        gradient(b, props.Gradient[1], props.Gradient[2], props.Gradient.Rotation or 90)
+    end
+
+    -- UIScale drives all hover/press scale animation
+    local scale = Instance.new("UIScale")
+    scale.Scale = 1
+    scale.Parent = b
+
+    local baseColor  = b.BackgroundColor3
+    local hoverColor = props.HoverColor or Theme.AccentHover
+
+    b.MouseEnter:Connect(function()
+        tween(b, { BackgroundColor3 = hoverColor }, 0.18)
+        tween(scale, { Scale = 1.02 }, 0.18)
+    end)
+    b.MouseLeave:Connect(function()
+        tween(b, { BackgroundColor3 = baseColor }, 0.18)
+        tween(scale, { Scale = 1 }, 0.18)
+    end)
+    b.MouseButton1Down:Connect(function()
+        tween(scale, { Scale = 0.96 }, 0.08, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+    end)
+    b.MouseButton1Up:Connect(function()
+        tween(scale, { Scale = 1.02 }, 0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+    end)
+
+    return b
 end
 
 -- ============================================================
--- Window construction
+-- INPUT FACTORY
+-- Focus: stroke color animates to accent + thickness grows, and a
+-- soft purple glow blooms behind the field.
 -- ============================================================
-local function buildWindow(config)
-    config = config or {}
-    local titleText = config.Title or "RETINA"
+local function makeInput(props)
+    local container = Instance.new("Frame")
+    container.Name             = props.Name or "Input"
+    container.Size             = props.Size or UDim2.new(1, 0, 0, 44)
+    container.Position         = props.Position or UDim2.new(0, 0, 0, 0)
+    container.BackgroundTransparency = 1
+    container.LayoutOrder      = props.LayoutOrder or 0
+    container.Parent           = props.Parent
 
-    -- ScreenGui root
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "RetinaLoginUI"
-    gui.ResetOnSpawn = false
-    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    gui.IgnoreGuiInset = true
-    gui.DisplayOrder = 100
-    gui.Parent = PlayerGui
+    -- Glow halo (sits behind the field, invisible until focus)
+    local glow = Instance.new("Frame")
+    glow.Name             = "Glow"
+    glow.Size             = UDim2.new(1, 8, 1, 8)
+    glow.Position         = UDim2.new(0, -4, 0, -4)
+    glow.BackgroundColor3 = Theme.Accent
+    glow.BackgroundTransparency = 1
+    glow.BorderSizePixel  = 0
+    glow.ZIndex           = 0
+    corner(glow, 14)
+    glow.Parent = container
 
-    -- Centered container for the window (handles responsiveness + entrance scale)
-    local container = newFrame("Container", gui, {
-        Size = UDim2.fromScale(1, 1),
-        BackgroundTransparency = 1,
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.5),
-    })
+    -- Field background
+    local bg = Instance.new("Frame")
+    bg.Name             = "Background"
+    bg.Size             = UDim2.new(1, 0, 1, 0)
+    bg.BackgroundColor3 = Theme.Secondary
+    bg.BackgroundTransparency = 0.3
+    bg.BorderSizePixel  = 0
+    bg.ZIndex           = 1
+    corner(bg, 10)
+    bg.Parent = container
 
-    -- UIScale drives responsive scaling
-    local uiScale = Instance.new("UIScale")
-    uiScale.Parent = container
-    applyScale(uiScale)
+    local st = stroke(bg, Theme.Border, 1, 0)
 
-    -- Window root (the dark panel with rounded corners)
-    local window = newFrame("Window", container, {
-        Size = UDim2.fromOffset(DIM.BaseWidth, DIM.BaseHeight),
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.5),
-        BackgroundColor3 = THEME.RightBg,
-        BackgroundTransparency = 1,  -- will fade in
-    })
-    newCorner(DIM.WindowRadius, window)
-    -- Subtle drop shadow via ImageLabel (cheaper than SurfaceAppearance)
-    local shadow = newImage("Shadow", container, {
-        Size = UDim2.fromOffset(DIM.BaseWidth + 60, DIM.BaseHeight + 60),
-        Position = UDim2.fromScale(0.5, 0.5),
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Image = "rbxassetid://1316045217",  -- universal soft shadow asset
-        ImageColor3 = THEME.DropShadow,
-        ImageTransparency = 0.6,
-        ScaleType = Enum.ScaleType.Slice,
-        SliceCenter = Rect.new(10, 10, 118, 118),
-        ZIndex = 0,
-    })
-    shadow.Parent = container
+    -- Textbox
+    local box = Instance.new("TextBox")
+    box.Name                  = "TextBox"
+    box.Size                  = UDim2.new(1, -24, 1, 0)
+    box.Position              = UDim2.new(0, 12, 0, 0)
+    box.BackgroundTransparency = 1
+    box.Text                  = ""
+    box.PlaceholderText       = props.Placeholder or ""
+    box.PlaceholderColor3     = Theme.TextDim
+    box.TextColor3            = Theme.Text
+    box.Font                  = Enum.Font.Gotham
+    box.TextSize              = 14
+    box.ClearTextOnFocus      = false
+    box.TextXAlignment        = Enum.TextXAlignment.Left
+    box.ClipsDescendants      = true
+    box.ZIndex                = 2
+    box.Parent = bg
 
-    -- Left panel (purple gradient)
-    local leftPanel = newFrame("LeftPanel", window, {
-        Size = UDim2.new(0.5, 0, 1, 0),
-        Position = UDim2.fromScale(0, 0),
-        BackgroundColor3 = THEME.PurpleTop,
-        ClipsDescendants = true,
-    })
-    newCorner(DIM.WindowRadius, leftPanel)
-    -- Mask the right-side rounding so left panel meets the right panel cleanly
-    -- (Use a small overlay if needed; here we let corner on left side suffice.)
-    newGradient(ColorSequence.new({
-        ColorSequenceKeypoint.new(0, THEME.PurpleTop),
-        ColorSequenceKeypoint.new(1, THEME.PurpleBottom),
-    }), 90, leftPanel)
-
-    -- Logo (centered in left panel)
-    local logo = newImage("Logo", leftPanel, {
-        Size = UDim2.fromOffset(DIM.LogoSize, DIM.LogoSize),
-        Position = UDim2.fromScale(0.5, 0.5),
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Image = "rbxassetid://0",  -- placeholder; overridden via SetLogo
-        ImageColor3 = Color3.fromRGB(255, 255, 255),
-        ImageTransparency = 0,
-    })
-
-    -- Attribution bottom-left of left panel
-    local attribution = newLabel("Attribution", leftPanel, {
-        Text = "@PastOwl",
-        Font = Enum.Font.Gotham,
-        TextSize = 12,
-        TextColor3 = THEME.Attribution,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Bottom,
-        Position = UDim2.new(0, DIM.Padding, 0, -DIM.Padding),
-        Size = UDim2.new(1, -DIM.Padding * 2, 0, 14),
-        AnchorPoint = Vector2.new(0, 1),
-        BackgroundTransparency = 1,
-        TextTransparency = 0.5,
-    })
-
-    -- Right panel (dark login section)
-    local rightPanel = newFrame("RightPanel", window, {
-        Size = UDim2.new(0.5, 0, 1, 0),
-        Position = UDim2.fromScale(0.5, 0),
-        BackgroundColor3 = THEME.RightBg,
-    })
-    newCorner(DIM.WindowRadius, rightPanel)
-
-    -- Close button (top-right of right panel)
-    local closeBtn = newButton("Close", rightPanel, {
-        Size = UDim2.fromOffset(DIM.CloseSize, DIM.CloseSize),
-        Position = UDim2.new(1, -DIM.Padding - 4, 0, DIM.Padding + 4),
-        AnchorPoint = Vector2.new(1, 0),
-        BackgroundTransparency = 1,
-        Text = "",
-        AutoButtonColor = false,
-    })
-    local closeIcon = newImage("Icon", closeBtn, {
-        Size = UDim2.fromScale(1, 1),
-        Position = UDim2.fromScale(0.5, 0.5),
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Image = "rbxassetid://13730395217",  -- universal X icon
-        ImageColor3 = THEME.CloseIdle,
-        BackgroundTransparency = 1,
-    })
-
-    -- Right-side form container (padded, vertically centered)
-    local form = newFrame("Form", rightPanel, {
-        Size = UDim2.new(1, -DIM.Padding * 2, 1, -DIM.Padding * 2),
-        Position = UDim2.fromOffset(DIM.Padding, DIM.Padding),
-        BackgroundTransparency = 1,
-    })
-    local formLayout = Instance.new("UIListLayout")
-    formLayout.FillDirection = Enum.FillDirection.Vertical
-    formLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    formLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-    formLayout.Padding = UDim.new(0, 0)
-    formLayout.Parent = form
-
-    -- Title
-    local titleLabel = newLabel("Title", form, {
-        Text = titleText,
-        Font = Enum.Font.GothamBold,
-        TextSize = 32,
-        TextColor3 = THEME.TitleColor,
-        TextXAlignment = Enum.TextXAlignment.Center,
-        Size = UDim2.new(1, 0, 0, 38),
-        LayoutOrder = 1,
-    })
-
-    -- Subtitle
-    local subtitleLabel = newLabel("Subtitle", form, {
-        Text = "Welcome again, please log in to continue.",
-        Font = Enum.Font.Gotham,
-        TextSize = 13,
-        TextColor3 = THEME.SubtitleColor,
-        TextXAlignment = Enum.TextXAlignment.Center,
-        Size = UDim2.new(1, 0, 0, 18),
-        LayoutOrder = 2,
-    })
-
-    -- Spacer
-    newFrame("Spacer1", form, {
-        Size = UDim2.new(0, 0, 0, 16),
-        BackgroundTransparency = 1,
-        LayoutOrder = 3,
-    })
-
-    -- Username input
-    local function makeInput(placeholder, isPassword, layoutOrder)
-        local wrap = newFrame("Input", form, {
-            Size = UDim2.fromOffset(DIM.InputWidth, DIM.InputHeight),
-            BackgroundColor3 = THEME.InputBg,
-            BackgroundTransparency = 0,
-            LayoutOrder = layoutOrder,
-        })
-        newCorner(DIM.InputRadius, wrap)
-        local stroke = newStroke(THEME.InputBorder, 1, wrap, 0.2)
-
-        local glow = newImage("Glow", wrap, {
-            Size = UDim2.new(1, 16, 1, 16),
-            Position = UDim2.new(0.5, 0, 0.5, 0),
-            AnchorPoint = Vector2.new(0.5, 0.5),
-            Image = "rbxassetid://6014261993",  -- soft radial glow
-            ImageColor3 = THEME.InputBorderFocus,
-            ImageTransparency = 1,
-            ScaleType = Enum.ScaleType.Slice,
-            SliceCenter = Rect.new(32, 32, 32, 32),
-            ZIndex = 0,
-        })
-
-        local icon = newImage("Icon", wrap, {
-            Size = UDim2.fromOffset(18, 18),
-            Position = UDim2.new(0, 14, 0.5, 0),
-            AnchorPoint = Vector2.new(0, 0.5),
-            Image = isPassword and "rbxassetid://13730395217" or "rbxassetid://13730395217",
-            ImageColor3 = THEME.InputPlaceholder,
-            ImageTransparency = 0.1,
-        })
-
-        local box = Instance.new("TextBox")
-        box.Name = "Field"
-        box.Parent = wrap
-        box.Size = UDim2.new(1, -50, 1, 0)
-        box.Position = UDim2.fromOffset(40, 0)
-        box.BackgroundTransparency = 1
-        box.Font = Enum.Font.Gotham
-        box.TextSize = 14
-        box.Text = ""
-        box.PlaceholderText = placeholder
-        box.PlaceholderColor3 = THEME.InputPlaceholder
-        box.TextColor3 = THEME.InputText
-        box.TextXAlignment = Enum.TextXAlignment.Left
-        box.ClearTextOnFocus = false
-        box.TextTruncate = Enum.TextTruncate.None
-        if isPassword then
-            box.TextTruncate = Enum.TextTruncate.AtEnd
-            -- Masking: use a custom property hook. Roblox doesn't natively mask text on TextBox
-            -- but we can detect text changes and replace with bullets.
-        end
-
-        local focused = false
-        local function setFocus(state)
-            if focused == state then return end
-            focused = state
-            tween(wrap, MOTION.Focus, { BackgroundColor3 = state and THEME.InputBgFocus or THEME.InputBg })
-            tween(stroke, MOTION.Focus, { Color = state and THEME.InputBorderFocus or THEME.InputBorder,
-                                          Transparency = state and 0 or 0.2,
-                                          Thickness = state and 1.5 or 1 })
-            tween(glow, MOTION.Focus, { ImageTransparency = state and 0.4 or 1 })
-            tween(icon, MOTION.Focus, { ImageColor3 = state and THEME.InputBorderFocus or THEME.InputPlaceholder })
-        end
-
-        box.Focused:Connect(function() setFocus(true) end)
-        box.FocusLost:Connect(function() setFocus(false) end)
-
-        return wrap, box, setFocus
-    end
-
-    local usernameWrap, usernameBox = makeInput("Enter username", false, 4)
-    -- Spacer between inputs
-    newFrame("Spacer2", form, {
-        Size = UDim2.new(0, 0, 0, 12),
-        BackgroundTransparency = 1,
-        LayoutOrder = 5,
-    })
-    local passwordWrap, passwordBox = makeInput("Enter password", true, 6)
-
-    -- Password masking: replace visible text with bullets, keep real value
-    local realPassword = ""
-    passwordBox:GetPropertyChangedSignal("Text"):Connect(function()
-        local current = passwordBox.Text
-        if #current < #realPassword then
-            -- backspace
-            realPassword = realPassword:sub(1, #current)
-        elseif #current > #realPassword then
-            -- new characters typed (could be paste — append all new chars)
-            local newChars = current:sub(#realPassword + 1)
-            realPassword = realPassword .. newChars
-        end
-        -- Render bullets, keep cursor position implied by end-of-string
-        passwordBox.Text = string.rep("•", #realPassword)
-        -- Move cursor to end
-        -- (Roblox TextBox auto-places cursor at end when Text is set programmatically during input)
+    box.Focused:Connect(function()
+        tween(st, { Color = Theme.BorderFocus, Thickness = 1.5 }, 0.2)
+        tween(glow, { BackgroundTransparency = 0.85 }, 0.3)
+    end)
+    box.FocusLost:Connect(function()
+        tween(st, { Color = Theme.Border, Thickness = 1 }, 0.2)
+        tween(glow, { BackgroundTransparency = 1 }, 0.3)
     end)
 
-    -- Spacer
-    newFrame("Spacer3", form, {
-        Size = UDim2.new(0, 0, 0, 18),
-        BackgroundTransparency = 1,
-        LayoutOrder = 7,
-    })
+    return container, box
+end
 
-    -- Continue button (primary CTA — illuminated gradient)
-    local continueBtn = newButton("Continue", form, {
-        Size = UDim2.fromOffset(DIM.InputWidth, DIM.InputHeight),
-        BackgroundColor3 = THEME.PurpleTop,
-        BackgroundTransparency = 0,
-        Text = "Continue",
-        Font = Enum.Font.GothamBold,
-        TextSize = 15,
-        TextColor3 = THEME.ButtonText,
-        AutoButtonColor = false,
-        LayoutOrder = 8,
-    })
-    newCorner(DIM.ButtonRadius, continueBtn)
-    newGradient(ColorSequence.new({
-        ColorSequenceKeypoint.new(0, THEME.PurpleTop),
-        ColorSequenceKeypoint.new(1, THEME.PurpleBottom),
-    }), 90, continueBtn)
-    local continueStroke = newStroke(Color3.fromRGB(160, 145, 255), 1, continueBtn, 0.6)
-    local continueGlow = newImage("Glow", continueBtn, {
-        Size = UDim2.new(1, 20, 1, 20),
-        Position = UDim2.new(0.5, 0, 0.5, 0),
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Image = "rbxassetid://6014261993",
-        ImageColor3 = THEME.PurpleTop,
-        ImageTransparency = 0.8,
-        ScaleType = Enum.ScaleType.Slice,
-        SliceCenter = Rect.new(32, 32, 32, 32),
-        ZIndex = 0,
-    })
+-- ============================================================
+-- WINDOW FACTORY  (the main entry point)
+-- ============================================================
+local function createWindow(config)
+    config = config or {}
 
-    -- OR separator
-    newFrame("Spacer4", form, {
-        Size = UDim2.new(0, 0, 0, 18),
-        BackgroundTransparency = 1,
-        LayoutOrder = 9,
-    })
-    local orSep = newFrame("OrSeparator", form, {
-        Size = UDim2.fromOffset(DIM.InputWidth, 14),
-        BackgroundTransparency = 1,
-        LayoutOrder = 10,
-    })
-    local orLine1 = newFrame("Line1", orSep, {
-        Size = UDim2.new(0.5, -16, 0, 1),
-        Position = UDim2.fromScale(0, 0.5),
-        BackgroundColor3 = THEME.Separator,
-        BorderSizePixel = 0,
-    })
-    local orText = newLabel("Text", orSep, {
-        Text = "OR",
-        Font = Enum.Font.Gotham,
-        TextSize = 11,
-        TextColor3 = THEME.OrText,
-        Size = UDim2.fromOffset(32, 14),
-        Position = UDim2.fromScale(0.5, 0),
-        AnchorPoint = Vector2.new(0.5, 0),
-        TextXAlignment = Enum.TextXAlignment.Center,
-    })
-    local orLine2 = newFrame("Line2", orSep, {
-        Size = UDim2.new(0.5, -16, 0, 1),
-        Position = UDim2.new(1, 0, 0.5, 0),
-        AnchorPoint = Vector2.new(1, 0),
-        BackgroundColor3 = THEME.Separator,
-        BorderSizePixel = 0,
-    })
-
-    -- Spacer
-    newFrame("Spacer5", form, {
-        Size = UDim2.new(0, 0, 0, 14),
-        BackgroundTransparency = 1,
-        LayoutOrder = 11,
-    })
-
-    -- Subscription button (secondary, ghost style)
-    local subBtn = newButton("Subscription", form, {
-        Size = UDim2.fromOffset(DIM.InputWidth, 36),
-        BackgroundTransparency = 1,
-        Text = "Purchasing a subscription",
-        Font = Enum.Font.Gotham,
-        TextSize = 12,
-        TextColor3 = THEME.SubscriptionText,
-        AutoButtonColor = false,
-        LayoutOrder = 12,
-    })
-
-    -- ============================================================
-    -- Interaction wiring
-    -- ============================================================
     local callbacks = {
-        OnClose = nil,
-        OnLogin = nil,
-        OnPurchase = nil,
+        onClose    = nil,
+        onLogin    = nil,
+        onPurchase = nil,
     }
 
-    local isDestroyed = false
-    local isOpen = false
-    local inFlightTween = nil
+    local BASE_W = 720
+    local BASE_H = 460
 
-    -- Close button hover
+    -- ===== ScreenGui =====
+    local gui = Instance.new("ScreenGui")
+    gui.Name             = "RetinaLogin"
+    gui.ResetOnSpawn     = false
+    gui.ZIndexBehavior   = Enum.ZIndexBehavior.Sibling
+    gui.IgnoreGuiInset   = true
+
+    pcall(function()
+        gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+    end)
+    if not gui.Parent then
+        gui.Parent = workspace
+    end
+
+    -- ===== Backdrop (dim overlay) =====
+    local backdrop = Instance.new("Frame")
+    backdrop.Name                  = "Backdrop"
+    backdrop.Size                  = UDim2.new(1, 0, 1, 0)
+    backdrop.Position              = UDim2.new(0, 0, 0, 0)
+    backdrop.BackgroundColor3      = Color3.new(0, 0, 0)
+    backdrop.BackgroundTransparency = 1   -- hidden until Show()
+    backdrop.BorderSizePixel       = 0
+    backdrop.ZIndex                = 0
+    backdrop.Parent = gui
+
+    -- ===== Holder (CanvasGroup for whole-window fade) =====
+    local holder = Instance.new("CanvasGroup")
+    holder.Name             = "Holder"
+    holder.Size             = UDim2.new(0, BASE_W, 0, BASE_H)
+    holder.Position         = UDim2.new(0.5, 0, 0.5, 0)
+    holder.AnchorPoint      = Vector2.new(0.5, 0.5)
+    holder.BackgroundTransparency = 1
+    holder.GroupTransparency = 1
+    holder.ZIndex           = 1
+    holder.Parent = gui
+
+    local uiscale = Instance.new("UIScale")
+    uiscale.Scale = 1
+    uiscale.Parent = holder
+    bindResponsiveScale(uiscale, BASE_W, BASE_H, 32)
+
+    -- ===== Window (the visible dark panel) =====
+    local window = Instance.new("Frame")
+    window.Name             = "Window"
+    window.Size             = UDim2.new(1, 0, 1, 0)
+    window.BackgroundColor3 = Theme.Window
+    window.BorderSizePixel  = 0
+    window.Parent = holder
+    corner(window, 14)
+    stroke(window, Color3.fromRGB(40, 40, 50), 1, 0.4)
+
+    -- Soft drop shadow (9-slice image)
+    local shadow = Instance.new("ImageLabel")
+    shadow.Name             = "Shadow"
+    shadow.Size             = UDim2.new(1, 64, 1, 64)
+    shadow.Position         = UDim2.new(0, -32, 0, -32)
+    shadow.BackgroundTransparency = 1
+    shadow.Image            = "rbxassetid://1316045217"
+    shadow.ImageColor3      = Color3.fromRGB(0, 0, 0)
+    shadow.ImageTransparency = 0.45
+    shadow.ScaleType        = Enum.ScaleType.Slice
+    shadow.SliceCenter      = Rect.new(10, 10, 118, 118)
+    shadow.ZIndex           = -1
+    shadow.Parent = window
+
+    -- ============= LEFT PANEL (Purple branding) =============
+    local leftPanel = Instance.new("Frame")
+    leftPanel.Name             = "LeftPanel"
+    leftPanel.Size             = UDim2.new(0.5, 0, 1, 0)
+    leftPanel.Position         = UDim2.new(0, 0, 0, 0)
+    leftPanel.BackgroundColor3 = Theme.LeftPanelTop
+    leftPanel.BorderSizePixel  = 0
+    leftPanel.Parent = window
+    corner(leftPanel, 14)
+    gradient(leftPanel, Theme.LeftPanelTop, Theme.LeftPanelBot, 120)
+
+    -- Square off the interior right edge so it meets RightPanel cleanly
+    local leftCover = Instance.new("Frame")
+    leftCover.Name             = "RightEdgeCover"
+    leftCover.Size             = UDim2.new(0, 14, 1, 0)
+    leftCover.Position         = UDim2.new(1, -14, 0, 0)
+    leftCover.BackgroundColor3 = Theme.LeftPanelTop
+    leftCover.BorderSizePixel  = 0
+    leftCover.Parent = leftPanel
+    gradient(leftCover, Theme.LeftPanelTop, Theme.LeftPanelBot, 120)
+
+    -- Logo (centered)
+    local logo = Instance.new("ImageLabel")
+    logo.Name             = "Logo"
+    logo.Size             = UDim2.new(0, 110, 0, 110)
+    logo.Position         = UDim2.new(0.5, 0, 0.5, 0)
+    logo.AnchorPoint      = Vector2.new(0.5, 0.5)
+    logo.BackgroundTransparency = 1
+    logo.Image            = config.Logo or ""
+    logo.ImageColor3      = Color3.fromRGB(255, 255, 255)
+    logo.Parent = leftPanel
+
+    -- Footer text (bottom-left credit)
+    local footer = Instance.new("TextLabel")
+    footer.Name             = "Footer"
+    footer.Size             = UDim2.new(0, 200, 0, 20)
+    footer.Position         = UDim2.new(0, 22, 1, -28)
+    footer.BackgroundTransparency = 1
+    footer.Text             = config.Footer or "@PastOwl"
+    footer.TextColor3       = Color3.fromRGB(255, 255, 255)
+    footer.TextTransparency = 0.25
+    footer.Font             = Enum.Font.Gotham
+    footer.TextSize         = 12
+    footer.TextXAlignment   = Enum.TextXAlignment.Left
+    footer.Parent = leftPanel
+
+    -- ============= RIGHT PANEL (Login form) =============
+    local rightPanel = Instance.new("Frame")
+    rightPanel.Name             = "RightPanel"
+    rightPanel.Size             = UDim2.new(0.5, 0, 1, 0)
+    rightPanel.Position         = UDim2.new(0.5, 0, 0, 0)
+    rightPanel.BackgroundColor3 = Theme.RightPanel
+    rightPanel.BorderSizePixel  = 0
+    rightPanel.Parent = window
+    corner(rightPanel, 14)
+
+    -- Square off the interior left edge
+    local rightCover = Instance.new("Frame")
+    rightCover.Name             = "LeftEdgeCover"
+    rightCover.Size             = UDim2.new(0, 14, 1, 0)
+    rightCover.Position         = UDim2.new(0, 0, 0, 0)
+    rightCover.BackgroundColor3 = Theme.RightPanel
+    rightCover.BorderSizePixel  = 0
+    rightCover.Parent = rightPanel
+
+    -- ===== Close button (top-right) =====
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Name             = "Close"
+    closeBtn.Size             = UDim2.new(0, 30, 0, 30)
+    closeBtn.Position         = UDim2.new(1, -18, 0, 18)
+    closeBtn.AnchorPoint      = Vector2.new(1, 0)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
+    closeBtn.BackgroundTransparency = 0.5
+    closeBtn.Text             = ""
+    closeBtn.AutoButtonColor  = false
+    closeBtn.ZIndex           = 5
+    closeBtn.Parent = rightPanel
+    corner(closeBtn, 8)
+
+    -- Draw the X with two rotated Frames (reliable across fonts)
+    local closeLine1 = Instance.new("Frame")
+    closeLine1.Name             = "Line1"
+    closeLine1.Size             = UDim2.new(0, 12, 0, 2)
+    closeLine1.Position         = UDim2.new(0.5, 0, 0.5, 0)
+    closeLine1.AnchorPoint      = Vector2.new(0.5, 0.5)
+    closeLine1.BackgroundColor3 = Theme.Close
+    closeLine1.BorderSizePixel  = 0
+    closeLine1.Rotation         = 45
+    closeLine1.Parent = closeBtn
+
+    local closeLine2 = Instance.new("Frame")
+    closeLine2.Name             = "Line2"
+    closeLine2.Size             = UDim2.new(0, 12, 0, 2)
+    closeLine2.Position         = UDim2.new(0.5, 0, 0.5, 0)
+    closeLine2.AnchorPoint      = Vector2.new(0.5, 0.5)
+    closeLine2.BackgroundColor3 = Theme.Close
+    closeLine2.BorderSizePixel  = 0
+    closeLine2.Rotation         = -45
+    closeLine2.Parent = closeBtn
+
+    local closeScale = Instance.new("UIScale")
+    closeScale.Scale = 1
+    closeScale.Parent = closeBtn
+
+    local closeWhite = Color3.fromRGB(255, 255, 255)
     closeBtn.MouseEnter:Connect(function()
-        tween(closeIcon, MOTION.Hover, { ImageColor3 = THEME.CloseHover })
+        tween(closeBtn, { BackgroundColor3 = Theme.CloseHover, BackgroundTransparency = 0 }, 0.15)
+        tween(closeLine1, { BackgroundColor3 = closeWhite }, 0.15)
+        tween(closeLine2, { BackgroundColor3 = closeWhite }, 0.15)
+        tween(closeScale, { Scale = 1.08 }, 0.15)
     end)
     closeBtn.MouseLeave:Connect(function()
-        tween(closeIcon, MOTION.Hover, { ImageColor3 = THEME.CloseIdle })
+        tween(closeBtn, { BackgroundColor3 = Color3.fromRGB(40, 40, 48), BackgroundTransparency = 0.5 }, 0.15)
+        tween(closeLine1, { BackgroundColor3 = Theme.Close }, 0.15)
+        tween(closeLine2, { BackgroundColor3 = Theme.Close }, 0.15)
+        tween(closeScale, { Scale = 1 }, 0.15)
     end)
     closeBtn.MouseButton1Down:Connect(function()
-        tween(closeIcon, MOTION.Press, { ImageTransparency = 0.3 })
+        tween(closeScale, { Scale = 0.9 }, 0.08, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
     end)
     closeBtn.MouseButton1Up:Connect(function()
-        tween(closeIcon, MOTION.Press, { ImageTransparency = 0 })
-    end)
-    closeBtn.Activated:Connect(function()
-        if callbacks.OnClose then callbacks.OnClose() end
-        window:Hide()
+        tween(closeScale, { Scale = 1.08 }, 0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
     end)
 
-    -- Continue button hover/press
-    continueBtn.MouseEnter:Connect(function()
-        tween(continueBtn, MOTION.Hover, { Size = UDim2.fromOffset(DIM.InputWidth, DIM.InputHeight) })
-        tween(continueGlow, MOTION.Hover, { ImageTransparency = 0.4 })
-        tween(continueStroke, MOTION.Hover, { Transparency = 0 })
-    end)
-    continueBtn.MouseLeave:Connect(function()
-        tween(continueBtn, MOTION.Hover, { Size = UDim2.fromOffset(DIM.InputWidth, DIM.InputHeight) })
-        tween(continueGlow, MOTION.Hover, { ImageTransparency = 0.8 })
-        tween(continueStroke, MOTION.Hover, { Transparency = 0.6 })
-    end)
-    continueBtn.MouseButton1Down:Connect(function()
-        tween(continueBtn, MOTION.Press, { BackgroundTransparency = 0.1 })
-    end)
-    continueBtn.MouseButton1Up:Connect(function()
-        tween(continueBtn, MOTION.Press, { BackgroundTransparency = 0 })
-    end)
+    -- ===== Right panel content =====
+    local content = Instance.new("Frame")
+    content.Name             = "Content"
+    content.Size             = UDim2.new(1, -56, 1, -56)
+    content.Position         = UDim2.new(0, 28, 0, 28)
+    content.BackgroundTransparency = 1
+    content.Parent = rightPanel
+
+    -- RETINA title
+    local title = Instance.new("TextLabel")
+    title.Name             = "Title"
+    title.Size             = UDim2.new(1, 0, 0, 36)
+    title.Position         = UDim2.new(0, 0, 0, 0)
+    title.BackgroundTransparency = 1
+    title.Text             = config.Title or "RETINA"
+    title.TextColor3       = Theme.Text
+    title.Font             = Enum.Font.GothamBlack
+    title.TextSize         = 28
+    title.TextXAlignment   = Enum.TextXAlignment.Left
+    title.Parent = content
+
+    -- Subtitle
+    local subtitle = Instance.new("TextLabel")
+    subtitle.Name             = "Subtitle"
+    subtitle.Size             = UDim2.new(1, 0, 0, 20)
+    subtitle.Position         = UDim2.new(0, 0, 0, 38)
+    subtitle.BackgroundTransparency = 1
+    subtitle.Text             = config.Subtitle or "Welcome again, please log in to continue."
+    subtitle.TextColor3       = Theme.TextDim
+    subtitle.Font             = Enum.Font.Gotham
+    subtitle.TextSize         = 13
+    subtitle.TextXAlignment   = Enum.TextXAlignment.Left
+    subtitle.Parent = content
+
+    -- ===== Form layout (fixed pixel math, scales via UIScale) =====
+    local formY   = 78
+    local inputH  = 44
+    local gap     = 12
+
+    local _, userInput = makeInput({
+        Parent      = content,
+        Size        = UDim2.new(1, 0, 0, inputH),
+        Position    = UDim2.new(0, 0, 0, formY),
+        Placeholder = "Enter username",
+        Name        = "Username",
+    })
+
+    local _, passInput = makeInput({
+        Parent      = content,
+        Size        = UDim2.new(1, 0, 0, inputH),
+        Position    = UDim2.new(0, 0, 0, formY + inputH + gap),
+        Placeholder = "Enter password",
+        Name        = "Password",
+    })
+    passInput.TextSecure = true
+
+    local continueBtn = makeButton({
+        Parent     = content,
+        Size       = UDim2.new(1, 0, 0, inputH),
+        Position   = UDim2.new(0, 0, 0, formY + (inputH + gap) * 2),
+        Text       = "Continue",
+        Color      = Theme.Accent,
+        HoverColor = Theme.AccentHover,
+        TextSize   = 15,
+        Font       = Enum.Font.GothamMedium,
+        Radius     = 10,
+        Gradient   = { Theme.Accent, Theme.AccentHover, Rotation = 90 },
+    })
+
+    -- ===== OR separator =====
+    local sepY = formY + (inputH + gap) * 2 + inputH + 18
+
+    local orLeft = Instance.new("Frame")
+    orLeft.Name             = "OrLineLeft"
+    orLeft.Size             = UDim2.new(0.42, 0, 0, 1)
+    orLeft.Position         = UDim2.new(0, 0, 0, sepY + 9)
+    orLeft.BackgroundColor3 = Theme.Divider
+    orLeft.BorderSizePixel  = 0
+    orLeft.Parent = content
+
+    local orText = Instance.new("TextLabel")
+    orText.Name             = "OrText"
+    orText.Size             = UDim2.new(0.16, 0, 0, 20)
+    orText.Position         = UDim2.new(0.42, 0, 0, sepY)
+    orText.BackgroundTransparency = 1
+    orText.Text             = "OR"
+    orText.TextColor3       = Theme.TextDim
+    orText.Font             = Enum.Font.GothamMedium
+    orText.TextSize         = 12
+    orText.Parent = content
+
+    local orRight = Instance.new("Frame")
+    orRight.Name             = "OrLineRight"
+    orRight.Size             = UDim2.new(0.42, 0, 0, 1)
+    orRight.Position         = UDim2.new(0.58, 0, 0, sepY + 9)
+    orRight.BackgroundColor3 = Theme.Divider
+    orRight.BorderSizePixel  = 0
+    orRight.Parent = content
+
+    -- ===== Purchase subscription button =====
+    local purchaseY = sepY + 30
+    local purchaseBtn = makeButton({
+        Parent     = content,
+        Size       = UDim2.new(1, 0, 0, inputH),
+        Position   = UDim2.new(0, 0, 0, purchaseY),
+        Text       = "Purchasing a subscription",
+        Color      = Theme.Secondary,
+        HoverColor = Theme.SecondaryHov,
+        TextColor  = Theme.Text,
+        TextSize   = 14,
+        Font       = Enum.Font.GothamMedium,
+        Radius     = 10,
+        Stroke     = { Color = Theme.Border, Thickness = 1, Transparency = 0 },
+    })
+
+    -- ===== Dragging (whole window, skips interactive elements) =====
+    makeDraggable(holder, window)
+
+    -- ===== Behavior wiring =====
     continueBtn.Activated:Connect(function()
-        local u = usernameBox.Text or ""
-        local p = realPassword
-        if callbacks.OnLogin then callbacks.OnLogin(u, p) end
-    end)
-
-    -- Subscription button hover
-    subBtn.MouseEnter:Connect(function()
-        tween(subBtn, MOTION.Hover, { TextColor3 = THEME.SubscriptionLink })
-    end)
-    subBtn.MouseLeave:Connect(function()
-        tween(subBtn, MOTION.Hover, { TextColor3 = THEME.SubscriptionText })
-    end)
-    subBtn.Activated:Connect(function()
-        if callbacks.OnPurchase then callbacks.OnPurchase() end
-    end)
-
-    -- Make the left panel and the top area of the right panel draggable
-    local cancelDrag = makeDraggable(window, leftPanel)
-    -- Also allow drag from the form's top area (above the title) — but only via a dedicated drag strip
-    -- For simplicity, the left panel is the primary drag handle.
-
-    -- Responsive scaling — re-evaluate on viewport resize
-    local viewportConn
-    viewportConn = workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
-        applyScale(uiScale)
-    end)
-
-    -- ============================================================
-    -- Public API (window object)
-    -- ============================================================
-    local windowObj = {}
-
-    function windowObj:SetSubtitle(text)
-        subtitleLabel.Text = text or ""
-    end
-
-    function windowObj:SetLogo(assetId)
-        logo.Image = assetId or "rbxassetid://0"
-    end
-
-    function windowObj:SetTitle(text)
-        titleLabel.Text = text or "RETINA"
-    end
-
-    function windowObj:OnClose(fn)      callbacks.OnClose = fn end
-    function windowObj:OnLogin(fn)      callbacks.OnLogin = fn end
-    function windowObj:OnPurchase(fn)   callbacks.OnPurchase = fn end
-
-    function windowObj:Show()
-        if isOpen or isDestroyed then return end
-        isOpen = true
-        gui.Enabled = true
-
-        -- Entrance choreography: fade + scale + slight spring (Back easing gives the spring feel)
-        -- See motion_mastery/choreography_ownership.md — single owner for the entrance.
-        if inFlightTween then inFlightTween:Cancel() end
-
-        window.BackgroundTransparency = 1
-        uiScale.Scale = 0.92
-        shadow.ImageTransparency = 1
-
-        if isReducedMotion() then
-            window.BackgroundTransparency = 0
-            uiScale.Scale = computeScale()
-            shadow.ImageTransparency = 0.6
-        else
-            task.spawn(function()
-                -- Phase 1: fade in window + shadow, scale 0.92 → 1.0 (with Back overshoot for spring)
-                local t1 = tween(window, MOTION.WindowOpen, { BackgroundTransparency = 0 })
-                local t2 = tween(uiScale, MOTION.WindowOpen, { Scale = computeScale() })
-                tween(shadow, MOTION.WindowOpen, { ImageTransparency = 0.6 })
-                inFlightTween = t2
-            end)
+        if callbacks.onLogin then
+            callbacks.onLogin(userInput.Text, passInput.Text)
         end
+    end)
+    passInput.FocusLost:Connect(function(enter)
+        if enter and callbacks.onLogin then
+            callbacks.onLogin(userInput.Text, passInput.Text)
+        end
+    end)
+    purchaseBtn.Activated:Connect(function()
+        if callbacks.onPurchase then
+            callbacks.onPurchase()
+        end
+    end)
+
+    -- ===== Open / Close animations =====
+    local isShown   = false
+    local isClosing = false
+
+    local function animateOpen()
+        holder.GroupTransparency      = 1
+        uiscale.Scale                 = 0.9
+        backdrop.BackgroundTransparency = 1
+
+        tween(uiscale,   { Scale = 1 }, 0.55, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+        tween(holder,    { GroupTransparency = 0 }, 0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        tween(backdrop,  { BackgroundTransparency = 0.5 }, 0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
     end
 
-    function windowObj:Hide()
-        if not isOpen or isDestroyed then return end
-        isOpen = false
-
-        if inFlightTween then inFlightTween:Cancel() end
-
-        if isReducedMotion() then
-            self:Destroy()
-            return
-        end
-
-        -- Exit choreography: fade out + slight scale down, then destroy
-        task.spawn(function()
-            local t1 = tween(window, MOTION.WindowClose, { BackgroundTransparency = 1 })
-            local t2 = tween(uiScale, MOTION.WindowClose, { Scale = computeScale() * 0.92 })
-            tween(shadow, MOTION.WindowClose, { ImageTransparency = 1 })
-            inFlightTween = t1
-            t1.Completed:Wait()
-            self:Destroy()
+    local function animateClose(onDone)
+        isClosing = true
+        tween(uiscale, { Scale = 0.92 }, 0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+        local t = tween(holder, { GroupTransparency = 1 }, 0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+        tween(backdrop, { BackgroundTransparency = 1 }, 0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+        t.Completed:Once(function()
+            if onDone then onDone() end
+            gui:Destroy()
         end)
     end
 
-    function windowObj:Destroy()
-        if isDestroyed then return end
-        isDestroyed = true
-        -- Teardown — see luau-max-quality-mode checklists/cleanup-gate.md
-        cancelDrag()
-        if viewportConn then viewportConn:Disconnect() end
-        if inFlightTween then inFlightTween:Cancel() end
+    closeBtn.Activated:Connect(function()
+        if isClosing then return end
+        animateClose(function()
+            if callbacks.onClose then callbacks.onClose() end
+        end)
+    end)
+
+    -- ===== Window API =====
+    local Window = {}
+
+    function Window:SetTitle(text)
+        title.Text = text
+    end
+
+    function Window:SetSubtitle(text)
+        subtitle.Text = text
+    end
+
+    function Window:SetLogo(assetId)
+        logo.Image = assetId
+    end
+
+    function Window:SetFooter(text)
+        footer.Text = text
+    end
+
+    function Window:OnClose(cb)    callbacks.onClose    = cb end
+    function Window:OnLogin(cb)    callbacks.onLogin    = cb end
+    function Window:OnPurchase(cb) callbacks.onPurchase = cb end
+
+    function Window:Show()
+        if isShown then return end
+        isShown = true
+        animateOpen()
+        return self
+    end
+
+    function Window:Hide()
+        if not isShown or isClosing then return end
+        isShown = false
+        animateClose()
+        return self
+    end
+
+    function Window:Destroy()
         gui:Destroy()
     end
 
-    function windowObj:IsOpen() return isOpen end
+    -- Exposed for advanced consumers
+    Window._gui    = gui
+    Window._holder = holder
+    Window._window = window
 
-    -- Expose raw elements for advanced consumers (rare; intentionally minimal)
-    windowObj._gui = gui
-    windowObj._window = window
-
-    return windowObj
+    return Window
 end
 
 -- ============================================================
--- Module export
+-- MODULE EXPORT
+-- Returns a factory function so `loadfile("UI.lua")()` works.
 -- ============================================================
-local UI = {}
-
-function UI:CreateWindow(config)
-    return buildWindow(config)
+return function()
+    return {
+        CreateWindow = createWindow,
+        Theme        = Theme,
+    }
 end
-
--- Optional helpers exposed for testing
-UI._internal = {
-    Theme = THEME,
-    Dimensions = DIM,
-    Motion = MOTION,
-    Spring = Spring,
-    ComputeScale = computeScale,
-}
-
-return UI
