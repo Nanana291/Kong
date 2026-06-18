@@ -34,7 +34,25 @@ local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
-local UserGameSettings = game:GetService("UserGameSettings")
+
+-- UserGameSettings may be blocked or sandboxed in some executor environments.
+-- Wrap access in pcall so the UI degrades gracefully to "no reduced motion" instead of erroring.
+local UserGameSettings
+pcall(function()
+    UserGameSettings = game:GetService("UserGameSettings")
+end)
+-- Some executors return a non-functional stub; verify the property is actually readable.
+do
+    local ok = pcall(function()
+        if UserGameSettings then
+            -- Access the property to ensure it is not a sandbox stub that throws on read.
+            local _ = UserGameSettings.ReducedMotionEnabled
+        end
+    end)
+    if not ok then
+        UserGameSettings = nil
+    end
+end
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
@@ -106,7 +124,11 @@ local MOTION = {
 }
 
 local function isReducedMotion()
-    return UserGameSettings.ReducedMotionEnabled == true
+    if not UserGameSettings then return false end
+    local ok, value = pcall(function()
+        return UserGameSettings.ReducedMotionEnabled
+    end)
+    return ok and value == true
 end
 
 local function resolve(spec)
