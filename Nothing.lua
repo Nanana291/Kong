@@ -1810,44 +1810,20 @@ function Library.new(config)
 			return false
 		end
 
-		local bucket = self.Controls[flag]
-		if not bucket then
-			bucket = {}
-			self.Controls[flag] = bucket
-		end
-
-		local alreadyTracked = false
-		for i = #bucket, 1, -1 do
-			local item = bucket[i]
-			local root = item and item.Root
-			if item == object then
-				alreadyTracked = true
-			elseif item == nil or item.Destroyed == true or root == nil or root.Parent == nil then
-				table.remove(bucket, i)
-			end
-		end
-
 		local existing = self.Registered[flag]
 		if existing and existing ~= object then
-			local existingRoot = existing.Root
-			local stale = existing.Destroyed == true
-				or existingRoot == nil
-				or existingRoot.Parent == nil
+			local root = existing.Root
+			local stale = existing.Destroyed == true or root == nil or root.Parent == nil
 			if stale then
 				self.Registered[flag] = nil
 			else
-				warn(("[Nothing UI] Duplicate Flag detected: %s"):format(flag))
+				warn(("[Nothing UI] Duplicate Flag rejected: %s"):format(flag))
+				return false
 			end
 		end
 
-		if not alreadyTracked then
-			bucket[#bucket + 1] = object
-		end
-
-		if not self.Registered[flag] then
-			self.Registered[flag] = object
-		end
-
+		self.Registered[flag] = object
+		self.Controls[flag] = object
 		if object.GetValue then
 			local ok, current = pcall(function()
 				return object:GetValue()
@@ -1873,7 +1849,7 @@ function Library.new(config)
 		if self.LoadedData and self.LoadedData[flag] ~= nil and self:GetSetter(object) then
 			local loadedValue = self.LoadedData[flag]
 			task.defer(function()
-				if object.Flag == flag and object.Destroyed ~= true then
+				if self.Controls[flag] == object and object.Destroyed ~= true then
 					local wasLoading = self.LoadingConfig
 					self.LoadingConfig = true
 					self:ApplyValueToObject(flag, object, loadedValue, false)
@@ -1882,7 +1858,7 @@ function Library.new(config)
 			end)
 		end
 
-		return self.Registered[flag] == object
+		return true
 	end
 
 	function ConfigManager:Unregister(flag, object)
@@ -1891,38 +1867,21 @@ function Library.new(config)
 			return false
 		end
 
-		local removed = false
-		local bucket = self.Controls[flag]
-		if bucket then
-			for i = #bucket, 1, -1 do
-				local item = bucket[i]
-				local root = item and item.Root
-				if (object and item == object) or item == nil or item.Destroyed == true or root == nil or root.Parent == nil then
-					table.remove(bucket, i)
-					removed = true
-				end
-			end
-			if #bucket == 0 then
-				self.Controls[flag] = nil
-			end
+		local current = self.Controls[flag] or self.Registered[flag]
+		if object and current ~= object then
+			return false
 		end
 
-		local current = self.Registered[flag]
-		if current == object or current == nil or current.Destroyed == true or current.Root == nil or current.Root.Parent == nil then
-			self.Registered[flag] = bucket and bucket[1] or nil
+		self.Controls[flag] = nil
+		self.Registered[flag] = nil
+		self.Values[flag] = nil
+		if current then
+			current.Destroyed = true
+			current.Flag = nil
+			current.ConfigManager = nil
 		end
 
-		if object then
-			object.Destroyed = true
-			object.Flag = nil
-			object.ConfigManager = nil
-		end
-
-		if not self.Registered[flag] and not self.Controls[flag] then
-			self.Values[flag] = nil
-		end
-
-		return removed
+		return true
 	end
 
 	function ConfigManager:Update(flag, value)
@@ -1981,39 +1940,16 @@ function Library.new(config)
 		self.LoadingConfig = true
 		for flag, value in pairs(self.LoadedData) do
 			if flag ~= ConfigMetaKey then
-				local bucket = self.Controls[flag]
-				if bucket then
-					for i = #bucket, 1, -1 do
-						local object = bucket[i]
-						local root = object and object.Root
-						if object == nil or object.Destroyed == true or root == nil or root.Parent == nil then
-							table.remove(bucket, i)
-						elseif self:GetSetter(object) and self:ApplyValueToObject(flag, object, value, silent == true) then
-							applied = applied + 1
-						end
-					end
-					if #bucket == 0 then
-						self.Controls[flag] = nil
-						self.Registered[flag] = nil
-					else
-						local primary = self.Registered[flag]
-						local primaryValid = false
-						for _, item in ipairs(bucket) do
-							if item == primary then
-								primaryValid = true
-								break
-							end
-						end
-						if not primaryValid then
-							self.Registered[flag] = bucket[1]
-						end
-					end
-				else
-					local object = self.Registered[flag]
-					if object and self:GetSetter(object) and object.Destroyed ~= true then
-						if self:ApplyValueToObject(flag, object, value, silent == true) then
-							applied = applied + 1
-						end
+				local object = self.Controls[flag] or self.Registered[flag]
+				local root = object and object.Root
+				if object and (object.Destroyed == true or root == nil or root.Parent == nil) then
+					self.Controls[flag] = nil
+					self.Registered[flag] = nil
+					object = nil
+				end
+				if object and self:GetSetter(object) then
+					if self:ApplyValueToObject(flag, object, value, silent == true) then
+						applied = applied + 1
 					end
 				end
 			end
