@@ -3840,6 +3840,7 @@ function Library.new(config)
 				System.Position = UDim2.new(0.975000024, 0, 0.5, 0)
 				System.Size = UDim2.new(0.155000001, 0, 0.600000024, 0)
 				System.ZIndex = 18
+				ThemeManager:BindAccent(System, "BackgroundColor3")
 
 				UICorner.CornerRadius = UDim.new(0.5, 0)
 				UICorner.Parent = System
@@ -4119,11 +4120,23 @@ function Library.new(config)
 							TextTransparency = 0.02
 						}):Play()
 
+						Twen:Create(System,TweenInfo.new(0.15,Enum.EasingStyle.Quint),{
+							BackgroundTransparency = 0.86
+						}):Play()
+						Twen:Create(UIStroke_2,TweenInfo.new(0.15,Enum.EasingStyle.Quint),{
+							Transparency = 0.66
+						}):Play()
 						Twen:Create(Icon,TweenInfo.new(0.15,Enum.EasingStyle.Quint),{
 							Position = UDim2.new(0.75, 0, 0.5, 0),
-							BackgroundTransparency = 0.4
+							BackgroundTransparency = 0.32
 						}):Play()
 					else
+						Twen:Create(System,TweenInfo.new(0.15,Enum.EasingStyle.Quint),{
+							BackgroundTransparency = 1
+						}):Play()
+						Twen:Create(UIStroke_2,TweenInfo.new(0.15,Enum.EasingStyle.Quint),{
+							Transparency = 0.85
+						}):Play()
 						Twen:Create(Icon,TweenInfo.new(0.15,Enum.EasingStyle.Quint),{
 							Position = UDim2.new(0.25, 0, 0.5, 0),
 							BackgroundTransparency = 0.500
@@ -4160,6 +4173,10 @@ function Library.new(config)
 						ApplyValue(value == true, silent, ConfigManager.LoadingConfig == true)
 					end,
 					Value = function(first, second, third)
+						local value, silent = NormalizeMethodArgs(ToggleObject, first, second, third)
+						ApplyValue(value == true, silent, ConfigManager.LoadingConfig == true)
+					end,
+					Set = function(first, second, third)
 						local value, silent = NormalizeMethodArgs(ToggleObject, first, second, third)
 						ApplyValue(value == true, silent, ConfigManager.LoadingConfig == true)
 					end,
@@ -5283,8 +5300,8 @@ function Library.new(config)
 				local ABox = Instance.new("TextBox")
 				local ColorpickerObject
 
-				local CollapsedHeight = 40
-				local ExpandedHeight = conf.AllowTransparency and 216 or 192
+				local CollapsedHeight = 38
+				local ExpandedHeight = conf.AllowTransparency and 202 or 176
 				local TextUpdating = false
 				local Dispatching = false
 				local Expanded = false
@@ -5521,7 +5538,7 @@ function Library.new(config)
 					box.ClearTextOnFocus = false
 					box.Font = Enum.Font.GothamBold
 					box.TextColor3 = Color3.fromRGB(255, 255, 255)
-					box.TextSize = 11
+					box.TextSize = 10
 					box.TextTransparency = 0.15
 					box.TextWrapped = false
 					box.TextXAlignment = Enum.TextXAlignment.Center
@@ -5565,12 +5582,12 @@ function Library.new(config)
 				Icon.AnchorPoint = Vector2.new(1, 0.5)
 				Icon.BackgroundTransparency = 1
 				Icon.BorderSizePixel = 0
-				Icon.Position = UDim2.new(0.755, 0, 0, 20)
-				Icon.Size = UDim2.fromOffset(15, 15)
+				Icon.Position = UDim2.new(0.76, 0, 0, 19)
+				Icon.Size = UDim2.fromOffset(14, 14)
 				Icon.ZIndex = 19
 
-				local PixelSize = 3
-				local PixelGap = 0
+				local PixelSize = 2
+				local PixelGap = 1
 				local PixelMap = {
 					{ 2, 0, "mono" }, { 3, 0, "mono" },
 					{ 1, 1, "mono" }, { 2, 1, "accent" }, { 3, 1, "accent" }, { 4, 1, "mono" },
@@ -5601,21 +5618,21 @@ function Library.new(config)
 				TitleText.Name = "TitleText"
 				TitleText.Parent = FunctionColorpicker
 				TitleText.BackgroundTransparency = 1
-				TitleText.Position = UDim2.new(0.025, 0, 0, conf.Description ~= "" and 6 or 12)
-				TitleText.Size = UDim2.new(0.66, 0, 0, 14)
+				TitleText.Position = UDim2.new(0.025, 0, 0, conf.Description ~= "" and 5 or 11)
+				TitleText.Size = UDim2.new(0.66, 0, 0, 13)
 				TitleText.ZIndex = 19
 				TitleText.Font = Enum.Font.GothamBold
 				TitleText.Text = tostring(conf.Title or "Colorpicker")
 				TitleText.TextColor3 = Color3.fromRGB(255, 255, 255)
-				TitleText.TextSize = 14
+				TitleText.TextSize = 13
 				TitleText.TextTransparency = 0.25
 				TitleText.TextXAlignment = Enum.TextXAlignment.Left
 
 				DescriptionText.Name = "DescriptionText"
 				DescriptionText.Parent = FunctionColorpicker
 				DescriptionText.BackgroundTransparency = 1
-				DescriptionText.Position = UDim2.new(0.025, 0, 0, 21)
-				DescriptionText.Size = UDim2.new(0.66, 0, 0, 11)
+				DescriptionText.Position = UDim2.new(0.025, 0, 0, 18)
+				DescriptionText.Size = UDim2.new(0.66, 0, 0, 10)
 				DescriptionText.ZIndex = 19
 				DescriptionText.Font = Enum.Font.GothamBold
 				DescriptionText.Text = tostring(conf.Description or "")
@@ -5631,8 +5648,8 @@ function Library.new(config)
 				PreviewShell.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 				PreviewShell.BackgroundTransparency = 0.45
 				PreviewShell.BorderSizePixel = 0
-				PreviewShell.Position = UDim2.new(0.86, 0, 0, 20)
-				PreviewShell.Size = UDim2.fromOffset(36, 18)
+				PreviewShell.Position = UDim2.new(0.86, 0, 0, 19)
+				PreviewShell.Size = UDim2.fromOffset(34, 16)
 				PreviewShell.ZIndex = 19
 				PreviewShell.ClipsDescendants = true
 				PreviewCorner.CornerRadius = UDim.new(0, 4)
@@ -5653,21 +5670,21 @@ function Library.new(config)
 				Arrow.Parent = FunctionColorpicker
 				Arrow.AnchorPoint = Vector2.new(1, 0.5)
 				Arrow.BackgroundTransparency = 1
-				Arrow.Position = UDim2.new(0.965, 0, 0, 20)
+				Arrow.Position = UDim2.new(0.965, 0, 0, 19)
 				Arrow.Size = UDim2.fromOffset(20, 20)
 				Arrow.ZIndex = 19
 				Arrow.Font = Enum.Font.GothamBold
 				Arrow.Text = "⌄"
 				Arrow.TextColor3 = Color3.fromRGB(255, 255, 255)
-				Arrow.TextSize = 16
+				Arrow.TextSize = 14
 				Arrow.TextTransparency = 0.35
 
 				Body.Name = "Body"
 				Body.Parent = FunctionColorpicker
 				Body.BackgroundTransparency = 1
 				Body.BorderSizePixel = 0
-				Body.Position = UDim2.new(0.035, 0, 0, 44)
-				Body.Size = UDim2.new(0.93, 0, 0, ExpandedHeight - 50)
+				Body.Position = UDim2.new(0.035, 0, 0, 42)
+				Body.Size = UDim2.new(0.93, 0, 0, ExpandedHeight - 46)
 				Body.ZIndex = 18
 
 				ColorArea.Name = "ColorArea"
@@ -5675,7 +5692,7 @@ function Library.new(config)
 				ColorArea.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
 				ColorArea.BorderSizePixel = 0
 				ColorArea.Position = UDim2.new(0, 0, 0, 0)
-				ColorArea.Size = UDim2.new(0.58, 0, 0, 104)
+				ColorArea.Size = UDim2.new(0.58, 0, 0, 96)
 				ColorArea.ZIndex = 19
 				ColorArea.ClipsDescendants = true
 				ColorCorner.CornerRadius = UDim.new(0, 5)
@@ -5706,7 +5723,7 @@ function Library.new(config)
 				ColorCursor.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 				ColorCursor.BackgroundTransparency = 0.45
 				ColorCursor.BorderSizePixel = 0
-				ColorCursor.Size = UDim2.fromOffset(12, 12)
+				ColorCursor.Size = UDim2.fromOffset(10, 10)
 				ColorCursor.ZIndex = 24
 				CursorCorner.CornerRadius = UDim.new(1, 0)
 				CursorCorner.Parent = ColorCursor
@@ -5718,7 +5735,7 @@ function Library.new(config)
 				LargePreview.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 				LargePreview.BorderSizePixel = 0
 				LargePreview.Position = UDim2.new(0.62, 0, 0, 0)
-				LargePreview.Size = UDim2.new(0.38, 0, 0, 34)
+				LargePreview.Size = UDim2.new(0.38, 0, 0, 30)
 				LargePreview.ZIndex = 19
 				LargePreviewCorner.CornerRadius = UDim.new(0, 5)
 				LargePreviewCorner.Parent = LargePreview
@@ -5729,8 +5746,8 @@ function Library.new(config)
 				HueTrack.Parent = Body
 				HueTrack.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 				HueTrack.BorderSizePixel = 0
-				HueTrack.Position = UDim2.new(0, 0, 0, 116)
-				HueTrack.Size = UDim2.new(1, 0, 0, 14)
+				HueTrack.Position = UDim2.new(0, 0, 0, 106)
+				HueTrack.Size = UDim2.new(1, 0, 0, 12)
 				HueTrack.ZIndex = 19
 				HueCorner.CornerRadius = UDim.new(0, 5)
 				HueCorner.Parent = HueTrack
@@ -5750,7 +5767,7 @@ function Library.new(config)
 				HueThumb.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 				HueThumb.BorderSizePixel = 0
 				HueThumb.Position = UDim2.fromScale(0, 0.5)
-				HueThumb.Size = UDim2.fromOffset(8, 20)
+				HueThumb.Size = UDim2.fromOffset(7, 18)
 				HueThumb.ZIndex = 23
 				HueThumbCorner.CornerRadius = UDim.new(0, 4)
 				HueThumbCorner.Parent = HueThumb
@@ -5760,8 +5777,8 @@ function Library.new(config)
 				AlphaTrack.Parent = Body
 				AlphaTrack.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 				AlphaTrack.BorderSizePixel = 0
-				AlphaTrack.Position = UDim2.new(0, 0, 0, 136)
-				AlphaTrack.Size = UDim2.new(1, 0, 0, 14)
+				AlphaTrack.Position = UDim2.new(0, 0, 0, 124)
+				AlphaTrack.Size = UDim2.new(1, 0, 0, 12)
 				AlphaTrack.ZIndex = 19
 				AlphaTrack.Visible = conf.AllowTransparency
 				AlphaCorner.CornerRadius = UDim.new(0, 5)
@@ -5789,18 +5806,18 @@ function Library.new(config)
 				AlphaThumb.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 				AlphaThumb.BorderSizePixel = 0
 				AlphaThumb.Position = UDim2.fromScale(1, 0.5)
-				AlphaThumb.Size = UDim2.fromOffset(8, 20)
+				AlphaThumb.Size = UDim2.fromOffset(7, 18)
 				AlphaThumb.ZIndex = 23
 				AlphaThumbCorner.CornerRadius = UDim.new(0, 4)
 				AlphaThumbCorner.Parent = AlphaThumb
 				AlphaThumbStroke.Transparency = 0.35
 				AlphaThumbStroke.Parent = AlphaThumb
 
-				MakeInputBox(HexBox, "Hex", UDim2.new(0.62, 0, 0, 42), UDim2.new(0.38, 0, 0, 22))
-				MakeInputBox(RBox, "R", UDim2.new(0.62, 0, 0, 72), UDim2.new(0.115, 0, 0, 22))
-				MakeInputBox(GBox, "G", UDim2.new(0.755, 0, 0, 72), UDim2.new(0.115, 0, 0, 22))
-				MakeInputBox(BBox, "B", UDim2.new(0.89, 0, 0, 72), UDim2.new(0.11, 0, 0, 22))
-				MakeInputBox(ABox, "Alpha", UDim2.new(0.62, 0, 0, 102), UDim2.new(0.38, 0, 0, 22))
+				MakeInputBox(HexBox, "Hex", UDim2.new(0.62, 0, 0, 38), UDim2.new(0.38, 0, 0, 20))
+				MakeInputBox(RBox, "R", UDim2.new(0.62, 0, 0, 66), UDim2.new(0.115, 0, 0, 20))
+				MakeInputBox(GBox, "G", UDim2.new(0.755, 0, 0, 66), UDim2.new(0.115, 0, 0, 20))
+				MakeInputBox(BBox, "B", UDim2.new(0.89, 0, 0, 66), UDim2.new(0.11, 0, 0, 20))
+				MakeInputBox(ABox, "Alpha", UDim2.new(0.62, 0, 0, 92), UDim2.new(0.38, 0, 0, 20))
 				ABox.Visible = conf.AllowTransparency
 
 				HeaderButton.MouseEnter:Connect(function()
