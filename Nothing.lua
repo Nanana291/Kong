@@ -4187,15 +4187,15 @@ function Library.new(config)
 					end,
 					SetValue = function(first, second, third)
 						local value, silent = NormalizeMethodArgs(ToggleObject, first, second, third)
-						ApplyValue(value, silent, ConfigManager.LoadingConfig == true)
+						return ApplyValue(value, silent, ConfigManager.LoadingConfig == true)
 					end,
 					Value = function(first, second, third)
 						local value, silent = NormalizeMethodArgs(ToggleObject, first, second, third)
-						ApplyValue(value, silent, ConfigManager.LoadingConfig == true)
+						return ApplyValue(value, silent, ConfigManager.LoadingConfig == true)
 					end,
 					Set = function(first, second, third)
 						local value, silent = NormalizeMethodArgs(ToggleObject, first, second, third)
-						ApplyValue(value, silent, ConfigManager.LoadingConfig == true)
+						return ApplyValue(value, silent, ConfigManager.LoadingConfig == true)
 					end,
 					Visible = function(newindx)
 						SearchManager:SetObjectVisible(ToggleObject, newindx)
@@ -5601,34 +5601,48 @@ function Library.new(config)
 				Icon.Size = UDim2.fromOffset(14, 14)
 				Icon.ZIndex = 19
 
-				local PixelSize = 2
-				local PixelGap = 1
-				local PixelMap = {
-					{ 2, 0, "mono" }, { 3, 0, "mono" },
-					{ 1, 1, "mono" }, { 2, 1, "accent" }, { 3, 1, "accent" }, { 4, 1, "mono" },
-					{ 0, 2, "mono" }, { 1, 2, "accent" }, { 2, 2, "cut" }, { 3, 2, "accent" }, { 4, 2, "mono" },
-					{ 0, 3, "mono" }, { 1, 3, "mono" }, { 2, 3, "accent" }, { 3, 3, "mono" },
-					{ 1, 4, "mono" }, { 2, 4, "mono" }, { 3, 4, "mono" },
-				}
-				for _, pixel in ipairs(PixelMap) do
-					local dot = Instance.new("Frame")
-					dot.Name = "Pixel"
-					dot.Parent = Icon
-					dot.BorderSizePixel = 0
-					dot.Position = UDim2.fromOffset(pixel[1] * (PixelSize + PixelGap), pixel[2] * (PixelSize + PixelGap))
-					dot.Size = UDim2.fromOffset(PixelSize, PixelSize)
-					dot.ZIndex = 20
-					if pixel[3] == "accent" then
-						dot.BackgroundColor3 = ThemeManager:GetColor("Accent")
-						ThemeManager:BindAccent(dot, "BackgroundColor3")
-					elseif pixel[3] == "cut" then
-						dot.BackgroundColor3 = Color3.fromRGB(17, 17, 17)
-						dot.BackgroundTransparency = 0.05
-					else
-						dot.BackgroundColor3 = Color3.fromRGB(235, 235, 235)
-						dot.BackgroundTransparency = 0.1
+				local function BuildPixelSwatchIcon(parent)
+					local pixelSize = 2
+					local pixelGap = 1
+					local bitmap = {
+						"AA.RR",
+						"AA.RR",
+						"..M..",
+						"BB.YY",
+						"BB.YY",
+					}
+					local palette = {
+						A = "Accent",
+						R = Color3.fromRGB(210, 72, 72),
+						B = Color3.fromRGB(70, 126, 218),
+						Y = Color3.fromRGB(220, 178, 70),
+						M = Color3.fromRGB(232, 232, 232),
+					}
+
+					for y, row in ipairs(bitmap) do
+						for x = 1, #row do
+							local token = row:sub(x, x)
+							local color = palette[token]
+							if color then
+								local dot = Instance.new("Frame")
+								dot.Name = "Pixel"
+								dot.Parent = parent
+								dot.BorderSizePixel = 0
+								dot.Position = UDim2.fromOffset((x - 1) * (pixelSize + pixelGap), (y - 1) * (pixelSize + pixelGap))
+								dot.Size = UDim2.fromOffset(pixelSize, pixelSize)
+								dot.ZIndex = 20
+								if color == "Accent" then
+									dot.BackgroundColor3 = ThemeManager:GetColor("Accent")
+									ThemeManager:BindAccent(dot, "BackgroundColor3")
+								else
+									dot.BackgroundColor3 = color
+								end
+							end
+						end
 					end
 				end
+
+				BuildPixelSwatchIcon(Icon)
 
 				TitleText.Name = "TitleText"
 				TitleText.Parent = FunctionColorpicker
