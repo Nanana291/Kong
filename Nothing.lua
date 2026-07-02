@@ -4170,7 +4170,7 @@ function Library.new(config)
 					return changed
 				end;
 
-				ApplyValue(toggle.Default, true, true);
+				ApplyValue(toggle.Default, true);
 
 				Button.MouseButton1Click:Connect(function()
 					ApplyValue(not CurrentValue, false)
