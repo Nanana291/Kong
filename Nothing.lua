@@ -1817,6 +1817,8 @@ function Library.new(config)
 			if stale then
 				self.Registered[flag] = nil
 			else
+				object.Flag = nil
+				object.ConfigManager = nil
 				warn(("[Nothing UI] Duplicate Flag rejected: %s"):format(flag))
 				return false
 			end
@@ -3768,15 +3770,13 @@ function Library.new(config)
 					return false
 				end
 
-				toggle = Config(toggle,{
+				toggle = Config(toggle, {
 					Title = "Toggle",
 					Default = false,
-					Callback = function() end;
-				});
+					Callback = function() end,
+				})
 				toggle.Default = ResolveToggleValue(toggle.Default)
 				toggle.Flag = toggle.Flag and tostring(toggle.Flag) or nil
-				local ActiveFlag = toggle.Flag
-				local Registered = false
 
 				local FunctionToggle = Instance.new("Frame")
 				local UIAspectRatioConstraint = Instance.new("UIAspectRatioConstraint")
@@ -3799,7 +3799,7 @@ function Library.new(config)
 				FunctionToggle.BorderSizePixel = 0
 				FunctionToggle.Size = UDim2.new(0.949999988, 0, 0.5, 0)
 				FunctionToggle.ZIndex = 17
-				Twen:Create(FunctionToggle,TweenInfo1,{BackgroundTransparency = 0.8}):Play();
+				Twen:Create(FunctionToggle, TweenInfo1, { BackgroundTransparency = 0.8 }):Play()
 
 				UIAspectRatioConstraint.Parent = FunctionToggle
 				UIAspectRatioConstraint.AspectRatio = 8.000
@@ -3825,7 +3825,11 @@ function Library.new(config)
 				TextInt.TextXAlignment = Enum.TextXAlignment.Left
 
 				UIGradient.Rotation = 90
-				UIGradient.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0.00, 0.00), NumberSequenceKeypoint.new(0.84, 0.25), NumberSequenceKeypoint.new(1.00, 1.00)}
+				UIGradient.Transparency = NumberSequence.new({
+					NumberSequenceKeypoint.new(0.00, 0.00),
+					NumberSequenceKeypoint.new(0.84, 0.25),
+					NumberSequenceKeypoint.new(1.00, 1.00),
+				})
 				UIGradient.Parent = TextInt
 
 				Button.Name = "Button"
@@ -3842,10 +3846,10 @@ function Library.new(config)
 				Button.TextSize = 14.000
 				Button.TextTransparency = 1.000
 
-			UIStroke.Transparency = 0.950
-			UIStroke.Color = Color3.fromRGB(255, 255, 255)
-			UIStroke.Parent = FunctionToggle
-			ThemeManager:BindAccentStroke(UIStroke)
+				UIStroke.Transparency = 0.950
+				UIStroke.Color = Color3.fromRGB(255, 255, 255)
+				UIStroke.Parent = FunctionToggle
+				ThemeManager:BindAccentStroke(UIStroke)
 
 				System.Name = "System"
 				System.Parent = FunctionToggle
@@ -3862,23 +3866,23 @@ function Library.new(config)
 				UICorner.CornerRadius = UDim.new(0.5, 0)
 				UICorner.Parent = System
 
-			UIStroke_2.Transparency = 0.850
-			UIStroke_2.Color = Color3.fromRGB(255, 255, 255)
-			UIStroke_2.Parent = System
-			ThemeManager:BindAccentStroke(UIStroke_2)
+				UIStroke_2.Transparency = 0.850
+				UIStroke_2.Color = Color3.fromRGB(255, 255, 255)
+				UIStroke_2.Parent = System
+				ThemeManager:BindAccentStroke(UIStroke_2)
 
 				Icon.Name = "Icon"
 				Icon.Parent = System
 				Icon.AnchorPoint = Vector2.new(0.5, 0.5)
-			Icon.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-			Icon.BackgroundTransparency = 0.500
+				Icon.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+				Icon.BackgroundTransparency = 0.500
 				Icon.BorderColor3 = Color3.fromRGB(0, 0, 0)
 				Icon.BorderSizePixel = 0
 				Icon.Position = UDim2.new(0.25, 0, 0.5, 0)
-			Icon.Size = UDim2.new(1, 0, 1, 0)
-			Icon.SizeConstraint = Enum.SizeConstraint.RelativeYY
-			Icon.ZIndex = 17
-			ThemeManager:BindAccent(Icon, "BackgroundColor3")
+				Icon.Size = UDim2.new(1, 0, 1, 0)
+				Icon.SizeConstraint = Enum.SizeConstraint.RelativeYY
+				Icon.ZIndex = 17
+				ThemeManager:BindAccent(Icon, "BackgroundColor3")
 
 				UICorner_2.CornerRadius = UDim.new(1, 0)
 				UICorner_2.Parent = Icon
@@ -3886,7 +3890,120 @@ function Library.new(config)
 				UICorner_3.CornerRadius = UDim.new(0, 2)
 				UICorner_3.Parent = FunctionToggle
 
+				local ToggleObject = nil
 				local AttachedKeybind = nil
+				local ActiveTweens = setmetatable({}, { __mode = "k" })
+				local State = {
+					Value = toggle.Default,
+					Flag = toggle.Flag,
+					Registered = false,
+					Dispatching = false,
+					Destroyed = false,
+				}
+
+				local function PlayToggleTween(instance, info, props, instant, channel)
+					if not instance then
+						return nil
+					end
+
+					channel = channel or "Main"
+					local bucket = ActiveTweens[instance]
+					if not bucket then
+						bucket = {}
+						ActiveTweens[instance] = bucket
+					end
+
+					local previous = bucket[channel]
+					if previous then
+						previous:Cancel()
+						bucket[channel] = nil
+					end
+
+					if instant then
+						for property, value in pairs(props) do
+							instance[property] = value
+						end
+						return nil
+					end
+
+					local tween = Twen:Create(instance, info, props)
+					bucket[channel] = tween
+					tween.Completed:Connect(function()
+						if bucket[channel] == tween then
+							bucket[channel] = nil
+						end
+					end)
+					tween:Play()
+					return tween
+				end
+
+				local function RenderToggle(value, instant)
+					local enabled = value == true
+					local info = TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+					local popInfo = TweenInfo.new(0.11, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+
+					PlayToggleTween(TextInt, info, {
+						TextTransparency = enabled and 0.02 or 0.25,
+					}, instant)
+					PlayToggleTween(System, info, {
+						BackgroundTransparency = enabled and 0.86 or 1,
+					}, instant)
+					PlayToggleTween(UIStroke_2, info, {
+						Transparency = enabled and 0.66 or 0.85,
+					}, instant)
+					PlayToggleTween(Icon, info, {
+						Position = enabled and UDim2.new(0.75, 0, 0.5, 0) or UDim2.new(0.25, 0, 0.5, 0),
+						BackgroundTransparency = enabled and 0.32 or 0.500,
+					}, instant)
+
+					if not instant then
+						PlayToggleTween(Icon, popInfo, {
+							Size = UDim2.new(1.08, 0, 1.08, 0),
+						}, false, "Pop")
+						task.delay(0.075, function()
+							if not State.Destroyed and Icon.Parent then
+								PlayToggleTween(Icon, popInfo, {
+									Size = UDim2.new(1, 0, 1, 0),
+								}, false, "Pop")
+							end
+						end)
+					else
+						Icon.Size = UDim2.new(1, 0, 1, 0)
+					end
+				end
+
+				local function DispatchCallback(value, silent)
+					if silent or type(toggle.Callback) ~= "function" or State.Dispatching then
+						return
+					end
+
+					State.Dispatching = true
+					toggle.Callback(value)
+					State.Dispatching = false
+				end
+
+				local function SetToggleValue(value, silent)
+					if State.Destroyed then
+						return false
+					end
+
+					local nextValue = ResolveToggleValue(value)
+					local changed = nextValue ~= State.Value
+
+					State.Value = nextValue
+					toggle.Default = nextValue
+					if State.Flag and State.Registered then
+						ConfigManager:Update(State.Flag, nextValue)
+					end
+
+					RenderToggle(nextValue, false)
+					if changed then
+						DispatchCallback(nextValue, silent == true)
+					end
+
+					return changed
+				end
+
 				local function UpdateToggleTitleWidth(hasKeybind)
 					TextInt.Size = hasKeybind and UDim2.new(0.699999988, 0, 0.479999989, 0)
 						or UDim2.new(0.949999988, 0, 0.479999989, 0)
@@ -3970,7 +4087,6 @@ function Library.new(config)
 						TooltipManager:Attach(KeybindButton, bindCfg.Tooltip)
 					end
 
-					local ApplyBind
 					local function UpdateBindDisplay(new)
 						if new == "..." then
 							KeybindText.Text = "..."
@@ -4008,31 +4124,27 @@ function Library.new(config)
 						return true
 					end
 
-					ApplyBind = function(newValue, silent, force)
+					local function ApplyBind(newValue, silent, force)
 						local resolved = ResolveKeybindValue(newValue, CurrentBind)
 						if not force and resolved == CurrentBind then
-							return false
-						end
-
-						local changed = UpdateBindDisplay(resolved)
-						if not changed then
 							if BindActiveFlag then
 								ConfigManager:Update(BindActiveFlag, CurrentBind)
 							end
 							return false
 						end
 
+						local changed = UpdateBindDisplay(resolved)
 						if BindActiveFlag then
 							ConfigManager:Update(BindActiveFlag, CurrentBind)
 						end
 
-						if not silent and type(bindCfg.Callback) == "function" and not Dispatching then
+						if changed and not silent and type(bindCfg.Callback) == "function" and not Dispatching then
 							Dispatching = true
 							bindCfg.Callback(CurrentBind)
 							Dispatching = false
 						end
 
-						return true
+						return changed == true
 					end
 
 					UpdateToggleTitleWidth(true)
@@ -4083,141 +4195,113 @@ function Library.new(config)
 					AttachedKeybind = {
 						Flag = bindCfg.Flag,
 						Root = KeybindFrame,
+						Get = function()
+							return CurrentBind
+						end,
 						GetValue = function()
 							return CurrentBind
 						end,
+						Set = function(first, second, third)
+							local value, silent = NormalizeMethodArgs(AttachedKeybind, first, second, third)
+							return ApplyBind(value, silent)
+						end,
 						SetValue = function(first, second, third)
 							local value, silent = NormalizeMethodArgs(AttachedKeybind, first, second, third)
-							ApplyBind(value, silent)
+							return ApplyBind(value, silent)
 						end,
 						Value = function(first, second, third)
 							local value, silent = NormalizeMethodArgs(AttachedKeybind, first, second, third)
-							ApplyBind(value, silent)
+							return ApplyBind(value, silent)
+						end,
+						Refresh = function()
+							UpdateBindDisplay(CurrentBind)
+							return CurrentBind
 						end,
 						Visible = function(newindx)
 							KeybindFrame.Visible = newindx
 						end,
-						Destroy = function()
-							if BindActiveFlag then
-								ConfigManager:Unregister(BindActiveFlag, AttachedKeybind)
+						Destroy = function(self)
+							local handle = AttachedKeybind or self
+							if not handle or handle.Destroyed then
+								return
 							end
-							AttachedKeybind.Destroyed = true
+							if BindActiveFlag then
+								ConfigManager:Unregister(BindActiveFlag, handle)
+							end
+							handle.Destroyed = true
 							KeybindFrame:Destroy()
-							AttachedKeybind = nil
+							if AttachedKeybind == handle then
+								AttachedKeybind = nil
+							end
 							UpdateToggleTitleWidth(false)
 						end,
 					}
 
-					if bindCfg.Flag then
-						ConfigManager:Register(bindCfg.Flag, AttachedKeybind)
+					if bindCfg.Flag and ConfigManager:Register(bindCfg.Flag, AttachedKeybind) then
 						BindActiveFlag = AttachedKeybind.Flag
+					else
+						BindActiveFlag = nil
 					end
 
 					return AttachedKeybind
 				end
 
-				local Dispatching = false
-				local CurrentValue = ResolveToggleValue(toggle.Default)
-				local ActiveTweens = setmetatable({}, { __mode = "k" })
-
-				local function PlayToggleTween(instance, info, props)
-					local previous = ActiveTweens[instance]
-					if previous then
-						previous:Cancel()
-					end
-
-					local tween = Twen:Create(instance, info, props)
-					ActiveTweens[instance] = tween
-					tween:Play()
-					return tween
-				end
-
-				local function ApplyValue(value, silent)
-					local nextValue = ResolveToggleValue(value)
-					local changed = nextValue ~= CurrentValue
-
-					CurrentValue = nextValue
-					toggle.Default = nextValue
-					if Registered and ActiveFlag then
-						ConfigManager:Update(ActiveFlag, nextValue)
-					end
-					if nextValue then
-
-						PlayToggleTween(TextInt, TweenInfo.new(0.15,Enum.EasingStyle.Quint), {
-							TextTransparency = 0.02
-						})
-
-						PlayToggleTween(System, TweenInfo.new(0.15,Enum.EasingStyle.Quint), {
-							BackgroundTransparency = 0.86
-						})
-						PlayToggleTween(UIStroke_2, TweenInfo.new(0.15,Enum.EasingStyle.Quint), {
-							Transparency = 0.66
-						})
-						PlayToggleTween(Icon, TweenInfo.new(0.15,Enum.EasingStyle.Quint), {
-							Position = UDim2.new(0.75, 0, 0.5, 0),
-							BackgroundTransparency = 0.32
-						})
-					else
-						PlayToggleTween(System, TweenInfo.new(0.15,Enum.EasingStyle.Quint), {
-							BackgroundTransparency = 1
-						})
-						PlayToggleTween(UIStroke_2, TweenInfo.new(0.15,Enum.EasingStyle.Quint), {
-							Transparency = 0.85
-						})
-						PlayToggleTween(Icon, TweenInfo.new(0.15,Enum.EasingStyle.Quint), {
-							Position = UDim2.new(0.25, 0, 0.5, 0),
-							BackgroundTransparency = 0.500
-						})
-
-						PlayToggleTween(TextInt, TweenInfo.new(0.15,Enum.EasingStyle.Quint), {
-							TextTransparency = 0.25
-						})
-					end;
-
-					if changed and not silent and type(toggle.Callback) == "function" and not Dispatching then
-						Dispatching = true
-						toggle.Callback(nextValue)
-						Dispatching = false
-					end
-
-					return changed
-				end;
-
-				ApplyValue(toggle.Default, true);
-
-				Button.MouseButton1Click:Connect(function()
-					ApplyValue(not CurrentValue, false)
-				end)
-
-				local ToggleObject = {
+				ToggleObject = {
+					Type = "Toggle",
 					Flag = toggle.Flag,
 					Root = FunctionToggle,
+					Get = function()
+						return State.Value == true
+					end,
 					GetValue = function()
-						return CurrentValue == true
-					end,
-					SetValue = function(first, second, third)
-						local value, silent = NormalizeMethodArgs(ToggleObject, first, second, third)
-						return ApplyValue(value, silent)
-					end,
-					Value = function(first, second, third)
-						local value, silent = NormalizeMethodArgs(ToggleObject, first, second, third)
-						return ApplyValue(value, silent)
+						return State.Value == true
 					end,
 					Set = function(first, second, third)
 						local value, silent = NormalizeMethodArgs(ToggleObject, first, second, third)
-						return ApplyValue(value, silent)
+						return SetToggleValue(value, silent)
+					end,
+					SetValue = function(first, second, third)
+						local value, silent = NormalizeMethodArgs(ToggleObject, first, second, third)
+						return SetToggleValue(value, silent)
+					end,
+					Value = function(first, second, third)
+						local value, silent = NormalizeMethodArgs(ToggleObject, first, second, third)
+						return SetToggleValue(value, silent)
+					end,
+					Refresh = function()
+						RenderToggle(State.Value, false)
+						return State.Value == true
 					end,
 					Visible = function(newindx)
 						SearchManager:SetObjectVisible(ToggleObject, newindx)
 					end,
 					NewKeybind = function(first, second)
 						local bindCfg = first == ToggleObject and second or first
-						local handle = CreateAttachedKeybind(bindCfg)
-						return handle
+						return CreateAttachedKeybind(bindCfg)
 					end,
 					Destroy = function()
-						if ActiveFlag then
-							ConfigManager:Unregister(ActiveFlag, ToggleObject)
+						if State.Destroyed then
+							return
+						end
+
+						State.Destroyed = true
+						if State.Flag then
+							ConfigManager:Unregister(State.Flag, ToggleObject)
+						end
+						if AttachedKeybind and not AttachedKeybind.Destroyed then
+							AttachedKeybind:Destroy()
+						end
+						for instance, bucket in pairs(ActiveTweens) do
+							if type(bucket) == "table" then
+								for _, tween in pairs(bucket) do
+									if tween then
+										tween:Cancel()
+									end
+								end
+							elseif bucket then
+								bucket:Cancel()
+							end
+							ActiveTweens[instance] = nil
 						end
 						ToggleObject.Destroyed = true
 						FunctionToggle:Destroy()
@@ -4226,11 +4310,18 @@ function Library.new(config)
 
 				RegisterSearchableControl(ToggleObject, FunctionToggle, toggle.Title, nil, toggle.Tooltip, Button, SectionTable)
 
-				if toggle.Flag then
-					ConfigManager:Register(toggle.Flag, ToggleObject)
-					ActiveFlag = ToggleObject.Flag
+				RenderToggle(State.Value, true)
+				if toggle.Flag and ConfigManager:Register(toggle.Flag, ToggleObject) then
+					State.Flag = ToggleObject.Flag
+					State.Registered = true
+				else
+					State.Flag = nil
+					ToggleObject.Flag = nil
 				end
-				Registered = true
+
+				Button.MouseButton1Click:Connect(function()
+					ToggleObject:Set(not State.Value)
+				end)
 
 				return ToggleObject
 			end;
