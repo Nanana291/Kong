@@ -1419,6 +1419,7 @@ function Library.new(config)
 		Registered = {},
 		Values = {},
 		LoadedData = nil,
+		LoadingConfig = false,
 		SelectedConfig = "",
 		AutoloadEnabled = false,
 		Theme = "Default",
@@ -1756,6 +1757,18 @@ function Library.new(config)
 
 	function ConfigManager:SetAutoloadEnabled(enabled, silent)
 		enabled = enabled and true or false
+		if enabled then
+			if self.SelectedConfig == "" or not self:IsConfigAvailable(self.SelectedConfig) then
+				self.AutoloadEnabled = false
+				if not silent then
+					self:Notify("Autoload Disabled", "Select a valid config before enabling autoload.", "x")
+					self:PersistAutoload()
+				end
+				self:SyncSettingsUI()
+				return false
+			end
+		end
+
 		if self.AutoloadEnabled == enabled then
 			if not silent then
 				self:PersistAutoload()
@@ -1820,12 +1833,9 @@ function Library.new(config)
 
 		if self.LoadedData and self.LoadedData[flag] ~= nil and object.SetValue then
 			local loadedValue = self.LoadedData[flag]
-			self.Values[flag] = loadedValue
 			task.defer(function()
-				if object and object.SetValue and object.Destroyed ~= true then
-					pcall(function()
-						object:SetValue(ResolveLoadedConfigValue(loadedValue), false)
-					end)
+				if self.Registered[flag] == object and object.Destroyed ~= true then
+					self:ApplyValueToObject(flag, object, loadedValue, false)
 				end
 			end)
 		end
@@ -1869,22 +1879,58 @@ function Library.new(config)
 		self.Values[tostring(flag)] = value ~= nil and value or ConfigNilValue
 	end
 
-	function ConfigManager:ApplyLoadedData()
-		if type(self.LoadedData) ~= "table" then
-			return
+	function ConfigManager:ApplyValueToObject(flag, object, rawValue, silent)
+		flag = tostring(flag or "")
+		if flag == "" or not object or object.Destroyed == true or not object.SetValue then
+			return false
 		end
 
+		local value = ResolveLoadedConfigValue(rawValue)
+		local ok, err = xpcall(function()
+			object:SetValue(value, silent == true)
+		end, debug.traceback)
+
+		if not ok then
+			warn(("[Nothing UI] Failed to restore Flag '%s': %s"):format(flag, tostring(err)))
+			return false
+		end
+
+		if object.GetValue then
+			local got, current = pcall(function()
+				return object:GetValue()
+			end)
+			if got then
+				self.Values[flag] = current ~= nil and current or ConfigNilValue
+			else
+				self.Values[flag] = value ~= nil and value or ConfigNilValue
+			end
+		else
+			self.Values[flag] = value ~= nil and value or ConfigNilValue
+		end
+
+		return true
+	end
+
+	function ConfigManager:ApplyLoadedData(silent)
+		if type(self.LoadedData) ~= "table" then
+			return 0
+		end
+
+		local applied = 0
+		self.LoadingConfig = true
 		for flag, value in pairs(self.LoadedData) do
 			if flag ~= ConfigMetaKey then
 				local object = self.Registered[flag]
 				if object and object.SetValue and object.Destroyed ~= true then
-					self.Values[flag] = value
-					pcall(function()
-						object:SetValue(ResolveLoadedConfigValue(value), false)
-					end)
+					if self:ApplyValueToObject(flag, object, value, silent == true) then
+						applied = applied + 1
+					end
 				end
 			end
 		end
+		self.LoadingConfig = false
+
+		return applied
 	end
 
 	function ConfigManager:LoadConfig(name, silent)
@@ -1914,7 +1960,7 @@ function Library.new(config)
 		end
 
 		self.LoadedData = CloneConfigValues(data)
-		self:ApplyLoadedData()
+		self:ApplyLoadedData(false)
 		self.SelectedConfig = name
 		self.Theme = ThemeManager:GetThemeName(ThemeManager.ActiveTheme)
 		self:PersistAutoload()
@@ -1966,36 +2012,53 @@ function Library.new(config)
 		self.Theme = ThemeManager:GetThemeName(self.ConstructorTheme or ThemeManager.ActiveTheme or "Default")
 
 		local data = self:ReadJson(self:GetAutoloadPath())
-		if type(data) == "table" then
-			self.AutoloadEnabled = data.Enabled == true
-			if IsValidConfigName(data.Config) then
-				self.SelectedConfig = NormalizeConfigName(data.Config, true)
-			else
-				self.SelectedConfig = ""
-				self.AutoloadEnabled = false
-			end
-			self.Theme = ThemeManager:GetThemeName(data.Theme or self.Theme)
+		if type(data) ~= "table" then
+			ThemeManager:SetTheme(self.Theme, true)
+			self:SyncSettingsUI()
+			return false
 		end
 
+		self.AutoloadEnabled = data.Enabled == true
+		self.Theme = ThemeManager:GetThemeName(data.Theme or self.Theme)
 		ThemeManager:SetTheme(self.Theme, true)
 
-		if self.SelectedConfig ~= "" and not self:IsConfigAvailable(self.SelectedConfig) then
+		if IsValidConfigName(data.Config) then
+			self.SelectedConfig = NormalizeConfigName(data.Config, true)
+		end
+
+		if not self.AutoloadEnabled then
+			self:SyncSettingsUI(self.SelectedConfig ~= "" and self.SelectedConfig or nil)
+			return false
+		end
+
+		if self.SelectedConfig == "" or not self:IsConfigAvailable(self.SelectedConfig) then
+			local missing = self.SelectedConfig
 			self.SelectedConfig = ""
 			self.AutoloadEnabled = false
-		end
-
-		if self.AutoloadEnabled and self.SelectedConfig ~= "" then
-			if not self:IsConfigAvailable(self.SelectedConfig) then
-				self.AutoloadEnabled = false
-				self.SelectedConfig = ""
-			elseif not self:LoadConfig(self.SelectedConfig, true) then
-				self.AutoloadEnabled = false
-				self.SelectedConfig = ""
+			self:PersistAutoload()
+			self:SyncSettingsUI()
+			if missing ~= "" then
+				self:Notify("Autoload Disabled", ("Config '%s' no longer exists."):format(missing), "x")
 			end
+			return false
 		end
 
-		self:SyncSettingsUI(self.SelectedConfig ~= "" and self.SelectedConfig or nil)
+		local selected = self.SelectedConfig
+		if self:LoadConfig(selected, true) then
+			self.AutoloadEnabled = true
+			self.SelectedConfig = selected
+			self:PersistAutoload()
+			self:SyncSettingsUI(selected)
+			self:Notify("Autoload", ("Automatically loaded configuration '%s'."):format(selected), "check")
+			return true
+		end
+
+		self.AutoloadEnabled = false
+		self.SelectedConfig = ""
 		self:PersistAutoload()
+		self:SyncSettingsUI()
+		self:Notify("Autoload Disabled", ("Could not load config '%s'."):format(selected), "x")
+		return false
 	end
 
 	function ConfigManager:BuildSettingsTab()
