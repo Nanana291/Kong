@@ -452,6 +452,19 @@ local function SafeWriteFile(path, data)
 	return ok
 end
 
+local function SafeIsFile(path)
+	if typeof(isfile) ~= "function" then
+		return nil
+	end
+
+	local ok, exists = pcall(isfile, path)
+	if ok then
+		return exists == true
+	end
+
+	return false
+end
+
 local function SafeListFiles(path)
 	if typeof(listfiles) ~= "function" then
 		return {}
@@ -465,9 +478,24 @@ local function SafeListFiles(path)
 	return {}
 end
 
+local ConfigNilValue = setmetatable({}, {
+	__tostring = function()
+		return "__NothingUIConfigNil__"
+	end,
+})
+
+local ConfigNilKey = "__nothingui_internal_nil__"
+local ConfigMetaKey = "__nothingui"
+
 local function SerializeConfigValue(value, seen)
 	local valueType = typeof(value)
-	if value == nil or valueType == "string" or valueType == "number" or valueType == "boolean" then
+	if value == nil or value == ConfigNilValue then
+		return {
+			[ConfigNilKey] = true,
+		}
+	end
+
+	if valueType == "string" or valueType == "number" or valueType == "boolean" then
 		return value
 	end
 
@@ -497,6 +525,83 @@ local function SerializeConfigValue(value, seen)
 	end
 
 	return tostring(value)
+end
+
+local function DecodeConfigValue(value, seen)
+	if value == nil then
+		return nil
+	end
+
+	if type(value) ~= "table" then
+		return value
+	end
+
+	if value[ConfigNilKey] == true and next(value, ConfigNilKey) == nil then
+		return ConfigNilValue
+	end
+
+	seen = seen or {}
+	if seen[value] then
+		return nil
+	end
+
+	seen[value] = true
+	local result = {}
+
+	for key, entry in pairs(value) do
+		if key ~= ConfigNilKey then
+			local decodedKey = DecodeConfigValue(key, seen)
+			if decodedKey ~= nil then
+				result[decodedKey] = DecodeConfigValue(entry, seen)
+			end
+		end
+	end
+
+	seen[value] = nil
+	return result
+end
+
+local function CloneConfigValues(data)
+	local result = {}
+	if type(data) ~= "table" then
+		return result
+	end
+
+	for key, value in pairs(data) do
+		if key ~= ConfigMetaKey then
+			result[key] = value
+		end
+	end
+
+	return result
+end
+
+local function ResolveLoadedConfigValue(value, seen)
+	if value == ConfigNilValue then
+		return nil
+	end
+
+	if type(value) ~= "table" then
+		return value
+	end
+
+	seen = seen or {}
+	if seen[value] then
+		return nil
+	end
+
+	seen[value] = true
+	local result = {}
+
+	for key, entry in pairs(value) do
+		local resolvedKey = ResolveLoadedConfigValue(key, seen)
+		if resolvedKey ~= nil then
+			result[resolvedKey] = ResolveLoadedConfigValue(entry, seen)
+		end
+	end
+
+	seen[value] = nil
+	return result
 end
 
 local function DecodeFileName(path)
@@ -608,12 +713,27 @@ function Library.GradientImage(E : Frame , Color)
 end;
 
 function Library.new(config)
+	local UserSearchBar = config and config.SearchBar
+	local UserTheme = config and config.Theme
 	config = Config(config,{
 		Title = "UI Library",
 		Description = "discord.gg/BH6pE7jesa",
 		Keybind = Enum.KeyCode.LeftControl,
-		Size = UDim2.new(0.100000001, 445, 0.100000001, 315)
+		Size = UDim2.new(0.100000001, 445, 0.100000001, 315),
+		SearchBar = true,
+		Theme = "Default",
 	});
+
+	if UserSearchBar == false then
+		config.SearchBar = false
+	end
+	if UserTheme ~= nil then
+		config.Theme = UserTheme
+	end
+
+	config.SearchBar = config.SearchBar ~= false
+	config.Theme = ThemeManager:NormalizeTheme(config.Theme or "Default")
+	ThemeManager.ActiveTheme = config.Theme
 
 	local TweenInfo1 = TweenInfo.new(1,Enum.EasingStyle.Quint,Enum.EasingDirection.InOut);
 	local TweenInfo2 = TweenInfo.new(0.7,Enum.EasingStyle.Quint,Enum.EasingDirection.InOut);
@@ -668,6 +788,7 @@ function Library.new(config)
 	WindowTable.Dropdown = {};
 	WindowTable.WindowToggle = true;
 	WindowTable.Keybind = config.Keybind;
+	WindowTable.SearchBar = config.SearchBar
 	WindowTable.ToggleButton = nil
 	WindowTable.Theme = ThemeManager
 	
@@ -1289,6 +1410,7 @@ function Library.new(config)
 		SelectedConfig = "",
 		AutoloadEnabled = false,
 		Theme = "Default",
+		ConstructorTheme = config.Theme,
 		Folder = LibraryState.Defaults.Folder,
 		SubFolder = LibraryState.Defaults.SubFolder,
 		SettingsUI = nil,
@@ -1408,7 +1530,7 @@ function Library.new(config)
 		end)
 
 		if ok and type(decoded) == "table" then
-			return decoded
+			return DecodeConfigValue(decoded)
 		end
 
 		return nil
@@ -1433,7 +1555,8 @@ function Library.new(config)
 		local seen = {}
 		for _, file in ipairs(SafeListFiles(self:GetConfigFolder())) do
 			local name = DecodeFileName(file)
-			if name and name ~= "autoload" and not seen[name] then
+			name = name and NormalizeConfigName(name, true) or nil
+			if name and IsValidConfigName(name) and name ~= "autoload" and not seen[name] then
 				seen[name] = true
 				configs[#configs + 1] = name
 			end
@@ -1460,21 +1583,27 @@ function Library.new(config)
 	end
 
 	function ConfigManager:SerializeValues()
+		local result = {
+			[ConfigMetaKey] = {
+				Theme = ThemeManager:GetThemeName(ThemeManager.ActiveTheme),
+			},
+		}
+		local nextValues = {}
+
 		for flag, object in pairs(self.Registered) do
 			if object and object.GetValue and object.Destroyed ~= true then
 				local ok, current = pcall(function()
 					return object:GetValue()
 				end)
 				if ok then
-					self.Values[flag] = current
+					nextValues[flag] = current ~= nil and current or ConfigNilValue
+					result[flag] = SerializeConfigValue(current)
 				end
 			end
 		end
 
-		local result = {}
-		for flag, value in pairs(self.Values) do
-			result[flag] = SerializeConfigValue(value)
-		end
+		self.Values = nextValues
+
 		return result
 	end
 
@@ -1500,19 +1629,13 @@ function Library.new(config)
 			end
 
 			if selected ~= nil and not available[selected] then
-				if selectedOverride ~= nil then
-					configs[#configs + 1] = selected
-					table.sort(configs)
-					available[selected] = true
-				else
-					selected = nil
-					if self.SelectedConfig ~= "" then
-						self.SelectedConfig = ""
+				selected = nil
+				if self.SelectedConfig ~= "" then
+					self.SelectedConfig = ""
+					needsPersist = true
+					if self.AutoloadEnabled then
+						self.AutoloadEnabled = false
 						needsPersist = true
-						if self.AutoloadEnabled then
-							self.AutoloadEnabled = false
-							needsPersist = true
-						end
 					end
 				end
 			end
@@ -1543,7 +1666,7 @@ function Library.new(config)
 
 			if ui.ThemeDropdown and ui.ThemeDropdown.SetValue then
 				local current = ui.ThemeDropdown.GetValue and ui.ThemeDropdown:GetValue() or nil
-				local selectedTheme = ThemeManager:GetThemeName(self.Theme or ThemeManager.ActiveTheme)
+				local selectedTheme = ThemeManager:GetThemeName(ThemeManager.ActiveTheme)
 				if current ~= selectedTheme then
 					ui.ThemeDropdown:SetValue(selectedTheme, true)
 				end
@@ -1566,14 +1689,38 @@ function Library.new(config)
 		self:WriteJson(self:GetAutoloadPath(), {
 			Enabled = self.AutoloadEnabled and true or false,
 			Config = self.SelectedConfig ~= "" and self.SelectedConfig or nil,
-			Theme = ThemeManager:GetThemeName(self.Theme or ThemeManager.ActiveTheme),
+			Theme = ThemeManager:GetThemeName(ThemeManager.ActiveTheme),
 		})
+	end
+
+	function ConfigManager:Notify(title, description, icon)
+		if type(Library.Notification) ~= "function" then
+			return
+		end
+
+		pcall(function()
+			local manager = Library.Notification()
+			if manager and manager.new then
+				manager.new({
+					Title = title or "Nothing UI",
+					Description = description or "",
+					Duration = 2.5,
+					Icon = icon or "check",
+				})
+			end
+		end)
 	end
 
 	function ConfigManager:SetSelectedConfig(name, silent)
 		name = name and tostring(name) or ""
 		name = name:gsub("^%s+", ""):gsub("%s+$", "")
 		if name ~= "" and not IsValidConfigName(name) then
+			return false
+		end
+		if name ~= "" and not self:IsConfigAvailable(name) then
+			if not silent then
+				self:Notify("Config Missing", ("Config '%s' does not exist."):format(name), "x")
+			end
 			return false
 		end
 
@@ -1585,7 +1732,7 @@ function Library.new(config)
 		end
 
 		self.SelectedConfig = name
-		self.Theme = ThemeManager:GetThemeName(self.Theme or ThemeManager.ActiveTheme)
+		self.Theme = ThemeManager:GetThemeName(ThemeManager.ActiveTheme)
 
 		if not silent then
 			self:PersistAutoload()
@@ -1605,7 +1752,7 @@ function Library.new(config)
 		end
 
 		self.AutoloadEnabled = enabled
-		self.Theme = ThemeManager:GetThemeName(self.Theme or ThemeManager.ActiveTheme)
+		self.Theme = ThemeManager:GetThemeName(ThemeManager.ActiveTheme)
 
 		if not silent then
 			self:PersistAutoload()
@@ -1617,7 +1764,7 @@ function Library.new(config)
 
 	function ConfigManager:Register(flag, object)
 		flag = tostring(flag or "")
-		if flag == "" or type(object) ~= "table" then
+		if flag == "" or flag == ConfigMetaKey or flag == ConfigNilKey or type(object) ~= "table" then
 			return false
 		end
 
@@ -1643,6 +1790,8 @@ function Library.new(config)
 			end)
 			if ok and current ~= nil then
 				self.Values[flag] = current
+			elseif ok and current == nil then
+				self.Values[flag] = ConfigNilValue
 			end
 		end
 		object.Flag = flag
@@ -1663,7 +1812,7 @@ function Library.new(config)
 			task.defer(function()
 				if object and object.SetValue and object.Destroyed ~= true then
 					pcall(function()
-						object:SetValue(loadedValue, false)
+						object:SetValue(ResolveLoadedConfigValue(loadedValue), false)
 					end)
 				end
 			end)
@@ -1688,6 +1837,7 @@ function Library.new(config)
 		end
 
 		self.Registered[flag] = nil
+		self.Values[flag] = nil
 		if current and current.Destroyed ~= true then
 			current.Destroyed = true
 		end
@@ -1704,7 +1854,7 @@ function Library.new(config)
 			return
 		end
 
-		self.Values[tostring(flag)] = value
+		self.Values[tostring(flag)] = value ~= nil and value or ConfigNilValue
 	end
 
 	function ConfigManager:ApplyLoadedData()
@@ -1713,18 +1863,25 @@ function Library.new(config)
 		end
 
 		for flag, value in pairs(self.LoadedData) do
-			local object = self.Registered[flag]
-			if object and object.SetValue and object.Destroyed ~= true then
-				pcall(function()
-					object:SetValue(value, false)
-				end)
+			if flag ~= ConfigMetaKey then
+				local object = self.Registered[flag]
+				if object and object.SetValue and object.Destroyed ~= true then
+					self.Values[flag] = value
+					pcall(function()
+						object:SetValue(ResolveLoadedConfigValue(value), false)
+					end)
+				end
 			end
 		end
 	end
 
-	function ConfigManager:LoadConfig(name)
-		name = name and NormalizeConfigName(name, true) or ""
+	function ConfigManager:LoadConfig(name, silent)
+		name = name and tostring(name) or ""
+		name = name:gsub("^%s+", ""):gsub("%s+$", "")
 		if not IsValidConfigName(name) then
+			if not silent then
+				self:Notify("Invalid Config", "The config name is empty or contains invalid characters.", "x")
+			end
 			return false
 		end
 
@@ -1732,35 +1889,60 @@ function Library.new(config)
 		local data = self:ReadJson(self:GetConfigPath(name))
 		if type(data) ~= "table" then
 			self.LoadedData = nil
+			if not silent then
+				self:Notify("Load Failed", ("Could not read config '%s'."):format(name), "x")
+			end
 			return false
 		end
 
-		self.LoadedData = data
+		local meta = type(data[ConfigMetaKey]) == "table" and data[ConfigMetaKey] or nil
+		if meta and meta.Theme ~= nil then
+			self.Theme = ThemeManager:GetThemeName(meta.Theme)
+			ThemeManager:SetTheme(self.Theme, true)
+		end
+
+		self.LoadedData = CloneConfigValues(data)
 		self:ApplyLoadedData()
 		self.SelectedConfig = name
-		self.Theme = ThemeManager:GetThemeName(self.Theme or ThemeManager.ActiveTheme)
+		self.Theme = ThemeManager:GetThemeName(ThemeManager.ActiveTheme)
 		self:PersistAutoload()
 		self:SyncSettingsUI(name)
+		if not silent then
+			self:Notify("Loaded Config", name, "check")
+		end
 		return true
 	end
 
-	function ConfigManager:SaveConfig(name)
+	function ConfigManager:SaveConfig(name, silent)
 		name = name and tostring(name) or ""
 		name = name:gsub("^%s+", ""):gsub("%s+$", "")
 		if not IsValidConfigName(name) then
+			if not silent then
+				self:Notify("Invalid Config", "The config name is empty or contains invalid characters.", "x")
+			end
 			return false
 		end
 
 		self:EnsureFolders()
-		local ok = self:WriteJson(self:GetConfigPath(name), self:SerializeValues())
-		if not ok then
+		local payload = self:SerializeValues()
+		local configPath = self:GetConfigPath(name)
+		local ok = self:WriteJson(configPath, payload)
+		local exists = SafeIsFile(configPath)
+		if not ok or exists == false then
+			if not silent then
+				self:Notify("Save Failed", ("Could not write config '%s'."):format(name), "x")
+			end
 			return false
 		end
 
+		self.LoadedData = CloneConfigValues(payload)
 		self.SelectedConfig = name
-		self.Theme = ThemeManager:GetThemeName(self.Theme or ThemeManager.ActiveTheme)
+		self.Theme = ThemeManager:GetThemeName(ThemeManager.ActiveTheme)
 		self:PersistAutoload()
 		self:SyncSettingsUI(name)
+		if not silent then
+			self:Notify("Saved Config", name, "check")
+		end
 		return true
 	end
 
@@ -1769,7 +1951,7 @@ function Library.new(config)
 		self.LoadedData = nil
 		self.AutoloadEnabled = false
 		self.SelectedConfig = ""
-		self.Theme = "Default"
+		self.Theme = ThemeManager:GetThemeName(self.ConstructorTheme or ThemeManager.ActiveTheme or "Default")
 
 		local data = self:ReadJson(self:GetAutoloadPath())
 		if type(data) == "table" then
@@ -1785,11 +1967,16 @@ function Library.new(config)
 
 		ThemeManager:SetTheme(self.Theme, true)
 
+		if self.SelectedConfig ~= "" and not self:IsConfigAvailable(self.SelectedConfig) then
+			self.SelectedConfig = ""
+			self.AutoloadEnabled = false
+		end
+
 		if self.AutoloadEnabled and self.SelectedConfig ~= "" then
 			if not self:IsConfigAvailable(self.SelectedConfig) then
 				self.AutoloadEnabled = false
 				self.SelectedConfig = ""
-			elseif not self:LoadConfig(self.SelectedConfig) then
+			elseif not self:LoadConfig(self.SelectedConfig, true) then
 				self.AutoloadEnabled = false
 				self.SelectedConfig = ""
 			end
@@ -1831,6 +2018,10 @@ function Library.new(config)
 			Title = "Select Config",
 			Data = self:RefreshList(),
 			Default = self.SelectedConfig ~= "" and self.SelectedConfig or nil,
+			BeforeOpen = function()
+				ConfigManager:SyncSettingsUI()
+				return ConfigManager:RefreshList()
+			end,
 			Callback = function(value)
 				if type(value) == "string" then
 					ConfigManager:SetSelectedConfig(value)
@@ -1899,7 +2090,7 @@ function Library.new(config)
 		ThemeDropdown = CustomizeSection:NewDropdown({
 			Title = "Select Theme",
 			Data = {"Default", "Kronos"},
-			Default = ThemeManager:GetThemeName(self.Theme or ThemeManager.ActiveTheme),
+			Default = ThemeManager:GetThemeName(ThemeManager.ActiveTheme),
 			Callback = function(value)
 				ThemeManager:SetTheme(value)
 			end,
@@ -2675,6 +2866,7 @@ function Library.new(config)
 			Sections = setmetatable({}, { __mode = "k" }),
 			Controls = setmetatable({}, { __mode = "k" }),
 		}
+		local SearchBarEnabled = config.SearchBar ~= false
 
 		local function NormalizeSearchText(...)
 			local parts = {}
@@ -3068,57 +3260,68 @@ function Library.new(config)
 			SearchManager:RegisterSection(object, root, title)
 		end
 
-		local SearchFrame = Instance.new("Frame")
-		local SearchCorner = Instance.new("UICorner")
-		local SearchStroke = Instance.new("UIStroke")
-		local SearchBox = Instance.new("TextBox")
+		local SearchFrame = nil
+		local SearchCorner = nil
+		local SearchStroke = nil
+		local SearchBox = nil
 
-		SearchFrame.Name = "SearchFrame"
-		SearchFrame.Parent = Init
-		SearchFrame.AnchorPoint = Vector2.new(0.5, 0)
-		SearchFrame.BackgroundColor3 = Color3.fromRGB(17, 17, 17)
-		SearchFrame.BackgroundTransparency = 0.8
-		SearchFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
-		SearchFrame.BorderSizePixel = 0
-		SearchFrame.Position = UDim2.new(0.5, 0, 0.02, 0)
-		SearchFrame.Size = UDim2.new(0.96, 0, 0, 28)
-		SearchFrame.ZIndex = 20
+		if SearchBarEnabled then
+			SearchFrame = Instance.new("Frame")
+			SearchCorner = Instance.new("UICorner")
+			SearchStroke = Instance.new("UIStroke")
+			SearchBox = Instance.new("TextBox")
 
-		SearchCorner.CornerRadius = UDim.new(0, 3)
-		SearchCorner.Parent = SearchFrame
+			SearchFrame.Name = "SearchFrame"
+			SearchFrame.Parent = Init
+			SearchFrame.AnchorPoint = Vector2.new(0.5, 0)
+			SearchFrame.BackgroundColor3 = Color3.fromRGB(17, 17, 17)
+			SearchFrame.BackgroundTransparency = 0.8
+			SearchFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
+			SearchFrame.BorderSizePixel = 0
+			SearchFrame.Position = UDim2.new(0.5, 0, 0.02, 0)
+			SearchFrame.Size = UDim2.new(0.96, 0, 0, 28)
+			SearchFrame.ZIndex = 20
 
-		SearchStroke.Transparency = 0.95
-		SearchStroke.Color = Color3.fromRGB(255, 255, 255)
-		SearchStroke.Parent = SearchFrame
-		ThemeManager:BindAccentStroke(SearchStroke)
+			SearchCorner.CornerRadius = UDim.new(0, 3)
+			SearchCorner.Parent = SearchFrame
 
-		SearchBox.Name = "SearchBox"
-		SearchBox.Parent = SearchFrame
-		SearchBox.BackgroundTransparency = 1
-		SearchBox.BorderSizePixel = 0
-		SearchBox.ClearTextOnFocus = false
-		SearchBox.Font = Enum.Font.GothamBold
-		SearchBox.PlaceholderText = "Search..."
-		SearchBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
-		SearchBox.Position = UDim2.fromOffset(10, 0)
-		SearchBox.Size = UDim2.new(1, -20, 1, 0)
-		SearchBox.Text = ""
-		SearchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-		SearchBox.TextScaled = true
-		SearchBox.TextSize = 14
-		SearchBox.TextTransparency = 0.1
-		SearchBox.TextWrapped = false
-		SearchBox.TextXAlignment = Enum.TextXAlignment.Left
-		SearchBox.ZIndex = 21
+			SearchStroke.Transparency = 0.95
+			SearchStroke.Color = Color3.fromRGB(255, 255, 255)
+			SearchStroke.Parent = SearchFrame
+			ThemeManager:BindAccentStroke(SearchStroke)
 
-		SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
-			SearchManager:SetQuery(SearchBox.Text)
-		end)
+			SearchBox.Name = "SearchBox"
+			SearchBox.Parent = SearchFrame
+			SearchBox.BackgroundTransparency = 1
+			SearchBox.BorderSizePixel = 0
+			SearchBox.ClearTextOnFocus = false
+			SearchBox.Font = Enum.Font.GothamBold
+			SearchBox.PlaceholderText = "Search..."
+			SearchBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+			SearchBox.Position = UDim2.fromOffset(10, 0)
+			SearchBox.Size = UDim2.new(1, -20, 1, 0)
+			SearchBox.Text = ""
+			SearchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+			SearchBox.TextScaled = true
+			SearchBox.TextSize = 14
+			SearchBox.TextTransparency = 0.1
+			SearchBox.TextWrapped = false
+			SearchBox.TextXAlignment = Enum.TextXAlignment.Left
+			SearchBox.ZIndex = 21
 
-		LeftFrame.Position = UDim2.new(0.25, 0, 0.57, 0)
-		LeftFrame.Size = UDim2.new(0.5, 0, 0.83, 0)
-		RightFrame.Position = UDim2.new(0.75, 0, 0.57, 0)
-		RightFrame.Size = UDim2.new(0.5, 0, 0.83, 0)
+			SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+				SearchManager:SetQuery(SearchBox.Text)
+			end)
+		else
+			SearchManager:SetQuery("")
+		end
+
+		local contentTop = SearchBarEnabled and 0.57 or 0.505
+		local contentHeight = SearchBarEnabled and 0.83 or 0.92
+		LeftFrame.Position = UDim2.new(0.25, 0, contentTop, 0)
+		LeftFrame.Size = UDim2.new(0.5, 0, contentHeight, 0)
+		RightFrame.Position = UDim2.new(0.75, 0, contentTop, 0)
+		RightFrame.Size = UDim2.new(0.5, 0, contentHeight, 0)
 
 		function TabTable:NewSection(c_o_n_f_i_g)
 			c_o_n_f_i_g = Config(c_o_n_f_i_g,{
@@ -3185,7 +3388,7 @@ function Library.new(config)
 			Icon.Size = UDim2.new(0.600000024, 0, 0.600000024, 0)
 			Icon.SizeConstraint = Enum.SizeConstraint.RelativeYY
 			Icon.ZIndex = 6
-			Icon.Image = ResolveIconSource(c_o_n_f_i_g.Icon); 
+				Icon.Image = ResolveIconSource(c_o_n_f_i_g.Icon)
 			Icon.ImageTransparency = 1
 			Twen:Create(Icon,TweenInfo2,{ImageTransparency = 0.1}):Play();
 
@@ -4712,6 +4915,14 @@ function Library.new(config)
 				end
 
 				Button.MouseButton1Click:Connect(function()
+					if type(drop.BeforeOpen) == "function" then
+						local ok, refreshed = pcall(drop.BeforeOpen)
+						if ok and type(refreshed) == "table" then
+							drop.Data = refreshed
+							ApplyValue(CurrentValue, true, true)
+						end
+					end
+
 					WindowTable.Dropdown:Setup(MFrame)
 
 					WindowTable.Dropdown:Open(drop.Data,CurrentValue,Updater,drop.Multi)
@@ -4733,6 +4944,14 @@ function Library.new(config)
 						ApplyValue(value, silent)
 					end,
 					Open = function(value)
+						if type(drop.BeforeOpen) == "function" then
+							local ok, refreshed = pcall(drop.BeforeOpen)
+							if ok and type(refreshed) == "table" then
+								drop.Data = refreshed
+								ApplyValue(CurrentValue, true, true)
+							end
+						end
+
 						WindowTable.Dropdown:Setup(MFrame)
 
 						WindowTable.Dropdown:Open(drop.Data,CurrentValue,Updater,drop.Multi)
@@ -5243,7 +5462,7 @@ function Library.new(config)
 	end;
 
 	InputFrame.InputBegan:Connect(function(input)
-		if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then 
+		if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
 			dragToggle = true
 			dragStart = input.Position
 			startPos = MainFrame.Position
@@ -6265,7 +6484,7 @@ function Library:Console()
 	end;
 
 	MFrame.InputBegan:Connect(function(input)
-		if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then 
+			if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
 			dragToggle = true
 			dragStart = input.Position
 			startPos = MFrame.Position
