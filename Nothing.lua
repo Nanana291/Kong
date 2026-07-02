@@ -20,6 +20,28 @@ local Icons = (function()
 	return nil;
 end)() or {};
 
+local function ResolveIconSource(icon)
+	if type(icon) ~= "string" then
+		return icon
+	end
+
+	local lower = string.lower(icon)
+
+	if Icons[icon] then
+		return Icons[icon]
+	end
+
+	if Icons[lower] then
+		return Icons[lower]
+	end
+
+	if icon:sub(1, 11) == "rbxassetid:" or icon:sub(1, 4) == "http" or icon:sub(1, 11) == "rbxthumb://" then
+		return icon
+	end
+
+	return icon
+end
+
 local ElBlurSource = function()
 	local GuiSystem = {}
 	local RunService = game:GetService('RunService');
@@ -195,10 +217,180 @@ local Library = {};
 
 Library['.'] = '1';
 Library['FetchIcon'] = "https://raw.githubusercontent.com/evoincorp/lucideblox/master/src/modules/util/icons.json";
+Library._ConfigDefaults = {
+	Folder = "NothingUI",
+	SubFolder = tostring(game.PlaceId),
+}
+Library._LastWindow = nil
 
 pcall(function()
 	Library['Icons'] = game:GetService('HttpService'):JSONDecode(game:HttpGetAsync(Library.FetchIcon))['icons'];
 end)
+
+local function NormalizePath(path)
+	path = tostring(path or "")
+	path = path:gsub("\\", "/"):gsub("/+", "/")
+	path = path:gsub("^%s+", ""):gsub("%s+$", "")
+	path = path:gsub("^/+", ""):gsub("/+$", "")
+	return path
+end
+
+local function PathJoin(...)
+	local parts = {}
+
+	for i = 1, select("#", ...) do
+		local part = NormalizePath(select(i, ...))
+		if part ~= "" then
+			parts[#parts + 1] = part
+		end
+	end
+
+	return table.concat(parts, "/")
+end
+
+local function EnsureFolderTree(path)
+	path = NormalizePath(path)
+	if path == "" then
+		return true
+	end
+
+	if typeof(isfolder) ~= "function" or typeof(makefolder) ~= "function" then
+		return false
+	end
+
+	local current = ""
+	for segment in path:gmatch("[^/]+") do
+		current = current == "" and segment or (current .. "/" .. segment)
+		if not isfolder(current) then
+			pcall(makefolder, current)
+		end
+	end
+
+	return true
+end
+
+local function SafeReadFile(path)
+	if typeof(readfile) ~= "function" then
+		return nil
+	end
+
+	local ok, data = pcall(readfile, path)
+	if ok then
+		return data
+	end
+
+	return nil
+end
+
+local function SafeWriteFile(path, data)
+	if typeof(writefile) ~= "function" then
+		return false
+	end
+
+	local ok = pcall(writefile, path, data)
+	return ok
+end
+
+local function SafeListFiles(path)
+	if typeof(listfiles) ~= "function" then
+		return {}
+	end
+
+	local ok, files = pcall(listfiles, path)
+	if ok and type(files) == "table" then
+		return files
+	end
+
+	return {}
+end
+
+local function SerializeConfigValue(value, seen)
+	local valueType = typeof(value)
+	if value == nil or valueType == "string" or valueType == "number" or valueType == "boolean" then
+		return value
+	end
+
+	if valueType == "EnumItem" then
+		return value.Name
+	end
+
+	if valueType == "table" then
+		seen = seen or {}
+		if seen[value] then
+			return nil
+		end
+
+		seen[value] = true
+		local result = {}
+
+		for key, entry in pairs(value) do
+			local serializedKey = SerializeConfigValue(key, seen)
+			local serializedValue = SerializeConfigValue(entry, seen)
+			if serializedKey ~= nil then
+				result[serializedKey] = serializedValue
+			end
+		end
+
+		seen[value] = nil
+		return result
+	end
+
+	return tostring(value)
+end
+
+local function DecodeFileName(path)
+	path = NormalizePath(path)
+	local name = path:match("([^/]+)%.json$")
+	if name then
+		return name
+	end
+
+	return nil
+end
+
+local function NormalizeSubFolderPath(folder, subfolder)
+	local root = NormalizePath(folder)
+	local sub = NormalizePath(subfolder)
+
+	if sub ~= "" and root ~= "" then
+		if sub == root then
+			sub = ""
+		elseif sub:sub(1, #root + 1) == (root .. "/") then
+			sub = sub:sub(#root + 2)
+		end
+	end
+
+	if sub == "" then
+		sub = tostring(game.PlaceId)
+	end
+
+	return sub
+end
+
+local function ResolveKeybindValue(value, fallback)
+	if typeof(value) == "EnumItem" then
+		return value
+	end
+
+	if type(value) == "string" and value ~= "" then
+		local stripped = value:gsub("^Enum%.KeyCode%.", "")
+		return Enum.KeyCode[stripped] or fallback or Enum.KeyCode.Unknown
+	end
+
+	return fallback or Enum.KeyCode.Unknown
+end
+
+local function FormatKeybindValue(value)
+	if typeof(value) == "EnumItem" then
+		return Input:GetStringForKeyCode(value) or value.Name
+	end
+
+	if type(value) == "string" then
+		return value
+	end
+
+	return "NONE"
+end
 
 function Library.GradientImage(E : Frame , Color)
 	local GLImage = Instance.new("ImageLabel")
@@ -259,7 +451,6 @@ function Library.new(config)
 		Title = "UI Library",
 		Description = "discord.gg/BH6pE7jesa",
 		Keybind = Enum.KeyCode.LeftControl,
-		Logo = "http://www.roblox.com/asset/?id=18810965406",
 		Size = UDim2.new(0.100000001, 445, 0.100000001, 315)
 	});
 
@@ -267,12 +458,13 @@ function Library.new(config)
 	local TweenInfo2 = TweenInfo.new(0.7,Enum.EasingStyle.Quint,Enum.EasingDirection.InOut);
 
 	local WindowTable = {};
+	local ConfigManager = nil
 	local ScreenGui = Instance.new("ScreenGui")
 	local MainFrame = Instance.new("Frame")
 	local UICorner = Instance.new("UICorner")
 	local MainDropShadow = Instance.new("ImageLabel")
 	local Headers = Instance.new("Frame")
-	local Logo = Instance.new("ImageLabel")
+	local Logo = Instance.new("Frame")
 	local UICorner_2 = Instance.new("UICorner")
 	local Title = Instance.new("TextLabel")
 	local UIGradient = Instance.new("UIGradient")
@@ -294,6 +486,22 @@ function Library.new(config)
 	local MainTabFrame = Instance.new("Frame")
 	local UICorner_7 = Instance.new("UICorner")
 	local InputFrame = Instance.new("Frame")
+	local BuiltInLogo = nil
+	local CustomLogo = nil
+	local LogoVisibleTransparency = 0
+
+	local function TweenLogoVisible(visible)
+		local target = visible and LogoVisibleTransparency or 1
+		if CustomLogo then
+			Twen:Create(CustomLogo, TweenInfo1, {
+				ImageTransparency = target,
+			}):Play()
+		elseif BuiltInLogo then
+			Twen:Create(BuiltInLogo, TweenInfo1, {
+				TextTransparency = target,
+			}):Play()
+		end
+	end
 
 	WindowTable.Tabs = {};
 	WindowTable.Dropdown = {};
@@ -315,7 +523,7 @@ function Library.new(config)
 	ImageButton.ZIndex = 50
 	ImageButton.Image = "rbxassetid://10002398990"
 	ImageButton.ImageTransparency = 1
-	
+
 	local HomeIcon = Instance.new("ImageLabel")
 	HomeIcon.Parent = ImageButton
 	HomeIcon.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -329,13 +537,66 @@ function Library.new(config)
 	HomeIcon.ScaleType = Enum.ScaleType.Fit
 	HomeIcon.ImageTransparency = 1;
 	HomeIcon.BackgroundTransparency = 1;
-	
+
+	local HasCustomLogo = type(config.Logo) == "string" and config.Logo ~= ""
+	Logo.Name = "Logo"
+	Logo.Parent = Headers
+	Logo.Active = true
+	Logo.AnchorPoint = Vector2.new(0.5, 0.5)
+	Logo.BackgroundColor3 = Color3.fromRGB(255, 0, 4)
+	Logo.BackgroundTransparency = 1.000
+	Logo.BorderColor3 = Color3.fromRGB(0, 0, 0)
+	Logo.BorderSizePixel = 0
+	Logo.ClipsDescendants = true
+	Logo.Position = UDim2.new(0.5, 0, 0.5, 0)
+	Logo.Size = UDim2.new(0.949999988, 0, 0.949999988, 0)
+	Logo.ZIndex = 4
+
+	if HasCustomLogo then
+		CustomLogo = Instance.new("ImageLabel")
+		CustomLogo.Name = "CustomLogo"
+		CustomLogo.Parent = Logo
+		CustomLogo.AnchorPoint = Vector2.new(0.5, 0.5)
+		CustomLogo.BackgroundTransparency = 1
+		CustomLogo.BorderSizePixel = 0
+		CustomLogo.Position = UDim2.new(0.5, 0, 0.5, 0)
+		CustomLogo.Size = UDim2.new(1, 0, 1, 0)
+		CustomLogo.ZIndex = 4
+		CustomLogo.Image = ResolveIconSource(config.Logo)
+		CustomLogo.ScaleType = Enum.ScaleType.Crop
+		CustomLogo.ImageTransparency = 1
+	else
+		local LogoText = Instance.new("TextLabel")
+		LogoText.Name = "BuiltInLogo"
+		LogoText.Parent = Logo
+		LogoText.AnchorPoint = Vector2.new(0.5, 0.5)
+		LogoText.BackgroundTransparency = 1
+		LogoText.BorderSizePixel = 0
+		LogoText.Position = UDim2.new(0.5, 0, 0.5, 0)
+		LogoText.Size = UDim2.new(1, 0, 1, 0)
+		LogoText.ZIndex = 4
+		LogoText.Font = Enum.Font.Arcade
+		LogoText.RichText = true
+		LogoText.Text = '<font color="rgb(235,235,235)">K</font>  <font color="rgb(82,128,214)">R</font>  <font color="rgb(82,128,214)">O</font>  <font color="rgb(82,128,214)">N</font>  <font color="rgb(235,235,235)">O</font>  <font color="rgb(235,235,235)">S</font>'
+		LogoText.TextColor3 = Color3.fromRGB(235, 235, 235)
+		LogoText.TextScaled = true
+		LogoText.TextSize = 14
+		LogoText.TextTransparency = 1
+		LogoText.TextWrapped = true
+		LogoText.TextXAlignment = Enum.TextXAlignment.Center
+		LogoText.TextYAlignment = Enum.TextYAlignment.Center
+		BuiltInLogo = LogoText
+		LogoVisibleTransparency = 0.1
+	end
+
+	TweenLogoVisible(true)
+
 	local function Update()
 		if WindowTable.WindowToggle then
 			Twen:Create(MainFrame,TweenInfo.new(1.5,Enum.EasingStyle.Quint),{BackgroundTransparency = 0.4,Size = config.Size}):Play();
 			Twen:Create(MainDropShadow,TweenInfo1,{ImageTransparency = 0.6}):Play();
 			Twen:Create(Headers,TweenInfo1,{BackgroundTransparency = 0.5}):Play();
-			Twen:Create(Logo,TweenInfo1,{ImageTransparency = 0}):Play();
+			TweenLogoVisible(true)
 			Twen:Create(MainFrame,TweenInfo.new(0.5,Enum.EasingStyle.Quint),{Position = UDim2.fromScale(0.5,0.5)}):Play();
 			WindowTable.ElBlurUI.Enabled = true;
 			
@@ -372,7 +633,7 @@ function Library.new(config)
 			Twen:Create(MainFrame,TweenInfo.new(0.5,Enum.EasingStyle.Quint),{Position = UDim2.new(0.5, 0,0.05, 0)}):Play();
 			Twen:Create(MainDropShadow,TweenInfo1,{ImageTransparency = 1}):Play();
 			Twen:Create(Headers,TweenInfo1,{BackgroundTransparency = 1}):Play();
-			Twen:Create(Logo,TweenInfo1,{ImageTransparency = 1}):Play();
+			TweenLogoVisible(false)
 			Twen:Create(TabButtonFrame,TweenInfo1,{Position = UDim2.fromScale(0.16,1.1)}):Play();
 			Twen:Create(MainTabFrame,TweenInfo1,{Position = UDim2.fromScale(1.5,0.131)}):Play();
 			Twen:Create(Description,TweenInfo1,{Position = UDim2.fromScale(1.5,0.071)}):Play();
@@ -485,23 +746,6 @@ function Library.new(config)
 	Headers.Size = UDim2.new(0.300000012, 0, 0.178419471, 0)
 	Headers.ZIndex = 3
 	Twen:Create(Headers,TweenInfo2,{BackgroundTransparency = 0.5}):Play();
-
-	Logo.Name = "Logo"
-	Logo.Parent = Headers
-	Logo.Active = true
-	Logo.AnchorPoint = Vector2.new(0.5, 0.5)
-	Logo.BackgroundColor3 = Color3.fromRGB(255, 0, 4)
-	Logo.BackgroundTransparency = 1.000
-	Logo.BorderColor3 = Color3.fromRGB(0, 0, 0)
-	Logo.BorderSizePixel = 0
-	Logo.Position = UDim2.new(0.5, 0, 0.5, 0)
-	Logo.Size = UDim2.new(0.949999988, 0, 0.949999988, 0)
-	Logo.ZIndex = 4
-	Logo.Image = config.Logo;
-	Logo.ScaleType = Enum.ScaleType.Crop
-	Logo.ImageTransparency = 1;
-
-	Twen:Create(Logo,TweenInfo2,{ImageTransparency = 0}):Play();
 
 	UICorner_2.CornerRadius = UDim.new(0, 15)
 	UICorner_2.Parent = Headers
@@ -667,6 +911,395 @@ function Library.new(config)
 	InputFrame.Position = UDim2.new(0, 0, 3.86494179e-08, 0)
 	InputFrame.Size = UDim2.new(1, 0, 0.121327251, 0)
 	InputFrame.ZIndex = 15;
+
+	ConfigManager = {
+		Registered = {},
+		Values = {},
+		LoadedData = nil,
+		SelectedConfig = "",
+		AutoloadEnabled = false,
+		Folder = Library._ConfigDefaults.Folder,
+		SubFolder = Library._ConfigDefaults.SubFolder,
+		SettingsUI = nil,
+	}
+
+	local function NormalizeConfigName(name, allowEmpty)
+		name = tostring(name or "")
+		name = name:gsub("[\\/:*?\"<>|]", "_")
+		name = name:gsub("^%s+", ""):gsub("%s+$", "")
+		name = name:gsub("^%.+", "")
+		if name == "" then
+			return allowEmpty and "" or "Default"
+		end
+		return name
+	end
+
+	local function NormalizeSubFolder(folder, subfolder)
+		return NormalizeSubFolderPath(folder, subfolder)
+	end
+
+	function ConfigManager:GetRootPath()
+		return PathJoin(self.Folder, self.SubFolder)
+	end
+
+	function ConfigManager:GetConfigFolder()
+		return PathJoin(self:GetRootPath(), "Configs")
+	end
+
+	function ConfigManager:GetConfigPath(name)
+		return PathJoin(self:GetConfigFolder(), NormalizeConfigName(name) .. ".json")
+	end
+
+	function ConfigManager:GetAutoloadPath()
+		return PathJoin(self:GetRootPath(), "autoload.json")
+	end
+
+	function ConfigManager:EnsureFolders()
+		EnsureFolderTree(self:GetConfigFolder())
+	end
+
+	function ConfigManager:ReadJson(path)
+		local data = SafeReadFile(path)
+		if not data or data == "" then
+			return nil
+		end
+
+		local ok, decoded = pcall(function()
+			return game:GetService("HttpService"):JSONDecode(data)
+		end)
+
+		if ok and type(decoded) == "table" then
+			return decoded
+		end
+
+		return nil
+	end
+
+	function ConfigManager:WriteJson(path, data)
+		local ok, encoded = pcall(function()
+			return game:GetService("HttpService"):JSONEncode(data)
+		end)
+
+		if not ok then
+			return false
+		end
+
+		return SafeWriteFile(path, encoded)
+	end
+
+	function ConfigManager:RefreshList()
+		self:EnsureFolders()
+
+		local configs = {}
+		for _, file in ipairs(SafeListFiles(self:GetConfigFolder())) do
+			local name = DecodeFileName(file)
+			if name and name ~= "autoload" then
+				configs[#configs + 1] = name
+			end
+		end
+
+		table.sort(configs)
+		return configs
+	end
+
+	function ConfigManager:SerializeValues()
+		for flag, object in pairs(self.Registered) do
+			if object and object.GetValue then
+				local ok, current = pcall(function()
+					return object:GetValue()
+				end)
+				if ok then
+					self.Values[flag] = current
+				end
+			end
+		end
+
+		local result = {}
+		for flag, value in pairs(self.Values) do
+			result[flag] = SerializeConfigValue(value)
+		end
+		return result
+	end
+
+	function ConfigManager:SyncSettingsUI()
+		if not self.SettingsUI then
+			return
+		end
+
+		local configs = self:RefreshList()
+		local ui = self.SettingsUI
+
+		if ui.ConfigDropdown and ui.ConfigDropdown.Set then
+			ui.ConfigDropdown:Set(configs)
+			if self.SelectedConfig ~= "" then
+				ui.ConfigDropdown:SetValue(self.SelectedConfig, true)
+			else
+				ui.ConfigDropdown:SetValue(nil, true)
+			end
+		end
+
+		if ui.ConfigTextbox and ui.ConfigTextbox.SetValue then
+			ui.ConfigTextbox:SetValue(self.SelectedConfig ~= "" and self.SelectedConfig or "", true)
+		end
+
+		if ui.AutoloadToggle and ui.AutoloadToggle.SetValue then
+			ui.AutoloadToggle:SetValue(self.AutoloadEnabled, true)
+		end
+	end
+
+	function ConfigManager:PersistAutoload()
+		self:EnsureFolders()
+		self:WriteJson(self:GetAutoloadPath(), {
+			Enabled = self.AutoloadEnabled and true or false,
+			Config = self.SelectedConfig ~= "" and self.SelectedConfig or nil,
+		})
+	end
+
+	function ConfigManager:SetSelectedConfig(name, silent)
+		name = name and NormalizeConfigName(name, true) or ""
+		self.SelectedConfig = name
+
+		if not silent then
+			self:PersistAutoload()
+		end
+
+		self:SyncSettingsUI()
+	end
+
+	function ConfigManager:SetAutoloadEnabled(enabled, silent)
+		self.AutoloadEnabled = enabled and true or false
+
+		if not silent then
+			self:PersistAutoload()
+		end
+
+		self:SyncSettingsUI()
+	end
+
+	function ConfigManager:Register(flag, object)
+		flag = tostring(flag or "")
+		if flag == "" or type(object) ~= "table" then
+			return false
+		end
+
+		if self.Registered[flag] and self.Registered[flag] ~= object then
+			warn(("[Nothing UI] Duplicate Flag ignored: %s"):format(flag))
+			object.Flag = nil
+			return false
+		end
+
+		self.Registered[flag] = object
+		if object.GetValue then
+			local ok, current = pcall(function()
+				return object:GetValue()
+			end)
+			if ok and current ~= nil then
+				self.Values[flag] = current
+			end
+		end
+		object.Flag = flag
+		object.ConfigManager = self
+
+		if self.LoadedData and self.LoadedData[flag] ~= nil and object.SetValue then
+			local loadedValue = self.LoadedData[flag]
+			self.Values[flag] = loadedValue
+			task.defer(function()
+				if object and object.SetValue then
+					pcall(function()
+						object:SetValue(loadedValue, false)
+					end)
+				end
+			end)
+		end
+
+		return true
+	end
+
+	function ConfigManager:Update(flag, value)
+		if flag == nil then
+			return
+		end
+
+		self.Values[tostring(flag)] = value
+	end
+
+	function ConfigManager:ApplyLoadedData()
+		if type(self.LoadedData) ~= "table" then
+			return
+		end
+
+		for flag, value in pairs(self.LoadedData) do
+			local object = self.Registered[flag]
+			if object and object.SetValue then
+				pcall(function()
+					object:SetValue(value, false)
+				end)
+			end
+		end
+	end
+
+	function ConfigManager:LoadConfig(name)
+		name = name and NormalizeConfigName(name, true) or ""
+		if name == "" then
+			return false
+		end
+
+		self:EnsureFolders()
+		local data = self:ReadJson(self:GetConfigPath(name))
+		if type(data) ~= "table" then
+			self.LoadedData = nil
+			return false
+		end
+
+		self.LoadedData = data
+		self:SetSelectedConfig(name, false)
+		self:ApplyLoadedData()
+		return true
+	end
+
+	function ConfigManager:SaveConfig(name)
+		name = name and NormalizeConfigName(name, false) or ""
+		if name == "" then
+			return false
+		end
+
+		self:EnsureFolders()
+		local ok = self:WriteJson(self:GetConfigPath(name), self:SerializeValues())
+		if not ok then
+			return false
+		end
+
+		self:SetSelectedConfig(name, false)
+		self:SyncSettingsUI()
+		return true
+	end
+
+	function ConfigManager:LoadAutoload()
+		self:EnsureFolders()
+		self.LoadedData = nil
+		self.AutoloadEnabled = false
+		self.SelectedConfig = ""
+
+		local data = self:ReadJson(self:GetAutoloadPath())
+		if type(data) == "table" then
+			self.AutoloadEnabled = data.Enabled == true
+			self.SelectedConfig = data.Config and NormalizeConfigName(data.Config, true) or self.SelectedConfig
+		end
+
+		self:SyncSettingsUI()
+
+		if self.AutoloadEnabled and self.SelectedConfig ~= "" then
+			self:LoadConfig(self.SelectedConfig)
+		end
+	end
+
+	function ConfigManager:BuildSettingsTab()
+		if self.SettingsTab then
+			return self.SettingsTab
+		end
+
+		local SettingsTab = WindowTable:NewTab({
+			Title = "Settings",
+			Description = "Configurations",
+			Icon = "settings",
+		})
+
+		local ConfigSection = SettingsTab:NewSection({
+			Position = "Left",
+			Title = "Configurations",
+			Icon = "settings",
+		})
+
+		local ConfigDropdown = nil
+		local ConfigTextbox = nil
+		local AutoloadToggle = nil
+
+		ConfigDropdown = ConfigSection:NewDropdown({
+			Title = "Select Config",
+			Data = self:RefreshList(),
+			Default = self.SelectedConfig ~= "" and self.SelectedConfig or nil,
+			Callback = function(value)
+				if type(value) == "string" then
+					ConfigManager:SetSelectedConfig(value)
+				end
+			end,
+		})
+
+		ConfigSection:NewButton({
+			Title = "Refresh Configs",
+			Callback = function()
+				local list = ConfigManager:RefreshList()
+				if ConfigDropdown and ConfigDropdown.Set then
+					ConfigDropdown:Set(list)
+				end
+				ConfigManager:SyncSettingsUI()
+			end,
+		})
+
+		ConfigTextbox = ConfigSection:NewTextbox({
+			Title = "Config Name",
+			Default = self.SelectedConfig,
+			FileType = "",
+			Flag = nil,
+			Callback = function(value)
+				if type(value) == "string" and value ~= "" then
+					ConfigManager:SetSelectedConfig(value)
+				end
+			end,
+		})
+
+		ConfigSection:Divider()
+
+		ConfigSection:NewButton({
+			Title = "Save Config",
+			Callback = function()
+				local name = ConfigTextbox and ConfigTextbox.GetValue and ConfigTextbox:GetValue() or ConfigManager.SelectedConfig
+				if name == nil or tostring(name) == "" then
+					name = ConfigManager.SelectedConfig
+				end
+				if name == nil or tostring(name) == "" then
+					name = "Default"
+				end
+				ConfigManager:SaveConfig(name)
+				ConfigManager:SyncSettingsUI()
+			end,
+		})
+
+		ConfigSection:NewButton({
+			Title = "Load Config",
+			Callback = function()
+				local name = ConfigDropdown and ConfigDropdown.GetValue and ConfigDropdown:GetValue() or ConfigManager.SelectedConfig
+				if type(name) == "table" then
+					name = next(name)
+				end
+				if name ~= nil and tostring(name) ~= "" then
+					ConfigManager:LoadConfig(name)
+				end
+			end,
+		})
+
+		ConfigSection:Divider()
+
+		AutoloadToggle = ConfigSection:NewToggle({
+			Title = "Set Autoload Config",
+			Default = self.AutoloadEnabled,
+			Callback = function(value)
+				ConfigManager:SetAutoloadEnabled(value)
+			end,
+		})
+
+		ConfigManager.SettingsUI = {
+			ConfigDropdown = ConfigDropdown,
+			ConfigTextbox = ConfigTextbox,
+			AutoloadToggle = AutoloadToggle,
+		}
+		ConfigManager:SyncSettingsUI()
+
+		self.SettingsTab = SettingsTab
+		return SettingsTab
+	end
+
+	ConfigManager:LoadAutoload()
 
 	local function NormalizeDropdownValue(values, value, multi)
 		if multi then
@@ -1210,7 +1843,7 @@ function Library.new(config)
 		Icon.Size = UDim2.new(0.600000024, 0, 0.600000024, 0)
 		Icon.SizeConstraint = Enum.SizeConstraint.RelativeYY
 		Icon.ZIndex = 6
-		Icon.Image = Icons[cfg.Icon] or cfg.Icon
+		Icon.Image = ResolveIconSource(cfg.Icon)
 		Icon.ImageTransparency = 1
 		Twen:Create(Icon,TweenInfo2,{ImageTransparency = 0.1}):Play();
 
@@ -1479,7 +2112,7 @@ function Library.new(config)
 			Icon.Size = UDim2.new(0.600000024, 0, 0.600000024, 0)
 			Icon.SizeConstraint = Enum.SizeConstraint.RelativeYY
 			Icon.ZIndex = 6
-			Icon.Image = Icons[c_o_n_f_i_g.Icon] or c_o_n_f_i_g.Icon; 
+			Icon.Image = ResolveIconSource(c_o_n_f_i_g.Icon); 
 			Icon.ImageTransparency = 1
 			Twen:Create(Icon,TweenInfo2,{ImageTransparency = 0.1}):Play();
 
@@ -1552,12 +2185,185 @@ function Library.new(config)
 			UIGradient_4.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0.00, 0.00), NumberSequenceKeypoint.new(0.17, 1.00), NumberSequenceKeypoint.new(0.82, 1.00), NumberSequenceKeypoint.new(1.00, 0.00)}
 			UIGradient_4.Parent = UIStroke
 
+			function SectionTable:Paragraph(cfg, description)
+				if type(cfg) ~= "table" then
+					cfg = {
+						Title = cfg,
+						Description = description,
+					}
+				end
+
+				cfg = Config(cfg, {
+					Title = "Paragraph",
+					Description = "",
+				})
+
+				local ParagraphState = {
+					Title = tostring(cfg.Title or ""),
+					Description = tostring(cfg.Description or ""),
+				}
+
+				local FunctionParagraph = Instance.new("Frame")
+				local UICorner = Instance.new("UICorner")
+				local UIStroke = Instance.new("UIStroke")
+				local TitleText = Instance.new("TextLabel")
+				local TitleGradient = Instance.new("UIGradient")
+				local DescriptionText = Instance.new("TextLabel")
+				local DescriptionGradient = Instance.new("UIGradient")
+
+				FunctionParagraph.Name = "FunctionParagraph"
+				FunctionParagraph.Parent = Section
+				FunctionParagraph.BackgroundColor3 = Color3.fromRGB(17, 17, 17)
+				FunctionParagraph.BackgroundTransparency = 1
+				FunctionParagraph.BorderColor3 = Color3.fromRGB(0, 0, 0)
+				FunctionParagraph.BorderSizePixel = 0
+				FunctionParagraph.ClipsDescendants = true
+				FunctionParagraph.Size = UDim2.new(0.949999988, 0, 0, 54)
+				FunctionParagraph.ZIndex = 17
+				Twen:Create(FunctionParagraph, TweenInfo1, { BackgroundTransparency = 0.8 }):Play()
+
+				UICorner.CornerRadius = UDim.new(0, 2)
+				UICorner.Parent = FunctionParagraph
+
+				UIStroke.Transparency = 0.950
+				UIStroke.Color = Color3.fromRGB(255, 255, 255)
+				UIStroke.Parent = FunctionParagraph
+
+				TitleText.Name = "TitleText"
+				TitleText.Parent = FunctionParagraph
+				TitleText.AnchorPoint = Vector2.new(0.5, 0)
+				TitleText.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+				TitleText.BackgroundTransparency = 1.000
+				TitleText.BorderColor3 = Color3.fromRGB(0, 0, 0)
+				TitleText.BorderSizePixel = 0
+				TitleText.Position = UDim2.new(0.5, 0, 0.12, 0)
+				TitleText.Size = UDim2.new(0.949999988, 0, 0, 18)
+				TitleText.ZIndex = 18
+				TitleText.Font = Enum.Font.GothamBold
+				TitleText.Text = ParagraphState.Title
+				TitleText.TextColor3 = Color3.fromRGB(255, 255, 255)
+				TitleText.TextScaled = true
+				TitleText.TextSize = 14.000
+				TitleText.TextTransparency = 1
+				TitleText.TextWrapped = true
+				TitleText.TextXAlignment = Enum.TextXAlignment.Left
+				TitleText.TextYAlignment = Enum.TextYAlignment.Top
+				Twen:Create(TitleText, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+					TextTransparency = 0.25,
+				}):Play()
+
+				TitleGradient.Rotation = 90
+				TitleGradient.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0.00, 0.00), NumberSequenceKeypoint.new(0.84, 0.25), NumberSequenceKeypoint.new(1.00, 1.00)}
+				TitleGradient.Parent = TitleText
+
+				DescriptionText.Name = "DescriptionText"
+				DescriptionText.Parent = FunctionParagraph
+				DescriptionText.AnchorPoint = Vector2.new(0.5, 0)
+				DescriptionText.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+				DescriptionText.BackgroundTransparency = 1.000
+				DescriptionText.BorderColor3 = Color3.fromRGB(0, 0, 0)
+				DescriptionText.BorderSizePixel = 0
+				DescriptionText.Position = UDim2.new(0.5, 0, 0, 26)
+				DescriptionText.Size = UDim2.new(0.949999988, 0, 0, 18)
+				DescriptionText.ZIndex = 18
+				DescriptionText.Font = Enum.Font.GothamBold
+				DescriptionText.Text = ParagraphState.Description
+				DescriptionText.TextColor3 = Color3.fromRGB(255, 255, 255)
+				DescriptionText.TextScaled = true
+				DescriptionText.TextSize = 14.000
+				DescriptionText.TextTransparency = 1
+				DescriptionText.TextWrapped = true
+				DescriptionText.TextXAlignment = Enum.TextXAlignment.Left
+				DescriptionText.TextYAlignment = Enum.TextYAlignment.Top
+				Twen:Create(DescriptionText, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+					TextTransparency = 0.5,
+				}):Play()
+
+				DescriptionGradient.Rotation = 90
+				DescriptionGradient.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0.00, 0.00), NumberSequenceKeypoint.new(0.84, 0.25), NumberSequenceKeypoint.new(1.00, 1.00)}
+				DescriptionGradient.Parent = DescriptionText
+
+				local function UpdateLayout()
+					local rawWidth = FunctionParagraph.AbsoluteSize.X
+					if rawWidth <= 0 then
+						rawWidth = Section.AbsoluteSize.X
+					end
+
+					local measureWidth = math.max(120, math.floor(rawWidth * 0.92))
+					local titleBounds = TextServ:GetTextSize(
+						ParagraphState.Title ~= "" and ParagraphState.Title or " ",
+						14,
+						Enum.Font.GothamBold,
+						Vector2.new(measureWidth, math.huge)
+					)
+					local descBounds = TextServ:GetTextSize(
+						ParagraphState.Description ~= "" and ParagraphState.Description or " ",
+						14,
+						Enum.Font.GothamBold,
+						Vector2.new(measureWidth, math.huge)
+					)
+
+					local titleHeight = math.max(16, titleBounds.Y)
+					local descHeight = ParagraphState.Description ~= "" and math.max(16, descBounds.Y) or 0
+					local totalHeight = 14 + titleHeight + (descHeight > 0 and (8 + descHeight) or 8)
+
+					FunctionParagraph.Size = UDim2.new(0.949999988, 0, 0, math.max(46, totalHeight))
+					TitleText.Size = UDim2.new(0.949999988, 0, 0, titleHeight)
+					DescriptionText.Visible = ParagraphState.Description ~= ""
+					if descHeight > 0 then
+						DescriptionText.Position = UDim2.new(0.5, 0, 0, titleHeight + 8)
+						DescriptionText.Size = UDim2.new(0.949999988, 0, 0, descHeight)
+					end
+				end
+
+				FunctionParagraph:GetPropertyChangedSignal("AbsoluteSize"):Connect(UpdateLayout)
+				task.defer(UpdateLayout)
+
+				local Paragraph = {}
+
+				function Paragraph:SetTitle(value)
+					ParagraphState.Title = tostring(value or "")
+					TitleText.Text = ParagraphState.Title
+					UpdateLayout()
+				end
+
+				function Paragraph:SetDescription(value)
+					ParagraphState.Description = tostring(value or "")
+					DescriptionText.Text = ParagraphState.Description
+					UpdateLayout()
+				end
+
+				function Paragraph:Set(title, desc)
+					ParagraphState.Title = tostring(title or "")
+					ParagraphState.Description = tostring(desc or "")
+					TitleText.Text = ParagraphState.Title
+					DescriptionText.Text = ParagraphState.Description
+					UpdateLayout()
+				end
+
+				function Paragraph:Visible(newindx)
+					FunctionParagraph.Visible = newindx
+				end
+
+				function Paragraph:Destroy()
+					FunctionParagraph:Destroy()
+				end
+
+				return Paragraph
+			end
+
+			SectionTable.AddParagraph = SectionTable.Paragraph
+
 			function SectionTable:NewToggle(toggle)
 				toggle = Config(toggle,{
 					Title = "Toggle",
 					Default = false,
 					Callback = function() end;
 				});
+				toggle.Default = toggle.Default == true
+				toggle.Flag = toggle.Flag and tostring(toggle.Flag) or nil
+				local ActiveFlag = toggle.Flag
+				local Registered = false
 
 				local FunctionToggle = Instance.new("Frame")
 				local UIAspectRatioConstraint = Instance.new("UIAspectRatioConstraint")
@@ -1663,7 +2469,208 @@ function Library.new(config)
 				UICorner_3.CornerRadius = UDim.new(0, 2)
 				UICorner_3.Parent = FunctionToggle
 
+				local AttachedKeybind = nil
+				local function UpdateToggleTitleWidth(hasKeybind)
+					TextInt.Size = hasKeybind and UDim2.new(0.699999988, 0, 0.479999989, 0)
+						or UDim2.new(0.949999988, 0, 0.479999989, 0)
+				end
+
+				UpdateToggleTitleWidth(false)
+
+				local function CreateAttachedKeybind(bindCfg)
+					if AttachedKeybind then
+						return AttachedKeybind
+					end
+
+					bindCfg = Config(bindCfg, {
+						Default = Enum.KeyCode.E,
+						Callback = function() end,
+					})
+					bindCfg.Flag = bindCfg.Flag and tostring(bindCfg.Flag) or nil
+					local BindActiveFlag = bindCfg.Flag
+
+					local BindEvent = Instance.new("BindableEvent", FunctionToggle)
+					local KeybindFrame = Instance.new("Frame")
+					local KeybindCorner = Instance.new("UICorner")
+					local KeybindStroke = Instance.new("UIStroke")
+					local KeybindText = Instance.new("TextLabel")
+					local KeybindButton = Instance.new("TextButton")
+					local Capturing = false
+					local CurrentBind = ResolveKeybindValue(bindCfg.Default, Enum.KeyCode.E)
+
+					KeybindFrame.Name = "Keybind"
+					KeybindFrame.Parent = FunctionToggle
+					KeybindFrame.AnchorPoint = Vector2.new(1, 0.5)
+					KeybindFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+					KeybindFrame.BackgroundTransparency = 1.000
+					KeybindFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
+					KeybindFrame.BorderSizePixel = 0
+					KeybindFrame.Position = UDim2.new(0.885, 0, 0.5, 0)
+					KeybindFrame.Size = UDim2.new(0, 50, 0.600000024, 0)
+					KeybindFrame.ZIndex = 19
+
+					KeybindCorner.CornerRadius = UDim.new(0.349999994, 0)
+					KeybindCorner.Parent = KeybindFrame
+
+					KeybindStroke.Transparency = 0.950
+					KeybindStroke.Color = Color3.fromRGB(255, 255, 255)
+					KeybindStroke.Parent = KeybindFrame
+
+					KeybindText.Name = "Bindkey"
+					KeybindText.Parent = KeybindFrame
+					KeybindText.AnchorPoint = Vector2.new(0.5, 0.5)
+					KeybindText.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+					KeybindText.BackgroundTransparency = 1.000
+					KeybindText.BorderColor3 = Color3.fromRGB(0, 0, 0)
+					KeybindText.BorderSizePixel = 0
+					KeybindText.Position = UDim2.new(0.5, 0, 0.5, 0)
+					KeybindText.Size = UDim2.new(1, 0, 0.649999976, 0)
+					KeybindText.ZIndex = 20
+					KeybindText.Font = Enum.Font.GothamBold
+					KeybindText.Text = FormatKeybindValue(CurrentBind)
+					KeybindText.TextColor3 = Color3.fromRGB(255, 255, 255)
+					KeybindText.TextScaled = true
+					KeybindText.TextSize = 14.000
+					KeybindText.TextTransparency = 0.500
+					KeybindText.TextWrapped = true
+
+					KeybindButton.Name = "Button"
+					KeybindButton.Parent = KeybindFrame
+					KeybindButton.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+					KeybindButton.BackgroundTransparency = 1.000
+					KeybindButton.BorderColor3 = Color3.fromRGB(0, 0, 0)
+					KeybindButton.BorderSizePixel = 0
+					KeybindButton.Size = UDim2.new(1, 0, 1, 0)
+					KeybindButton.ZIndex = 21
+					KeybindButton.Font = Enum.Font.SourceSans
+					KeybindButton.Text = ""
+					KeybindButton.TextColor3 = Color3.fromRGB(0, 0, 0)
+					KeybindButton.TextSize = 14.000
+					KeybindButton.TextTransparency = 1.000
+
+					local function UpdateBindDisplay(new)
+						if new == "..." then
+							KeybindText.Text = "..."
+							local size = TextServ:GetTextSize(
+								KeybindText.Text,
+								KeybindText.TextSize,
+								KeybindText.Font,
+								Vector2.new(math.huge, math.huge)
+							)
+
+							Twen:Create(KeybindFrame, TweenInfo.new(0.2), {
+								Size = UDim2.new(0, math.clamp(size.X + 12, 48, 92), 0.600000024, 0),
+							}):Play()
+							return
+						end
+
+						CurrentBind = ResolveKeybindValue(new, CurrentBind)
+						KeybindText.Text = FormatKeybindValue(CurrentBind)
+
+						local size = TextServ:GetTextSize(
+							KeybindText.Text,
+							KeybindText.TextSize,
+							KeybindText.Font,
+							Vector2.new(math.huge, math.huge)
+						)
+
+						Twen:Create(KeybindFrame, TweenInfo.new(0.2), {
+							Size = UDim2.new(0, math.clamp(size.X + 12, 48, 92), 0.600000024, 0),
+						}):Play()
+					end
+
+					UpdateToggleTitleWidth(true)
+					UpdateBindDisplay(CurrentBind)
+
+					KeybindFrame.MouseEnter:Connect(function()
+						Twen:Create(KeybindText, TweenInfo.new(0.15, Enum.EasingStyle.Quint), {
+							TextTransparency = 0.1,
+						}):Play()
+					end)
+
+					KeybindFrame.MouseLeave:Connect(function()
+						if not Capturing then
+							Twen:Create(KeybindText, TweenInfo.new(0.15, Enum.EasingStyle.Quint), {
+								TextTransparency = 0.500,
+							}):Play()
+						end
+					end)
+
+					KeybindButton.MouseButton1Click:Connect(function()
+						if Capturing then
+							return
+						end
+
+						Capturing = true
+						Twen:Create(KeybindText, TweenInfo.new(0.1), {
+							TextTransparency = 0,
+						}):Play()
+
+						local Signal = Input.InputBegan:Connect(function(key)
+							if key.KeyCode and key.KeyCode ~= Enum.KeyCode.Unknown then
+								BindEvent:Fire(key.KeyCode)
+							end
+						end)
+
+						UpdateBindDisplay("...")
+
+						local Bind = BindEvent.Event:Wait()
+						Signal:Disconnect()
+						UpdateBindDisplay(Bind)
+						if BindActiveFlag then
+							ConfigManager:Update(BindActiveFlag, CurrentBind)
+						end
+						Twen:Create(KeybindText, TweenInfo.new(0.1), {
+							TextTransparency = 0.500,
+						}):Play()
+
+						Capturing = false
+						if type(bindCfg.Callback) == "function" then
+							task.spawn(bindCfg.Callback, CurrentBind)
+						end
+					end)
+
+					AttachedKeybind = {
+						Flag = bindCfg.Flag,
+						GetValue = function()
+							return CurrentBind
+						end,
+						SetValue = function(newindex, silent)
+							UpdateBindDisplay(newindex)
+							if BindActiveFlag then
+								ConfigManager:Update(BindActiveFlag, CurrentBind)
+							end
+							if not silent and type(bindCfg.Callback) == "function" then
+								task.spawn(bindCfg.Callback, CurrentBind)
+							end
+						end,
+						Value = function(newindex, silent)
+							AttachedKeybind:SetValue(newindex, silent)
+						end,
+						Visible = function(newindx)
+							KeybindFrame.Visible = newindx
+						end,
+						Destroy = function()
+							KeybindFrame:Destroy()
+							AttachedKeybind = nil
+							UpdateToggleTitleWidth(false)
+						end,
+					}
+
+					if bindCfg.Flag then
+						ConfigManager:Register(bindCfg.Flag, AttachedKeybind)
+						BindActiveFlag = AttachedKeybind.Flag
+					end
+
+					return AttachedKeybind
+				end
+
 				local function OnChange(value)
+					value = value == true
+					toggle.Default = value
+					if Registered and ActiveFlag then
+						ConfigManager:Update(ActiveFlag, value)
+					end
 					if value then
 
 						Twen:Create(TextInt,TweenInfo.new(0.15,Enum.EasingStyle.Quint),{
@@ -1689,21 +2696,43 @@ function Library.new(config)
 				OnChange(toggle.Default);
 
 				Button.MouseButton1Click:Connect(function()
-					toggle.Default = not toggle.Default;
-					OnChange(toggle.Default);
+					OnChange(not toggle.Default);
 					task.spawn(toggle.Callback,toggle.Default)
 				end)
 
-				return {
-					Value = function(newindex)
-						toggle.Default = newindex;
-						OnChange(toggle.Default);
-						task.spawn(toggle.Callback,toggle.Default)
+				local ToggleObject = {
+					Flag = toggle.Flag,
+					GetValue = function()
+						return toggle.Default == true
+					end,
+					SetValue = function(newindex, silent)
+						OnChange(newindex == true);
+						if not silent then
+							task.spawn(toggle.Callback,toggle.Default)
+						end
+					end,
+					Value = function(newindex, silent)
+						OnChange(newindex == true);
+						if not silent then
+							task.spawn(toggle.Callback,toggle.Default)
+						end
 					end,
 					Visible = function(newindx)
 						FunctionToggle.Visible = newindx
 					end,
-				};
+					NewKeybind = function(bindCfg)
+						local handle = CreateAttachedKeybind(bindCfg)
+						return handle
+					end,
+				}
+
+				if toggle.Flag then
+					ConfigManager:Register(toggle.Flag, ToggleObject)
+					ActiveFlag = ToggleObject.Flag
+				end
+				Registered = true
+
+				return ToggleObject
 			end;
 
 			function SectionTable:NewTitle(lrm)
@@ -1897,6 +2926,10 @@ function Library.new(config)
 					Default = Enum.KeyCode.E,
 
 				});
+				ctfx.Flag = ctfx.Flag and tostring(ctfx.Flag) or nil
+				ctfx.Default = ResolveKeybindValue(ctfx.Default, Enum.KeyCode.E)
+				local ActiveFlag = ctfx.Flag
+				local Registered = false
 
 				local BindEvent = Instance.new('BindableEvent',Section);
 				local FunctionKeybind = Instance.new("Frame")
@@ -1993,7 +3026,7 @@ function Library.new(config)
 				Bindkey.Position = UDim2.new(0.5, 0, 0.5, 0)
 				Bindkey.Size = UDim2.new(1, 0, 0.649999976, 0)
 				Bindkey.Font = Enum.Font.GothamBold
-				Bindkey.Text = Input:GetStringForKeyCode(ctfx.Default) or ctfx.Default.Name;
+				Bindkey.Text = FormatKeybindValue(ctfx.Default)
 				Bindkey.TextColor3 = Color3.fromRGB(255, 255, 255)
 				Bindkey.TextScaled = true
 				Bindkey.TextSize = 14.000
@@ -2005,7 +3038,20 @@ function Library.new(config)
 
 				local IsWIP = false;
 				local function UpdateUI(new)
-					Bindkey.Text = (typeof(new) == 'string' and new) or new.Name;
+					if new == "..." then
+						Bindkey.Text = "..."
+						local size = TextServ:GetTextSize(Bindkey.Text,Bindkey.TextSize,Bindkey.Font,Vector2.new(math.huge,math.huge));
+						Twen:Create(System,TweenInfo.new(0.2),{
+							Size = UDim2.new(0, size.X + 2, 0.600000024, 0)
+						}):Play()
+						return
+					end
+
+					ctfx.Default = ResolveKeybindValue(new, ctfx.Default)
+					Bindkey.Text = FormatKeybindValue(ctfx.Default)
+					if Registered and ActiveFlag then
+						ConfigManager:Update(ActiveFlag, ctfx.Default)
+					end
 
 					local size = TextServ:GetTextSize(Bindkey.Text,Bindkey.TextSize,Bindkey.Font,Vector2.new(math.huge,math.huge));
 
@@ -2043,22 +3089,45 @@ function Library.new(config)
 					UpdateUI(Bind)
 
 					IsWIP = false;
-					ctfx.Callback(Bind);
+					if type(ctfx.Callback) == "function" then
+						ctfx.Callback(ctfx.Default);
+					end;
 
 
 				end)
 
-				return {
+				local KeybindObject = {
+						Flag = ctfx.Flag,
+						GetValue = function()
+							return ctfx.Default
+						end,
+						SetValue = function(value, silent)
+							UpdateUI(value)
+							if ActiveFlag then
+								ConfigManager:Update(ActiveFlag, ctfx.Default)
+							end
+							if not silent and type(ctfx.Callback) == "function" then
+								ctfx.Callback(ctfx.Default);
+							end
+						end,
 					Visible = function(newindx)
 						FunctionKeybind.Visible = newindx
 					end,
-					Value = function(lrm)
+					Value = function(lrm, silent)
 						UpdateUI(lrm)
-
-
-						ctfx.Callback(lrm);
+						if not silent and type(ctfx.Callback) == "function" then
+							ctfx.Callback(ctfx.Default);
+						end
 					end,
-				};
+				}
+
+				if ctfx.Flag then
+					ConfigManager:Register(ctfx.Flag, KeybindObject)
+					ActiveFlag = KeybindObject.Flag
+				end
+				Registered = true
+
+				return KeybindObject
 			end;
 
 			function SectionTable:NewSlider(slider)
@@ -2071,6 +3140,9 @@ function Library.new(config)
 
 					end,
 				});
+				slider.Flag = slider.Flag and tostring(slider.Flag) or nil
+				slider.Default = math.clamp(tonumber(slider.Default) or slider.Min, slider.Min, slider.Max)
+				local ActiveFlag = slider.Flag
 
 				local FunctionSlider = Instance.new("Frame")
 				local UIAspectRatioConstraint = Instance.new("UIAspectRatioConstraint")
@@ -2185,14 +3257,25 @@ function Library.new(config)
 
 				local Holding = false
 
+				local function ApplyValue(value, silent)
+					local Value = math.clamp(math.round(tonumber(value) or slider.Default), slider.Min, slider.Max)
+					slider.Default = Value
+					local SizeScale = (slider.Max == slider.Min) and 1 or ((Value - slider.Min) / (slider.Max - slider.Min))
+					ValueText.Text = tostring(Value)..'/'..tostring(slider.Max)
+					Twen:Create(TFrame,TweenInfo.new(0.1),{Size = UDim2.fromScale(SizeScale, 1)}):Play()
+					if ActiveFlag then
+						ConfigManager:Update(ActiveFlag, Value)
+					end
+					if not silent then
+						slider.Callback(Value)
+					end
+				end
+
 				local function update(Input)
 					local SizeScale = math.clamp((((Input.Position.X) - MFrame.AbsolutePosition.X) / MFrame.AbsoluteSize.X), 0, 1)
 					local Main = ((slider.Max - slider.Min) * SizeScale) + slider.Min;
 					local Value = math.round(Main)
-					local Size = UDim2.fromScale(SizeScale, 1)
-					ValueText.Text = tostring(Value)..'/'..tostring(slider.Max)
-					Twen:Create(TFrame,TweenInfo.new(0.1),{Size = Size}):Play()
-					slider.Callback(Value);
+					ApplyValue(Value)
 				end
 
 				MFrame.InputBegan:Connect(function(Input)
@@ -2222,16 +3305,28 @@ function Library.new(config)
 					end
 				end)
 
-				return {
+				local SliderObject = {
+					Flag = slider.Flag,
+					GetValue = function()
+						return slider.Default
+					end,
+					SetValue = function(value, silent)
+						ApplyValue(value, silent)
+					end,
 					Visible = function(newindx)
 						FunctionSlider.Visible = newindx
 					end,
-					Value = function(lrm)
-						TFrame.Size = UDim2.new((lrm / slider.Max), 0, 1, 0)
-
-						slider.Callback(lrm);
+					Value = function(lrm, silent)
+						ApplyValue(lrm, silent)
 					end,
-				};
+				}
+
+				if slider.Flag then
+					ConfigManager:Register(slider.Flag, SliderObject)
+					ActiveFlag = SliderObject.Flag
+				end
+
+				return SliderObject
 			end;
 
 			function SectionTable:NewDropdown(drop)
@@ -2246,7 +3341,9 @@ function Library.new(config)
 				});
 
 				drop.Multi = drop.Multi == true
+				drop.Flag = drop.Flag and tostring(drop.Flag) or nil
 				drop.Default = NormalizeDropdownValue(drop.Data, drop.Default, drop.Multi)
+				local ActiveFlag = drop.Flag
 
 				local FunctionDropdown = Instance.new("Frame")
 				local UIAspectRatioConstraint = Instance.new("UIAspectRatioConstraint")
@@ -2372,10 +3469,19 @@ function Library.new(config)
 				Button.TextSize = 14.000
 				Button.TextTransparency = 1.000
 
-				local Updater = function(value)
+				local function ApplyValue(value, silent)
 					drop.Default = NormalizeDropdownValue(drop.Data, value, drop.Multi)
 					ValueText.Text = FormatDropdownValue(drop.Data, drop.Default, drop.Multi)
-					drop.Callback(drop.Default)
+					if ActiveFlag then
+						ConfigManager:Update(ActiveFlag, drop.Default)
+					end
+					if not silent then
+						drop.Callback(drop.Default)
+					end
+				end
+
+				local Updater = function(value)
+					ApplyValue(value)
 				end
 
 				Button.MouseButton1Click:Connect(function()
@@ -2384,15 +3490,19 @@ function Library.new(config)
 					WindowTable.Dropdown:Open(drop.Data,drop.Default,Updater,drop.Multi)
 				end)
 
-				return {
+				local DropdownObject = {
+					Flag = drop.Flag,
+					GetValue = function()
+						return drop.Default
+					end,
+					SetValue = function(value, silent)
+						ApplyValue(value, silent)
+					end,
 					Visible = function(newindx)
 						FunctionDropdown.Visible = newindx
 					end,
-					Value = function(value)
-						local normalized = NormalizeDropdownValue(drop.Data, value, drop.Multi)
-						drop.Default = normalized
-						ValueText.Text = FormatDropdownValue(drop.Data, drop.Default, drop.Multi)
-						drop.Callback(drop.Default)
+					Value = function(value, silent)
+						ApplyValue(value, silent)
 					end,
 					Open = function(value)
 						WindowTable.Dropdown:Setup(MFrame)
@@ -2405,15 +3515,24 @@ function Library.new(config)
 					end,
 					Clear = function()
 						drop.Data = {}
-						drop.Default = drop.Multi and {} or nil
-						ValueText.Text = FormatDropdownValue(drop.Data, drop.Default, drop.Multi)
+						ApplyValue(drop.Multi and {} or nil, true)
 					end,
 					Set = function(table)
 						drop.Data = table
 						drop.Default = NormalizeDropdownValue(drop.Data, drop.Default, drop.Multi)
 						ValueText.Text = FormatDropdownValue(drop.Data, drop.Default, drop.Multi)
+						if drop.Flag then
+							ConfigManager:Update(drop.Flag, drop.Default)
+						end
 					end
-				};
+				}
+
+				if drop.Flag then
+					ConfigManager:Register(drop.Flag, DropdownObject)
+					ActiveFlag = DropdownObject.Flag
+				end
+
+				return DropdownObject
 			end;
 
 			function SectionTable:Divider(text)
@@ -2533,10 +3652,14 @@ function Library.new(config)
 					Title = "Textbox",
 					Default = '',
 					FileType = "",
+					Numeric = false,
 					Callback = function(a)
 
 					end,
 				})
+				conf.Numeric = conf.Numeric == true
+				conf.Flag = conf.Flag and tostring(conf.Flag) or nil
+				local ActiveFlag = conf.Flag
 
 				local FunctionTextbox = Instance.new("Frame")
 				local UIAspectRatioConstraint = Instance.new("UIAspectRatioConstraint")
@@ -2648,7 +3771,7 @@ function Library.new(config)
 				TextBox.ZIndex = 35
 				TextBox.ClearTextOnFocus = false
 				TextBox.Font = Enum.Font.GothamBold
-				TextBox.Text = tostring(conf.Default) or "";
+				TextBox.Text = tostring(conf.Default or "");
 				TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
 				TextBox.TextScaled = true
 				TextBox.TextSize = 14.000
@@ -2670,10 +3793,155 @@ function Library.new(config)
 				Button.TextSize = 14.000
 				Button.TextTransparency = 1.000
 
+				local TextUpdating = false
+				local CurrentValue = nil
 
-				TextBox.FocusLost:Connect(function(press)
-					conf.Callback(TextBox.Text);
+				local function SetText(text)
+					TextUpdating = true
+					TextBox.Text = text
+					TextUpdating = false
+				end
+
+				local function SanitizeNumericText(value)
+					local text = tostring(value or "")
+					if text == "" then
+						return ""
+					end
+
+					local result = {}
+					local length = 0
+					local decimalUsed = false
+					local minusUsed = false
+					local started = false
+
+					for i = 1, #text do
+						local char = string.sub(text, i, i)
+						if char >= "0" and char <= "9" then
+							length = length + 1
+							result[length] = char
+							started = true
+						elseif char == "." then
+							if not decimalUsed then
+								decimalUsed = true
+								length = length + 1
+								result[length] = char
+								started = true
+							end
+						elseif char == "-" then
+							if not started and not minusUsed then
+								minusUsed = true
+							end
+						end
+					end
+
+					local sanitized = table.concat(result, "", 1, length)
+					if minusUsed then
+						sanitized = "-" .. sanitized
+					end
+
+					if string.sub(sanitized, 1, 2) == "-." then
+						return "-0" .. string.sub(sanitized, 2)
+					end
+
+					if string.sub(sanitized, 1, 1) == "." then
+						return "0" .. sanitized
+					end
+
+					return sanitized
+				end
+
+				local function ResolveNumericValue(value)
+					if value == nil or value == "" then
+						return nil, ""
+					end
+
+					if type(value) == "number" then
+						if value ~= value then
+							return nil, ""
+						end
+
+						return value, tostring(value)
+					end
+
+					local sanitized = SanitizeNumericText(value)
+					if sanitized == "" or sanitized == "-" then
+						return nil, ""
+					end
+
+					local numeric = tonumber(sanitized)
+					if numeric == nil then
+						return nil, ""
+					end
+
+					return numeric, tostring(numeric)
+				end
+
+				local function ResolveTextboxValue(value)
+					if conf.Numeric then
+						return ResolveNumericValue(value)
+					end
+
+					local text = tostring(value or "")
+					return text, text
+				end
+
+				local function ApplyValue(value, silent)
+					local resolvedValue, resolvedText = ResolveTextboxValue(value)
+					CurrentValue = resolvedValue
+					conf.Default = resolvedValue
+					SetText(resolvedText)
+					if ActiveFlag then
+						ConfigManager:Update(ActiveFlag, resolvedValue)
+					end
+					if not silent and type(conf.Callback) == "function" then
+						conf.Callback(resolvedValue)
+					end
+				end
+
+				if conf.Numeric then
+					TextBox:GetPropertyChangedSignal("Text"):Connect(function()
+						if TextUpdating then
+							return
+						end
+
+						local sanitized = SanitizeNumericText(TextBox.Text)
+						if sanitized ~= TextBox.Text then
+							SetText(sanitized)
+						end
+					end)
+				end
+
+				TextBox.FocusLost:Connect(function()
+					ApplyValue(TextBox.Text, false)
 				end)
+
+				ApplyValue(conf.Default, true)
+
+				local TextboxObject = {
+					Flag = conf.Flag,
+					GetValue = function()
+						return CurrentValue
+					end,
+					SetValue = function(value, silent)
+						ApplyValue(value, silent)
+					end,
+					Value = function(value, silent)
+						ApplyValue(value, silent)
+					end,
+					Visible = function(newindx)
+						FunctionTextbox.Visible = newindx
+					end,
+					Destroy = function()
+						FunctionTextbox:Destroy()
+					end,
+				}
+
+				if conf.Flag then
+					ConfigManager:Register(conf.Flag, TextboxObject)
+					ActiveFlag = TextboxObject.Flag
+				end
+
+				return TextboxObject
 			end;
 
 			return SectionTable;
@@ -2716,8 +3984,54 @@ function Library.new(config)
 		end;
 	end)
 
+	WindowTable.ConfigManager = ConfigManager
+	WindowTable.SetFolder = function(self, folder)
+		ConfigManager.Folder = NormalizePath(folder) ~= "" and NormalizePath(folder) or Library._ConfigDefaults.Folder
+		ConfigManager:EnsureFolders()
+		ConfigManager:LoadAutoload()
+		return self
+	end
+
+	WindowTable.SetSubFolder = function(self, subfolder)
+		ConfigManager.SubFolder = NormalizeSubFolderPath(ConfigManager.Folder, subfolder)
+		ConfigManager:EnsureFolders()
+		ConfigManager:LoadAutoload()
+		return self
+	end
+
+	WindowTable.AddSettingsTab = function(self)
+		return ConfigManager:BuildSettingsTab()
+	end
+
+	Library._LastWindow = WindowTable
+
 	return WindowTable;
 end;
+
+function Library:SetFolder(folder)
+	local window = self and self.ConfigManager and self or Library._LastWindow
+	if window and window.ConfigManager then
+		return window:SetFolder(folder)
+	end
+
+	Library._ConfigDefaults.Folder = NormalizePath(folder) ~= "" and NormalizePath(folder) or Library._ConfigDefaults.Folder
+end
+
+function Library:SetSubFolder(subfolder)
+	local window = self and self.ConfigManager and self or Library._LastWindow
+	if window and window.ConfigManager then
+		return window:SetSubFolder(subfolder)
+	end
+
+	Library._ConfigDefaults.SubFolder = NormalizeSubFolderPath(Library._ConfigDefaults.Folder, subfolder)
+end
+
+function Library:AddSettingsTab()
+	local window = self and self.ConfigManager and self or Library._LastWindow
+	if window and window.ConfigManager then
+		return window:AddSettingsTab()
+	end
+end
 
 Library.NewAuth = function(conf)
 	conf = Config(conf,{
@@ -3144,7 +4458,7 @@ Library.Notification = function()
 			icon.Position = UDim2.new(0.5, 0, 0.5, 0)
 			icon.Size = UDim2.new(0.3, 0, 0.3, 0)
 			icon.SizeConstraint = Enum.SizeConstraint.RelativeYY
-			icon.Image = Icons[ctfx.Icon] or ctfx.Icon
+			icon.Image = ResolveIconSource(ctfx.Icon)
 			icon.ImageTransparency = 1;
 
 			Twen:Create(icon,css_style,{
