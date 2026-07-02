@@ -4118,6 +4118,19 @@ function Library.new(config)
 
 				local Dispatching = false
 				local CurrentValue = ResolveToggleValue(toggle.Default)
+				local ActiveTweens = setmetatable({}, { __mode = "k" })
+
+				local function PlayToggleTween(instance, info, props)
+					local previous = ActiveTweens[instance]
+					if previous then
+						previous:Cancel()
+					end
+
+					local tween = Twen:Create(instance, info, props)
+					ActiveTweens[instance] = tween
+					tween:Play()
+					return tween
+				end
 
 				local function ApplyValue(value, silent)
 					local nextValue = ResolveToggleValue(value)
@@ -4130,35 +4143,35 @@ function Library.new(config)
 					end
 					if nextValue then
 
-						Twen:Create(TextInt,TweenInfo.new(0.15,Enum.EasingStyle.Quint),{
+						PlayToggleTween(TextInt, TweenInfo.new(0.15,Enum.EasingStyle.Quint), {
 							TextTransparency = 0.02
-						}):Play()
+						})
 
-						Twen:Create(System,TweenInfo.new(0.15,Enum.EasingStyle.Quint),{
+						PlayToggleTween(System, TweenInfo.new(0.15,Enum.EasingStyle.Quint), {
 							BackgroundTransparency = 0.86
-						}):Play()
-						Twen:Create(UIStroke_2,TweenInfo.new(0.15,Enum.EasingStyle.Quint),{
+						})
+						PlayToggleTween(UIStroke_2, TweenInfo.new(0.15,Enum.EasingStyle.Quint), {
 							Transparency = 0.66
-						}):Play()
-						Twen:Create(Icon,TweenInfo.new(0.15,Enum.EasingStyle.Quint),{
+						})
+						PlayToggleTween(Icon, TweenInfo.new(0.15,Enum.EasingStyle.Quint), {
 							Position = UDim2.new(0.75, 0, 0.5, 0),
 							BackgroundTransparency = 0.32
-						}):Play()
+						})
 					else
-						Twen:Create(System,TweenInfo.new(0.15,Enum.EasingStyle.Quint),{
+						PlayToggleTween(System, TweenInfo.new(0.15,Enum.EasingStyle.Quint), {
 							BackgroundTransparency = 1
-						}):Play()
-						Twen:Create(UIStroke_2,TweenInfo.new(0.15,Enum.EasingStyle.Quint),{
+						})
+						PlayToggleTween(UIStroke_2, TweenInfo.new(0.15,Enum.EasingStyle.Quint), {
 							Transparency = 0.85
-						}):Play()
-						Twen:Create(Icon,TweenInfo.new(0.15,Enum.EasingStyle.Quint),{
+						})
+						PlayToggleTween(Icon, TweenInfo.new(0.15,Enum.EasingStyle.Quint), {
 							Position = UDim2.new(0.25, 0, 0.5, 0),
 							BackgroundTransparency = 0.500
-						}):Play()
+						})
 
-						Twen:Create(TextInt,TweenInfo.new(0.15,Enum.EasingStyle.Quint),{
+						PlayToggleTween(TextInt, TweenInfo.new(0.15,Enum.EasingStyle.Quint), {
 							TextTransparency = 0.25
-						}):Play()
+						})
 					end;
 
 					if changed and not silent and type(toggle.Callback) == "function" and not Dispatching then
