@@ -670,6 +670,14 @@ local function FormatKeybindValue(value)
 	return "NONE"
 end
 
+local function NormalizeMethodArgs(owner, first, second, third)
+	if first == owner then
+		return second, third
+	end
+
+	return first, second
+end
+
 function Library.GradientImage(E : Frame , Color)
 	local GLImage = Instance.new("ImageLabel")
 	local upd = tick();
@@ -1654,10 +1662,10 @@ function Library.new(config)
 			end
 
 			if ui.ConfigDropdown and ui.ConfigDropdown.Set then
-				ui.ConfigDropdown:Set(configs)
+				ui.ConfigDropdown.Set(configs)
 				local current = ui.ConfigDropdown.GetValue and ui.ConfigDropdown:GetValue() or nil
 				if not DeepEqual(current, selected) then
-					ui.ConfigDropdown:SetValue(selected, true)
+					ui.ConfigDropdown.SetValue(selected, true)
 				end
 			end
 
@@ -1666,14 +1674,14 @@ function Library.new(config)
 				local focused = ui.ConfigTextbox.IsFocused and ui.ConfigTextbox:IsFocused()
 				local current = ui.ConfigTextbox.GetValue and ui.ConfigTextbox:GetValue() or ""
 				if not focused and current ~= selectedText then
-					ui.ConfigTextbox:SetValue(selectedText, true)
+					ui.ConfigTextbox.SetValue(selectedText, true)
 				end
 			end
 
 			if ui.AutoloadToggle and ui.AutoloadToggle.SetValue then
 				local current = ui.AutoloadToggle.GetValue and ui.AutoloadToggle:GetValue() or nil
 				if current ~= self.AutoloadEnabled then
-					ui.AutoloadToggle:SetValue(self.AutoloadEnabled, true)
+					ui.AutoloadToggle.SetValue(self.AutoloadEnabled, true)
 				end
 			end
 
@@ -1681,7 +1689,7 @@ function Library.new(config)
 				local current = ui.ThemeDropdown.GetValue and ui.ThemeDropdown:GetValue() or nil
 				local selectedTheme = ThemeManager:GetThemeName(ThemeManager.ActiveTheme)
 				if current ~= selectedTheme then
-					ui.ThemeDropdown:SetValue(selectedTheme, true)
+					ui.ThemeDropdown.SetValue(selectedTheme, true)
 				end
 			end
 
@@ -1787,6 +1795,14 @@ function Library.new(config)
 		return true
 	end
 
+	function ConfigManager:GetSetter(object)
+		if type(object) ~= "table" then
+			return nil
+		end
+
+		return object.SetValue or object.SetState or object.SetSelected or object.Value or object.Set
+	end
+
 	function ConfigManager:Register(flag, object)
 		flag = tostring(flag or "")
 		if flag == "" or flag == ConfigMetaKey or flag == ConfigNilKey or type(object) ~= "table" then
@@ -1831,13 +1847,8 @@ function Library.new(config)
 			end)
 		end
 
-		if self.LoadedData and self.LoadedData[flag] ~= nil and object.SetValue then
-			local loadedValue = self.LoadedData[flag]
-			task.defer(function()
-				if self.Registered[flag] == object and object.Destroyed ~= true then
-					self:ApplyValueToObject(flag, object, loadedValue, false)
-				end
-			end)
+		if self.LoadedData and self.LoadedData[flag] ~= nil and self:GetSetter(object) then
+			self:ApplyValueToObject(flag, object, self.LoadedData[flag], false)
 		end
 
 		return true
@@ -1881,14 +1892,21 @@ function Library.new(config)
 
 	function ConfigManager:ApplyValueToObject(flag, object, rawValue, silent)
 		flag = tostring(flag or "")
-		if flag == "" or not object or object.Destroyed == true or not object.SetValue then
+		if flag == "" or not object or object.Destroyed == true or not self:GetSetter(object) then
 			return false
 		end
 
 		local value = ResolveLoadedConfigValue(rawValue)
+		local setter = self:GetSetter(object)
 		local ok, err = xpcall(function()
-			object:SetValue(value, silent == true)
+			setter(value, silent == true)
 		end, debug.traceback)
+
+		if not ok then
+			ok, err = xpcall(function()
+				setter(object, value, silent == true)
+			end, debug.traceback)
+		end
 
 		if not ok then
 			warn(("[Nothing UI] Failed to restore Flag '%s': %s"):format(flag, tostring(err)))
@@ -1921,7 +1939,7 @@ function Library.new(config)
 		for flag, value in pairs(self.LoadedData) do
 			if flag ~= ConfigMetaKey then
 				local object = self.Registered[flag]
-				if object and object.SetValue and object.Destroyed ~= true then
+				if object and self:GetSetter(object) and object.Destroyed ~= true then
 					if self:ApplyValueToObject(flag, object, value, silent == true) then
 						applied = applied + 1
 					end
@@ -2109,7 +2127,7 @@ function Library.new(config)
 			Callback = function()
 				local list = ConfigManager:RefreshList()
 				if ConfigDropdown and ConfigDropdown.Set then
-					ConfigDropdown:Set(list)
+					ConfigDropdown.Set(list)
 				end
 				ConfigManager:SyncSettingsUI()
 			end,
@@ -4038,11 +4056,13 @@ function Library.new(config)
 						GetValue = function()
 							return CurrentBind
 						end,
-						SetValue = function(newindex, silent)
-							ApplyBind(newindex, silent)
+						SetValue = function(first, second, third)
+							local value, silent = NormalizeMethodArgs(AttachedKeybind, first, second, third)
+							ApplyBind(value, silent)
 						end,
-						Value = function(newindex, silent)
-							ApplyBind(newindex, silent)
+						Value = function(first, second, third)
+							local value, silent = NormalizeMethodArgs(AttachedKeybind, first, second, third)
+							ApplyBind(value, silent)
 						end,
 						Visible = function(newindx)
 							KeybindFrame.Visible = newindx
@@ -4122,16 +4142,19 @@ function Library.new(config)
 					GetValue = function()
 						return CurrentValue == true
 					end,
-					SetValue = function(newindex, silent)
-						ApplyValue(newindex == true, silent)
+					SetValue = function(first, second, third)
+						local value, silent = NormalizeMethodArgs(ToggleObject, first, second, third)
+						ApplyValue(value == true, silent)
 					end,
-					Value = function(newindex, silent)
-						ApplyValue(newindex == true, silent)
+					Value = function(first, second, third)
+						local value, silent = NormalizeMethodArgs(ToggleObject, first, second, third)
+						ApplyValue(value == true, silent)
 					end,
 					Visible = function(newindx)
 						SearchManager:SetObjectVisible(ToggleObject, newindx)
 					end,
-					NewKeybind = function(bindCfg)
+					NewKeybind = function(first, second)
+						local bindCfg = first == ToggleObject and second or first
 						local handle = CreateAttachedKeybind(bindCfg)
 						return handle
 					end,
@@ -4570,14 +4593,16 @@ function Library.new(config)
 						GetValue = function()
 							return CurrentBind
 						end,
-						SetValue = function(value, silent)
+						SetValue = function(first, second, third)
+							local value, silent = NormalizeMethodArgs(KeybindObject, first, second, third)
 							ApplyBind(value, silent)
 						end,
 						Visible = function(newindx)
 							SearchManager:SetObjectVisible(KeybindObject, newindx)
 						end,
-						Value = function(lrm, silent)
-							ApplyBind(lrm, silent)
+						Value = function(first, second, third)
+							local value, silent = NormalizeMethodArgs(KeybindObject, first, second, third)
+							ApplyBind(value, silent)
 						end,
 						Destroy = function()
 							if ActiveFlag then
@@ -4793,14 +4818,16 @@ function Library.new(config)
 					GetValue = function()
 						return CurrentValue
 					end,
-					SetValue = function(value, silent)
+					SetValue = function(first, second, third)
+						local value, silent = NormalizeMethodArgs(SliderObject, first, second, third)
 						ApplyValue(value, silent)
 					end,
 					Visible = function(newindx)
 						SearchManager:SetObjectVisible(SliderObject, newindx)
 					end,
-					Value = function(lrm, silent)
-						ApplyValue(lrm, silent)
+					Value = function(first, second, third)
+						local value, silent = NormalizeMethodArgs(SliderObject, first, second, third)
+						ApplyValue(value, silent)
 					end,
 					Destroy = function()
 						if ActiveFlag then
@@ -5009,13 +5036,15 @@ function Library.new(config)
 					GetValue = function()
 						return CurrentValue
 					end,
-					SetValue = function(value, silent)
+					SetValue = function(first, second, third)
+						local value, silent = NormalizeMethodArgs(DropdownObject, first, second, third)
 						ApplyValue(value, silent)
 					end,
 					Visible = function(newindx)
 						SearchManager:SetObjectVisible(DropdownObject, newindx)
 					end,
-					Value = function(value, silent)
+					Value = function(first, second, third)
+						local value, silent = NormalizeMethodArgs(DropdownObject, first, second, third)
 						ApplyValue(value, silent)
 					end,
 					Open = function(value)
@@ -5039,8 +5068,9 @@ function Library.new(config)
 						drop.Data = {}
 						ApplyValue(drop.Multi and {} or nil, true, true)
 					end,
-					Set = function(table)
-						drop.Data = table
+					Set = function(first, second)
+						local data = first == DropdownObject and second or first
+						drop.Data = type(data) == "table" and data or {}
 						ApplyValue(CurrentValue, true, true)
 					end,
 					Destroy = function()
@@ -5486,10 +5516,12 @@ function Library.new(config)
 
 						return TextBox.Text
 					end,
-					SetValue = function(value, silent)
+					SetValue = function(first, second, third)
+						local value, silent = NormalizeMethodArgs(TextboxObject, first, second, third)
 						ApplyValue(value, silent)
 					end,
-					Value = function(value, silent)
+					Value = function(first, second, third)
+						local value, silent = NormalizeMethodArgs(TextboxObject, first, second, third)
 						ApplyValue(value, silent)
 					end,
 					IsFocused = function()
