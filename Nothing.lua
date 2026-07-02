@@ -20,6 +20,26 @@ local Icons = (function()
 	return nil;
 end)() or {};
 
+local LucideIconCache = nil
+
+local function LoadLucideIcons()
+	if LucideIconCache ~= nil then
+		return LucideIconCache
+	end
+
+	local ok, result = pcall(function()
+		return loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/StyearX/Icons/refs/heads/main/lucide/dist/Icons.lua"))()
+	end)
+
+	if ok and type(result) == "table" then
+		LucideIconCache = result
+		return LucideIconCache
+	end
+
+	LucideIconCache = {}
+	return LucideIconCache
+end
+
 local function ResolveIconSource(icon)
 	if type(icon) ~= "string" then
 		return icon
@@ -37,6 +57,17 @@ local function ResolveIconSource(icon)
 
 	if icon:sub(1, 11) == "rbxassetid:" or icon:sub(1, 4) == "http" or icon:sub(1, 11) == "rbxthumb://" then
 		return icon
+	end
+
+	local lucide = LoadLucideIcons()
+	local normalized = lower:gsub("_", "-")
+	local resolved = lucide[icon] or lucide[lower] or lucide[normalized] or lucide["lucide-" .. normalized]
+	if resolved then
+		return resolved
+	end
+
+	if Icons[lower] then
+		return Icons[lower]
 	end
 
 	return icon
@@ -926,6 +957,9 @@ function Library.new(config)
 	}
 
 	local function NormalizeConfigName(name, allowEmpty)
+		if type(name) == "table" then
+			name = ""
+		end
 		name = tostring(name or "")
 		name = name:gsub("[\\/:*?\"<>|]", "_")
 		name = name:gsub("^%s+", ""):gsub("%s+$", "")
@@ -2220,7 +2254,7 @@ function Library.new(config)
 				FunctionParagraph.BorderColor3 = Color3.fromRGB(0, 0, 0)
 				FunctionParagraph.BorderSizePixel = 0
 				FunctionParagraph.ClipsDescendants = true
-				FunctionParagraph.Size = UDim2.new(0.949999988, 0, 0, 54)
+				FunctionParagraph.Size = UDim2.new(0.949999988, 0, 0, 40)
 				FunctionParagraph.ZIndex = 17
 				Twen:Create(FunctionParagraph, TweenInfo1, { BackgroundTransparency = 0.8 }):Play()
 
@@ -2238,8 +2272,8 @@ function Library.new(config)
 				TitleText.BackgroundTransparency = 1.000
 				TitleText.BorderColor3 = Color3.fromRGB(0, 0, 0)
 				TitleText.BorderSizePixel = 0
-				TitleText.Position = UDim2.new(0.5, 0, 0.12, 0)
-				TitleText.Size = UDim2.new(0.949999988, 0, 0, 18)
+				TitleText.Position = UDim2.new(0.5, 0, 0.08, 0)
+				TitleText.Size = UDim2.new(0.949999988, 0, 0, 16)
 				TitleText.ZIndex = 18
 				TitleText.Font = Enum.Font.GothamBold
 				TitleText.Text = ParagraphState.Title
@@ -2265,8 +2299,8 @@ function Library.new(config)
 				DescriptionText.BackgroundTransparency = 1.000
 				DescriptionText.BorderColor3 = Color3.fromRGB(0, 0, 0)
 				DescriptionText.BorderSizePixel = 0
-				DescriptionText.Position = UDim2.new(0.5, 0, 0, 26)
-				DescriptionText.Size = UDim2.new(0.949999988, 0, 0, 18)
+				DescriptionText.Position = UDim2.new(0.5, 0, 0, 20)
+				DescriptionText.Size = UDim2.new(0.949999988, 0, 0, 16)
 				DescriptionText.ZIndex = 18
 				DescriptionText.Font = Enum.Font.GothamBold
 				DescriptionText.Text = ParagraphState.Description
@@ -2305,15 +2339,15 @@ function Library.new(config)
 						Vector2.new(measureWidth, math.huge)
 					)
 
-					local titleHeight = math.max(16, titleBounds.Y)
-					local descHeight = ParagraphState.Description ~= "" and math.max(16, descBounds.Y) or 0
-					local totalHeight = 14 + titleHeight + (descHeight > 0 and (8 + descHeight) or 8)
+					local titleHeight = math.max(14, titleBounds.Y)
+					local descHeight = ParagraphState.Description ~= "" and math.max(14, descBounds.Y) or 0
+					local totalHeight = 8 + titleHeight + (descHeight > 0 and (4 + descHeight) or 6)
 
-					FunctionParagraph.Size = UDim2.new(0.949999988, 0, 0, math.max(46, totalHeight))
+					FunctionParagraph.Size = UDim2.new(0.949999988, 0, 0, math.max(34, totalHeight))
 					TitleText.Size = UDim2.new(0.949999988, 0, 0, titleHeight)
 					DescriptionText.Visible = ParagraphState.Description ~= ""
 					if descHeight > 0 then
-						DescriptionText.Position = UDim2.new(0.5, 0, 0, titleHeight + 8)
+						DescriptionText.Position = UDim2.new(0.5, 0, 0, titleHeight + 4)
 						DescriptionText.Size = UDim2.new(0.949999988, 0, 0, descHeight)
 					end
 				end
@@ -3857,7 +3891,12 @@ function Library.new(config)
 						return nil, ""
 					end
 
-					if type(value) == "number" then
+					local valueType = type(value)
+					if valueType ~= "number" and valueType ~= "string" then
+						return nil, ""
+					end
+
+					if valueType == "number" then
 						if value ~= value then
 							return nil, ""
 						end
@@ -3881,6 +3920,10 @@ function Library.new(config)
 				local function ResolveTextboxValue(value)
 					if conf.Numeric then
 						return ResolveNumericValue(value)
+					end
+
+					if type(value) == "table" then
+						return "", ""
 					end
 
 					local text = tostring(value or "")
