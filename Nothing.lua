@@ -253,6 +253,134 @@ local LibraryState = {
 	LastWindow = nil,
 }
 
+local ThemeManager = {
+	ActiveTheme = "Default",
+	ConfigManager = nil,
+	Themes = {
+		Default = {
+			Accent = Color3.fromRGB(255, 255, 255),
+			AccentSoft = Color3.fromRGB(255, 255, 255),
+			AccentStroke = Color3.fromRGB(255, 255, 255),
+		},
+		Kronos = {
+			Accent = Color3.fromRGB(82, 128, 214),
+			AccentSoft = Color3.fromRGB(82, 128, 214),
+			AccentStroke = Color3.fromRGB(82, 128, 214),
+		},
+	},
+	Bindings = setmetatable({}, { __mode = "k" }),
+}
+
+function ThemeManager:NormalizeTheme(name)
+	name = tostring(name or "Default")
+	if self.Themes[name] then
+		return name
+	end
+	return "Default"
+end
+
+function ThemeManager:GetThemeName(name)
+	return self:NormalizeTheme(name or self.ActiveTheme)
+end
+
+function ThemeManager:GetTheme(name)
+	return self.Themes[self:NormalizeTheme(name or self.ActiveTheme)] or self.Themes.Default
+end
+
+function ThemeManager:GetColor(token, themeName)
+	local theme = self:GetTheme(themeName)
+	local color = theme[token] or theme.Accent or Color3.fromRGB(255, 255, 255)
+	return color
+end
+
+function ThemeManager:_ApplyBinding(instance, binding)
+	if not instance or not binding then
+		return false
+	end
+
+	return pcall(function()
+		instance[binding.Property] = self:GetColor(binding.Token)
+	end)
+end
+
+function ThemeManager:Bind(instance, property, token)
+	if not instance or property == nil then
+		return false
+	end
+
+	local bucket = self.Bindings[instance]
+	if not bucket then
+		bucket = {}
+		self.Bindings[instance] = bucket
+	end
+
+	bucket[#bucket + 1] = {
+		Property = property,
+		Token = token or "Accent",
+	}
+
+	self:_ApplyBinding(instance, bucket[#bucket])
+	return true
+end
+
+function ThemeManager:BindAccent(instance, property)
+	return self:Bind(instance, property, "Accent")
+end
+
+function ThemeManager:BindAccentStroke(instance)
+	return self:Bind(instance, "Color", "AccentStroke")
+end
+
+function ThemeManager:ApplyTheme(themeName)
+	themeName = self:NormalizeTheme(themeName)
+	self.ActiveTheme = themeName
+
+	for instance, bucket in pairs(self.Bindings) do
+		if bucket and instance then
+			for i = 1, #bucket do
+				self:_ApplyBinding(instance, bucket[i])
+			end
+		end
+	end
+end
+
+function ThemeManager:Persist()
+	if self.ConfigManager and self.ConfigManager.PersistAutoload then
+		self.ConfigManager:PersistAutoload()
+	end
+end
+
+function ThemeManager:SetTheme(themeName, silent)
+	local normalized = self:NormalizeTheme(themeName)
+	if self.ActiveTheme == normalized then
+		if not silent then
+			self:Persist()
+			if self.ConfigManager and self.ConfigManager.SyncSettingsUI then
+				self.ConfigManager:SyncSettingsUI()
+			end
+		end
+		return false
+	end
+
+	self.ActiveTheme = normalized
+	if self.ConfigManager then
+		self.ConfigManager.Theme = normalized
+	end
+	self:ApplyTheme(normalized)
+
+	if not silent then
+		self:Persist()
+	end
+
+	if self.ConfigManager and self.ConfigManager.SyncSettingsUI then
+		self.ConfigManager:SyncSettingsUI()
+	end
+
+	return true
+end
+
+Library.Theme = ThemeManager
+
 Library['.'] = '1';
 Library['FetchIcon'] = "https://raw.githubusercontent.com/evoincorp/lucideblox/master/src/modules/util/icons.json";
 
@@ -541,6 +669,7 @@ function Library.new(config)
 	WindowTable.WindowToggle = true;
 	WindowTable.Keybind = config.Keybind;
 	WindowTable.ToggleButton = nil
+	WindowTable.Theme = ThemeManager
 	
 	local ImageButton = Instance.new("ImageButton")
 
@@ -819,6 +948,7 @@ function Library.new(config)
 	FloatingStroke.Transparency = 0.88
 	FloatingStroke.Color = Color3.fromRGB(255, 255, 255)
 	FloatingStroke.Parent = FloatingButton
+	ThemeManager:BindAccentStroke(FloatingStroke)
 
 	FloatingHitbox.Name = "Hitbox"
 	FloatingHitbox.Parent = FloatingButton
@@ -1044,6 +1174,7 @@ function Library.new(config)
 	BlockFrame1.Size = UDim2.new(0, 1, 1, 0)
 	BlockFrame1.ZIndex = 3
 	Twen:Create(BlockFrame1,TweenInfo2,{BackgroundTransparency = 0.8}):Play();
+	ThemeManager:BindAccent(BlockFrame1, "BackgroundColor3")
 
 	UICorner_3.CornerRadius = UDim.new(0.5, 0)
 	UICorner_3.Parent = BlockFrame1
@@ -1063,6 +1194,7 @@ function Library.new(config)
 	BlockFrame3.Size = UDim2.new(0.682999969, 0, 0, 1)
 	BlockFrame3.ZIndex = 3
 	Twen:Create(BlockFrame3,TweenInfo2,{BackgroundTransparency = 0.8}):Play();
+	ThemeManager:BindAccent(BlockFrame3, "BackgroundColor3")
 
 	UICorner_4.CornerRadius = UDim.new(0.5, 0)
 	UICorner_4.Parent = BlockFrame3
@@ -1081,6 +1213,7 @@ function Library.new(config)
 	BlockFrame2.Size = UDim2.new(0.318471342, 0, 0, 1)
 	BlockFrame2.ZIndex = 3
 	Twen:Create(BlockFrame2,TweenInfo2,{BackgroundTransparency = 0.8}):Play();
+	ThemeManager:BindAccent(BlockFrame2, "BackgroundColor3")
 
 	UICorner_5.CornerRadius = UDim.new(0.5, 0)
 	UICorner_5.Parent = BlockFrame2
@@ -1155,10 +1288,13 @@ function Library.new(config)
 		LoadedData = nil,
 		SelectedConfig = "",
 		AutoloadEnabled = false,
+		Theme = "Default",
 		Folder = LibraryState.Defaults.Folder,
 		SubFolder = LibraryState.Defaults.SubFolder,
 		SettingsUI = nil,
 	}
+
+	ThemeManager.ConfigManager = ConfigManager
 
 	local function NormalizeConfigName(name, allowEmpty)
 		if type(name) == "table" then
@@ -1172,6 +1308,48 @@ function Library.new(config)
 			return allowEmpty and "" or "Default"
 		end
 		return name
+	end
+
+	local function DeepEqual(left, right, visited)
+		if left == right then
+			return true
+		end
+
+		local leftType = type(left)
+		local rightType = type(right)
+		if leftType ~= rightType then
+			return false
+		end
+
+		if leftType ~= "table" then
+			return left == right
+		end
+
+		visited = visited or {}
+		local leftVisited = visited[left]
+		if leftVisited and leftVisited[right] then
+			return true
+		end
+
+		if not leftVisited then
+			leftVisited = {}
+			visited[left] = leftVisited
+		end
+		leftVisited[right] = true
+
+		for key, value in pairs(left) do
+			if not DeepEqual(value, right[key], visited) then
+				return false
+			end
+		end
+
+		for key in pairs(right) do
+			if left[key] == nil then
+				return false
+			end
+		end
+
+		return true
 	end
 
 	local function NormalizeSubFolder(folder, subfolder)
@@ -1244,7 +1422,7 @@ function Library.new(config)
 
 	function ConfigManager:SerializeValues()
 		for flag, object in pairs(self.Registered) do
-			if object and object.GetValue then
+			if object and object.GetValue and object.Destroyed ~= true then
 				local ok, current = pcall(function()
 					return object:GetValue()
 				end)
@@ -1265,26 +1443,53 @@ function Library.new(config)
 		if not self.SettingsUI then
 			return
 		end
+		if self._SyncingSettingsUI then
+			return
+		end
+		self._SyncingSettingsUI = true
 
-		local configs = self:RefreshList()
-		local ui = self.SettingsUI
+		local function SyncBody()
+			local configs = self:RefreshList()
+			local ui = self.SettingsUI
 
-		if ui.ConfigDropdown and ui.ConfigDropdown.Set then
-			ui.ConfigDropdown:Set(configs)
-			if self.SelectedConfig ~= "" then
-				ui.ConfigDropdown:SetValue(self.SelectedConfig, true)
-			else
-				ui.ConfigDropdown:SetValue(nil, true)
+			if ui.ConfigDropdown and ui.ConfigDropdown.Set then
+				ui.ConfigDropdown:Set(configs)
+				local selected = self.SelectedConfig ~= "" and self.SelectedConfig or nil
+				local current = ui.ConfigDropdown.GetValue and ui.ConfigDropdown:GetValue() or nil
+				if not DeepEqual(current, selected) then
+					ui.ConfigDropdown:SetValue(selected, true)
+				end
+			end
+
+			if ui.ConfigTextbox and ui.ConfigTextbox.SetValue then
+				local selected = type(self.SelectedConfig) == "string" and self.SelectedConfig or ""
+				local focused = ui.ConfigTextbox.IsFocused and ui.ConfigTextbox:IsFocused()
+				local current = ui.ConfigTextbox.GetValue and ui.ConfigTextbox:GetValue() or ""
+				if not focused and current ~= selected then
+					ui.ConfigTextbox:SetValue(selected, true)
+				end
+			end
+
+			if ui.AutoloadToggle and ui.AutoloadToggle.SetValue then
+				local current = ui.AutoloadToggle.GetValue and ui.AutoloadToggle:GetValue() or nil
+				if current ~= self.AutoloadEnabled then
+					ui.AutoloadToggle:SetValue(self.AutoloadEnabled, true)
+				end
+			end
+
+			if ui.ThemeDropdown and ui.ThemeDropdown.SetValue then
+				local current = ui.ThemeDropdown.GetValue and ui.ThemeDropdown:GetValue() or nil
+				local selected = ThemeManager:GetThemeName(self.Theme or ThemeManager.ActiveTheme)
+				if current ~= selected then
+					ui.ThemeDropdown:SetValue(selected, true)
+				end
 			end
 		end
 
-		if ui.ConfigTextbox and ui.ConfigTextbox.SetValue then
-			local selected = type(self.SelectedConfig) == "string" and self.SelectedConfig or ""
-			ui.ConfigTextbox:SetValue(selected, true)
-		end
-
-		if ui.AutoloadToggle and ui.AutoloadToggle.SetValue then
-			ui.AutoloadToggle:SetValue(self.AutoloadEnabled, true)
+		local ok, err = xpcall(SyncBody, debug.traceback)
+		self._SyncingSettingsUI = false
+		if not ok then
+			error(err, 0)
 		end
 	end
 
@@ -1293,28 +1498,48 @@ function Library.new(config)
 		self:WriteJson(self:GetAutoloadPath(), {
 			Enabled = self.AutoloadEnabled and true or false,
 			Config = self.SelectedConfig ~= "" and self.SelectedConfig or nil,
+			Theme = ThemeManager:GetThemeName(self.Theme or ThemeManager.ActiveTheme),
 		})
 	end
 
 	function ConfigManager:SetSelectedConfig(name, silent)
 		name = name and NormalizeConfigName(name, true) or ""
+		if self.SelectedConfig == name then
+			if not silent then
+				self:PersistAutoload()
+			end
+			return false
+		end
+
 		self.SelectedConfig = name
+		self.Theme = ThemeManager:GetThemeName(self.Theme or ThemeManager.ActiveTheme)
 
 		if not silent then
 			self:PersistAutoload()
 		end
 
 		self:SyncSettingsUI()
+		return true
 	end
 
 	function ConfigManager:SetAutoloadEnabled(enabled, silent)
-		self.AutoloadEnabled = enabled and true or false
+		enabled = enabled and true or false
+		if self.AutoloadEnabled == enabled then
+			if not silent then
+				self:PersistAutoload()
+			end
+			return false
+		end
+
+		self.AutoloadEnabled = enabled
+		self.Theme = ThemeManager:GetThemeName(self.Theme or ThemeManager.ActiveTheme)
 
 		if not silent then
 			self:PersistAutoload()
 		end
 
 		self:SyncSettingsUI()
+		return true
 	end
 
 	function ConfigManager:Register(flag, object)
@@ -1323,10 +1548,19 @@ function Library.new(config)
 			return false
 		end
 
-		if self.Registered[flag] and self.Registered[flag] ~= object then
-			warn(("[Nothing UI] Duplicate Flag ignored: %s"):format(flag))
-			object.Flag = nil
-			return false
+		local existing = self.Registered[flag]
+		if existing and existing ~= object then
+			local existingRoot = existing.Root
+			local stale = existing.Destroyed == true
+				or existingRoot == nil
+				or existingRoot.Parent == nil
+			if stale then
+				self.Registered[flag] = nil
+			else
+				warn(("[Nothing UI] Duplicate Flag ignored: %s"):format(flag))
+				object.Flag = nil
+				return false
+			end
 		end
 
 		self.Registered[flag] = object
@@ -1341,16 +1575,52 @@ function Library.new(config)
 		object.Flag = flag
 		object.ConfigManager = self
 
+		if object.Root and object.Root.AncestryChanged and not object._RegistryCleanupBound then
+			object._RegistryCleanupBound = true
+			object.Root.AncestryChanged:Connect(function(_, parent)
+				if parent == nil and self.Registered[flag] == object then
+					self:Unregister(flag, object)
+				end
+			end)
+		end
+
 		if self.LoadedData and self.LoadedData[flag] ~= nil and object.SetValue then
 			local loadedValue = self.LoadedData[flag]
 			self.Values[flag] = loadedValue
 			task.defer(function()
-				if object and object.SetValue then
+				if object and object.SetValue and object.Destroyed ~= true then
 					pcall(function()
 						object:SetValue(loadedValue, false)
 					end)
 				end
 			end)
+		end
+
+		return true
+	end
+
+	function ConfigManager:Unregister(flag, object)
+		flag = tostring(flag or "")
+		if flag == "" then
+			return false
+		end
+
+		local current = self.Registered[flag]
+		if not current then
+			return false
+		end
+
+		if object and current ~= object then
+			return false
+		end
+
+		self.Registered[flag] = nil
+		if current and current.Destroyed ~= true then
+			current.Destroyed = true
+		end
+		if current then
+			current.Flag = nil
+			current.ConfigManager = nil
 		end
 
 		return true
@@ -1371,7 +1641,7 @@ function Library.new(config)
 
 		for flag, value in pairs(self.LoadedData) do
 			local object = self.Registered[flag]
-			if object and object.SetValue then
+			if object and object.SetValue and object.Destroyed ~= true then
 				pcall(function()
 					object:SetValue(value, false)
 				end)
@@ -1406,26 +1676,31 @@ function Library.new(config)
 
 		self:EnsureFolders()
 		local ok = self:WriteJson(self:GetConfigPath(name), self:SerializeValues())
-		if not ok then
-			return false
-		end
+			if not ok then
+				return false
+			end
 
-		self:SetSelectedConfig(name, false)
-		self:SyncSettingsUI()
-		return true
-	end
+			if not self:SetSelectedConfig(name, false) then
+				self:SyncSettingsUI()
+			end
+			return true
+		end
 
 	function ConfigManager:LoadAutoload()
 		self:EnsureFolders()
 		self.LoadedData = nil
 		self.AutoloadEnabled = false
 		self.SelectedConfig = ""
+		self.Theme = "Default"
 
 		local data = self:ReadJson(self:GetAutoloadPath())
 		if type(data) == "table" then
 			self.AutoloadEnabled = data.Enabled == true
 			self.SelectedConfig = data.Config and NormalizeConfigName(data.Config, true) or self.SelectedConfig
+			self.Theme = ThemeManager:GetThemeName(data.Theme or self.Theme)
 		end
+
+		ThemeManager:SetTheme(self.Theme, true)
 
 		self:SyncSettingsUI()
 
@@ -1451,9 +1726,16 @@ function Library.new(config)
 			Icon = "settings",
 		})
 
+		local CustomizeSection = SettingsTab:NewSection({
+			Position = "Right",
+			Title = "Customize",
+			Icon = "palette",
+		})
+
 		local ConfigDropdown = nil
 		local ConfigTextbox = nil
 		local AutoloadToggle = nil
+		local ThemeDropdown = nil
 
 		ConfigDropdown = ConfigSection:NewDropdown({
 			Title = "Select Config",
@@ -1483,7 +1765,7 @@ function Library.new(config)
 			FileType = "",
 			Flag = nil,
 			Callback = function(value)
-				if type(value) == "string" and value ~= "" then
+				if type(value) == "string" then
 					ConfigManager:SetSelectedConfig(value)
 				end
 			end,
@@ -1494,21 +1776,14 @@ function Library.new(config)
 		ConfigSection:NewButton({
 			Title = "Save Config",
 			Callback = function()
-				local name = ConfigTextbox and ConfigTextbox.GetValue and ConfigTextbox:GetValue() or ConfigManager.SelectedConfig
-				if type(name) ~= "string" then
-					name = ""
-				end
-				if name == "" then
-					name = ConfigManager.SelectedConfig
+				local name = ""
+				if ConfigTextbox and ConfigTextbox.GetValue then
+					name = ConfigTextbox:GetValue()
 				end
 				if type(name) ~= "string" then
-					name = ""
-				end
-				if name == "" then
-					name = "Default"
+					name = tostring(name or "")
 				end
 				ConfigManager:SaveConfig(name)
-				ConfigManager:SyncSettingsUI()
 			end,
 		})
 
@@ -1535,10 +1810,20 @@ function Library.new(config)
 			end,
 		})
 
+		ThemeDropdown = CustomizeSection:NewDropdown({
+			Title = "Select Theme",
+			Data = {"Default", "Kronos"},
+			Default = ThemeManager:GetThemeName(self.Theme or ThemeManager.ActiveTheme),
+			Callback = function(value)
+				ThemeManager:SetTheme(value)
+			end,
+		})
+
 		ConfigManager.SettingsUI = {
 			ConfigDropdown = ConfigDropdown,
 			ConfigTextbox = ConfigTextbox,
 			AutoloadToggle = AutoloadToggle,
+			ThemeDropdown = ThemeDropdown,
 		}
 		ConfigManager:SyncSettingsUI()
 
@@ -1694,6 +1979,7 @@ function Library.new(config)
 		UIStroke.Transparency = 0.900
 		UIStroke.Color = Color3.fromRGB(255, 255, 255)
 		UIStroke.Parent = DropdownFrame
+		ThemeManager:BindAccentStroke(UIStroke)
 
 		ValueId.Name = "ValueId"
 		ValueId.Parent = DropdownFrame
@@ -1758,6 +2044,7 @@ function Library.new(config)
 		BlockFrame3.Position = UDim2.new(0, 0, 0.0799999982, 0)
 		BlockFrame3.Size = UDim2.new(1, 0, 0, 1)
 		BlockFrame3.ZIndex = 102
+		ThemeManager:BindAccent(BlockFrame3, "BackgroundColor3")
 
 		UICorner_2.CornerRadius = UDim.new(0.5, 0)
 		UICorner_2.Parent = BlockFrame3
@@ -1824,6 +2111,7 @@ function Library.new(config)
 			Frame.Position = UDim2.new(1.02499998, 0, 0.5, 0)
 			Frame.Size = UDim2.new(0.0549999997, 0, 0.699999988, 0)
 			Frame.ZIndex = 104
+			ThemeManager:BindAccent(Frame, "BackgroundColor3")
 
 			UICorner_2.CornerRadius = UDim.new(0, 3)
 			UICorner_2.Parent = Frame
@@ -1848,6 +2136,7 @@ function Library.new(config)
 			UIStroke.Transparency = 0.900
 			UIStroke.Color = Color3.fromRGB(255, 255, 255)
 			UIStroke.Parent = Selector;
+			ThemeManager:BindAccentStroke(UIStroke)
 
 			local caller = function(a)
 				if a then
@@ -2155,6 +2444,7 @@ function Library.new(config)
 		Frame.Size = UDim2.new(0.0549999997, 0, 0.699999988, 0)
 		Frame.ZIndex = 6
 		Twen:Create(Frame,TweenInfo2,{BackgroundTransparency = 0.1}):Play();
+		ThemeManager:BindAccent(Frame, "BackgroundColor3")
 
 		UICorner_3.CornerRadius = UDim.new(0, 3)
 		UICorner_3.Parent = Frame
@@ -2370,17 +2660,18 @@ function Library.new(config)
 			UIGradient.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0.00, 0.00), NumberSequenceKeypoint.new(0.75, 0.27), NumberSequenceKeypoint.new(1.00, 1.00)}
 			UIGradient.Parent = Icon
 
-			BlockFrame.Name = "BlockFrame"
-			BlockFrame.Parent = Header
+		BlockFrame.Name = "BlockFrame"
+		BlockFrame.Parent = Header
 			BlockFrame.AnchorPoint = Vector2.new(0.5, 1)
 			BlockFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 			BlockFrame.BackgroundTransparency = 1
 			BlockFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
 			BlockFrame.BorderSizePixel = 0
 			BlockFrame.Position = UDim2.new(0.5, 0, 1, 0)
-			BlockFrame.Size = UDim2.new(1, 0, 0, 1)
-			BlockFrame.ZIndex = 3
-			Twen:Create(BlockFrame,TweenInfo2,{BackgroundTransparency = 0.8}):Play();
+		BlockFrame.Size = UDim2.new(1, 0, 0, 1)
+		BlockFrame.ZIndex = 3
+		Twen:Create(BlockFrame,TweenInfo2,{BackgroundTransparency = 0.8}):Play();
+		ThemeManager:BindAccent(BlockFrame, "BackgroundColor3")
 
 			UICorner_4.CornerRadius = UDim.new(0.5, 0)
 			UICorner_4.Parent = BlockFrame
@@ -2423,9 +2714,10 @@ function Library.new(config)
 				}):Play()
 			end)
 
-			UIStroke.Transparency = 1
-			UIStroke.Color = Color3.fromRGB(255, 255, 255)
-			UIStroke.Parent = Section
+		UIStroke.Transparency = 1
+		UIStroke.Color = Color3.fromRGB(255, 255, 255)
+		UIStroke.Parent = Section
+		ThemeManager:BindAccentStroke(UIStroke)
 			Twen:Create(UIStroke,TweenInfo1,{Transparency = 0.9}):Play();
 
 			UIGradient_4.Rotation = 90
@@ -2472,9 +2764,10 @@ function Library.new(config)
 				UICorner.CornerRadius = UDim.new(0, 2)
 				UICorner.Parent = FunctionParagraph
 
-				UIStroke.Transparency = 0.950
-				UIStroke.Color = Color3.fromRGB(255, 255, 255)
-				UIStroke.Parent = FunctionParagraph
+			UIStroke.Transparency = 0.950
+			UIStroke.Color = Color3.fromRGB(255, 255, 255)
+			UIStroke.Parent = FunctionParagraph
+			ThemeManager:BindAccentStroke(UIStroke)
 
 				TitleText.Name = "TitleText"
 				TitleText.Parent = FunctionParagraph
@@ -2676,9 +2969,10 @@ function Library.new(config)
 				Button.TextSize = 14.000
 				Button.TextTransparency = 1.000
 
-				UIStroke.Transparency = 0.950
-				UIStroke.Color = Color3.fromRGB(255, 255, 255)
-				UIStroke.Parent = FunctionToggle
+			UIStroke.Transparency = 0.950
+			UIStroke.Color = Color3.fromRGB(255, 255, 255)
+			UIStroke.Parent = FunctionToggle
+			ThemeManager:BindAccentStroke(UIStroke)
 
 				System.Name = "System"
 				System.Parent = FunctionToggle
@@ -2694,21 +2988,23 @@ function Library.new(config)
 				UICorner.CornerRadius = UDim.new(0.5, 0)
 				UICorner.Parent = System
 
-				UIStroke_2.Transparency = 0.850
-				UIStroke_2.Color = Color3.fromRGB(255, 255, 255)
-				UIStroke_2.Parent = System
+			UIStroke_2.Transparency = 0.850
+			UIStroke_2.Color = Color3.fromRGB(255, 255, 255)
+			UIStroke_2.Parent = System
+			ThemeManager:BindAccentStroke(UIStroke_2)
 
 				Icon.Name = "Icon"
 				Icon.Parent = System
 				Icon.AnchorPoint = Vector2.new(0.5, 0.5)
-				Icon.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-				Icon.BackgroundTransparency = 0.500
+			Icon.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+			Icon.BackgroundTransparency = 0.500
 				Icon.BorderColor3 = Color3.fromRGB(0, 0, 0)
 				Icon.BorderSizePixel = 0
 				Icon.Position = UDim2.new(0.25, 0, 0.5, 0)
-				Icon.Size = UDim2.new(1, 0, 1, 0)
-				Icon.SizeConstraint = Enum.SizeConstraint.RelativeYY
-				Icon.ZIndex = 17
+			Icon.Size = UDim2.new(1, 0, 1, 0)
+			Icon.SizeConstraint = Enum.SizeConstraint.RelativeYY
+			Icon.ZIndex = 17
+			ThemeManager:BindAccent(Icon, "BackgroundColor3")
 
 				UICorner_2.CornerRadius = UDim.new(1, 0)
 				UICorner_2.Parent = Icon
@@ -2743,6 +3039,7 @@ function Library.new(config)
 					local KeybindText = Instance.new("TextLabel")
 					local KeybindButton = Instance.new("TextButton")
 					local Capturing = false
+					local Dispatching = false
 					local CurrentBind = ResolveKeybindValue(bindCfg.Default, Enum.KeyCode.E)
 
 					KeybindFrame.Name = "Keybind"
@@ -2795,6 +3092,7 @@ function Library.new(config)
 					KeybindButton.TextSize = 14.000
 					KeybindButton.TextTransparency = 1.000
 
+					local ApplyBind
 					local function UpdateBindDisplay(new)
 						if new == "..." then
 							KeybindText.Text = "..."
@@ -2811,7 +3109,12 @@ function Library.new(config)
 							return
 						end
 
-						CurrentBind = ResolveKeybindValue(new, CurrentBind)
+						local nextBind = ResolveKeybindValue(new, CurrentBind)
+						if nextBind == CurrentBind and KeybindText.Text == FormatKeybindValue(CurrentBind) then
+							return false
+						end
+
+						CurrentBind = nextBind
 						KeybindText.Text = FormatKeybindValue(CurrentBind)
 
 						local size = TextServ:GetTextSize(
@@ -2824,6 +3127,34 @@ function Library.new(config)
 						Twen:Create(KeybindFrame, TweenInfo.new(0.2), {
 							Size = UDim2.new(0, math.clamp(size.X + 12, 48, 92), 0.600000024, 0),
 						}):Play()
+						return true
+					end
+
+					ApplyBind = function(newValue, silent, force)
+						local resolved = ResolveKeybindValue(newValue, CurrentBind)
+						if not force and resolved == CurrentBind then
+							return false
+						end
+
+						local changed = UpdateBindDisplay(resolved)
+						if not changed then
+							if BindActiveFlag then
+								ConfigManager:Update(BindActiveFlag, CurrentBind)
+							end
+							return false
+						end
+
+						if BindActiveFlag then
+							ConfigManager:Update(BindActiveFlag, CurrentBind)
+						end
+
+						if not silent and type(bindCfg.Callback) == "function" and not Dispatching then
+							Dispatching = true
+							bindCfg.Callback(CurrentBind)
+							Dispatching = false
+						end
+
+						return true
 					end
 
 					UpdateToggleTitleWidth(true)
@@ -2863,41 +3194,34 @@ function Library.new(config)
 
 						local Bind = BindEvent.Event:Wait()
 						Signal:Disconnect()
-						UpdateBindDisplay(Bind)
-						if BindActiveFlag then
-							ConfigManager:Update(BindActiveFlag, CurrentBind)
-						end
+						ApplyBind(Bind, false, true)
 						Twen:Create(KeybindText, TweenInfo.new(0.1), {
 							TextTransparency = 0.500,
 						}):Play()
 
 						Capturing = false
-						if type(bindCfg.Callback) == "function" then
-							task.spawn(bindCfg.Callback, CurrentBind)
-						end
 					end)
 
 					AttachedKeybind = {
 						Flag = bindCfg.Flag,
+						Root = KeybindFrame,
 						GetValue = function()
 							return CurrentBind
 						end,
 						SetValue = function(newindex, silent)
-							UpdateBindDisplay(newindex)
-							if BindActiveFlag then
-								ConfigManager:Update(BindActiveFlag, CurrentBind)
-							end
-							if not silent and type(bindCfg.Callback) == "function" then
-								task.spawn(bindCfg.Callback, CurrentBind)
-							end
+							ApplyBind(newindex, silent)
 						end,
 						Value = function(newindex, silent)
-							AttachedKeybind:SetValue(newindex, silent)
+							ApplyBind(newindex, silent)
 						end,
 						Visible = function(newindx)
 							KeybindFrame.Visible = newindx
 						end,
 						Destroy = function()
+							if BindActiveFlag then
+								ConfigManager:Unregister(BindActiveFlag, AttachedKeybind)
+							end
+							AttachedKeybind.Destroyed = true
 							KeybindFrame:Destroy()
 							AttachedKeybind = nil
 							UpdateToggleTitleWidth(false)
@@ -2912,13 +3236,21 @@ function Library.new(config)
 					return AttachedKeybind
 				end
 
-				local function OnChange(value)
-					value = value == true
-					toggle.Default = value
-					if Registered and ActiveFlag then
-						ConfigManager:Update(ActiveFlag, value)
+				local Dispatching = false
+				local CurrentValue = toggle.Default == true
+
+				local function ApplyValue(value, silent, force)
+					local nextValue = value == true
+					if not force and nextValue == CurrentValue then
+						return false
 					end
-					if value then
+
+					CurrentValue = nextValue
+					toggle.Default = nextValue
+					if Registered and ActiveFlag then
+						ConfigManager:Update(ActiveFlag, nextValue)
+					end
+					if nextValue then
 
 						Twen:Create(TextInt,TweenInfo.new(0.15,Enum.EasingStyle.Quint),{
 							TextTransparency = 0.02
@@ -2938,31 +3270,33 @@ function Library.new(config)
 							TextTransparency = 0.25
 						}):Play()
 					end;
+
+					if not silent and type(toggle.Callback) == "function" and not Dispatching then
+						Dispatching = true
+						toggle.Callback(nextValue)
+						Dispatching = false
+					end
+
+					return true
 				end;
 
-				OnChange(toggle.Default);
+				ApplyValue(toggle.Default, true, true);
 
 				Button.MouseButton1Click:Connect(function()
-					OnChange(not toggle.Default);
-					task.spawn(toggle.Callback,toggle.Default)
+					ApplyValue(not CurrentValue, false)
 				end)
 
 				local ToggleObject = {
 					Flag = toggle.Flag,
+					Root = FunctionToggle,
 					GetValue = function()
-						return toggle.Default == true
+						return CurrentValue == true
 					end,
 					SetValue = function(newindex, silent)
-						OnChange(newindex == true);
-						if not silent then
-							task.spawn(toggle.Callback,toggle.Default)
-						end
+						ApplyValue(newindex == true, silent)
 					end,
 					Value = function(newindex, silent)
-						OnChange(newindex == true);
-						if not silent then
-							task.spawn(toggle.Callback,toggle.Default)
-						end
+						ApplyValue(newindex == true, silent)
 					end,
 					Visible = function(newindx)
 						FunctionToggle.Visible = newindx
@@ -2970,6 +3304,13 @@ function Library.new(config)
 					NewKeybind = function(bindCfg)
 						local handle = CreateAttachedKeybind(bindCfg)
 						return handle
+					end,
+					Destroy = function()
+						if ActiveFlag then
+							ConfigManager:Unregister(ActiveFlag, ToggleObject)
+						end
+						ToggleObject.Destroyed = true
+						FunctionToggle:Destroy()
 					end,
 				}
 
@@ -3129,10 +3470,11 @@ function Library.new(config)
 				Button.TextSize = 14.000
 				Button.TextTransparency = 1.000
 
-				UIStroke.Transparency = 0.920
-				UIStroke.Color = Color3.fromRGB(255, 255, 255)
-				UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-				UIStroke.Parent = FunctionButton
+			UIStroke.Transparency = 0.920
+			UIStroke.Color = Color3.fromRGB(255, 255, 255)
+			UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+			UIStroke.Parent = FunctionButton
+			ThemeManager:BindAccentStroke(UIStroke)
 
 				Button.MouseEnter:Connect(function()
 					Twen:Create(DropShadow,TweenInfo.new(0.2),{
@@ -3178,19 +3520,23 @@ function Library.new(config)
 				local ActiveFlag = ctfx.Flag
 				local Registered = false
 
-				local BindEvent = Instance.new('BindableEvent',Section);
-				local FunctionKeybind = Instance.new("Frame")
-				local UIAspectRatioConstraint = Instance.new("UIAspectRatioConstraint")
-				local TextInt = Instance.new("TextLabel")
+					local BindEvent = Instance.new('BindableEvent',Section);
+					local FunctionKeybind = Instance.new("Frame")
+					local UIAspectRatioConstraint = Instance.new("UIAspectRatioConstraint")
+					local TextInt = Instance.new("TextLabel")
 				local UIGradient = Instance.new("UIGradient")
 				local Button = Instance.new("TextButton")
 				local UIStroke = Instance.new("UIStroke")
 				local System = Instance.new("Frame")
 				local UICorner = Instance.new("UICorner")
 				local UIStroke_2 = Instance.new("UIStroke")
-				local Bindkey = Instance.new("TextLabel")
-				local UICorner_2 = Instance.new("UICorner")
-				BindEvent.Name = tostring(ctfx.Title)
+					local Bindkey = Instance.new("TextLabel")
+					local UICorner_2 = Instance.new("UICorner")
+					local Dispatching = false
+					local CurrentBind = ctfx.Default
+					local KeybindObject
+					local ApplyBind
+					BindEvent.Name = tostring(ctfx.Title)
 				FunctionKeybind.Name = "FunctionKeybind"
 				FunctionKeybind.Parent = Section
 				FunctionKeybind.BackgroundColor3 = Color3.fromRGB(17, 17, 17)
@@ -3241,9 +3587,10 @@ function Library.new(config)
 				Button.TextSize = 14.000
 				Button.TextTransparency = 1.000
 
-				UIStroke.Transparency = 0.950
-				UIStroke.Color = Color3.fromRGB(255, 255, 255)
-				UIStroke.Parent = FunctionKeybind
+			UIStroke.Transparency = 0.950
+			UIStroke.Color = Color3.fromRGB(255, 255, 255)
+			UIStroke.Parent = FunctionKeybind
+			ThemeManager:BindAccentStroke(UIStroke)
 
 				System.Name = "System"
 				System.Parent = FunctionKeybind
@@ -3259,9 +3606,10 @@ function Library.new(config)
 				UICorner.CornerRadius = UDim.new(0.349999994, 0)
 				UICorner.Parent = System
 
-				UIStroke_2.Transparency = 0.950
-				UIStroke_2.Color = Color3.fromRGB(255, 255, 255)
-				UIStroke_2.Parent = System
+			UIStroke_2.Transparency = 0.950
+			UIStroke_2.Color = Color3.fromRGB(255, 255, 255)
+			UIStroke_2.Parent = System
+			ThemeManager:BindAccentStroke(UIStroke_2)
 
 				Bindkey.Name = "Bindkey"
 				Bindkey.Parent = System
@@ -3283,36 +3631,66 @@ function Library.new(config)
 				UICorner_2.CornerRadius = UDim.new(0, 2)
 				UICorner_2.Parent = FunctionKeybind
 
-				local IsWIP = false;
-				local function UpdateUI(new)
-					if new == "..." then
-						Bindkey.Text = "..."
-						local size = TextServ:GetTextSize(Bindkey.Text,Bindkey.TextSize,Bindkey.Font,Vector2.new(math.huge,math.huge));
-						Twen:Create(System,TweenInfo.new(0.2),{
-							Size = UDim2.new(0, size.X + 2, 0.600000024, 0)
+					local IsWIP = false
+					local function UpdateUI(new)
+						if new == "..." then
+							Bindkey.Text = "..."
+							local size = TextServ:GetTextSize(Bindkey.Text, Bindkey.TextSize, Bindkey.Font, Vector2.new(math.huge, math.huge))
+							Twen:Create(System, TweenInfo.new(0.2), {
+								Size = UDim2.new(0, size.X + 2, 0.600000024, 0),
+							}):Play()
+							return true
+						end
+
+						local nextBind = ResolveKeybindValue(new, CurrentBind)
+						if nextBind == CurrentBind and Bindkey.Text == FormatKeybindValue(CurrentBind) then
+							return false
+						end
+
+						CurrentBind = nextBind
+						ctfx.Default = CurrentBind
+						Bindkey.Text = FormatKeybindValue(CurrentBind)
+						if Registered and ActiveFlag then
+							ConfigManager:Update(ActiveFlag, CurrentBind)
+						end
+
+						local size = TextServ:GetTextSize(Bindkey.Text, Bindkey.TextSize, Bindkey.Font, Vector2.new(math.huge, math.huge))
+						Twen:Create(System, TweenInfo.new(0.2), {
+							Size = UDim2.new(0, size.X + 2, 0.600000024, 0),
 						}):Play()
-						return
+						return true
 					end
 
-					ctfx.Default = ResolveKeybindValue(new, ctfx.Default)
-					Bindkey.Text = FormatKeybindValue(ctfx.Default)
-					if Registered and ActiveFlag then
-						ConfigManager:Update(ActiveFlag, ctfx.Default)
+					ApplyBind = function(newValue, silent, force)
+						local resolved = ResolveKeybindValue(newValue, CurrentBind)
+						local valueChanged = resolved ~= CurrentBind
+						if not force and not valueChanged then
+							return false
+						end
+
+						local changed = UpdateUI(resolved)
+						if not changed then
+							if Registered and ActiveFlag then
+								ConfigManager:Update(ActiveFlag, CurrentBind)
+							end
+							return false
+						end
+
+						if not silent and valueChanged and type(ctfx.Callback) == "function" and not Dispatching then
+							Dispatching = true
+							ctfx.Callback(CurrentBind)
+							Dispatching = false
+						end
+
+						return true
 					end
 
-					local size = TextServ:GetTextSize(Bindkey.Text,Bindkey.TextSize,Bindkey.Font,Vector2.new(math.huge,math.huge));
+					UpdateUI(CurrentBind)
 
-					Twen:Create(System,TweenInfo.new(0.2),{
-						Size = UDim2.new(0, size.X + 2, 0.600000024, 0)
-					}):Play()
-				end;
+					Button.MouseButton1Click:Connect(function()
+						if IsWIP then return end;
 
-				UpdateUI(ctfx.Default)
-
-				Button.MouseButton1Click:Connect(function()
-					if IsWIP then return end;
-
-					IsWIP = true;
+						IsWIP = true;
 
 
 					Twen:Create(TextInt,TweenInfo.new(0.1),{
@@ -3327,46 +3705,40 @@ function Library.new(config)
 						end;
 					end)
 
-					UpdateUI('...')
-					local Bind = BindEvent.Event:Wait();
-					Twen:Create(TextInt,TweenInfo.new(0.1),{
-						TextTransparency = 0.250
-					}):Play();
-					Signal:Disconnect()
-					UpdateUI(Bind)
+						UpdateUI('...')
+						local Bind = BindEvent.Event:Wait();
+						Twen:Create(TextInt,TweenInfo.new(0.1),{
+							TextTransparency = 0.250
+						}):Play();
+						Signal:Disconnect()
+						ApplyBind(Bind, false, true)
 
-					IsWIP = false;
-					if type(ctfx.Callback) == "function" then
-						ctfx.Callback(ctfx.Default);
-					end;
+						IsWIP = false;
+					end)
 
-
-				end)
-
-				local KeybindObject = {
+					KeybindObject = {
 						Flag = ctfx.Flag,
+						Root = FunctionKeybind,
 						GetValue = function()
-							return ctfx.Default
+							return CurrentBind
 						end,
 						SetValue = function(value, silent)
-							UpdateUI(value)
-							if ActiveFlag then
-								ConfigManager:Update(ActiveFlag, ctfx.Default)
-							end
-							if not silent and type(ctfx.Callback) == "function" then
-								ctfx.Callback(ctfx.Default);
-							end
+							ApplyBind(value, silent)
 						end,
-					Visible = function(newindx)
-						FunctionKeybind.Visible = newindx
-					end,
-					Value = function(lrm, silent)
-						UpdateUI(lrm)
-						if not silent and type(ctfx.Callback) == "function" then
-							ctfx.Callback(ctfx.Default);
-						end
-					end,
-				}
+						Visible = function(newindx)
+							FunctionKeybind.Visible = newindx
+						end,
+						Value = function(lrm, silent)
+							ApplyBind(lrm, silent)
+						end,
+						Destroy = function()
+							if ActiveFlag then
+								ConfigManager:Unregister(ActiveFlag, KeybindObject)
+							end
+							KeybindObject.Destroyed = true
+							FunctionKeybind:Destroy()
+						end,
+					}
 
 				if ctfx.Flag then
 					ConfigManager:Register(ctfx.Flag, KeybindObject)
@@ -3492,20 +3864,30 @@ function Library.new(config)
 				TFrame.BackgroundTransparency = 0.500
 				TFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
 				TFrame.BorderSizePixel = 0
-				TFrame.Size = UDim2.new((slider.Default / slider.Max), 0, 1, 0)
-				TFrame.ZIndex = 17
+			TFrame.Size = UDim2.new((slider.Default / slider.Max), 0, 1, 0)
+			TFrame.ZIndex = 17
+			ThemeManager:BindAccent(TFrame, "BackgroundColor3")
 
 				UICorner_3.CornerRadius = UDim.new(0, 2)
 				UICorner_3.Parent = TFrame
 
-				UIStroke_2.Transparency = 0.975
-				UIStroke_2.Color = Color3.fromRGB(255, 255, 255)
-				UIStroke_2.Parent = MFrame
+			UIStroke_2.Transparency = 0.975
+			UIStroke_2.Color = Color3.fromRGB(255, 255, 255)
+			UIStroke_2.Parent = MFrame
+			ThemeManager:BindAccentStroke(UIStroke_2)
 
 				local Holding = false
+				local Dispatching = false
+				local CurrentValue = slider.Default
+				local SliderObject
 
-				local function ApplyValue(value, silent)
-					local Value = math.clamp(math.round(tonumber(value) or slider.Default), slider.Min, slider.Max)
+				local function ApplyValue(value, silent, force)
+					local Value = math.clamp(math.round(tonumber(value) or CurrentValue), slider.Min, slider.Max)
+					if not force and Value == CurrentValue then
+						return false
+					end
+
+					CurrentValue = Value
 					slider.Default = Value
 					local SizeScale = (slider.Max == slider.Min) and 1 or ((Value - slider.Min) / (slider.Max - slider.Min))
 					ValueText.Text = tostring(Value)..'/'..tostring(slider.Max)
@@ -3513,16 +3895,19 @@ function Library.new(config)
 					if ActiveFlag then
 						ConfigManager:Update(ActiveFlag, Value)
 					end
-					if not silent then
+					if not silent and type(slider.Callback) == "function" and not Dispatching then
+						Dispatching = true
 						slider.Callback(Value)
+						Dispatching = false
 					end
+					return true
 				end
 
 				local function update(Input)
 					local SizeScale = math.clamp((((Input.Position.X) - MFrame.AbsolutePosition.X) / MFrame.AbsoluteSize.X), 0, 1)
 					local Main = ((slider.Max - slider.Min) * SizeScale) + slider.Min;
 					local Value = math.round(Main)
-					ApplyValue(Value)
+					ApplyValue(Value, false)
 				end
 
 				MFrame.InputBegan:Connect(function(Input)
@@ -3552,10 +3937,11 @@ function Library.new(config)
 					end
 				end)
 
-				local SliderObject = {
+				SliderObject = {
 					Flag = slider.Flag,
+					Root = FunctionSlider,
 					GetValue = function()
-						return slider.Default
+						return CurrentValue
 					end,
 					SetValue = function(value, silent)
 						ApplyValue(value, silent)
@@ -3565,6 +3951,13 @@ function Library.new(config)
 					end,
 					Value = function(lrm, silent)
 						ApplyValue(lrm, silent)
+					end,
+					Destroy = function()
+						if ActiveFlag then
+							ConfigManager:Unregister(ActiveFlag, SliderObject)
+						end
+						SliderObject.Destroyed = true
+						FunctionSlider:Destroy()
 					end,
 				}
 
@@ -3716,15 +4109,28 @@ function Library.new(config)
 				Button.TextSize = 14.000
 				Button.TextTransparency = 1.000
 
-				local function ApplyValue(value, silent)
-					drop.Default = NormalizeDropdownValue(drop.Data, value, drop.Multi)
-					ValueText.Text = FormatDropdownValue(drop.Data, drop.Default, drop.Multi)
+				local Dispatching = false
+				local CurrentValue = drop.Default
+				local DropdownObject
+
+				local function ApplyValue(value, silent, force)
+					local nextValue = NormalizeDropdownValue(drop.Data, value, drop.Multi)
+					if not force and DeepEqual(nextValue, CurrentValue) then
+						return false
+					end
+
+					CurrentValue = nextValue
+					drop.Default = nextValue
+					ValueText.Text = FormatDropdownValue(drop.Data, nextValue, drop.Multi)
 					if ActiveFlag then
-						ConfigManager:Update(ActiveFlag, drop.Default)
+						ConfigManager:Update(ActiveFlag, nextValue)
 					end
-					if not silent then
-						drop.Callback(drop.Default)
+					if not silent and type(drop.Callback) == "function" and not Dispatching then
+						Dispatching = true
+						drop.Callback(nextValue)
+						Dispatching = false
 					end
+					return true
 				end
 
 				local Updater = function(value)
@@ -3734,13 +4140,14 @@ function Library.new(config)
 				Button.MouseButton1Click:Connect(function()
 					WindowTable.Dropdown:Setup(MFrame)
 
-					WindowTable.Dropdown:Open(drop.Data,drop.Default,Updater,drop.Multi)
+					WindowTable.Dropdown:Open(drop.Data,CurrentValue,Updater,drop.Multi)
 				end)
 
-				local DropdownObject = {
+				DropdownObject = {
 					Flag = drop.Flag,
+					Root = FunctionDropdown,
 					GetValue = function()
-						return drop.Default
+						return CurrentValue
 					end,
 					SetValue = function(value, silent)
 						ApplyValue(value, silent)
@@ -3754,7 +4161,7 @@ function Library.new(config)
 					Open = function(value)
 						WindowTable.Dropdown:Setup(MFrame)
 
-						WindowTable.Dropdown:Open(drop.Data,drop.Default,Updater,drop.Multi)
+						WindowTable.Dropdown:Open(drop.Data,CurrentValue,Updater,drop.Multi)
 					end,
 
 					Close = function(value)
@@ -3762,15 +4169,18 @@ function Library.new(config)
 					end,
 					Clear = function()
 						drop.Data = {}
-						ApplyValue(drop.Multi and {} or nil, true)
+						ApplyValue(drop.Multi and {} or nil, true, true)
 					end,
 					Set = function(table)
 						drop.Data = table
-						drop.Default = NormalizeDropdownValue(drop.Data, drop.Default, drop.Multi)
-						ValueText.Text = FormatDropdownValue(drop.Data, drop.Default, drop.Multi)
+						ApplyValue(CurrentValue, true, true)
+					end,
+					Destroy = function()
 						if drop.Flag then
-							ConfigManager:Update(drop.Flag, drop.Default)
+							ConfigManager:Unregister(drop.Flag, DropdownObject)
 						end
+						DropdownObject.Destroyed = true
+						FunctionDropdown:Destroy()
 					end
 				}
 
@@ -3958,9 +4368,10 @@ function Library.new(config)
 				UIGradient.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0.00, 0.00), NumberSequenceKeypoint.new(0.84, 0.25), NumberSequenceKeypoint.new(1.00, 1.00)}
 				UIGradient.Parent = TextInt
 
-				UIStroke.Transparency = 0.950
-				UIStroke.Color = Color3.fromRGB(255, 255, 255)
-				UIStroke.Parent = FunctionTextbox
+			UIStroke.Transparency = 0.950
+			UIStroke.Color = Color3.fromRGB(255, 255, 255)
+			UIStroke.Parent = FunctionTextbox
+			ThemeManager:BindAccentStroke(UIStroke)
 
 				UICorner.CornerRadius = UDim.new(0, 2)
 				UICorner.Parent = FunctionTextbox
@@ -3980,9 +4391,10 @@ function Library.new(config)
 				UICorner_2.CornerRadius = UDim.new(0, 2)
 				UICorner_2.Parent = MFrame
 
-				UIStroke_2.Transparency = 0.975
-				UIStroke_2.Color = Color3.fromRGB(255, 255, 255)
-				UIStroke_2.Parent = MFrame
+			UIStroke_2.Transparency = 0.975
+			UIStroke_2.Color = Color3.fromRGB(255, 255, 255)
+			UIStroke_2.Parent = MFrame
+			ThemeManager:BindAccentStroke(UIStroke_2)
 
 				FileType.Name = "FileType"
 				FileType.Parent = MFrame
@@ -4041,7 +4453,10 @@ function Library.new(config)
 				Button.TextTransparency = 1.000
 
 				local TextUpdating = false
+				local Dispatching = false
 				local CurrentValue = nil
+				local IsFocused = false
+				local TextboxObject
 
 				local function SetText(text)
 					TextUpdating = true
@@ -4141,18 +4556,36 @@ function Library.new(config)
 					return text, text
 				end
 
-				local function ApplyValue(value, silent)
+				local function ApplyValue(value, silent, force)
 					local resolvedValue, resolvedText = ResolveTextboxValue(value)
+					local valueChanged = not DeepEqual(resolvedValue, CurrentValue)
+					local textChanged = resolvedText ~= TextBox.Text
+					if not force and not valueChanged and not textChanged then
+						return false
+					end
+
 					CurrentValue = resolvedValue
 					conf.Default = resolvedValue
 					SetText(resolvedText)
 					if ActiveFlag then
 						ConfigManager:Update(ActiveFlag, resolvedValue)
 					end
-					if not silent and type(conf.Callback) == "function" then
+					if not silent and valueChanged and type(conf.Callback) == "function" and not Dispatching then
+						Dispatching = true
 						conf.Callback(resolvedValue)
+						Dispatching = false
 					end
+					return true
 				end
+
+				TextBox.Focused:Connect(function()
+					IsFocused = true
+				end)
+
+				TextBox.FocusLost:Connect(function()
+					IsFocused = false
+					ApplyValue(TextBox.Text, false)
+				end)
 
 				if conf.Numeric then
 					TextBox:GetPropertyChangedSignal("Text"):Connect(function()
@@ -4167,16 +4600,21 @@ function Library.new(config)
 					end)
 				end
 
-				TextBox.FocusLost:Connect(function()
-					ApplyValue(TextBox.Text, false)
-				end)
+				ApplyValue(conf.Default, true, true)
 
-				ApplyValue(conf.Default, true)
-
-				local TextboxObject = {
+				TextboxObject = {
 					Flag = conf.Flag,
+					Root = FunctionTextbox,
 					GetValue = function()
-						return CurrentValue
+						if conf.Numeric then
+							local numeric = ResolveNumericValue(TextBox.Text)
+							if numeric ~= nil then
+								return numeric
+							end
+							return CurrentValue
+						end
+
+						return TextBox.Text
 					end,
 					SetValue = function(value, silent)
 						ApplyValue(value, silent)
@@ -4184,10 +4622,17 @@ function Library.new(config)
 					Value = function(value, silent)
 						ApplyValue(value, silent)
 					end,
+					IsFocused = function()
+						return IsFocused
+					end,
 					Visible = function(newindx)
 						FunctionTextbox.Visible = newindx
 					end,
 					Destroy = function()
+						if ActiveFlag then
+							ConfigManager:Unregister(ActiveFlag, TextboxObject)
+						end
+						TextboxObject.Destroyed = true
 						FunctionTextbox:Destroy()
 					end,
 				}
