@@ -1848,7 +1848,15 @@ function Library.new(config)
 		end
 
 		if self.LoadedData and self.LoadedData[flag] ~= nil and self:GetSetter(object) then
-			self:ApplyValueToObject(flag, object, self.LoadedData[flag], false)
+			local loadedValue = self.LoadedData[flag]
+			task.defer(function()
+				if self.Registered[flag] == object and object.Destroyed ~= true then
+					local wasLoading = self.LoadingConfig
+					self.LoadingConfig = true
+					self:ApplyValueToObject(flag, object, loadedValue, false)
+					self.LoadingConfig = wasLoading
+				end
+			end)
 		end
 
 		return true
@@ -3600,7 +3608,7 @@ function Library.new(config)
 				FunctionParagraph.BorderSizePixel = 0
 				FunctionParagraph.ClipsDescendants = true
 				FunctionParagraph.Active = true
-				FunctionParagraph.Size = UDim2.new(0.949999988, 0, 0, 34)
+				FunctionParagraph.Size = UDim2.new(0.949999988, 0, 0, 30)
 				FunctionParagraph.ZIndex = 17
 				Twen:Create(FunctionParagraph, TweenInfo1, { BackgroundTransparency = 0.8 }):Play()
 
@@ -3619,14 +3627,14 @@ function Library.new(config)
 				TitleText.BackgroundTransparency = 1.000
 				TitleText.BorderColor3 = Color3.fromRGB(0, 0, 0)
 				TitleText.BorderSizePixel = 0
-				TitleText.Position = UDim2.new(0.5, 0, 0.05, 0)
-				TitleText.Size = UDim2.new(0.949999988, 0, 0, 16)
+				TitleText.Position = UDim2.new(0.5, 0, 0, 3)
+				TitleText.Size = UDim2.new(0.949999988, 0, 0, 13)
 				TitleText.ZIndex = 18
 				TitleText.Font = Enum.Font.GothamBold
 				TitleText.Text = ParagraphState.Title
 				TitleText.TextColor3 = Color3.fromRGB(255, 255, 255)
 				TitleText.TextScaled = true
-				TitleText.TextSize = 13.000
+				TitleText.TextSize = 12.000
 				TitleText.TextTransparency = 1
 				TitleText.TextWrapped = true
 				TitleText.TextXAlignment = Enum.TextXAlignment.Left
@@ -3646,14 +3654,14 @@ function Library.new(config)
 				DescriptionText.BackgroundTransparency = 1.000
 				DescriptionText.BorderColor3 = Color3.fromRGB(0, 0, 0)
 				DescriptionText.BorderSizePixel = 0
-				DescriptionText.Position = UDim2.new(0.5, 0, 0, 20)
-				DescriptionText.Size = UDim2.new(0.949999988, 0, 0, 13)
+				DescriptionText.Position = UDim2.new(0.5, 0, 0, 16)
+				DescriptionText.Size = UDim2.new(0.949999988, 0, 0, 11)
 				DescriptionText.ZIndex = 18
 				DescriptionText.Font = Enum.Font.GothamBold
 				DescriptionText.Text = ParagraphState.Description
 				DescriptionText.TextColor3 = Color3.fromRGB(255, 255, 255)
 				DescriptionText.TextScaled = true
-				DescriptionText.TextSize = 12.000
+				DescriptionText.TextSize = 11.000
 				DescriptionText.TextTransparency = 1
 				DescriptionText.TextWrapped = true
 				DescriptionText.TextXAlignment = Enum.TextXAlignment.Left
@@ -3675,26 +3683,26 @@ function Library.new(config)
 					local measureWidth = math.max(120, math.floor(rawWidth * 0.92))
 					local titleBounds = TextServ:GetTextSize(
 						ParagraphState.Title ~= "" and ParagraphState.Title or " ",
-						14,
+						12,
 						Enum.Font.GothamBold,
 						Vector2.new(measureWidth, math.huge)
 					)
 					local descBounds = TextServ:GetTextSize(
 						ParagraphState.Description ~= "" and ParagraphState.Description or " ",
-						14,
+						11,
 						Enum.Font.GothamBold,
 						Vector2.new(measureWidth, math.huge)
 					)
 
-					local titleHeight = math.max(13, titleBounds.Y)
-					local descHeight = ParagraphState.Description ~= "" and math.max(12, descBounds.Y) or 0
-					local totalHeight = 5 + titleHeight + (descHeight > 0 and (2 + descHeight) or 4)
+					local titleHeight = math.max(12, titleBounds.Y)
+					local descHeight = ParagraphState.Description ~= "" and math.max(10, descBounds.Y) or 0
+					local totalHeight = 4 + titleHeight + (descHeight > 0 and (1 + descHeight) or 3)
 
-					FunctionParagraph.Size = UDim2.new(0.949999988, 0, 0, math.max(28, totalHeight))
+					FunctionParagraph.Size = UDim2.new(0.949999988, 0, 0, math.max(24, totalHeight))
 					TitleText.Size = UDim2.new(0.949999988, 0, 0, titleHeight)
 					DescriptionText.Visible = ParagraphState.Description ~= ""
 					if descHeight > 0 then
-						DescriptionText.Position = UDim2.new(0.5, 0, 0, titleHeight + 2)
+						DescriptionText.Position = UDim2.new(0.5, 0, 0, titleHeight + 1)
 						DescriptionText.Size = UDim2.new(0.949999988, 0, 0, descHeight)
 					end
 				end
@@ -4095,7 +4103,8 @@ function Library.new(config)
 
 				local function ApplyValue(value, silent, force)
 					local nextValue = value == true
-					if not force and nextValue == CurrentValue then
+					local changed = nextValue ~= CurrentValue
+					if not force and not changed then
 						return false
 					end
 
@@ -4125,13 +4134,13 @@ function Library.new(config)
 						}):Play()
 					end;
 
-					if not silent and type(toggle.Callback) == "function" and not Dispatching then
+					if changed and not silent and type(toggle.Callback) == "function" and not Dispatching then
 						Dispatching = true
 						toggle.Callback(nextValue)
 						Dispatching = false
 					end
 
-					return true
+					return changed
 				end;
 
 				ApplyValue(toggle.Default, true, true);
@@ -4148,11 +4157,11 @@ function Library.new(config)
 					end,
 					SetValue = function(first, second, third)
 						local value, silent = NormalizeMethodArgs(ToggleObject, first, second, third)
-						ApplyValue(value == true, silent)
+						ApplyValue(value == true, silent, ConfigManager.LoadingConfig == true)
 					end,
 					Value = function(first, second, third)
 						local value, silent = NormalizeMethodArgs(ToggleObject, first, second, third)
-						ApplyValue(value == true, silent)
+						ApplyValue(value == true, silent, ConfigManager.LoadingConfig == true)
 					end,
 					Visible = function(newindx)
 						SearchManager:SetObjectVisible(ToggleObject, newindx)
@@ -5231,7 +5240,7 @@ function Library.new(config)
 				local UICorner = Instance.new("UICorner")
 				local UIStroke = Instance.new("UIStroke")
 				local HeaderButton = Instance.new("TextButton")
-				local Icon = Instance.new("ImageLabel")
+				local Icon = Instance.new("Frame")
 				local TitleText = Instance.new("TextLabel")
 				local DescriptionText = Instance.new("TextLabel")
 				local PreviewShell = Instance.new("Frame")
@@ -5274,8 +5283,8 @@ function Library.new(config)
 				local ABox = Instance.new("TextBox")
 				local ColorpickerObject
 
-				local CollapsedHeight = 42
-				local ExpandedHeight = conf.AllowTransparency and 300 or 274
+				local CollapsedHeight = 40
+				local ExpandedHeight = conf.AllowTransparency and 216 or 192
 				local TextUpdating = false
 				local Dispatching = false
 				local Expanded = false
@@ -5512,12 +5521,12 @@ function Library.new(config)
 					box.ClearTextOnFocus = false
 					box.Font = Enum.Font.GothamBold
 					box.TextColor3 = Color3.fromRGB(255, 255, 255)
-					box.TextSize = 12
+					box.TextSize = 11
 					box.TextTransparency = 0.15
 					box.TextWrapped = false
 					box.TextXAlignment = Enum.TextXAlignment.Center
 					local corner = Instance.new("UICorner")
-					corner.CornerRadius = UDim.new(0, 3)
+					corner.CornerRadius = UDim.new(0, 2)
 					corner.Parent = box
 					local stroke = Instance.new("UIStroke")
 					stroke.Transparency = 0.92
@@ -5551,39 +5560,67 @@ function Library.new(config)
 				HeaderButton.ZIndex = 25
 				HeaderButton.Text = ""
 
-				Icon.Name = "Icon"
+				Icon.Name = "PixelPaletteIcon"
 				Icon.Parent = FunctionColorpicker
-				Icon.AnchorPoint = Vector2.new(0, 0.5)
+				Icon.AnchorPoint = Vector2.new(1, 0.5)
 				Icon.BackgroundTransparency = 1
-				Icon.Position = UDim2.new(0.035, 0, 0, 21)
-				Icon.Size = UDim2.fromOffset(18, 18)
+				Icon.BorderSizePixel = 0
+				Icon.Position = UDim2.new(0.755, 0, 0, 20)
+				Icon.Size = UDim2.fromOffset(15, 15)
 				Icon.ZIndex = 19
-				Icon.Image = ResolveIconSource(conf.Icon or "palette")
-				Icon.ImageTransparency = 0.25
+
+				local PixelSize = 3
+				local PixelGap = 0
+				local PixelMap = {
+					{ 2, 0, "mono" }, { 3, 0, "mono" },
+					{ 1, 1, "mono" }, { 2, 1, "accent" }, { 3, 1, "accent" }, { 4, 1, "mono" },
+					{ 0, 2, "mono" }, { 1, 2, "accent" }, { 2, 2, "cut" }, { 3, 2, "accent" }, { 4, 2, "mono" },
+					{ 0, 3, "mono" }, { 1, 3, "mono" }, { 2, 3, "accent" }, { 3, 3, "mono" },
+					{ 1, 4, "mono" }, { 2, 4, "mono" }, { 3, 4, "mono" },
+				}
+				for _, pixel in ipairs(PixelMap) do
+					local dot = Instance.new("Frame")
+					dot.Name = "Pixel"
+					dot.Parent = Icon
+					dot.BorderSizePixel = 0
+					dot.Position = UDim2.fromOffset(pixel[1] * (PixelSize + PixelGap), pixel[2] * (PixelSize + PixelGap))
+					dot.Size = UDim2.fromOffset(PixelSize, PixelSize)
+					dot.ZIndex = 20
+					if pixel[3] == "accent" then
+						dot.BackgroundColor3 = ThemeManager:GetColor("Accent")
+						ThemeManager:BindAccent(dot, "BackgroundColor3")
+					elseif pixel[3] == "cut" then
+						dot.BackgroundColor3 = Color3.fromRGB(17, 17, 17)
+						dot.BackgroundTransparency = 0.05
+					else
+						dot.BackgroundColor3 = Color3.fromRGB(235, 235, 235)
+						dot.BackgroundTransparency = 0.1
+					end
+				end
 
 				TitleText.Name = "TitleText"
 				TitleText.Parent = FunctionColorpicker
 				TitleText.BackgroundTransparency = 1
-				TitleText.Position = UDim2.new(0.12, 0, 0, conf.Description ~= "" and 7 or 11)
-				TitleText.Size = UDim2.new(0.58, 0, 0, 14)
+				TitleText.Position = UDim2.new(0.025, 0, 0, conf.Description ~= "" and 6 or 12)
+				TitleText.Size = UDim2.new(0.66, 0, 0, 14)
 				TitleText.ZIndex = 19
 				TitleText.Font = Enum.Font.GothamBold
 				TitleText.Text = tostring(conf.Title or "Colorpicker")
 				TitleText.TextColor3 = Color3.fromRGB(255, 255, 255)
-				TitleText.TextSize = 13
-				TitleText.TextTransparency = 0.2
+				TitleText.TextSize = 14
+				TitleText.TextTransparency = 0.25
 				TitleText.TextXAlignment = Enum.TextXAlignment.Left
 
 				DescriptionText.Name = "DescriptionText"
 				DescriptionText.Parent = FunctionColorpicker
 				DescriptionText.BackgroundTransparency = 1
-				DescriptionText.Position = UDim2.new(0.12, 0, 0, 23)
-				DescriptionText.Size = UDim2.new(0.58, 0, 0, 12)
+				DescriptionText.Position = UDim2.new(0.025, 0, 0, 21)
+				DescriptionText.Size = UDim2.new(0.66, 0, 0, 11)
 				DescriptionText.ZIndex = 19
 				DescriptionText.Font = Enum.Font.GothamBold
 				DescriptionText.Text = tostring(conf.Description or "")
 				DescriptionText.TextColor3 = Color3.fromRGB(255, 255, 255)
-				DescriptionText.TextSize = 11
+				DescriptionText.TextSize = 10
 				DescriptionText.TextTransparency = 0.55
 				DescriptionText.TextXAlignment = Enum.TextXAlignment.Left
 				DescriptionText.Visible = conf.Description ~= ""
@@ -5594,8 +5631,8 @@ function Library.new(config)
 				PreviewShell.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 				PreviewShell.BackgroundTransparency = 0.45
 				PreviewShell.BorderSizePixel = 0
-				PreviewShell.Position = UDim2.new(0.86, 0, 0, 21)
-				PreviewShell.Size = UDim2.fromOffset(38, 20)
+				PreviewShell.Position = UDim2.new(0.86, 0, 0, 20)
+				PreviewShell.Size = UDim2.fromOffset(36, 18)
 				PreviewShell.ZIndex = 19
 				PreviewShell.ClipsDescendants = true
 				PreviewCorner.CornerRadius = UDim.new(0, 4)
@@ -5616,7 +5653,7 @@ function Library.new(config)
 				Arrow.Parent = FunctionColorpicker
 				Arrow.AnchorPoint = Vector2.new(1, 0.5)
 				Arrow.BackgroundTransparency = 1
-				Arrow.Position = UDim2.new(0.965, 0, 0, 21)
+				Arrow.Position = UDim2.new(0.965, 0, 0, 20)
 				Arrow.Size = UDim2.fromOffset(20, 20)
 				Arrow.ZIndex = 19
 				Arrow.Font = Enum.Font.GothamBold
@@ -5629,8 +5666,8 @@ function Library.new(config)
 				Body.Parent = FunctionColorpicker
 				Body.BackgroundTransparency = 1
 				Body.BorderSizePixel = 0
-				Body.Position = UDim2.new(0.035, 0, 0, 48)
-				Body.Size = UDim2.new(0.93, 0, 0, ExpandedHeight - 54)
+				Body.Position = UDim2.new(0.035, 0, 0, 44)
+				Body.Size = UDim2.new(0.93, 0, 0, ExpandedHeight - 50)
 				Body.ZIndex = 18
 
 				ColorArea.Name = "ColorArea"
@@ -5638,7 +5675,7 @@ function Library.new(config)
 				ColorArea.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
 				ColorArea.BorderSizePixel = 0
 				ColorArea.Position = UDim2.new(0, 0, 0, 0)
-				ColorArea.Size = UDim2.new(0.58, 0, 0, 118)
+				ColorArea.Size = UDim2.new(0.58, 0, 0, 104)
 				ColorArea.ZIndex = 19
 				ColorArea.ClipsDescendants = true
 				ColorCorner.CornerRadius = UDim.new(0, 5)
@@ -5681,7 +5718,7 @@ function Library.new(config)
 				LargePreview.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 				LargePreview.BorderSizePixel = 0
 				LargePreview.Position = UDim2.new(0.62, 0, 0, 0)
-				LargePreview.Size = UDim2.new(0.38, 0, 0, 38)
+				LargePreview.Size = UDim2.new(0.38, 0, 0, 34)
 				LargePreview.ZIndex = 19
 				LargePreviewCorner.CornerRadius = UDim.new(0, 5)
 				LargePreviewCorner.Parent = LargePreview
@@ -5692,7 +5729,7 @@ function Library.new(config)
 				HueTrack.Parent = Body
 				HueTrack.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 				HueTrack.BorderSizePixel = 0
-				HueTrack.Position = UDim2.new(0, 0, 0, 130)
+				HueTrack.Position = UDim2.new(0, 0, 0, 116)
 				HueTrack.Size = UDim2.new(1, 0, 0, 14)
 				HueTrack.ZIndex = 19
 				HueCorner.CornerRadius = UDim.new(0, 5)
@@ -5723,7 +5760,7 @@ function Library.new(config)
 				AlphaTrack.Parent = Body
 				AlphaTrack.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 				AlphaTrack.BorderSizePixel = 0
-				AlphaTrack.Position = UDim2.new(0, 0, 0, 152)
+				AlphaTrack.Position = UDim2.new(0, 0, 0, 136)
 				AlphaTrack.Size = UDim2.new(1, 0, 0, 14)
 				AlphaTrack.ZIndex = 19
 				AlphaTrack.Visible = conf.AllowTransparency
@@ -5759,11 +5796,11 @@ function Library.new(config)
 				AlphaThumbStroke.Transparency = 0.35
 				AlphaThumbStroke.Parent = AlphaThumb
 
-				MakeInputBox(HexBox, "Hex", UDim2.new(0.62, 0, 0, 48), UDim2.new(0.38, 0, 0, 24))
-				MakeInputBox(RBox, "R", UDim2.new(0.62, 0, 0, 82), UDim2.new(0.115, 0, 0, 24))
-				MakeInputBox(GBox, "G", UDim2.new(0.755, 0, 0, 82), UDim2.new(0.115, 0, 0, 24))
-				MakeInputBox(BBox, "B", UDim2.new(0.89, 0, 0, 82), UDim2.new(0.11, 0, 0, 24))
-				MakeInputBox(ABox, "Alpha", UDim2.new(0.62, 0, 0, 112), UDim2.new(0.38, 0, 0, 24))
+				MakeInputBox(HexBox, "Hex", UDim2.new(0.62, 0, 0, 42), UDim2.new(0.38, 0, 0, 22))
+				MakeInputBox(RBox, "R", UDim2.new(0.62, 0, 0, 72), UDim2.new(0.115, 0, 0, 22))
+				MakeInputBox(GBox, "G", UDim2.new(0.755, 0, 0, 72), UDim2.new(0.115, 0, 0, 22))
+				MakeInputBox(BBox, "B", UDim2.new(0.89, 0, 0, 72), UDim2.new(0.11, 0, 0, 22))
+				MakeInputBox(ABox, "Alpha", UDim2.new(0.62, 0, 0, 102), UDim2.new(0.38, 0, 0, 22))
 				ABox.Visible = conf.AllowTransparency
 
 				HeaderButton.MouseEnter:Connect(function()
