@@ -811,7 +811,7 @@ function Library.new(config)
 	WindowTable.SearchBar = config.SearchBar
 	WindowTable.ToggleButton = nil
 	WindowTable.Theme = ThemeManager
-	
+
 	local ImageButton = Instance.new("ImageButton")
 
 	ImageButton.Parent = MainFrame
@@ -902,11 +902,11 @@ function Library.new(config)
 			TweenLogoVisible(true)
 			Twen:Create(MainFrame,TweenInfo.new(0.5,Enum.EasingStyle.Quint),{Position = UDim2.fromScale(0.5,0.5)}):Play();
 			WindowTable.ElBlurUI.Enabled = true;
-			
+
 			Twen:Create(BlockFrame1,TweenInfo1,{BackgroundTransparency = 0.8}):Play();
 			Twen:Create(BlockFrame2,TweenInfo1,{BackgroundTransparency = 0.8}):Play();
 			Twen:Create(BlockFrame3,TweenInfo1,{BackgroundTransparency = 0.8}):Play();
-			
+
 			Twen:Create(TabButtonFrame,TweenInfo1,{Position = UDim2.fromScale(0.16,0.215)}):Play();
 			Twen:Create(MainTabFrame,TweenInfo1,{Position = UDim2.fromScale(0.658,0.131)}):Play();
 			Twen:Create(Description,TweenInfo1,{Position = UDim2.fromScale(0.328,0.071)}):Play();
@@ -920,13 +920,13 @@ function Library.new(config)
 				ImageTransparency = 0.5,
 				AnchorPoint = Vector2.new(1, 0)
 			}):Play();
-			
+
 			Twen:Create(HomeIcon,TweenInfo.new(0.5),{
 				ImageTransparency = 1,
 			}):Play()
 
 			ImageButton.Image = "rbxassetid://10002398990"
-			
+
 			Twen:Create(UICorner,TweenInfo.new(1),{
 				CornerRadius = UDim.new(0, 7)
 			}):Play()
@@ -945,22 +945,22 @@ function Library.new(config)
 			Twen:Create(UICorner,TweenInfo.new(1),{
 				CornerRadius = UDim.new(0.1,0)
 			}):Play()
-			
+
 			Twen:Create(ImageButton,TweenInfo1,{
 				Position = UDim2.new(0.5, 0, 0.5, 0),
 				Size = UDim2.new(1,0,1,0),
 				ImageTransparency = 1,
 				AnchorPoint = Vector2.new(0.5,0.5)
 			}):Play();
-			
+
 			Twen:Create(HomeIcon,TweenInfo.new(1),{
 				ImageTransparency = 0.5,
 			}):Play()
-			
-			
+
+
 			Twen:Create(Title,TweenInfo1,{Position = UDim2.fromScale(1,0.071)}):Play();
 
-			
+
 			Twen:Create(BlockFrame1,TweenInfo1,{BackgroundTransparency = 1}):Play();
 			Twen:Create(BlockFrame2,TweenInfo1,{BackgroundTransparency = 1}):Play();
 			Twen:Create(BlockFrame3,TweenInfo1,{BackgroundTransparency = 1}):Play();
@@ -1012,7 +1012,7 @@ function Library.new(config)
 	MainFrame.Size = UDim2.fromOffset(config.Size.X.Offset,config.Size.Y.Offset)
 	MainFrame.Active = true;
 	MainFrame.ClipsDescendants = true;
-	
+
 	WindowTable.AddEffect = function(color)
 		Library.GradientImage(MainFrame,color)
 	end
@@ -1240,7 +1240,7 @@ function Library.new(config)
 	MainDropShadow.ScaleType = Enum.ScaleType.Slice
 	MainDropShadow.SliceCenter = Rect.new(49, 49, 450, 450)
 	MainDropShadow.Rotation = 0.0001;
-	
+
 	Twen:Create(MainDropShadow,TweenInfo2,{ImageTransparency = 0.6}):Play();
 
 	Headers.Name = "Headers"
@@ -1899,12 +1899,12 @@ function Library.new(config)
 		local value = ResolveLoadedConfigValue(rawValue)
 		local setter = self:GetSetter(object)
 		local ok, err = xpcall(function()
-			setter(value, silent == true)
+			setter(object, value, silent == true)
 		end, debug.traceback)
 
 		if not ok then
 			ok, err = xpcall(function()
-				setter(object, value, silent == true)
+				setter(value, silent == true)
 			end, debug.traceback)
 		end
 
@@ -2543,6 +2543,10 @@ function Library.new(config)
 
 		function WindowTable.Dropdown:Setup(target_frame:Frame)
 			Locked = target_frame
+		end;
+
+		function WindowTable.Dropdown:IsOpenFor(target_frame: Frame)
+			return Looped and Locked == target_frame
 		end;
 
 		function WindowTable.Dropdown:Open(args,defauklt,callback,multi)
@@ -4991,6 +4995,7 @@ function Library.new(config)
 				local Dispatching = false
 				local CurrentValue = drop.Default
 				local DropdownObject
+				local Updater
 
 				local function ApplyValue(value, silent, force)
 					local nextValue = NormalizeDropdownValue(drop.Data, value, drop.Multi)
@@ -5001,6 +5006,9 @@ function Library.new(config)
 					CurrentValue = nextValue
 					drop.Default = nextValue
 					ValueText.Text = FormatDropdownValue(drop.Data, nextValue, drop.Multi)
+					if ConfigManager.LoadingConfig and WindowTable.Dropdown.IsOpenFor and WindowTable.Dropdown:IsOpenFor(MFrame) then
+						WindowTable.Dropdown:Open(drop.Data, nextValue, Updater, drop.Multi)
+					end
 					if ActiveFlag then
 						ConfigManager:Update(ActiveFlag, nextValue)
 					end
@@ -5012,7 +5020,7 @@ function Library.new(config)
 					return true
 				end
 
-				local Updater = function(value)
+				Updater = function(value)
 					ApplyValue(value)
 				end
 
@@ -5203,6 +5211,733 @@ function Library.new(config)
 			end
 
 			SectionTable.AddDivider = SectionTable.Divider
+
+			function SectionTable:NewColorpicker(conf)
+				conf = Config(conf, {
+					Title = "Colorpicker",
+					Description = "",
+					Icon = "palette",
+					Default = Color3.new(1, 1, 1),
+					Transparency = 0,
+					AllowTransparency = false,
+					Callback = function() end,
+				})
+				conf.Flag = conf.Flag and tostring(conf.Flag) or nil
+				conf.AllowTransparency = conf.AllowTransparency == true
+				conf.Transparency = math.clamp(tonumber(conf.Transparency) or 0, 0, 1)
+				local ActiveFlag = conf.Flag
+
+				local FunctionColorpicker = Instance.new("Frame")
+				local UICorner = Instance.new("UICorner")
+				local UIStroke = Instance.new("UIStroke")
+				local HeaderButton = Instance.new("TextButton")
+				local Icon = Instance.new("ImageLabel")
+				local TitleText = Instance.new("TextLabel")
+				local DescriptionText = Instance.new("TextLabel")
+				local PreviewShell = Instance.new("Frame")
+				local PreviewCorner = Instance.new("UICorner")
+				local PreviewStroke = Instance.new("UIStroke")
+				local PreviewColor = Instance.new("Frame")
+				local PreviewColorCorner = Instance.new("UICorner")
+				local Arrow = Instance.new("TextLabel")
+				local Body = Instance.new("Frame")
+				local ColorArea = Instance.new("Frame")
+				local ColorCorner = Instance.new("UICorner")
+				local ColorStroke = Instance.new("UIStroke")
+				local SaturationOverlay = Instance.new("Frame")
+				local SaturationGradient = Instance.new("UIGradient")
+				local ValueOverlay = Instance.new("Frame")
+				local ValueGradient = Instance.new("UIGradient")
+				local ColorCursor = Instance.new("Frame")
+				local CursorCorner = Instance.new("UICorner")
+				local CursorStroke = Instance.new("UIStroke")
+				local HueTrack = Instance.new("Frame")
+				local HueCorner = Instance.new("UICorner")
+				local HueGradient = Instance.new("UIGradient")
+				local HueThumb = Instance.new("Frame")
+				local HueThumbCorner = Instance.new("UICorner")
+				local HueThumbStroke = Instance.new("UIStroke")
+				local AlphaTrack = Instance.new("Frame")
+				local AlphaCorner = Instance.new("UICorner")
+				local AlphaColor = Instance.new("Frame")
+				local AlphaGradient = Instance.new("UIGradient")
+				local AlphaThumb = Instance.new("Frame")
+				local AlphaThumbCorner = Instance.new("UICorner")
+				local AlphaThumbStroke = Instance.new("UIStroke")
+				local LargePreview = Instance.new("Frame")
+				local LargePreviewCorner = Instance.new("UICorner")
+				local LargePreviewStroke = Instance.new("UIStroke")
+				local HexBox = Instance.new("TextBox")
+				local RBox = Instance.new("TextBox")
+				local GBox = Instance.new("TextBox")
+				local BBox = Instance.new("TextBox")
+				local ABox = Instance.new("TextBox")
+				local ColorpickerObject
+
+				local CollapsedHeight = 42
+				local ExpandedHeight = conf.AllowTransparency and 300 or 274
+				local TextUpdating = false
+				local Dispatching = false
+				local Expanded = false
+				local DraggingColor = false
+				local DraggingHue = false
+				local DraggingAlpha = false
+				local Current = {
+					H = 0,
+					S = 0,
+					V = 1,
+					Transparency = conf.Transparency,
+				}
+
+				local function RGBToHex(r, g, b)
+					return ("#%02X%02X%02X"):format(math.clamp(math.floor(r + 0.5), 0, 255), math.clamp(math.floor(g + 0.5), 0, 255), math.clamp(math.floor(b + 0.5), 0, 255))
+				end
+
+				local function ColorToRGB(color)
+					return math.clamp(math.floor(color.R * 255 + 0.5), 0, 255), math.clamp(math.floor(color.G * 255 + 0.5), 0, 255), math.clamp(math.floor(color.B * 255 + 0.5), 0, 255)
+				end
+
+				local function FromRGBSafe(r, g, b)
+					return Color3.fromRGB(math.clamp(tonumber(r) or 0, 0, 255), math.clamp(tonumber(g) or 0, 0, 255), math.clamp(tonumber(b) or 0, 0, 255))
+				end
+
+				local function NormalizeHex(text)
+					text = tostring(text or ""):gsub("%s+", ""):gsub("#", "")
+					if #text == 3 then
+						text = text:sub(1, 1):rep(2) .. text:sub(2, 2):rep(2) .. text:sub(3, 3):rep(2)
+					end
+					if #text ~= 6 or text:find("[^%x]") then
+						return nil
+					end
+					return "#" .. text:upper()
+				end
+
+				local function HexToColor3(text)
+					local hex = NormalizeHex(text)
+					if not hex then
+						return nil
+					end
+					local raw = hex:sub(2)
+					return Color3.fromRGB(tonumber(raw:sub(1, 2), 16), tonumber(raw:sub(3, 4), 16), tonumber(raw:sub(5, 6), 16))
+				end
+
+				local function ReadColorPayload()
+					local color = Color3.fromHSV(Current.H, Current.S, Current.V)
+					local r, g, b = ColorToRGB(color)
+					return {
+						Color3 = color,
+						Format = conf.AllowTransparency and "RGBA" or "RGB",
+						AllowTransparency = conf.AllowTransparency,
+						RGB = {
+							R = r,
+							G = g,
+							B = b,
+						},
+						HSV = {
+							H = Current.H,
+							S = Current.S,
+							V = Current.V,
+						},
+						Hex = RGBToHex(r, g, b),
+						Transparency = Current.Transparency,
+						Alpha = 1 - Current.Transparency,
+					}
+				end
+
+				local function ResolveColorInput(value, transparency)
+					local color = nil
+					local nextTransparency = transparency
+
+					if typeof(value) == "Color3" then
+						color = value
+					elseif type(value) == "string" then
+						color = HexToColor3(value)
+					elseif type(value) == "table" then
+						if typeof(value.Color3) == "Color3" then
+							color = value.Color3
+						elseif type(value.Hex) == "string" then
+							color = HexToColor3(value.Hex)
+						end
+
+						if not color and type(value.RGB) == "table" then
+							color = FromRGBSafe(tonumber(value.RGB.R) or tonumber(value.RGB[1]) or 255, tonumber(value.RGB.G) or tonumber(value.RGB[2]) or 255, tonumber(value.RGB.B) or tonumber(value.RGB[3]) or 255)
+						elseif not color and (value.R or value.G or value.B) then
+							color = FromRGBSafe(tonumber(value.R) or 255, tonumber(value.G) or 255, tonumber(value.B) or 255)
+						elseif not color and type(value.HSV) == "table" then
+							color = Color3.fromHSV(math.clamp(tonumber(value.HSV.H) or 0, 0, 1), math.clamp(tonumber(value.HSV.S) or 0, 0, 1), math.clamp(tonumber(value.HSV.V) or 1, 0, 1))
+						end
+
+						if value.Transparency ~= nil then
+							nextTransparency = value.Transparency
+						elseif value.Alpha ~= nil then
+							nextTransparency = 1 - (tonumber(value.Alpha) or 1)
+						end
+					end
+
+					color = color or Color3.new(1, 1, 1)
+					nextTransparency = math.clamp(tonumber(nextTransparency) or Current.Transparency or 0, 0, 1)
+					local h, s, v = color:ToHSV()
+					return h, s, v, nextTransparency
+				end
+
+				local function SetInputText(box, text)
+					TextUpdating = true
+					box.Text = text
+					TextUpdating = false
+				end
+
+				local function ApplyVisuals()
+					local payload = ReadColorPayload()
+					local color = payload.Color3
+					ColorArea.BackgroundColor3 = Color3.fromHSV(Current.H, 1, 1)
+					PreviewColor.BackgroundColor3 = color
+					PreviewColor.BackgroundTransparency = conf.AllowTransparency and Current.Transparency or 0
+					LargePreview.BackgroundColor3 = color
+					LargePreview.BackgroundTransparency = conf.AllowTransparency and Current.Transparency or 0
+					AlphaColor.BackgroundColor3 = color
+					ColorCursor.Position = UDim2.fromScale(Current.S, 1 - Current.V)
+					HueThumb.Position = UDim2.fromScale(Current.H, 0.5)
+					AlphaThumb.Position = UDim2.fromScale(1 - Current.Transparency, 0.5)
+					SetInputText(HexBox, payload.Hex)
+					SetInputText(RBox, tostring(payload.RGB.R))
+					SetInputText(GBox, tostring(payload.RGB.G))
+					SetInputText(BBox, tostring(payload.RGB.B))
+					SetInputText(ABox, tostring(math.floor(Current.Transparency * 100 + 0.5)))
+				end
+
+				local function Changed(h, s, v, transparency)
+					return math.abs(Current.H - h) > 0.0005
+						or math.abs(Current.S - s) > 0.0005
+						or math.abs(Current.V - v) > 0.0005
+						or math.abs(Current.Transparency - transparency) > 0.0005
+				end
+
+				local function ApplyHSV(h, s, v, transparency, silent, force)
+					h = math.clamp(tonumber(h) or Current.H, 0, 1)
+					s = math.clamp(tonumber(s) or Current.S, 0, 1)
+					v = math.clamp(tonumber(v) or Current.V, 0, 1)
+					transparency = conf.AllowTransparency and math.clamp(tonumber(transparency) or Current.Transparency, 0, 1) or 0
+					if not force and not Changed(h, s, v, transparency) then
+						return false
+					end
+
+					Current.H = h
+					Current.S = s
+					Current.V = v
+					Current.Transparency = transparency
+					ApplyVisuals()
+					local payload = ReadColorPayload()
+					if ActiveFlag then
+						ConfigManager:Update(ActiveFlag, payload)
+					end
+					if not silent and type(conf.Callback) == "function" and not Dispatching then
+						Dispatching = true
+						conf.Callback(payload)
+						Dispatching = false
+					end
+					return true
+				end
+
+				local function ApplyValue(value, silent, force)
+					local h, s, v, transparency = ResolveColorInput(value, conf.AllowTransparency and Current.Transparency or 0)
+					ApplyHSV(h, s, v, transparency, silent, force)
+				end
+
+				local function ApplyColor(color, silent)
+					local h, s, v = color:ToHSV()
+					ApplyHSV(h, s, v, Current.Transparency, silent)
+				end
+
+				local function ParseRGBBox()
+					local r = math.clamp(tonumber(RBox.Text) or 0, 0, 255)
+					local g = math.clamp(tonumber(GBox.Text) or 0, 0, 255)
+					local b = math.clamp(tonumber(BBox.Text) or 0, 0, 255)
+					ApplyColor(FromRGBSafe(r, g, b), false)
+				end
+
+				local function ParseAlphaBox()
+					if not conf.AllowTransparency then
+						return
+					end
+					local text = tostring(ABox.Text or ""):gsub("%%", "")
+					local value = tonumber(text)
+					if not value then
+						ApplyVisuals()
+						return
+					end
+					local transparency = value > 1 and (value / 100) or value
+					ApplyHSV(Current.H, Current.S, Current.V, transparency, false)
+				end
+
+				local function ToggleExpanded(value)
+					Expanded = value == nil and not Expanded or value == true
+					Arrow.Text = Expanded and "⌃" or "⌄"
+					Twen:Create(FunctionColorpicker, TweenInfo.new(0.24, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+						Size = UDim2.new(0.949999988, 0, 0, Expanded and ExpandedHeight or CollapsedHeight),
+					}):Play()
+					Twen:Create(Body, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+						BackgroundTransparency = Expanded and 1 or 1,
+					}):Play()
+				end
+
+				local function UpdateFromColorArea(input)
+					local pos = input.Position
+					local x = math.clamp((pos.X - ColorArea.AbsolutePosition.X) / math.max(1, ColorArea.AbsoluteSize.X), 0, 1)
+					local y = math.clamp((pos.Y - ColorArea.AbsolutePosition.Y) / math.max(1, ColorArea.AbsoluteSize.Y), 0, 1)
+					ApplyHSV(Current.H, x, 1 - y, Current.Transparency, false)
+				end
+
+				local function UpdateFromHue(input)
+					local x = math.clamp((input.Position.X - HueTrack.AbsolutePosition.X) / math.max(1, HueTrack.AbsoluteSize.X), 0, 1)
+					ApplyHSV(x, Current.S, Current.V, Current.Transparency, false)
+				end
+
+				local function UpdateFromAlpha(input)
+					if not conf.AllowTransparency then
+						return
+					end
+					local x = math.clamp((input.Position.X - AlphaTrack.AbsolutePosition.X) / math.max(1, AlphaTrack.AbsoluteSize.X), 0, 1)
+					ApplyHSV(Current.H, Current.S, Current.V, 1 - x, false)
+				end
+
+				local function MakeInputBox(box, label, position, size)
+					box.Name = label .. "Input"
+					box.Parent = Body
+					box.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+					box.BackgroundTransparency = 0.76
+					box.BorderSizePixel = 0
+					box.Position = position
+					box.Size = size
+					box.ZIndex = 22
+					box.ClearTextOnFocus = false
+					box.Font = Enum.Font.GothamBold
+					box.TextColor3 = Color3.fromRGB(255, 255, 255)
+					box.TextSize = 12
+					box.TextTransparency = 0.15
+					box.TextWrapped = false
+					box.TextXAlignment = Enum.TextXAlignment.Center
+					local corner = Instance.new("UICorner")
+					corner.CornerRadius = UDim.new(0, 3)
+					corner.Parent = box
+					local stroke = Instance.new("UIStroke")
+					stroke.Transparency = 0.92
+					stroke.Color = Color3.fromRGB(255, 255, 255)
+					stroke.Parent = box
+					ThemeManager:BindAccentStroke(stroke)
+				end
+
+				FunctionColorpicker.Name = "FunctionColorpicker"
+				FunctionColorpicker.Parent = Section
+				FunctionColorpicker.BackgroundColor3 = Color3.fromRGB(17, 17, 17)
+				FunctionColorpicker.BackgroundTransparency = 0.8
+				FunctionColorpicker.BorderSizePixel = 0
+				FunctionColorpicker.ClipsDescendants = true
+				FunctionColorpicker.Size = UDim2.new(0.949999988, 0, 0, CollapsedHeight)
+				FunctionColorpicker.ZIndex = 17
+
+				UICorner.CornerRadius = UDim.new(0, 3)
+				UICorner.Parent = FunctionColorpicker
+
+				UIStroke.Transparency = 0.95
+				UIStroke.Color = Color3.fromRGB(255, 255, 255)
+				UIStroke.Parent = FunctionColorpicker
+				ThemeManager:BindAccentStroke(UIStroke)
+
+				HeaderButton.Name = "HeaderButton"
+				HeaderButton.Parent = FunctionColorpicker
+				HeaderButton.BackgroundTransparency = 1
+				HeaderButton.BorderSizePixel = 0
+				HeaderButton.Size = UDim2.new(1, 0, 0, CollapsedHeight)
+				HeaderButton.ZIndex = 25
+				HeaderButton.Text = ""
+
+				Icon.Name = "Icon"
+				Icon.Parent = FunctionColorpicker
+				Icon.AnchorPoint = Vector2.new(0, 0.5)
+				Icon.BackgroundTransparency = 1
+				Icon.Position = UDim2.new(0.035, 0, 0, 21)
+				Icon.Size = UDim2.fromOffset(18, 18)
+				Icon.ZIndex = 19
+				Icon.Image = ResolveIconSource(conf.Icon or "palette")
+				Icon.ImageTransparency = 0.25
+
+				TitleText.Name = "TitleText"
+				TitleText.Parent = FunctionColorpicker
+				TitleText.BackgroundTransparency = 1
+				TitleText.Position = UDim2.new(0.12, 0, 0, conf.Description ~= "" and 7 or 11)
+				TitleText.Size = UDim2.new(0.58, 0, 0, 14)
+				TitleText.ZIndex = 19
+				TitleText.Font = Enum.Font.GothamBold
+				TitleText.Text = tostring(conf.Title or "Colorpicker")
+				TitleText.TextColor3 = Color3.fromRGB(255, 255, 255)
+				TitleText.TextSize = 13
+				TitleText.TextTransparency = 0.2
+				TitleText.TextXAlignment = Enum.TextXAlignment.Left
+
+				DescriptionText.Name = "DescriptionText"
+				DescriptionText.Parent = FunctionColorpicker
+				DescriptionText.BackgroundTransparency = 1
+				DescriptionText.Position = UDim2.new(0.12, 0, 0, 23)
+				DescriptionText.Size = UDim2.new(0.58, 0, 0, 12)
+				DescriptionText.ZIndex = 19
+				DescriptionText.Font = Enum.Font.GothamBold
+				DescriptionText.Text = tostring(conf.Description or "")
+				DescriptionText.TextColor3 = Color3.fromRGB(255, 255, 255)
+				DescriptionText.TextSize = 11
+				DescriptionText.TextTransparency = 0.55
+				DescriptionText.TextXAlignment = Enum.TextXAlignment.Left
+				DescriptionText.Visible = conf.Description ~= ""
+
+				PreviewShell.Name = "PreviewShell"
+				PreviewShell.Parent = FunctionColorpicker
+				PreviewShell.AnchorPoint = Vector2.new(1, 0.5)
+				PreviewShell.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+				PreviewShell.BackgroundTransparency = 0.45
+				PreviewShell.BorderSizePixel = 0
+				PreviewShell.Position = UDim2.new(0.86, 0, 0, 21)
+				PreviewShell.Size = UDim2.fromOffset(38, 20)
+				PreviewShell.ZIndex = 19
+				PreviewShell.ClipsDescendants = true
+				PreviewCorner.CornerRadius = UDim.new(0, 4)
+				PreviewCorner.Parent = PreviewShell
+				PreviewStroke.Transparency = 0.82
+				PreviewStroke.Parent = PreviewShell
+				ThemeManager:BindAccentStroke(PreviewStroke)
+
+				PreviewColor.Name = "PreviewColor"
+				PreviewColor.Parent = PreviewShell
+				PreviewColor.BorderSizePixel = 0
+				PreviewColor.Size = UDim2.fromScale(1, 1)
+				PreviewColor.ZIndex = 20
+				PreviewColorCorner.CornerRadius = UDim.new(0, 4)
+				PreviewColorCorner.Parent = PreviewColor
+
+				Arrow.Name = "Arrow"
+				Arrow.Parent = FunctionColorpicker
+				Arrow.AnchorPoint = Vector2.new(1, 0.5)
+				Arrow.BackgroundTransparency = 1
+				Arrow.Position = UDim2.new(0.965, 0, 0, 21)
+				Arrow.Size = UDim2.fromOffset(20, 20)
+				Arrow.ZIndex = 19
+				Arrow.Font = Enum.Font.GothamBold
+				Arrow.Text = "⌄"
+				Arrow.TextColor3 = Color3.fromRGB(255, 255, 255)
+				Arrow.TextSize = 16
+				Arrow.TextTransparency = 0.35
+
+				Body.Name = "Body"
+				Body.Parent = FunctionColorpicker
+				Body.BackgroundTransparency = 1
+				Body.BorderSizePixel = 0
+				Body.Position = UDim2.new(0.035, 0, 0, 48)
+				Body.Size = UDim2.new(0.93, 0, 0, ExpandedHeight - 54)
+				Body.ZIndex = 18
+
+				ColorArea.Name = "ColorArea"
+				ColorArea.Parent = Body
+				ColorArea.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+				ColorArea.BorderSizePixel = 0
+				ColorArea.Position = UDim2.new(0, 0, 0, 0)
+				ColorArea.Size = UDim2.new(0.58, 0, 0, 118)
+				ColorArea.ZIndex = 19
+				ColorArea.ClipsDescendants = true
+				ColorCorner.CornerRadius = UDim.new(0, 5)
+				ColorCorner.Parent = ColorArea
+				ColorStroke.Transparency = 0.84
+				ColorStroke.Parent = ColorArea
+				ThemeManager:BindAccentStroke(ColorStroke)
+
+				SaturationOverlay.Parent = ColorArea
+				SaturationOverlay.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+				SaturationOverlay.BorderSizePixel = 0
+				SaturationOverlay.Size = UDim2.fromScale(1, 1)
+				SaturationOverlay.ZIndex = 20
+				SaturationGradient.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1) })
+				SaturationGradient.Parent = SaturationOverlay
+
+				ValueOverlay.Parent = ColorArea
+				ValueOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+				ValueOverlay.BorderSizePixel = 0
+				ValueOverlay.Size = UDim2.fromScale(1, 1)
+				ValueOverlay.ZIndex = 21
+				ValueGradient.Rotation = 90
+				ValueGradient.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(1, 0) })
+				ValueGradient.Parent = ValueOverlay
+
+				ColorCursor.Parent = ColorArea
+				ColorCursor.AnchorPoint = Vector2.new(0.5, 0.5)
+				ColorCursor.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+				ColorCursor.BackgroundTransparency = 0.45
+				ColorCursor.BorderSizePixel = 0
+				ColorCursor.Size = UDim2.fromOffset(12, 12)
+				ColorCursor.ZIndex = 24
+				CursorCorner.CornerRadius = UDim.new(1, 0)
+				CursorCorner.Parent = ColorCursor
+				CursorStroke.Thickness = 1.4
+				CursorStroke.Transparency = 0.1
+				CursorStroke.Parent = ColorCursor
+
+				LargePreview.Parent = Body
+				LargePreview.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+				LargePreview.BorderSizePixel = 0
+				LargePreview.Position = UDim2.new(0.62, 0, 0, 0)
+				LargePreview.Size = UDim2.new(0.38, 0, 0, 38)
+				LargePreview.ZIndex = 19
+				LargePreviewCorner.CornerRadius = UDim.new(0, 5)
+				LargePreviewCorner.Parent = LargePreview
+				LargePreviewStroke.Transparency = 0.84
+				LargePreviewStroke.Parent = LargePreview
+				ThemeManager:BindAccentStroke(LargePreviewStroke)
+
+				HueTrack.Parent = Body
+				HueTrack.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+				HueTrack.BorderSizePixel = 0
+				HueTrack.Position = UDim2.new(0, 0, 0, 130)
+				HueTrack.Size = UDim2.new(1, 0, 0, 14)
+				HueTrack.ZIndex = 19
+				HueCorner.CornerRadius = UDim.new(0, 5)
+				HueCorner.Parent = HueTrack
+				HueGradient.Color = ColorSequence.new({
+					ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
+					ColorSequenceKeypoint.new(0.17, Color3.fromRGB(255, 255, 0)),
+					ColorSequenceKeypoint.new(0.33, Color3.fromRGB(0, 255, 0)),
+					ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 255, 255)),
+					ColorSequenceKeypoint.new(0.67, Color3.fromRGB(0, 0, 255)),
+					ColorSequenceKeypoint.new(0.83, Color3.fromRGB(255, 0, 255)),
+					ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 0)),
+				})
+				HueGradient.Parent = HueTrack
+
+				HueThumb.Parent = HueTrack
+				HueThumb.AnchorPoint = Vector2.new(0.5, 0.5)
+				HueThumb.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+				HueThumb.BorderSizePixel = 0
+				HueThumb.Position = UDim2.fromScale(0, 0.5)
+				HueThumb.Size = UDim2.fromOffset(8, 20)
+				HueThumb.ZIndex = 23
+				HueThumbCorner.CornerRadius = UDim.new(0, 4)
+				HueThumbCorner.Parent = HueThumb
+				HueThumbStroke.Transparency = 0.35
+				HueThumbStroke.Parent = HueThumb
+
+				AlphaTrack.Parent = Body
+				AlphaTrack.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+				AlphaTrack.BorderSizePixel = 0
+				AlphaTrack.Position = UDim2.new(0, 0, 0, 152)
+				AlphaTrack.Size = UDim2.new(1, 0, 0, 14)
+				AlphaTrack.ZIndex = 19
+				AlphaTrack.Visible = conf.AllowTransparency
+				AlphaCorner.CornerRadius = UDim.new(0, 5)
+				AlphaCorner.Parent = AlphaTrack
+				for i = 0, 15 do
+					local tile = Instance.new("Frame")
+					tile.Parent = AlphaTrack
+					tile.BackgroundColor3 = (i % 2 == 0) and Color3.fromRGB(210, 210, 210) or Color3.fromRGB(70, 70, 70)
+					tile.BorderSizePixel = 0
+					tile.Position = UDim2.new(i / 16, 0, 0, 0)
+					tile.Size = UDim2.new(1 / 16, 1, 1, 0)
+					tile.ZIndex = 18
+				end
+
+				AlphaColor.Parent = AlphaTrack
+				AlphaColor.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+				AlphaColor.BorderSizePixel = 0
+				AlphaColor.Size = UDim2.fromScale(1, 1)
+				AlphaColor.ZIndex = 20
+				AlphaGradient.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(1, 0) })
+				AlphaGradient.Parent = AlphaColor
+
+				AlphaThumb.Parent = AlphaTrack
+				AlphaThumb.AnchorPoint = Vector2.new(0.5, 0.5)
+				AlphaThumb.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+				AlphaThumb.BorderSizePixel = 0
+				AlphaThumb.Position = UDim2.fromScale(1, 0.5)
+				AlphaThumb.Size = UDim2.fromOffset(8, 20)
+				AlphaThumb.ZIndex = 23
+				AlphaThumbCorner.CornerRadius = UDim.new(0, 4)
+				AlphaThumbCorner.Parent = AlphaThumb
+				AlphaThumbStroke.Transparency = 0.35
+				AlphaThumbStroke.Parent = AlphaThumb
+
+				MakeInputBox(HexBox, "Hex", UDim2.new(0.62, 0, 0, 48), UDim2.new(0.38, 0, 0, 24))
+				MakeInputBox(RBox, "R", UDim2.new(0.62, 0, 0, 82), UDim2.new(0.115, 0, 0, 24))
+				MakeInputBox(GBox, "G", UDim2.new(0.755, 0, 0, 82), UDim2.new(0.115, 0, 0, 24))
+				MakeInputBox(BBox, "B", UDim2.new(0.89, 0, 0, 82), UDim2.new(0.11, 0, 0, 24))
+				MakeInputBox(ABox, "Alpha", UDim2.new(0.62, 0, 0, 112), UDim2.new(0.38, 0, 0, 24))
+				ABox.Visible = conf.AllowTransparency
+
+				HeaderButton.MouseEnter:Connect(function()
+					Twen:Create(TitleText, TweenInfo.new(0.15, Enum.EasingStyle.Quint), { TextTransparency = 0.05 }):Play()
+					Twen:Create(Arrow, TweenInfo.new(0.15, Enum.EasingStyle.Quint), { TextTransparency = 0.1 }):Play()
+				end)
+
+				HeaderButton.MouseLeave:Connect(function()
+					Twen:Create(TitleText, TweenInfo.new(0.15, Enum.EasingStyle.Quint), { TextTransparency = 0.2 }):Play()
+					Twen:Create(Arrow, TweenInfo.new(0.15, Enum.EasingStyle.Quint), { TextTransparency = 0.35 }):Play()
+				end)
+
+				HeaderButton.MouseButton1Click:Connect(function()
+					ToggleExpanded()
+				end)
+
+				ColorArea.InputBegan:Connect(function(input)
+					if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+						DraggingColor = true
+						UpdateFromColorArea(input)
+					end
+				end)
+				HueTrack.InputBegan:Connect(function(input)
+					if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+						DraggingHue = true
+						UpdateFromHue(input)
+					end
+				end)
+				AlphaTrack.InputBegan:Connect(function(input)
+					if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+						DraggingAlpha = true
+						UpdateFromAlpha(input)
+					end
+				end)
+				Input.InputChanged:Connect(function(input)
+					if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+						if DraggingColor then
+							UpdateFromColorArea(input)
+						elseif DraggingHue then
+							UpdateFromHue(input)
+						elseif DraggingAlpha then
+							UpdateFromAlpha(input)
+						end
+					end
+				end)
+				Input.InputEnded:Connect(function(input)
+					if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+						DraggingColor = false
+						DraggingHue = false
+						DraggingAlpha = false
+					end
+				end)
+
+				HexBox:GetPropertyChangedSignal("Text"):Connect(function()
+					if TextUpdating then
+						return
+					end
+					local color = HexToColor3(HexBox.Text)
+					if color then
+						ApplyColor(color, false)
+					end
+				end)
+				HexBox.FocusLost:Connect(function()
+					local color = HexToColor3(HexBox.Text)
+					if color then
+						ApplyColor(color, false)
+					else
+						ApplyVisuals()
+					end
+				end)
+				for _, box in ipairs({ RBox, GBox, BBox }) do
+					box:GetPropertyChangedSignal("Text"):Connect(function()
+						if not TextUpdating and tonumber(box.Text) then
+							ParseRGBBox()
+						end
+					end)
+					box.FocusLost:Connect(ParseRGBBox)
+				end
+				ABox:GetPropertyChangedSignal("Text"):Connect(function()
+					if not TextUpdating and tonumber((ABox.Text or ""):gsub("%%", "")) then
+						ParseAlphaBox()
+					end
+				end)
+				ABox.FocusLost:Connect(ParseAlphaBox)
+
+				ApplyValue(conf.Default, true, true)
+
+				ColorpickerObject = {
+					Flag = conf.Flag,
+					Root = FunctionColorpicker,
+					GetValue = function()
+						return ReadColorPayload()
+					end,
+					Get = function()
+						return ReadColorPayload()
+					end,
+					GetColor3 = function()
+						return ReadColorPayload().Color3
+					end,
+					GetRGB = function()
+						return ReadColorPayload().RGB
+					end,
+					GetHSV = function()
+						return ReadColorPayload().HSV
+					end,
+					GetHex = function()
+						return ReadColorPayload().Hex
+					end,
+					GetTransparency = function()
+						return Current.Transparency
+					end,
+					SetValue = function(first, second, third)
+						local value, silent = NormalizeMethodArgs(ColorpickerObject, first, second, third)
+						ApplyValue(value, silent)
+					end,
+					Value = function(first, second, third)
+						local value, silent = NormalizeMethodArgs(ColorpickerObject, first, second, third)
+						ApplyValue(value, silent)
+					end,
+					Set = function(first, second, third)
+						local value, silent = NormalizeMethodArgs(ColorpickerObject, first, second, third)
+						ApplyValue(value, silent)
+					end,
+					SetRGB = function(first, r, g, b, silent)
+						if first == ColorpickerObject then
+							ApplyColor(FromRGBSafe(r, g, b), silent)
+						else
+							ApplyColor(FromRGBSafe(first, r, g), b)
+						end
+					end,
+					SetHex = function(first, value, silent)
+						local hex = first == ColorpickerObject and value or first
+						local quiet = first == ColorpickerObject and silent or value
+						local color = HexToColor3(hex)
+						if color then
+							ApplyColor(color, quiet)
+						end
+					end,
+					SetTransparency = function(first, value, silent)
+						local transparency = first == ColorpickerObject and value or first
+						local quiet = first == ColorpickerObject and silent or value
+						ApplyHSV(Current.H, Current.S, Current.V, transparency, quiet)
+					end,
+					Refresh = function()
+						ApplyVisuals()
+					end,
+					Expand = function()
+						ToggleExpanded(true)
+					end,
+					Collapse = function()
+						ToggleExpanded(false)
+					end,
+					Visible = function(newindx)
+						SearchManager:SetObjectVisible(ColorpickerObject, newindx)
+					end,
+					Destroy = function()
+						if ActiveFlag then
+							ConfigManager:Unregister(ActiveFlag, ColorpickerObject)
+						end
+						ColorpickerObject.Destroyed = true
+						FunctionColorpicker:Destroy()
+					end,
+				}
+
+				RegisterSearchableControl(ColorpickerObject, FunctionColorpicker, conf.Title, conf.Description, conf.Tooltip, HeaderButton, SectionTable)
+
+				if conf.Flag then
+					ConfigManager:Register(conf.Flag, ColorpickerObject)
+					ActiveFlag = ColorpickerObject.Flag
+				end
+
+				return ColorpickerObject
+			end
+
 
 			function SectionTable:NewTextbox(conf)
 				conf = Config(conf,{
@@ -6406,7 +7141,7 @@ function Library:Console()
 	overview = {
 		command = {
 			neofetch = function()
-				local default = 
+				local default =
 [[
 						<font color="rgb(255,125,0)">neuron@rubuntu</font>
 						<font color="rgb(255,125,0)">----------------------------------</font>
