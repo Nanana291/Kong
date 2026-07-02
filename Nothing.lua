@@ -1310,6 +1310,27 @@ function Library.new(config)
 		return name
 	end
 
+	local function IsValidConfigName(name)
+		if type(name) ~= "string" then
+			return false
+		end
+
+		name = name:gsub("^%s+", ""):gsub("%s+$", "")
+		if name == "" then
+			return false
+		end
+
+		if name:find('[\\/:*?"<>|]') then
+			return false
+		end
+
+		if name:sub(1, 1) == "." then
+			return false
+		end
+
+		return true
+	end
+
 	local function DeepEqual(left, right, visited)
 		if left == right then
 			return true
@@ -1409,15 +1430,33 @@ function Library.new(config)
 		self:EnsureFolders()
 
 		local configs = {}
+		local seen = {}
 		for _, file in ipairs(SafeListFiles(self:GetConfigFolder())) do
 			local name = DecodeFileName(file)
-			if name and name ~= "autoload" then
+			if name and name ~= "autoload" and not seen[name] then
+				seen[name] = true
 				configs[#configs + 1] = name
 			end
 		end
 
 		table.sort(configs)
 		return configs
+	end
+
+	function ConfigManager:IsConfigAvailable(name)
+		name = name and tostring(name) or ""
+		name = name:gsub("^%s+", ""):gsub("%s+$", "")
+		if not IsValidConfigName(name) then
+			return false
+		end
+
+		for _, entry in ipairs(self:RefreshList()) do
+			if entry == name then
+				return true
+			end
+		end
+
+		return false
 	end
 
 	function ConfigManager:SerializeValues()
@@ -1439,22 +1478,47 @@ function Library.new(config)
 		return result
 	end
 
-	function ConfigManager:SyncSettingsUI()
+	function ConfigManager:SyncSettingsUI(selectedOverride)
 		if not self.SettingsUI then
 			return
 		end
 		if self._SyncingSettingsUI then
 			return
 		end
+
 		self._SyncingSettingsUI = true
 
 		local function SyncBody()
 			local configs = self:RefreshList()
 			local ui = self.SettingsUI
+			local selected = selectedOverride ~= nil and selectedOverride or (self.SelectedConfig ~= "" and self.SelectedConfig or nil)
+			local needsPersist = false
+			local available = {}
+
+			for _, name in ipairs(configs) do
+				available[name] = true
+			end
+
+			if selected ~= nil and not available[selected] then
+				if selectedOverride ~= nil then
+					configs[#configs + 1] = selected
+					table.sort(configs)
+					available[selected] = true
+				else
+					selected = nil
+					if self.SelectedConfig ~= "" then
+						self.SelectedConfig = ""
+						needsPersist = true
+						if self.AutoloadEnabled then
+							self.AutoloadEnabled = false
+							needsPersist = true
+						end
+					end
+				end
+			end
 
 			if ui.ConfigDropdown and ui.ConfigDropdown.Set then
 				ui.ConfigDropdown:Set(configs)
-				local selected = self.SelectedConfig ~= "" and self.SelectedConfig or nil
 				local current = ui.ConfigDropdown.GetValue and ui.ConfigDropdown:GetValue() or nil
 				if not DeepEqual(current, selected) then
 					ui.ConfigDropdown:SetValue(selected, true)
@@ -1462,11 +1526,11 @@ function Library.new(config)
 			end
 
 			if ui.ConfigTextbox and ui.ConfigTextbox.SetValue then
-				local selected = type(self.SelectedConfig) == "string" and self.SelectedConfig or ""
+				local selectedText = type(self.SelectedConfig) == "string" and self.SelectedConfig or ""
 				local focused = ui.ConfigTextbox.IsFocused and ui.ConfigTextbox:IsFocused()
 				local current = ui.ConfigTextbox.GetValue and ui.ConfigTextbox:GetValue() or ""
-				if not focused and current ~= selected then
-					ui.ConfigTextbox:SetValue(selected, true)
+				if not focused and current ~= selectedText then
+					ui.ConfigTextbox:SetValue(selectedText, true)
 				end
 			end
 
@@ -1479,10 +1543,14 @@ function Library.new(config)
 
 			if ui.ThemeDropdown and ui.ThemeDropdown.SetValue then
 				local current = ui.ThemeDropdown.GetValue and ui.ThemeDropdown:GetValue() or nil
-				local selected = ThemeManager:GetThemeName(self.Theme or ThemeManager.ActiveTheme)
-				if current ~= selected then
-					ui.ThemeDropdown:SetValue(selected, true)
+				local selectedTheme = ThemeManager:GetThemeName(self.Theme or ThemeManager.ActiveTheme)
+				if current ~= selectedTheme then
+					ui.ThemeDropdown:SetValue(selectedTheme, true)
 				end
+			end
+
+			if needsPersist then
+				self:PersistAutoload()
 			end
 		end
 
@@ -1503,7 +1571,12 @@ function Library.new(config)
 	end
 
 	function ConfigManager:SetSelectedConfig(name, silent)
-		name = name and NormalizeConfigName(name, true) or ""
+		name = name and tostring(name) or ""
+		name = name:gsub("^%s+", ""):gsub("%s+$", "")
+		if name ~= "" and not IsValidConfigName(name) then
+			return false
+		end
+
 		if self.SelectedConfig == name then
 			if not silent then
 				self:PersistAutoload()
@@ -1518,7 +1591,7 @@ function Library.new(config)
 			self:PersistAutoload()
 		end
 
-		self:SyncSettingsUI()
+		self:SyncSettingsUI(name ~= "" and name or nil)
 		return true
 	end
 
@@ -1651,7 +1724,7 @@ function Library.new(config)
 
 	function ConfigManager:LoadConfig(name)
 		name = name and NormalizeConfigName(name, true) or ""
-		if name == "" then
+		if not IsValidConfigName(name) then
 			return false
 		end
 
@@ -1663,28 +1736,33 @@ function Library.new(config)
 		end
 
 		self.LoadedData = data
-		self:SetSelectedConfig(name, false)
 		self:ApplyLoadedData()
+		self.SelectedConfig = name
+		self.Theme = ThemeManager:GetThemeName(self.Theme or ThemeManager.ActiveTheme)
+		self:PersistAutoload()
+		self:SyncSettingsUI(name)
 		return true
 	end
 
 	function ConfigManager:SaveConfig(name)
-		name = name and NormalizeConfigName(name, false) or ""
-		if name == "" then
+		name = name and tostring(name) or ""
+		name = name:gsub("^%s+", ""):gsub("%s+$", "")
+		if not IsValidConfigName(name) then
 			return false
 		end
 
 		self:EnsureFolders()
 		local ok = self:WriteJson(self:GetConfigPath(name), self:SerializeValues())
-			if not ok then
-				return false
-			end
-
-			if not self:SetSelectedConfig(name, false) then
-				self:SyncSettingsUI()
-			end
-			return true
+		if not ok then
+			return false
 		end
+
+		self.SelectedConfig = name
+		self.Theme = ThemeManager:GetThemeName(self.Theme or ThemeManager.ActiveTheme)
+		self:PersistAutoload()
+		self:SyncSettingsUI(name)
+		return true
+	end
 
 	function ConfigManager:LoadAutoload()
 		self:EnsureFolders()
@@ -1696,17 +1774,29 @@ function Library.new(config)
 		local data = self:ReadJson(self:GetAutoloadPath())
 		if type(data) == "table" then
 			self.AutoloadEnabled = data.Enabled == true
-			self.SelectedConfig = data.Config and NormalizeConfigName(data.Config, true) or self.SelectedConfig
+			if IsValidConfigName(data.Config) then
+				self.SelectedConfig = NormalizeConfigName(data.Config, true)
+			else
+				self.SelectedConfig = ""
+				self.AutoloadEnabled = false
+			end
 			self.Theme = ThemeManager:GetThemeName(data.Theme or self.Theme)
 		end
 
 		ThemeManager:SetTheme(self.Theme, true)
 
-		self:SyncSettingsUI()
-
 		if self.AutoloadEnabled and self.SelectedConfig ~= "" then
-			self:LoadConfig(self.SelectedConfig)
+			if not self:IsConfigAvailable(self.SelectedConfig) then
+				self.AutoloadEnabled = false
+				self.SelectedConfig = ""
+			elseif not self:LoadConfig(self.SelectedConfig) then
+				self.AutoloadEnabled = false
+				self.SelectedConfig = ""
+			end
 		end
+
+		self:SyncSettingsUI(self.SelectedConfig ~= "" and self.SelectedConfig or nil)
+		self:PersistAutoload()
 	end
 
 	function ConfigManager:BuildSettingsTab()
@@ -1764,11 +1854,7 @@ function Library.new(config)
 			Default = type(self.SelectedConfig) == "string" and self.SelectedConfig or "",
 			FileType = "",
 			Flag = nil,
-			Callback = function(value)
-				if type(value) == "string" then
-					ConfigManager:SetSelectedConfig(value)
-				end
-			end,
+			Callback = function() end,
 		})
 
 		ConfigSection:Divider()
@@ -2584,6 +2670,456 @@ function Library.new(config)
 			end;
 		end)
 
+		local SearchManager = {
+			Query = "",
+			Sections = setmetatable({}, { __mode = "k" }),
+			Controls = setmetatable({}, { __mode = "k" }),
+		}
+
+		local function NormalizeSearchText(...)
+			local parts = {}
+			local count = 0
+
+			for i = 1, select("#", ...) do
+				local value = select(i, ...)
+				if value ~= nil then
+					local text = tostring(value)
+					if text ~= "" then
+						count = count + 1
+						parts[count] = text
+					end
+				end
+			end
+
+			return string.lower(table.concat(parts, " ")):gsub("^%s+", ""):gsub("%s+$", "")
+		end
+
+		local function SearchContains(text, query)
+			if query == "" then
+				return true
+			end
+
+			return string.find(text, query, 1, true) ~= nil
+		end
+
+		local function SetInstanceVisible(object, visible)
+			if object and object.Root and object.Root.Visible ~= visible then
+				object.Root.Visible = visible
+			end
+		end
+
+		function SearchManager:Apply()
+			local query = self.Query
+
+			for sectionObject, sectionEntry in pairs(self.Sections) do
+				if sectionObject and sectionObject.Destroyed ~= true then
+					local sectionMatch = query ~= "" and SearchContains(sectionEntry.Text, query)
+					local anyChildVisible = false
+
+					for i = 1, #sectionEntry.Children do
+						local child = sectionEntry.Children[i]
+						if child and child.Object and child.Object.Destroyed ~= true then
+							local childMatch = query == "" or SearchContains(child.Text, query)
+							local visible = child.BaseVisible and (query == "" or childMatch or sectionMatch)
+							SetInstanceVisible(child.Object, visible)
+							if visible then
+								anyChildVisible = true
+							end
+						end
+					end
+
+					local sectionVisible = sectionEntry.BaseVisible and (query == "" or sectionMatch or anyChildVisible)
+					SetInstanceVisible(sectionObject, sectionVisible)
+				end
+			end
+
+			for controlObject, controlEntry in pairs(self.Controls) do
+				if controlObject and controlObject.Destroyed ~= true and controlEntry.Section == nil then
+					local visible = controlEntry.BaseVisible and (query == "" or SearchContains(controlEntry.Text, query))
+					SetInstanceVisible(controlObject, visible)
+				end
+			end
+		end
+
+		function SearchManager:SetQuery(value)
+			value = NormalizeSearchText(value)
+			if self.Query == value then
+				return false
+			end
+
+			self.Query = value
+			self:Apply()
+			return true
+		end
+
+		function SearchManager:RegisterSection(object, root, title)
+			local entry = {
+				Object = object,
+				Root = root,
+				Text = NormalizeSearchText(title),
+				BaseVisible = true,
+				Children = {},
+			}
+
+			self.Sections[object] = entry
+			if self.Query ~= "" then
+				self:Apply()
+			end
+			return entry
+		end
+
+		function SearchManager:RegisterControl(object, root, title, description, sectionObject)
+			local sectionEntry = sectionObject and self.Sections[sectionObject] or nil
+			local entry = {
+				Object = object,
+				Root = root,
+				Text = NormalizeSearchText(title, description),
+				BaseVisible = true,
+				Section = sectionEntry,
+			}
+
+			self.Controls[object] = entry
+			if sectionEntry then
+				sectionEntry.Children[#sectionEntry.Children + 1] = entry
+			end
+
+			if self.Query ~= "" then
+				self:Apply()
+			end
+			return entry
+		end
+
+		function SearchManager:UpdateControlText(object, title, description)
+			local entry = self.Controls[object]
+			if not entry then
+				return
+			end
+
+			entry.Text = NormalizeSearchText(title, description)
+			if self.Query ~= "" then
+				self:Apply()
+			end
+		end
+
+		function SearchManager:SetObjectVisible(object, visible)
+			local entry = self.Controls[object] or self.Sections[object]
+			if not entry then
+				SetInstanceVisible(object, visible and true or false)
+				return
+			end
+
+			entry.BaseVisible = visible and true or false
+			self:Apply()
+		end
+
+		local TooltipManager = {
+			ActiveObject = nil,
+			Token = 0,
+		}
+
+		local TooltipFrame = Instance.new("Frame")
+		local TooltipCorner = Instance.new("UICorner")
+		local TooltipStroke = Instance.new("UIStroke")
+		local TooltipShadow = Instance.new("ImageLabel")
+		local TooltipText = Instance.new("TextLabel")
+
+		TooltipFrame.Name = "TooltipFrame"
+		TooltipFrame.Parent = ScreenGui
+		TooltipFrame.AnchorPoint = Vector2.new(0, 0)
+		TooltipFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
+		TooltipFrame.BackgroundTransparency = 1
+		TooltipFrame.BorderSizePixel = 0
+		TooltipFrame.ClipsDescendants = false
+		TooltipFrame.Position = UDim2.fromOffset(0, 0)
+		TooltipFrame.Size = UDim2.fromOffset(10, 10)
+		TooltipFrame.Visible = false
+		TooltipFrame.ZIndex = 250
+
+		TooltipShadow.Name = "Shadow"
+		TooltipShadow.Parent = TooltipFrame
+		TooltipShadow.AnchorPoint = Vector2.new(0.5, 0.5)
+		TooltipShadow.BackgroundTransparency = 1
+		TooltipShadow.BorderSizePixel = 0
+		TooltipShadow.Position = UDim2.fromScale(0.5, 0.5)
+		TooltipShadow.Size = UDim2.new(1, 18, 1, 18)
+		TooltipShadow.ZIndex = 249
+		TooltipShadow.Image = "rbxassetid://6015897843"
+		TooltipShadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+		TooltipShadow.ImageTransparency = 1
+		TooltipShadow.ScaleType = Enum.ScaleType.Slice
+		TooltipShadow.SliceCenter = Rect.new(49, 49, 450, 450)
+
+		TooltipCorner.CornerRadius = UDim.new(0, 4)
+		TooltipCorner.Parent = TooltipFrame
+
+		TooltipStroke.Transparency = 0.85
+		TooltipStroke.Color = Color3.fromRGB(255, 255, 255)
+		TooltipStroke.Parent = TooltipFrame
+		ThemeManager:BindAccentStroke(TooltipStroke)
+
+		TooltipText.Name = "Text"
+		TooltipText.Parent = TooltipFrame
+		TooltipText.BackgroundTransparency = 1
+		TooltipText.BorderSizePixel = 0
+		TooltipText.Position = UDim2.fromOffset(8, 6)
+		TooltipText.Size = UDim2.fromOffset(10, 10)
+		TooltipText.AutomaticSize = Enum.AutomaticSize.XY
+		TooltipText.Font = Enum.Font.Gotham
+		TooltipText.Text = ""
+		TooltipText.TextColor3 = Color3.fromRGB(235, 235, 235)
+		TooltipText.TextSize = 12
+		TooltipText.TextTransparency = 1
+		TooltipText.TextWrapped = true
+		TooltipText.TextXAlignment = Enum.TextXAlignment.Left
+		TooltipText.TextYAlignment = Enum.TextYAlignment.Top
+		TooltipText.ZIndex = 250
+
+		local TooltipPaddingX = 12
+		local TooltipPaddingY = 8
+		local TooltipMaxWidth = 260
+		local TooltipGap = 10
+		local TooltipFadeIn = TweenInfo.new(0.12, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+		local TooltipFadeOut = TweenInfo.new(0.1, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+
+		local function TooltipBounds(text)
+			local bounds = TextServ:GetTextSize(text, TooltipText.TextSize, TooltipText.Font, Vector2.new(TooltipMaxWidth, math.huge))
+			return Vector2.new(bounds.X + (TooltipPaddingX * 2), bounds.Y + (TooltipPaddingY * 2))
+		end
+
+		local function TooltipPosition(target, size)
+			local camera = workspace.CurrentCamera
+			local viewport = camera and camera.ViewportSize or Vector2.new(1920, 1080)
+			local anchor = target and target.AbsolutePosition or Vector2.zero
+			local targetSize = target and target.AbsoluteSize or Vector2.zero
+			local x = anchor.X + math.floor(targetSize.X * 0.5)
+			local y = anchor.Y + targetSize.Y + TooltipGap
+
+			if y + size.Y > viewport.Y - 6 then
+				y = anchor.Y - size.Y - TooltipGap
+			end
+
+			if y < 6 or y + size.Y > viewport.Y - 6 then
+				local rightX = anchor.X + targetSize.X + TooltipGap
+				local leftX = anchor.X - size.X - TooltipGap
+
+				if rightX + size.X <= viewport.X - 6 then
+					x = rightX
+					y = math.clamp(anchor.Y + math.floor((targetSize.Y - size.Y) * 0.5), 6, math.max(6, viewport.Y - size.Y - 6))
+				elseif leftX >= 6 then
+					x = leftX
+					y = math.clamp(anchor.Y + math.floor((targetSize.Y - size.Y) * 0.5), 6, math.max(6, viewport.Y - size.Y - 6))
+				else
+					y = math.clamp(y, 6, math.max(6, viewport.Y - size.Y - 6))
+				end
+			end
+
+			if x + size.X > viewport.X - 6 then
+				x = viewport.X - size.X - 6
+			end
+
+			if x < 6 then
+				x = 6
+			end
+
+			return UDim2.fromOffset(x, y)
+		end
+
+		function TooltipManager:Show(target, text)
+			text = tostring(text or "")
+			if text == "" or not target or target.Parent == nil or not target.Visible then
+				return
+			end
+
+			self.Token = self.Token + 1
+			local token = self.Token
+			self.ActiveObject = target
+
+			local size = TooltipBounds(text)
+			TooltipText.Text = text
+			TooltipText.Size = UDim2.fromOffset(math.max(1, size.X - (TooltipPaddingX * 2)), math.max(1, size.Y - (TooltipPaddingY * 2)))
+			TooltipFrame.Size = UDim2.fromOffset(size.X, size.Y)
+			TooltipFrame.Position = TooltipPosition(target, size)
+			TooltipFrame.Visible = true
+			TooltipShadow.ImageTransparency = 1
+			TooltipFrame.BackgroundTransparency = 1
+			TooltipText.TextTransparency = 1
+
+			Twen:Create(TooltipFrame, TooltipFadeIn, { BackgroundTransparency = 0.2 }):Play()
+			Twen:Create(TooltipText, TooltipFadeIn, { TextTransparency = 0.05 }):Play()
+			Twen:Create(TooltipShadow, TooltipFadeIn, { ImageTransparency = 0.8 }):Play()
+
+			if token ~= self.Token then
+				return
+			end
+		end
+
+		function TooltipManager:Hide(target)
+			if target and self.ActiveObject and target ~= self.ActiveObject then
+				return
+			end
+
+			self.Token = self.Token + 1
+			self.ActiveObject = nil
+
+			local tweenA = Twen:Create(TooltipFrame, TooltipFadeOut, { BackgroundTransparency = 1 })
+			local tweenB = Twen:Create(TooltipText, TooltipFadeOut, { TextTransparency = 1 })
+			local tweenC = Twen:Create(TooltipShadow, TooltipFadeOut, { ImageTransparency = 1 })
+			tweenA:Play()
+			tweenB:Play()
+			tweenC:Play()
+
+			task.delay(0.12, function()
+				if self.ActiveObject == nil then
+					TooltipFrame.Visible = false
+				end
+			end)
+		end
+
+		function TooltipManager:Attach(target, tooltipText)
+			tooltipText = type(tooltipText) == "string" and tooltipText or ""
+			if tooltipText == "" or not target then
+				return
+			end
+
+			local hoverShown = false
+			local touchToken = 0
+			local touchStart = nil
+			local touchActive = false
+			local touchLongShown = false
+			local touchThreshold = 8
+			local longPressDelay = 0.45
+
+			target.MouseEnter:Connect(function()
+				hoverShown = true
+				self:Show(target, tooltipText)
+			end)
+
+			target.MouseLeave:Connect(function()
+				hoverShown = false
+				if not touchActive then
+					self:Hide(target)
+				end
+			end)
+
+			target.InputBegan:Connect(function(input)
+				if input.UserInputType ~= Enum.UserInputType.Touch then
+					return
+				end
+
+				touchActive = true
+				touchLongShown = false
+				touchToken = touchToken + 1
+				local token = touchToken
+				touchStart = input.Position
+
+				task.delay(longPressDelay, function()
+					if token ~= touchToken or not touchActive or touchStart == nil then
+						return
+					end
+
+					touchLongShown = true
+					self:Show(target, tooltipText)
+				end)
+			end)
+
+			target.InputChanged:Connect(function(input)
+				if input.UserInputType ~= Enum.UserInputType.Touch or not touchActive or not touchStart then
+					return
+				end
+
+				if (input.Position - touchStart).Magnitude > touchThreshold then
+					touchToken = touchToken + 1
+					touchStart = nil
+					touchActive = false
+					touchLongShown = false
+					self:Hide(target)
+				end
+			end)
+
+			target.InputEnded:Connect(function(input)
+				if input.UserInputType ~= Enum.UserInputType.Touch then
+					return
+				end
+
+				touchActive = false
+				touchToken = touchToken + 1
+				touchStart = nil
+				if not hoverShown or not touchLongShown then
+					self:Hide(target)
+				end
+				touchLongShown = false
+			end)
+
+			target.AncestryChanged:Connect(function(_, parent)
+				if parent == nil then
+					self:Hide(target)
+				end
+			end)
+		end
+
+		local function RegisterSearchableControl(object, root, title, description, tooltipText, tooltipTarget, sectionObject)
+			SearchManager:RegisterControl(object, root, title, description, sectionObject)
+			if tooltipText ~= nil and tooltipText ~= "" then
+				TooltipManager:Attach(tooltipTarget or root, tooltipText)
+			end
+		end
+
+		local function RegisterSearchableSection(object, root, title)
+			SearchManager:RegisterSection(object, root, title)
+		end
+
+		local SearchFrame = Instance.new("Frame")
+		local SearchCorner = Instance.new("UICorner")
+		local SearchStroke = Instance.new("UIStroke")
+		local SearchBox = Instance.new("TextBox")
+
+		SearchFrame.Name = "SearchFrame"
+		SearchFrame.Parent = Init
+		SearchFrame.AnchorPoint = Vector2.new(0.5, 0)
+		SearchFrame.BackgroundColor3 = Color3.fromRGB(17, 17, 17)
+		SearchFrame.BackgroundTransparency = 0.8
+		SearchFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
+		SearchFrame.BorderSizePixel = 0
+		SearchFrame.Position = UDim2.new(0.5, 0, 0.02, 0)
+		SearchFrame.Size = UDim2.new(0.96, 0, 0, 28)
+		SearchFrame.ZIndex = 20
+
+		SearchCorner.CornerRadius = UDim.new(0, 3)
+		SearchCorner.Parent = SearchFrame
+
+		SearchStroke.Transparency = 0.95
+		SearchStroke.Color = Color3.fromRGB(255, 255, 255)
+		SearchStroke.Parent = SearchFrame
+		ThemeManager:BindAccentStroke(SearchStroke)
+
+		SearchBox.Name = "SearchBox"
+		SearchBox.Parent = SearchFrame
+		SearchBox.BackgroundTransparency = 1
+		SearchBox.BorderSizePixel = 0
+		SearchBox.ClearTextOnFocus = false
+		SearchBox.Font = Enum.Font.GothamBold
+		SearchBox.PlaceholderText = "Search..."
+		SearchBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+		SearchBox.Position = UDim2.fromOffset(10, 0)
+		SearchBox.Size = UDim2.new(1, -20, 1, 0)
+		SearchBox.Text = ""
+		SearchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+		SearchBox.TextScaled = true
+		SearchBox.TextSize = 14
+		SearchBox.TextTransparency = 0.1
+		SearchBox.TextWrapped = false
+		SearchBox.TextXAlignment = Enum.TextXAlignment.Left
+		SearchBox.ZIndex = 21
+
+		SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+			SearchManager:SetQuery(SearchBox.Text)
+		end)
+
+		LeftFrame.Position = UDim2.new(0.25, 0, 0.57, 0)
+		LeftFrame.Size = UDim2.new(0.5, 0, 0.83, 0)
+		RightFrame.Position = UDim2.new(0.75, 0, 0.57, 0)
+		RightFrame.Size = UDim2.new(0.5, 0, 0.83, 0)
+
 		function TabTable:NewSection(c_o_n_f_i_g)
 			c_o_n_f_i_g = Config(c_o_n_f_i_g,{
 				Position = "Left",
@@ -2697,6 +3233,12 @@ function Library.new(config)
 			Title.TextXAlignment = Enum.TextXAlignment.Left
 			Title.TextTransparency = 1
 			Twen:Create(Title,TweenInfo2,{TextTransparency = 0}):Play();
+			SectionTable.Root = Section
+			SectionTable.Visible = function(newindx)
+				SearchManager:SetObjectVisible(SectionTable, newindx)
+			end
+			SectionTable.SearchTitle = c_o_n_f_i_g.Title
+			RegisterSearchableSection(SectionTable, Section, c_o_n_f_i_g.Title)
 
 			UIGradient_3.Rotation = 90
 			UIGradient_3.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0.00, 0.00), NumberSequenceKeypoint.new(0.84, 0.25), NumberSequenceKeypoint.new(1.00, 1.00)}
@@ -2714,10 +3256,10 @@ function Library.new(config)
 				}):Play()
 			end)
 
-		UIStroke.Transparency = 1
-		UIStroke.Color = Color3.fromRGB(255, 255, 255)
-		UIStroke.Parent = Section
-		ThemeManager:BindAccentStroke(UIStroke)
+			UIStroke.Transparency = 1
+			UIStroke.Color = Color3.fromRGB(255, 255, 255)
+			UIStroke.Parent = Section
+			ThemeManager:BindAccentStroke(UIStroke)
 			Twen:Create(UIStroke,TweenInfo1,{Transparency = 0.9}):Play();
 
 			UIGradient_4.Rotation = 90
@@ -2757,6 +3299,7 @@ function Library.new(config)
 				FunctionParagraph.BorderColor3 = Color3.fromRGB(0, 0, 0)
 				FunctionParagraph.BorderSizePixel = 0
 				FunctionParagraph.ClipsDescendants = true
+				FunctionParagraph.Active = true
 				FunctionParagraph.Size = UDim2.new(0.949999988, 0, 0, 34)
 				FunctionParagraph.ZIndex = 17
 				Twen:Create(FunctionParagraph, TweenInfo1, { BackgroundTransparency = 0.8 }):Play()
@@ -2860,16 +3403,19 @@ function Library.new(config)
 				task.defer(UpdateLayout)
 
 				local Paragraph = {}
+				RegisterSearchableControl(Paragraph, FunctionParagraph, ParagraphState.Title, ParagraphState.Description, cfg.Tooltip, FunctionParagraph, SectionTable)
 
 				function Paragraph:SetTitle(value)
 					ParagraphState.Title = tostring(value or "")
 					TitleText.Text = ParagraphState.Title
+					SearchManager:UpdateControlText(Paragraph, ParagraphState.Title, ParagraphState.Description)
 					UpdateLayout()
 				end
 
 				function Paragraph:SetDescription(value)
 					ParagraphState.Description = tostring(value or "")
 					DescriptionText.Text = ParagraphState.Description
+					SearchManager:UpdateControlText(Paragraph, ParagraphState.Title, ParagraphState.Description)
 					UpdateLayout()
 				end
 
@@ -2878,14 +3424,16 @@ function Library.new(config)
 					ParagraphState.Description = tostring(desc or "")
 					TitleText.Text = ParagraphState.Title
 					DescriptionText.Text = ParagraphState.Description
+					SearchManager:UpdateControlText(Paragraph, ParagraphState.Title, ParagraphState.Description)
 					UpdateLayout()
 				end
 
 				function Paragraph:Visible(newindx)
-					FunctionParagraph.Visible = newindx
+					SearchManager:SetObjectVisible(Paragraph, newindx)
 				end
 
 				function Paragraph:Destroy()
+					SearchManager.Controls[Paragraph] = nil
 					FunctionParagraph:Destroy()
 				end
 
@@ -3091,6 +3639,10 @@ function Library.new(config)
 					KeybindButton.TextColor3 = Color3.fromRGB(0, 0, 0)
 					KeybindButton.TextSize = 14.000
 					KeybindButton.TextTransparency = 1.000
+
+					if bindCfg.Tooltip ~= nil and bindCfg.Tooltip ~= "" then
+						TooltipManager:Attach(KeybindButton, bindCfg.Tooltip)
+					end
 
 					local ApplyBind
 					local function UpdateBindDisplay(new)
@@ -3299,7 +3851,7 @@ function Library.new(config)
 						ApplyValue(newindex == true, silent)
 					end,
 					Visible = function(newindx)
-						FunctionToggle.Visible = newindx
+						SearchManager:SetObjectVisible(ToggleObject, newindx)
 					end,
 					NewKeybind = function(bindCfg)
 						local handle = CreateAttachedKeybind(bindCfg)
@@ -3314,6 +3866,8 @@ function Library.new(config)
 					end,
 				}
 
+				RegisterSearchableControl(ToggleObject, FunctionToggle, toggle.Title, nil, toggle.Tooltip, Button, SectionTable)
+
 				if toggle.Flag then
 					ConfigManager:Register(toggle.Flag, ToggleObject)
 					ActiveFlag = ToggleObject.Flag
@@ -3324,6 +3878,11 @@ function Library.new(config)
 			end;
 
 			function SectionTable:NewTitle(lrm)
+				local TitleTooltip = nil
+				if type(lrm) == "table" then
+					TitleTooltip = lrm.Tooltip
+					lrm = lrm.Title or lrm.Text or ""
+				end
 				local FunctionTitle = Instance.new("Frame")
 				local UIAspectRatioConstraint = Instance.new("UIAspectRatioConstraint")
 				local TextInt = Instance.new("TextLabel")
@@ -3337,6 +3896,7 @@ function Library.new(config)
 				FunctionTitle.BackgroundTransparency = 0.800
 				FunctionTitle.BorderColor3 = Color3.fromRGB(0, 0, 0)
 				FunctionTitle.BorderSizePixel = 0
+				FunctionTitle.Active = true
 				FunctionTitle.Size = UDim2.new(0.949999988, 0, 0.5, 0)
 				FunctionTitle.ZIndex = 17
 
@@ -3370,15 +3930,20 @@ function Library.new(config)
 
 				UICorner.CornerRadius = UDim.new(0, 2)
 				UICorner.Parent = FunctionTitle
-
-				return {
+				local TitleObject = {
+					Root = FunctionTitle,
 					Visible = function(newindx)
-						FunctionTitle.Visible = newindx
+						SearchManager:SetObjectVisible(TitleObject, newindx)
 					end,
 					Set = function(a)
 						TextInt.Text = a
+						SearchManager:UpdateControlText(TitleObject, a, nil)
 					end,
-				};
+				}
+
+				RegisterSearchableControl(TitleObject, FunctionTitle, lrm, nil, TitleTooltip, FunctionTitle, SectionTable)
+
+				return TitleObject;
 			end;
 
 			function SectionTable:NewButton(cfg)
@@ -3500,12 +4065,17 @@ function Library.new(config)
 					task.spawn(cfg.Callback);
 				end)
 
-				return {
+				local ButtonObject = {
+					Root = FunctionButton,
 					Visible = function(newindx)
-						FunctionButton.Visible = newindx
+						SearchManager:SetObjectVisible(ButtonObject, newindx)
 					end,
-					Fire = cfg.Callback
-				};
+					Fire = cfg.Callback,
+				}
+
+				RegisterSearchableControl(ButtonObject, FunctionButton, cfg.Title, nil, cfg.Tooltip, Button, SectionTable)
+
+				return ButtonObject;
 			end;
 
 			function SectionTable:NewKeybind(ctfx)
@@ -3726,7 +4296,7 @@ function Library.new(config)
 							ApplyBind(value, silent)
 						end,
 						Visible = function(newindx)
-							FunctionKeybind.Visible = newindx
+							SearchManager:SetObjectVisible(KeybindObject, newindx)
 						end,
 						Value = function(lrm, silent)
 							ApplyBind(lrm, silent)
@@ -3739,6 +4309,8 @@ function Library.new(config)
 							FunctionKeybind:Destroy()
 						end,
 					}
+
+					RegisterSearchableControl(KeybindObject, FunctionKeybind, ctfx.Title, nil, ctfx.Tooltip, KeybindButton, SectionTable)
 
 				if ctfx.Flag then
 					ConfigManager:Register(ctfx.Flag, KeybindObject)
@@ -3871,10 +4443,10 @@ function Library.new(config)
 				UICorner_3.CornerRadius = UDim.new(0, 2)
 				UICorner_3.Parent = TFrame
 
-			UIStroke_2.Transparency = 0.975
-			UIStroke_2.Color = Color3.fromRGB(255, 255, 255)
-			UIStroke_2.Parent = MFrame
-			ThemeManager:BindAccentStroke(UIStroke_2)
+				UIStroke_2.Transparency = 0.975
+				UIStroke_2.Color = Color3.fromRGB(255, 255, 255)
+				UIStroke_2.Parent = MFrame
+				ThemeManager:BindAccentStroke(UIStroke_2)
 
 				local Holding = false
 				local Dispatching = false
@@ -3947,7 +4519,7 @@ function Library.new(config)
 						ApplyValue(value, silent)
 					end,
 					Visible = function(newindx)
-						FunctionSlider.Visible = newindx
+						SearchManager:SetObjectVisible(SliderObject, newindx)
 					end,
 					Value = function(lrm, silent)
 						ApplyValue(lrm, silent)
@@ -3960,6 +4532,8 @@ function Library.new(config)
 						FunctionSlider:Destroy()
 					end,
 				}
+
+				RegisterSearchableControl(SliderObject, FunctionSlider, slider.Title, nil, slider.Tooltip, MFrame, SectionTable)
 
 				if slider.Flag then
 					ConfigManager:Register(slider.Flag, SliderObject)
@@ -4153,7 +4727,7 @@ function Library.new(config)
 						ApplyValue(value, silent)
 					end,
 					Visible = function(newindx)
-						FunctionDropdown.Visible = newindx
+						SearchManager:SetObjectVisible(DropdownObject, newindx)
 					end,
 					Value = function(value, silent)
 						ApplyValue(value, silent)
@@ -4183,6 +4757,8 @@ function Library.new(config)
 						FunctionDropdown:Destroy()
 					end
 				}
+
+				RegisterSearchableControl(DropdownObject, FunctionDropdown, drop.Title, nil, drop.Tooltip, MFrame, SectionTable)
 
 				if drop.Flag then
 					ConfigManager:Register(drop.Flag, DropdownObject)
@@ -4626,7 +5202,7 @@ function Library.new(config)
 						return IsFocused
 					end,
 					Visible = function(newindx)
-						FunctionTextbox.Visible = newindx
+						SearchManager:SetObjectVisible(TextboxObject, newindx)
 					end,
 					Destroy = function()
 						if ActiveFlag then
@@ -4636,6 +5212,8 @@ function Library.new(config)
 						FunctionTextbox:Destroy()
 					end,
 				}
+
+				RegisterSearchableControl(TextboxObject, FunctionTextbox, conf.Title, nil, conf.Tooltip, MFrame, SectionTable)
 
 				if conf.Flag then
 					ConfigManager:Register(conf.Flag, TextboxObject)
