@@ -3751,12 +3751,29 @@ function Library.new(config)
 			SectionTable.AddParagraph = SectionTable.Paragraph
 
 			function SectionTable:NewToggle(toggle)
+				local function ResolveToggleValue(value)
+					if value == true then
+						return true
+					end
+					if value == false or value == nil then
+						return false
+					end
+					if type(value) == "number" then
+						return value ~= 0
+					end
+					if type(value) == "string" then
+						local text = value:lower():gsub("^%s+", ""):gsub("%s+$", "")
+						return text == "true" or text == "1" or text == "on" or text == "yes"
+					end
+					return false
+				end
+
 				toggle = Config(toggle,{
 					Title = "Toggle",
 					Default = false,
 					Callback = function() end;
 				});
-				toggle.Default = toggle.Default == true
+				toggle.Default = ResolveToggleValue(toggle.Default)
 				toggle.Flag = toggle.Flag and tostring(toggle.Flag) or nil
 				local ActiveFlag = toggle.Flag
 				local Registered = false
@@ -4100,10 +4117,10 @@ function Library.new(config)
 				end
 
 				local Dispatching = false
-				local CurrentValue = toggle.Default == true
+				local CurrentValue = ResolveToggleValue(toggle.Default)
 
 				local function ApplyValue(value, silent, force)
-					local nextValue = value == true
+					local nextValue = ResolveToggleValue(value)
 					local changed = nextValue ~= CurrentValue
 					if not force and not changed then
 						return false
@@ -4170,15 +4187,15 @@ function Library.new(config)
 					end,
 					SetValue = function(first, second, third)
 						local value, silent = NormalizeMethodArgs(ToggleObject, first, second, third)
-						ApplyValue(value == true, silent, ConfigManager.LoadingConfig == true)
+						ApplyValue(value, silent, ConfigManager.LoadingConfig == true)
 					end,
 					Value = function(first, second, third)
 						local value, silent = NormalizeMethodArgs(ToggleObject, first, second, third)
-						ApplyValue(value == true, silent, ConfigManager.LoadingConfig == true)
+						ApplyValue(value, silent, ConfigManager.LoadingConfig == true)
 					end,
 					Set = function(first, second, third)
 						local value, silent = NormalizeMethodArgs(ToggleObject, first, second, third)
-						ApplyValue(value == true, silent, ConfigManager.LoadingConfig == true)
+						ApplyValue(value, silent, ConfigManager.LoadingConfig == true)
 					end,
 					Visible = function(newindx)
 						SearchManager:SetObjectVisible(ToggleObject, newindx)
@@ -5265,7 +5282,6 @@ function Library.new(config)
 				local PreviewStroke = Instance.new("UIStroke")
 				local PreviewColor = Instance.new("Frame")
 				local PreviewColorCorner = Instance.new("UICorner")
-				local Arrow = Instance.new("TextLabel")
 				local Body = Instance.new("Frame")
 				local ColorArea = Instance.new("Frame")
 				local ColorCorner = Instance.new("UICorner")
@@ -5497,7 +5513,6 @@ function Library.new(config)
 
 				local function ToggleExpanded(value)
 					Expanded = value == nil and not Expanded or value == true
-					Arrow.Text = Expanded and "⌃" or "⌄"
 					Twen:Create(FunctionColorpicker, TweenInfo.new(0.24, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
 						Size = UDim2.new(0.949999988, 0, 0, Expanded and ExpandedHeight or CollapsedHeight),
 					}):Play()
@@ -5582,7 +5597,7 @@ function Library.new(config)
 				Icon.AnchorPoint = Vector2.new(1, 0.5)
 				Icon.BackgroundTransparency = 1
 				Icon.BorderSizePixel = 0
-				Icon.Position = UDim2.new(0.76, 0, 0, 19)
+				Icon.Position = UDim2.new(0.965, 0, 0, 19)
 				Icon.Size = UDim2.fromOffset(14, 14)
 				Icon.ZIndex = 19
 
@@ -5619,7 +5634,7 @@ function Library.new(config)
 				TitleText.Parent = FunctionColorpicker
 				TitleText.BackgroundTransparency = 1
 				TitleText.Position = UDim2.new(0.025, 0, 0, conf.Description ~= "" and 5 or 11)
-				TitleText.Size = UDim2.new(0.66, 0, 0, 13)
+				TitleText.Size = UDim2.new(0.68, 0, 0, 13)
 				TitleText.ZIndex = 19
 				TitleText.Font = Enum.Font.GothamBold
 				TitleText.Text = tostring(conf.Title or "Colorpicker")
@@ -5632,7 +5647,7 @@ function Library.new(config)
 				DescriptionText.Parent = FunctionColorpicker
 				DescriptionText.BackgroundTransparency = 1
 				DescriptionText.Position = UDim2.new(0.025, 0, 0, 18)
-				DescriptionText.Size = UDim2.new(0.66, 0, 0, 10)
+				DescriptionText.Size = UDim2.new(0.68, 0, 0, 10)
 				DescriptionText.ZIndex = 19
 				DescriptionText.Font = Enum.Font.GothamBold
 				DescriptionText.Text = tostring(conf.Description or "")
@@ -5648,7 +5663,7 @@ function Library.new(config)
 				PreviewShell.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 				PreviewShell.BackgroundTransparency = 0.45
 				PreviewShell.BorderSizePixel = 0
-				PreviewShell.Position = UDim2.new(0.86, 0, 0, 19)
+				PreviewShell.Position = UDim2.new(0.895, 0, 0, 19)
 				PreviewShell.Size = UDim2.fromOffset(34, 16)
 				PreviewShell.ZIndex = 19
 				PreviewShell.ClipsDescendants = true
@@ -5665,19 +5680,6 @@ function Library.new(config)
 				PreviewColor.ZIndex = 20
 				PreviewColorCorner.CornerRadius = UDim.new(0, 4)
 				PreviewColorCorner.Parent = PreviewColor
-
-				Arrow.Name = "Arrow"
-				Arrow.Parent = FunctionColorpicker
-				Arrow.AnchorPoint = Vector2.new(1, 0.5)
-				Arrow.BackgroundTransparency = 1
-				Arrow.Position = UDim2.new(0.965, 0, 0, 19)
-				Arrow.Size = UDim2.fromOffset(20, 20)
-				Arrow.ZIndex = 19
-				Arrow.Font = Enum.Font.GothamBold
-				Arrow.Text = "⌄"
-				Arrow.TextColor3 = Color3.fromRGB(255, 255, 255)
-				Arrow.TextSize = 14
-				Arrow.TextTransparency = 0.35
 
 				Body.Name = "Body"
 				Body.Parent = FunctionColorpicker
@@ -5822,12 +5824,10 @@ function Library.new(config)
 
 				HeaderButton.MouseEnter:Connect(function()
 					Twen:Create(TitleText, TweenInfo.new(0.15, Enum.EasingStyle.Quint), { TextTransparency = 0.05 }):Play()
-					Twen:Create(Arrow, TweenInfo.new(0.15, Enum.EasingStyle.Quint), { TextTransparency = 0.1 }):Play()
 				end)
 
 				HeaderButton.MouseLeave:Connect(function()
 					Twen:Create(TitleText, TweenInfo.new(0.15, Enum.EasingStyle.Quint), { TextTransparency = 0.2 }):Play()
-					Twen:Create(Arrow, TweenInfo.new(0.15, Enum.EasingStyle.Quint), { TextTransparency = 0.35 }):Play()
 				end)
 
 				HeaderButton.MouseButton1Click:Connect(function()
@@ -5897,7 +5897,8 @@ function Library.new(config)
 					box.FocusLost:Connect(ParseRGBBox)
 				end
 				ABox:GetPropertyChangedSignal("Text"):Connect(function()
-					if not TextUpdating and tonumber((ABox.Text or ""):gsub("%%", "")) then
+					local alphaText = tostring(ABox.Text or ""):gsub("%%", "")
+					if not TextUpdating and tonumber(alphaText) then
 						ParseAlphaBox()
 					end
 				end)
