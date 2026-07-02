@@ -706,19 +706,22 @@ function Library.new(config)
 		task.delay(1,WindowTable.ElBlurUI.Update)
 	end;
 
+	local function ToggleWindow()
+		WindowTable.WindowToggle = not WindowTable.WindowToggle
+		Update()
+	end
+
 	Twen:Create(ImageButton,TweenInfo1,{
 		ImageTransparency = 0.5
 	}):Play()
 
 	ImageButton.MouseButton1Click:Connect(function()
-		WindowTable.WindowToggle = not WindowTable.WindowToggle
-		Update()
+		ToggleWindow()
 	end)
 
 	Input.InputBegan:Connect(function(io)
 		if io.KeyCode == WindowTable.Keybind then
-			WindowTable.WindowToggle = not WindowTable.WindowToggle
-			Update()
+			ToggleWindow()
 		end
 	end)
 
@@ -747,6 +750,207 @@ function Library.new(config)
 	Twen:Create(MainFrame,TweenInfo1,{BackgroundTransparency = 0.4,Size = config.Size}):Play();
 
 	WindowTable.ElBlurUI = ElBlurSource.new(MainFrame);
+
+	local FloatingShadow = Instance.new("ImageLabel")
+	local FloatingButton = Instance.new("Frame")
+	local FloatingCorner = Instance.new("UICorner")
+	local FloatingStroke = Instance.new("UIStroke")
+	local FloatingHitbox = Instance.new("TextButton")
+	local FloatingIcon = Instance.new("Frame")
+	local FloatingCamera = workspace.CurrentCamera
+	local FloatingViewport = FloatingCamera and FloatingCamera.ViewportSize or Vector2.new(1920, 1080)
+	local FloatingEdge = 18
+	local FloatingBaseX = FloatingEdge
+	local FloatingBaseY = math.max(18, math.floor(FloatingViewport.Y - 82))
+	local FloatingSize = 46
+	local FloatingShadowOffset = 2
+	local FloatingStartPos = nil
+	local FloatingStartInput = nil
+	local FloatingDragging = false
+	local FloatingMoved = false
+	local FloatingThreshold = 6
+	local FloatingHovering = false
+
+	local function SetFloatingPosition(x, y)
+		FloatingButton.Position = UDim2.fromOffset(x, y)
+		FloatingShadow.Position = UDim2.fromOffset(x + FloatingShadowOffset, y + FloatingShadowOffset)
+	end
+
+	local function SetFloatingVisual(hovered, pressed)
+		local target = pressed and 0.25 or (hovered and 0.32 or 0.42)
+		Twen:Create(FloatingButton, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+			BackgroundTransparency = target,
+		}):Play()
+		Twen:Create(FloatingShadow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+			ImageTransparency = pressed and 0.85 or (hovered and 0.78 or 0.82),
+		}):Play()
+	end
+
+	FloatingShadow.Name = "FloatingShadow"
+	FloatingShadow.Parent = ScreenGui
+	FloatingShadow.AnchorPoint = Vector2.new(0, 0)
+	FloatingShadow.BackgroundTransparency = 1
+	FloatingShadow.BorderSizePixel = 0
+	FloatingShadow.Position = UDim2.fromOffset(FloatingBaseX + FloatingShadowOffset, FloatingBaseY + FloatingShadowOffset)
+	FloatingShadow.Size = UDim2.fromOffset(FloatingSize + 8, FloatingSize + 8)
+	FloatingShadow.ZIndex = 50
+	FloatingShadow.Image = "rbxassetid://6015897843"
+	FloatingShadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+	FloatingShadow.ImageTransparency = 0.82
+	FloatingShadow.ScaleType = Enum.ScaleType.Slice
+	FloatingShadow.SliceCenter = Rect.new(49, 49, 450, 450)
+	FloatingShadow.Rotation = 0.0001
+
+	FloatingButton.Name = "FloatingButton"
+	FloatingButton.Parent = ScreenGui
+	FloatingButton.AnchorPoint = Vector2.new(0, 0)
+	FloatingButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+	FloatingButton.BackgroundTransparency = 0.42
+	FloatingButton.BorderColor3 = Color3.fromRGB(0, 0, 0)
+	FloatingButton.BorderSizePixel = 0
+	FloatingButton.ClipsDescendants = false
+	FloatingButton.Position = UDim2.fromOffset(FloatingBaseX, FloatingBaseY)
+	FloatingButton.Size = UDim2.fromOffset(FloatingSize, FloatingSize)
+	FloatingButton.ZIndex = 51
+
+	FloatingCorner.CornerRadius = UDim.new(0, 8)
+	FloatingCorner.Parent = FloatingButton
+
+	FloatingStroke.Transparency = 0.88
+	FloatingStroke.Color = Color3.fromRGB(255, 255, 255)
+	FloatingStroke.Parent = FloatingButton
+
+	FloatingHitbox.Name = "Hitbox"
+	FloatingHitbox.Parent = FloatingButton
+	FloatingHitbox.BackgroundTransparency = 1
+	FloatingHitbox.BorderSizePixel = 0
+	FloatingHitbox.Size = UDim2.fromScale(1, 1)
+	FloatingHitbox.ZIndex = 53
+	FloatingHitbox.AutoButtonColor = false
+	FloatingHitbox.Text = ""
+	FloatingHitbox.Modal = false
+
+	FloatingIcon.Name = "Icon"
+	FloatingIcon.Parent = FloatingButton
+	FloatingIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+	FloatingIcon.BackgroundTransparency = 1
+	FloatingIcon.BorderSizePixel = 0
+	FloatingIcon.Position = UDim2.fromScale(0.5, 0.5)
+	FloatingIcon.Size = UDim2.fromOffset(28, 28)
+	FloatingIcon.ZIndex = 52
+
+	local KPattern = {
+		"10000",
+		"10010",
+		"10100",
+		"11000",
+		"10100",
+		"10010",
+		"10001",
+	}
+
+	local PixelSize = 3
+	local PixelGap = 1
+	local GridWidth = 5 * PixelSize + 4 * PixelGap
+	local GridHeight = 7 * PixelSize + 6 * PixelGap
+	local GridX = math.floor((28 - GridWidth) / 2)
+	local GridY = math.floor((28 - GridHeight) / 2)
+
+	for rowIndex, row in ipairs(KPattern) do
+		for colIndex = 1, #row do
+			if row:sub(colIndex, colIndex) == "1" then
+				local Pixel = Instance.new("Frame")
+				Pixel.Name = "Pixel"
+				Pixel.Parent = FloatingIcon
+				Pixel.BackgroundColor3 = Color3.fromRGB(242, 242, 242)
+				Pixel.BorderSizePixel = 0
+				Pixel.Position = UDim2.fromOffset(GridX + (colIndex - 1) * (PixelSize + PixelGap), GridY + (rowIndex - 1) * (PixelSize + PixelGap))
+				Pixel.Size = UDim2.fromOffset(PixelSize, PixelSize)
+				Pixel.ZIndex = 52
+			end
+		end
+	end
+
+	SetFloatingVisual(false, false)
+	SetFloatingPosition(FloatingBaseX, FloatingBaseY)
+
+	FloatingHitbox.MouseEnter:Connect(function()
+		FloatingHovering = true
+		if not FloatingDragging then
+			SetFloatingVisual(true, false)
+		end
+	end)
+
+	FloatingHitbox.MouseLeave:Connect(function()
+		FloatingHovering = false
+		if not FloatingDragging then
+			SetFloatingVisual(false, false)
+		end
+	end)
+
+	FloatingHitbox.InputBegan:Connect(function(input)
+		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
+			return
+		end
+
+		FloatingStartInput = input
+		FloatingStartPos = input.Position
+		FloatingDragging = false
+		FloatingMoved = false
+		SetFloatingVisual(true, true)
+	end)
+
+	Input.InputChanged:Connect(function(input)
+		if not FloatingStartInput or not FloatingStartPos then
+			return
+		end
+
+		if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then
+			return
+		end
+
+		local delta = input.Position - FloatingStartPos
+		if not FloatingDragging and delta.Magnitude >= FloatingThreshold then
+			FloatingDragging = true
+		end
+
+		if FloatingDragging then
+			FloatingMoved = true
+			local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or FloatingViewport
+			local maxX = math.max(FloatingEdge, viewport.X - FloatingSize - FloatingEdge)
+			local maxY = math.max(FloatingEdge, viewport.Y - FloatingSize - FloatingEdge)
+			local nextX = math.clamp(FloatingButton.Position.X.Offset + delta.X, FloatingEdge, maxX)
+			local nextY = math.clamp(FloatingButton.Position.Y.Offset + delta.Y, FloatingEdge, maxY)
+			FloatingStartPos = input.Position
+			SetFloatingPosition(nextX, nextY)
+		end
+	end)
+
+	Input.InputEnded:Connect(function(input)
+		if not FloatingStartInput then
+			return
+		end
+
+		if input.UserInputType ~= FloatingStartInput.UserInputType then
+			return
+		end
+
+		local shouldToggle = not FloatingMoved
+		FloatingStartInput = nil
+		FloatingStartPos = nil
+		FloatingDragging = false
+		FloatingMoved = false
+
+		if FloatingHovering then
+			SetFloatingVisual(true, false)
+		else
+			SetFloatingVisual(false, false)
+		end
+
+		if shouldToggle then
+			ToggleWindow()
+		end
+	end)
 
 	UICorner.CornerRadius = UDim.new(0, 7)
 	UICorner.Parent = MainFrame
@@ -1075,7 +1279,8 @@ function Library.new(config)
 		end
 
 		if ui.ConfigTextbox and ui.ConfigTextbox.SetValue then
-			ui.ConfigTextbox:SetValue(self.SelectedConfig ~= "" and self.SelectedConfig or "", true)
+			local selected = type(self.SelectedConfig) == "string" and self.SelectedConfig or ""
+			ui.ConfigTextbox:SetValue(selected, true)
 		end
 
 		if ui.AutoloadToggle and ui.AutoloadToggle.SetValue then
@@ -1274,7 +1479,7 @@ function Library.new(config)
 
 		ConfigTextbox = ConfigSection:NewTextbox({
 			Title = "Config Name",
-			Default = self.SelectedConfig,
+			Default = type(self.SelectedConfig) == "string" and self.SelectedConfig or "",
 			FileType = "",
 			Flag = nil,
 			Callback = function(value)
@@ -1290,10 +1495,16 @@ function Library.new(config)
 			Title = "Save Config",
 			Callback = function()
 				local name = ConfigTextbox and ConfigTextbox.GetValue and ConfigTextbox:GetValue() or ConfigManager.SelectedConfig
-				if name == nil or tostring(name) == "" then
+				if type(name) ~= "string" then
+					name = ""
+				end
+				if name == "" then
 					name = ConfigManager.SelectedConfig
 				end
-				if name == nil or tostring(name) == "" then
+				if type(name) ~= "string" then
+					name = ""
+				end
+				if name == "" then
 					name = "Default"
 				end
 				ConfigManager:SaveConfig(name)
@@ -1305,10 +1516,10 @@ function Library.new(config)
 			Title = "Load Config",
 			Callback = function()
 				local name = ConfigDropdown and ConfigDropdown.GetValue and ConfigDropdown:GetValue() or ConfigManager.SelectedConfig
-				if type(name) == "table" then
-					name = next(name)
+				if type(name) ~= "string" then
+					name = ""
 				end
-				if name ~= nil and tostring(name) ~= "" then
+				if name ~= "" then
 					ConfigManager:LoadConfig(name)
 				end
 			end,
@@ -2254,7 +2465,7 @@ function Library.new(config)
 				FunctionParagraph.BorderColor3 = Color3.fromRGB(0, 0, 0)
 				FunctionParagraph.BorderSizePixel = 0
 				FunctionParagraph.ClipsDescendants = true
-				FunctionParagraph.Size = UDim2.new(0.949999988, 0, 0, 40)
+				FunctionParagraph.Size = UDim2.new(0.949999988, 0, 0, 34)
 				FunctionParagraph.ZIndex = 17
 				Twen:Create(FunctionParagraph, TweenInfo1, { BackgroundTransparency = 0.8 }):Play()
 
@@ -2272,14 +2483,14 @@ function Library.new(config)
 				TitleText.BackgroundTransparency = 1.000
 				TitleText.BorderColor3 = Color3.fromRGB(0, 0, 0)
 				TitleText.BorderSizePixel = 0
-				TitleText.Position = UDim2.new(0.5, 0, 0.08, 0)
+				TitleText.Position = UDim2.new(0.5, 0, 0.05, 0)
 				TitleText.Size = UDim2.new(0.949999988, 0, 0, 16)
 				TitleText.ZIndex = 18
 				TitleText.Font = Enum.Font.GothamBold
 				TitleText.Text = ParagraphState.Title
 				TitleText.TextColor3 = Color3.fromRGB(255, 255, 255)
 				TitleText.TextScaled = true
-				TitleText.TextSize = 14.000
+				TitleText.TextSize = 13.000
 				TitleText.TextTransparency = 1
 				TitleText.TextWrapped = true
 				TitleText.TextXAlignment = Enum.TextXAlignment.Left
@@ -2300,13 +2511,13 @@ function Library.new(config)
 				DescriptionText.BorderColor3 = Color3.fromRGB(0, 0, 0)
 				DescriptionText.BorderSizePixel = 0
 				DescriptionText.Position = UDim2.new(0.5, 0, 0, 20)
-				DescriptionText.Size = UDim2.new(0.949999988, 0, 0, 16)
+				DescriptionText.Size = UDim2.new(0.949999988, 0, 0, 13)
 				DescriptionText.ZIndex = 18
 				DescriptionText.Font = Enum.Font.GothamBold
 				DescriptionText.Text = ParagraphState.Description
 				DescriptionText.TextColor3 = Color3.fromRGB(255, 255, 255)
 				DescriptionText.TextScaled = true
-				DescriptionText.TextSize = 14.000
+				DescriptionText.TextSize = 12.000
 				DescriptionText.TextTransparency = 1
 				DescriptionText.TextWrapped = true
 				DescriptionText.TextXAlignment = Enum.TextXAlignment.Left
@@ -2339,15 +2550,15 @@ function Library.new(config)
 						Vector2.new(measureWidth, math.huge)
 					)
 
-					local titleHeight = math.max(14, titleBounds.Y)
-					local descHeight = ParagraphState.Description ~= "" and math.max(14, descBounds.Y) or 0
-					local totalHeight = 8 + titleHeight + (descHeight > 0 and (4 + descHeight) or 6)
+					local titleHeight = math.max(13, titleBounds.Y)
+					local descHeight = ParagraphState.Description ~= "" and math.max(12, descBounds.Y) or 0
+					local totalHeight = 5 + titleHeight + (descHeight > 0 and (2 + descHeight) or 4)
 
-					FunctionParagraph.Size = UDim2.new(0.949999988, 0, 0, math.max(34, totalHeight))
+					FunctionParagraph.Size = UDim2.new(0.949999988, 0, 0, math.max(28, totalHeight))
 					TitleText.Size = UDim2.new(0.949999988, 0, 0, titleHeight)
 					DescriptionText.Visible = ParagraphState.Description ~= ""
 					if descHeight > 0 then
-						DescriptionText.Position = UDim2.new(0.5, 0, 0, titleHeight + 4)
+						DescriptionText.Position = UDim2.new(0.5, 0, 0, titleHeight + 2)
 						DescriptionText.Size = UDim2.new(0.949999988, 0, 0, descHeight)
 					end
 				end
