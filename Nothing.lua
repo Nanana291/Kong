@@ -234,14 +234,26 @@ local ElBlurSource = function()
 end;
 
 local ElBlurSource = ElBlurSource();
-local Config = function(data,default)
-	data = data or {};
+local Config = function(data, default)
+	local source = type(data) == "table" and data or {}
+	local result = {}
 
-	for i,v in next,default do
-		data[i] = data[i] or v;
-	end;
+	for i, v in next, default do
+		local value = source[i]
+		if value == nil then
+			result[i] = v
+		else
+			result[i] = value
+		end
+	end
 
-	return data;
+	for i, v in next, source do
+		if result[i] == nil then
+			result[i] = v
+		end
+	end
+
+	return result
 end;
 
 local Library = {};
