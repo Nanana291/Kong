@@ -214,14 +214,16 @@ local Config = function(data,default)
 end;
 
 local Library = {};
+local LibraryState = {
+	Defaults = {
+		Folder = "NothingUI",
+		SubFolder = tostring(game.PlaceId),
+	},
+	LastWindow = nil,
+}
 
 Library['.'] = '1';
 Library['FetchIcon'] = "https://raw.githubusercontent.com/evoincorp/lucideblox/master/src/modules/util/icons.json";
-Library._ConfigDefaults = {
-	Folder = "NothingUI",
-	SubFolder = tostring(game.PlaceId),
-}
-Library._LastWindow = nil
 
 pcall(function()
 	Library['Icons'] = game:GetService('HttpService'):JSONDecode(game:HttpGetAsync(Library.FetchIcon))['icons'];
@@ -582,7 +584,7 @@ function Library.new(config)
 		LogoText.TextScaled = true
 		LogoText.TextSize = 14
 		LogoText.TextTransparency = 1
-		LogoText.TextWrapped = true
+		LogoText.TextWrapped = false
 		LogoText.TextXAlignment = Enum.TextXAlignment.Center
 		LogoText.TextYAlignment = Enum.TextYAlignment.Center
 		BuiltInLogo = LogoText
@@ -918,8 +920,8 @@ function Library.new(config)
 		LoadedData = nil,
 		SelectedConfig = "",
 		AutoloadEnabled = false,
-		Folder = Library._ConfigDefaults.Folder,
-		SubFolder = Library._ConfigDefaults.SubFolder,
+		Folder = LibraryState.Defaults.Folder,
+		SubFolder = LibraryState.Defaults.SubFolder,
 		SettingsUI = nil,
 	}
 
@@ -3986,7 +3988,7 @@ function Library.new(config)
 
 	WindowTable.ConfigManager = ConfigManager
 	WindowTable.SetFolder = function(self, folder)
-		ConfigManager.Folder = NormalizePath(folder) ~= "" and NormalizePath(folder) or Library._ConfigDefaults.Folder
+		ConfigManager.Folder = NormalizePath(folder) ~= "" and NormalizePath(folder) or LibraryState.Defaults.Folder
 		ConfigManager:EnsureFolders()
 		ConfigManager:LoadAutoload()
 		return self
@@ -4003,31 +4005,31 @@ function Library.new(config)
 		return ConfigManager:BuildSettingsTab()
 	end
 
-	Library._LastWindow = WindowTable
+	LibraryState.LastWindow = WindowTable
 
 	return WindowTable;
 end;
 
 function Library:SetFolder(folder)
-	local window = self and self.ConfigManager and self or Library._LastWindow
+	local window = self and self.ConfigManager and self or LibraryState.LastWindow
 	if window and window.ConfigManager then
 		return window:SetFolder(folder)
 	end
 
-	Library._ConfigDefaults.Folder = NormalizePath(folder) ~= "" and NormalizePath(folder) or Library._ConfigDefaults.Folder
+	LibraryState.Defaults.Folder = NormalizePath(folder) ~= "" and NormalizePath(folder) or LibraryState.Defaults.Folder
 end
 
 function Library:SetSubFolder(subfolder)
-	local window = self and self.ConfigManager and self or Library._LastWindow
+	local window = self and self.ConfigManager and self or LibraryState.LastWindow
 	if window and window.ConfigManager then
 		return window:SetSubFolder(subfolder)
 	end
 
-	Library._ConfigDefaults.SubFolder = NormalizeSubFolderPath(Library._ConfigDefaults.Folder, subfolder)
+	LibraryState.Defaults.SubFolder = NormalizeSubFolderPath(LibraryState.Defaults.Folder, subfolder)
 end
 
 function Library:AddSettingsTab()
-	local window = self and self.ConfigManager and self or Library._LastWindow
+	local window = self and self.ConfigManager and self or LibraryState.LastWindow
 	if window and window.ConfigManager then
 		return window:AddSettingsTab()
 	end
