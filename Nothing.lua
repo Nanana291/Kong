@@ -4119,12 +4119,9 @@ function Library.new(config)
 				local Dispatching = false
 				local CurrentValue = ResolveToggleValue(toggle.Default)
 
-				local function ApplyValue(value, silent, force)
+				local function ApplyValue(value, silent)
 					local nextValue = ResolveToggleValue(value)
 					local changed = nextValue ~= CurrentValue
-					if not force and not changed then
-						return false
-					end
 
 					CurrentValue = nextValue
 					toggle.Default = nextValue
@@ -4187,15 +4184,15 @@ function Library.new(config)
 					end,
 					SetValue = function(first, second, third)
 						local value, silent = NormalizeMethodArgs(ToggleObject, first, second, third)
-						return ApplyValue(value, silent, ConfigManager.LoadingConfig == true)
+						return ApplyValue(value, silent)
 					end,
 					Value = function(first, second, third)
 						local value, silent = NormalizeMethodArgs(ToggleObject, first, second, third)
-						return ApplyValue(value, silent, ConfigManager.LoadingConfig == true)
+						return ApplyValue(value, silent)
 					end,
 					Set = function(first, second, third)
 						local value, silent = NormalizeMethodArgs(ToggleObject, first, second, third)
-						return ApplyValue(value, silent, ConfigManager.LoadingConfig == true)
+						return ApplyValue(value, silent)
 					end,
 					Visible = function(newindx)
 						SearchManager:SetObjectVisible(ToggleObject, newindx)
@@ -5274,7 +5271,6 @@ function Library.new(config)
 				local UICorner = Instance.new("UICorner")
 				local UIStroke = Instance.new("UIStroke")
 				local HeaderButton = Instance.new("TextButton")
-				local Icon = Instance.new("Frame")
 				local TitleText = Instance.new("TextLabel")
 				local DescriptionText = Instance.new("TextLabel")
 				local PreviewShell = Instance.new("Frame")
@@ -5592,63 +5588,11 @@ function Library.new(config)
 				HeaderButton.ZIndex = 25
 				HeaderButton.Text = ""
 
-				Icon.Name = "PixelPaletteIcon"
-				Icon.Parent = FunctionColorpicker
-				Icon.AnchorPoint = Vector2.new(1, 0.5)
-				Icon.BackgroundTransparency = 1
-				Icon.BorderSizePixel = 0
-				Icon.Position = UDim2.new(0.965, 0, 0, 19)
-				Icon.Size = UDim2.fromOffset(14, 14)
-				Icon.ZIndex = 19
-
-				local function BuildPixelSwatchIcon(parent)
-					local pixelSize = 2
-					local pixelGap = 1
-					local bitmap = {
-						"AA.RR",
-						"AA.RR",
-						"..M..",
-						"BB.YY",
-						"BB.YY",
-					}
-					local palette = {
-						A = "Accent",
-						R = Color3.fromRGB(210, 72, 72),
-						B = Color3.fromRGB(70, 126, 218),
-						Y = Color3.fromRGB(220, 178, 70),
-						M = Color3.fromRGB(232, 232, 232),
-					}
-
-					for y, row in ipairs(bitmap) do
-						for x = 1, #row do
-							local token = row:sub(x, x)
-							local color = palette[token]
-							if color then
-								local dot = Instance.new("Frame")
-								dot.Name = "Pixel"
-								dot.Parent = parent
-								dot.BorderSizePixel = 0
-								dot.Position = UDim2.fromOffset((x - 1) * (pixelSize + pixelGap), (y - 1) * (pixelSize + pixelGap))
-								dot.Size = UDim2.fromOffset(pixelSize, pixelSize)
-								dot.ZIndex = 20
-								if color == "Accent" then
-									dot.BackgroundColor3 = ThemeManager:GetColor("Accent")
-									ThemeManager:BindAccent(dot, "BackgroundColor3")
-								else
-									dot.BackgroundColor3 = color
-								end
-							end
-						end
-					end
-				end
-
-				BuildPixelSwatchIcon(Icon)
-
 				TitleText.Name = "TitleText"
 				TitleText.Parent = FunctionColorpicker
 				TitleText.BackgroundTransparency = 1
 				TitleText.Position = UDim2.new(0.025, 0, 0, conf.Description ~= "" and 5 or 11)
-				TitleText.Size = UDim2.new(0.68, 0, 0, 13)
+				TitleText.Size = UDim2.new(0.78, 0, 0, 13)
 				TitleText.ZIndex = 19
 				TitleText.Font = Enum.Font.GothamBold
 				TitleText.Text = tostring(conf.Title or "Colorpicker")
@@ -5661,7 +5605,7 @@ function Library.new(config)
 				DescriptionText.Parent = FunctionColorpicker
 				DescriptionText.BackgroundTransparency = 1
 				DescriptionText.Position = UDim2.new(0.025, 0, 0, 18)
-				DescriptionText.Size = UDim2.new(0.68, 0, 0, 10)
+				DescriptionText.Size = UDim2.new(0.78, 0, 0, 10)
 				DescriptionText.ZIndex = 19
 				DescriptionText.Font = Enum.Font.GothamBold
 				DescriptionText.Text = tostring(conf.Description or "")
@@ -5677,7 +5621,7 @@ function Library.new(config)
 				PreviewShell.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 				PreviewShell.BackgroundTransparency = 0.45
 				PreviewShell.BorderSizePixel = 0
-				PreviewShell.Position = UDim2.new(0.895, 0, 0, 19)
+				PreviewShell.Position = UDim2.new(0.965, 0, 0, 19)
 				PreviewShell.Size = UDim2.fromOffset(34, 16)
 				PreviewShell.ZIndex = 19
 				PreviewShell.ClipsDescendants = true
