@@ -4947,11 +4947,14 @@ function Library.new(config)
 				TitleText.Font = Enum.Font.GothamBold
 				TitleText.Text = ParagraphState.Title
 				TitleText.TextColor3 = Color3.fromRGB(255, 255, 255)
-				TitleText.TextScaled = true
+				TitleText.TextScaled = false
 				TitleText.TextSize = 12.000
 				TitleText.TextTransparency = 1
 				TitleText.TextWrapped = true
 				TitleText.TextXAlignment = Enum.TextXAlignment.Left
+				local TitleText_tc = Instance.new("UITextSizeConstraint")
+				TitleText_tc.MaxTextSize = 12
+				TitleText_tc.Parent = TitleText
 				TitleText.TextYAlignment = Enum.TextYAlignment.Top
 				Twen:Create(TitleText, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
 					TextTransparency = 0.25,
@@ -4974,11 +4977,14 @@ function Library.new(config)
 				DescriptionText.Font = Enum.Font.GothamBold
 				DescriptionText.Text = ParagraphState.Description
 				DescriptionText.TextColor3 = Color3.fromRGB(255, 255, 255)
-				DescriptionText.TextScaled = true
+				DescriptionText.TextScaled = false
 				DescriptionText.TextSize = 11.000
 				DescriptionText.TextTransparency = 1
 				DescriptionText.TextWrapped = true
 				DescriptionText.TextXAlignment = Enum.TextXAlignment.Left
+				local DescriptionText_tc = Instance.new("UITextSizeConstraint")
+				DescriptionText_tc.MaxTextSize = 11
+				DescriptionText_tc.Parent = DescriptionText
 				DescriptionText.TextYAlignment = Enum.TextYAlignment.Top
 				Twen:Create(DescriptionText, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
 					TextTransparency = 0.5,
@@ -5130,11 +5136,14 @@ function Library.new(config)
 				TextInt.Font = Enum.Font.GothamBold
 				TextInt.Text = toggle.Title
 				TextInt.TextColor3 = Color3.fromRGB(255, 255, 255)
-				TextInt.TextScaled = true
-				TextInt.TextSize = 14.000
+				TextInt.TextScaled = false
+				TextInt.TextSize = 12.000
 				TextInt.TextTransparency = 0.250
 				TextInt.TextWrapped = true
 				TextInt.TextXAlignment = Enum.TextXAlignment.Left
+				local TextInt_tc = Instance.new("UITextSizeConstraint")
+				TextInt_tc.MaxTextSize = 14
+				TextInt_tc.Parent = TextInt
 
 				UIGradient.Rotation = 90
 				UIGradient.Transparency = NumberSequence.new({
@@ -5376,10 +5385,13 @@ function Library.new(config)
 					KeybindText.Font = Enum.Font.GothamBold
 					KeybindText.Text = FormatKeybindValue(CurrentBind)
 					KeybindText.TextColor3 = Color3.fromRGB(255, 255, 255)
-					KeybindText.TextScaled = true
-					KeybindText.TextSize = 14.000
+					KeybindText.TextScaled = false
+					KeybindText.TextSize = 12.000
 					KeybindText.TextTransparency = 0.500
 					KeybindText.TextWrapped = true
+					local KeybindText_tc = Instance.new("UITextSizeConstraint")
+					KeybindText_tc.MaxTextSize = 14
+					KeybindText_tc.Parent = KeybindText
 
 					KeybindButton.Name = "Button"
 					KeybindButton.Parent = KeybindFrame
@@ -5678,11 +5690,14 @@ function Library.new(config)
 				TextInt.Font = Enum.Font.GothamBold
 				TextInt.Text = lrm
 				TextInt.TextColor3 = Color3.fromRGB(255, 255, 255)
-				TextInt.TextScaled = true
-				TextInt.TextSize = 14.000
+				TextInt.TextScaled = false
+				TextInt.TextSize = 12.000
 				TextInt.TextTransparency = 1
 				TextInt.TextWrapped = true
 				TextInt.TextXAlignment = Enum.TextXAlignment.Left
+				local TextInt_tc = Instance.new("UITextSizeConstraint")
+				TextInt_tc.MaxTextSize = 14
+				TextInt_tc.Parent = TextInt
 				Twen:Create(TextInt,TweenInfo1,{TextTransparency = 0.25}):Play();
 
 				UIGradient.Rotation = 90
@@ -5773,9 +5788,12 @@ function Library.new(config)
 				TextInt.Font = Enum.Font.GothamBold
 				TextInt.Text = cfg.Title
 				TextInt.TextColor3 = Color3.fromRGB(255, 255, 255)
-				TextInt.TextScaled = true
-				TextInt.TextSize = 14.000
+				TextInt.TextScaled = false
+				TextInt.TextSize = 12.000
 				TextInt.TextWrapped = true
+				local TextInt_tc = Instance.new("UITextSizeConstraint")
+				TextInt_tc.MaxTextSize = 14
+				TextInt_tc.Parent = TextInt
 				TextInt.TextTransparency = 0.25;
 
 				UIGradient.Rotation = 90
@@ -5894,11 +5912,14 @@ function Library.new(config)
 				TextInt.Font = Enum.Font.GothamBold
 				TextInt.Text = ctfx.Title
 				TextInt.TextColor3 = Color3.fromRGB(255, 255, 255)
-				TextInt.TextScaled = true
-				TextInt.TextSize = 14.000
+				TextInt.TextScaled = false
+				TextInt.TextSize = 12.000
 				TextInt.TextTransparency = 0.250
 				TextInt.TextWrapped = true
 				TextInt.TextXAlignment = Enum.TextXAlignment.Left
+				local TextInt_tc = Instance.new("UITextSizeConstraint")
+				TextInt_tc.MaxTextSize = 14
+				TextInt_tc.Parent = TextInt
 
 				UIGradient.Rotation = 90
 				UIGradient.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0.00, 0.00), NumberSequenceKeypoint.new(0.84, 0.25), NumberSequenceKeypoint.new(1.00, 1.00)}
@@ -5954,10 +5975,13 @@ function Library.new(config)
 				Bindkey.Font = Enum.Font.GothamBold
 				Bindkey.Text = FormatKeybindValue(ctfx.Default)
 				Bindkey.TextColor3 = Color3.fromRGB(255, 255, 255)
-				Bindkey.TextScaled = true
-				Bindkey.TextSize = 14.000
+				Bindkey.TextScaled = false
+				Bindkey.TextSize = 12.000
 				Bindkey.TextTransparency = 0.500
 				Bindkey.TextWrapped = true
+				local Bindkey_tc = Instance.new("UITextSizeConstraint")
+				Bindkey_tc.MaxTextSize = 14
+				Bindkey_tc.Parent = Bindkey
 
 				UICorner_2.CornerRadius = UDim.new(0, 2)
 				UICorner_2.Parent = FunctionKeybind
@@ -6138,11 +6162,14 @@ function Library.new(config)
 				TextInt.Font = Enum.Font.GothamBold
 				TextInt.Text = slider.Title
 				TextInt.TextColor3 = Color3.fromRGB(255, 255, 255)
-				TextInt.TextScaled = true
-				TextInt.TextSize = 14.000
+				TextInt.TextScaled = false
+				TextInt.TextSize = 12.000
 				TextInt.TextTransparency = 0.250
 				TextInt.TextWrapped = true
 				TextInt.TextXAlignment = Enum.TextXAlignment.Left
+				local TextInt_tc = Instance.new("UITextSizeConstraint")
+				TextInt_tc.MaxTextSize = 14
+				TextInt_tc.Parent = TextInt
 
 				UIGradient.Rotation = 90
 				UIGradient.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0.00, 0.00), NumberSequenceKeypoint.new(0.84, 0.25), NumberSequenceKeypoint.new(1.00, 1.00)}
@@ -6168,11 +6195,14 @@ function Library.new(config)
 				ValueText.Font = Enum.Font.GothamBold
 				ValueText.Text = tostring(slider.Default)..'/'..tostring(slider.Max)
 				ValueText.TextColor3 = Color3.fromRGB(255, 255, 255)
-				ValueText.TextScaled = true
-				ValueText.TextSize = 14.000
+				ValueText.TextScaled = false
+				ValueText.TextSize = 12.000
 				ValueText.TextTransparency = 0.500
 				ValueText.TextWrapped = true
 				ValueText.TextXAlignment = Enum.TextXAlignment.Right
+				local ValueText_tc = Instance.new("UITextSizeConstraint")
+				ValueText_tc.MaxTextSize = 14
+				ValueText_tc.Parent = ValueText
 
 				UIGradient_2.Rotation = 90
 				UIGradient_2.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0.00, 0.00), NumberSequenceKeypoint.new(0.84, 0.25), NumberSequenceKeypoint.new(1.00, 1.00)}
@@ -6363,11 +6393,14 @@ function Library.new(config)
 				TextInt.Font = Enum.Font.GothamBold
 				TextInt.Text = drop.Title
 				TextInt.TextColor3 = Color3.fromRGB(255, 255, 255)
-				TextInt.TextScaled = true
-				TextInt.TextSize = 14.000
+				TextInt.TextScaled = false
+				TextInt.TextSize = 12.000
 				TextInt.TextTransparency = 0.250
 				TextInt.TextWrapped = true
 				TextInt.TextXAlignment = Enum.TextXAlignment.Left
+				local TextInt_tc = Instance.new("UITextSizeConstraint")
+				TextInt_tc.MaxTextSize = 14
+				TextInt_tc.Parent = TextInt
 
 				UIGradient.Rotation = 90
 				UIGradient.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0.00, 0.00), NumberSequenceKeypoint.new(0.84, 0.25), NumberSequenceKeypoint.new(1.00, 1.00)}
@@ -6412,11 +6445,14 @@ function Library.new(config)
 				ValueText.Font = Enum.Font.GothamBold
 				ValueText.Text = FormatDropdownValue(drop.Data, drop.Default, drop.Multi)
 				ValueText.TextColor3 = Color3.fromRGB(255, 255, 255)
-				ValueText.TextScaled = true
-				ValueText.TextSize = 14.000
+				ValueText.TextScaled = false
+				ValueText.TextSize = 12.000
 				ValueText.TextTransparency = 0.500
 				ValueText.TextWrapped = true
 				ValueText.TextXAlignment = Enum.TextXAlignment.Left
+				local ValueText_tc = Instance.new("UITextSizeConstraint")
+				ValueText_tc.MaxTextSize = 14
+				ValueText_tc.Parent = ValueText
 
 				MFrame.MouseEnter:Connect(function()
 					Twen:Create(ValueText,TweenInfo.new(0.3),{
@@ -6628,11 +6664,14 @@ function Library.new(config)
 					DividerTextLabel.Font = Enum.Font.GothamBold
 					DividerTextLabel.Text = DividerText
 					DividerTextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-					DividerTextLabel.TextScaled = true
-					DividerTextLabel.TextSize = 14
+					DividerTextLabel.TextScaled = false
+					DividerTextLabel.TextSize = 12
 					DividerTextLabel.TextTransparency = 0.450
 					DividerTextLabel.TextWrapped = true
 					DividerTextLabel.TextXAlignment = Enum.TextXAlignment.Center
+					local DividerTextLabel_tc = Instance.new("UITextSizeConstraint")
+					DividerTextLabel_tc.MaxTextSize = 14
+					DividerTextLabel_tc.Parent = DividerTextLabel
 					DividerTextLabel.TextYAlignment = Enum.TextYAlignment.Center
 
 					TextGradient.Rotation = 90
@@ -7424,11 +7463,14 @@ function Library.new(config)
 				TextInt.Font = Enum.Font.GothamBold
 				TextInt.Text = conf.Title
 				TextInt.TextColor3 = Color3.fromRGB(255, 255, 255)
-				TextInt.TextScaled = true
-				TextInt.TextSize = 14.000
+				TextInt.TextScaled = false
+				TextInt.TextSize = 12.000
 				TextInt.TextTransparency = 0.250
 				TextInt.TextWrapped = true
 				TextInt.TextXAlignment = Enum.TextXAlignment.Left
+				local TextInt_tc = Instance.new("UITextSizeConstraint")
+				TextInt_tc.MaxTextSize = 14
+				TextInt_tc.Parent = TextInt
 
 				UIGradient.Rotation = 90
 				UIGradient.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0.00, 0.00), NumberSequenceKeypoint.new(0.84, 0.25), NumberSequenceKeypoint.new(1.00, 1.00)}
@@ -7475,11 +7517,14 @@ function Library.new(config)
 				FileType.Font = Enum.Font.GothamBold
 				FileType.Text = conf.FileType
 				FileType.TextColor3 = Color3.fromRGB(255, 255, 255)
-				FileType.TextScaled = true
-				FileType.TextSize = 14.000
+				FileType.TextScaled = false
+				FileType.TextSize = 12.000
 				FileType.TextTransparency = 0.100
 				FileType.TextWrapped = true
 				FileType.TextXAlignment = Enum.TextXAlignment.Right
+				local FileType_tc = Instance.new("UITextSizeConstraint")
+				FileType_tc.MaxTextSize = 14
+				FileType_tc.Parent = FileType
 
 				UIGradient_2.Rotation = 90
 				UIGradient_2.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0.00, 0.00), NumberSequenceKeypoint.new(0.84, 0.25), NumberSequenceKeypoint.new(1.00, 1.00)}
@@ -7498,11 +7543,14 @@ function Library.new(config)
 				TextBox.Font = Enum.Font.GothamBold
 				TextBox.Text = tostring(conf.Default or "");
 				TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-				TextBox.TextScaled = true
-				TextBox.TextSize = 14.000
+				TextBox.TextScaled = false
+				TextBox.TextSize = 12.000
 				TextBox.TextTransparency = 0.600
 				TextBox.TextWrapped = true
 				TextBox.TextXAlignment = Enum.TextXAlignment.Left
+				local TextBox_tc = Instance.new("UITextSizeConstraint")
+				TextBox_tc.MaxTextSize = 14
+				TextBox_tc.Parent = TextBox
 
 				Button.Name = "Button"
 				Button.Parent = FunctionTextbox
