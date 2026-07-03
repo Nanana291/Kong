@@ -275,6 +275,16 @@ local ThemeManager = {
 			AccentStroke = Color3.fromRGB(255, 255, 255),
 			CardSurface = Color3.fromRGB(10, 10, 10),
 			CardChip = Color3.fromRGB(17, 17, 17),
+			Hover = Color3.fromRGB(34, 34, 34),
+			Pressed = Color3.fromRGB(44, 44, 44),
+			Scrollbar = Color3.fromRGB(255, 255, 255),
+			AnimationStyle = "Quint / Soft",
+			CornerRadius = "3-5px",
+			StrokeStyle = "Monochrome hairline",
+			CardStyle = "Minimal graphite",
+			Contrast = "High",
+			ShadowStyle = "Soft inset",
+			SpacingDensity = "Compact",
 			Description = "Nothing UI monochrome system.",
 			Preview = {
 				Background = Color3.fromRGB(8, 8, 8),
@@ -291,6 +301,16 @@ local ThemeManager = {
 			AccentStroke = Color3.fromRGB(82, 128, 214),
 			CardSurface = Color3.fromRGB(8, 10, 16),
 			CardChip = Color3.fromRGB(15, 17, 24),
+			Hover = Color3.fromRGB(24, 31, 48),
+			Pressed = Color3.fromRGB(30, 40, 62),
+			Scrollbar = Color3.fromRGB(82, 128, 214),
+			AnimationStyle = "Quint / Blue pulse",
+			CornerRadius = "3-5px",
+			StrokeStyle = "Kronos blue hairline",
+			CardStyle = "Blue graphite",
+			Contrast = "High",
+			ShadowStyle = "Soft blue depth",
+			SpacingDensity = "Compact",
 			Description = "Kronos blue accent variant.",
 			Preview = {
 				Background = Color3.fromRGB(7, 8, 12),
@@ -2190,444 +2210,534 @@ function Library.new(config)
 				return nil
 			end
 
+			local LabMetrics = {
+				Radius = UDim.new(0, 4),
+				Pad = 8,
+				Gap = 6,
+				Motion = TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+				Press = TweenInfo.new(0.08, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+			}
+
 			local root = Instance.new("Frame")
 			local rootCorner = Instance.new("UICorner")
 			local rootStroke = Instance.new("UIStroke")
 			local title = Instance.new("TextLabel")
-			local titleGradient = Instance.new("UIGradient")
-			local liveRow = Instance.new("Frame")
-			local liveDot = Instance.new("Frame")
-			local liveDotCorner = Instance.new("UICorner")
-			local liveText = Instance.new("TextLabel")
-			local currentText = Instance.new("TextLabel")
-			local cardHolder = Instance.new("Frame")
-			local grid = Instance.new("UIGridLayout")
-			local cards = {}
-			local connections = {}
-			local tweens = setmetatable({}, { __mode = "k" })
+			local subtitle = Instance.new("TextLabel")
+			local liveChip = Instance.new("Frame")
+			local liveChipCorner = Instance.new("UICorner")
+			local liveChipStroke = Instance.new("UIStroke")
+			local liveChipText = Instance.new("TextLabel")
+			local previewCard = Instance.new("Frame")
+			local previewCorner = Instance.new("UICorner")
+			local previewStroke = Instance.new("UIStroke")
+			local previewTitle = Instance.new("TextLabel")
+			local compareButton = Instance.new("TextButton")
+			local compareCorner = Instance.new("UICorner")
+			local compareStroke = Instance.new("UIStroke")
+			local previewArea = Instance.new("Frame")
+			local compareDivider = Instance.new("Frame")
+			local accentStrip = Instance.new("Frame")
+			local accentStripCorner = Instance.new("UICorner")
+			local accentGradient = Instance.new("UIGradient")
+			local themeLabel = Instance.new("TextLabel")
+			local themeCards = Instance.new("Frame")
+			local themeGrid = Instance.new("UIGridLayout")
+			local paletteLabel = Instance.new("TextLabel")
+			local paletteRow = Instance.new("Frame")
+			local infoLabel = Instance.new("TextLabel")
+			local infoGridFrame = Instance.new("Frame")
+			local infoGrid = Instance.new("UIGridLayout")
+			local motionLabel = Instance.new("TextLabel")
+			local motionPanel = Instance.new("Frame")
+			local motionCorner = Instance.new("UICorner")
+			local historyText = Instance.new("TextLabel")
+			local statsFrame = Instance.new("Frame")
+			local statsGrid = Instance.new("UIGridLayout")
+
 			local selectedTheme = ThemeManager:GetThemeName(ThemeManager.ActiveTheme)
+			local previousTheme = selectedTheme
+			local changedAt = os.date("%H:%M:%S")
+			local compareEnabled = false
 			local destroyed = false
+			local connections = {}
+			local themeCardData = {}
+			local previewParts = {}
+			local paletteParts = {}
+			local infoCards = {}
+			local statCards = {}
+			local motionParts = {}
+			local tweens = setmetatable({}, { __mode = "k" })
 
 			local function tween(instance, props, info)
 				if not instance then
-					return
+					return nil
 				end
-
 				local old = tweens[instance]
 				if old then
 					old:Cancel()
 				end
-
-				local tw = Twen:Create(instance, info or TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), props)
+				local tw = Twen:Create(instance, info or LabMetrics.Motion, props)
 				tweens[instance] = tw
+				tw.Completed:Connect(function()
+					if tweens[instance] == tw then
+						tweens[instance] = nil
+					end
+				end)
 				tw:Play()
 				return tw
 			end
 
-			local function makeCorner(parent, radius)
-				local corner = Instance.new("UICorner")
-				corner.CornerRadius = radius or UDim.new(0, 3)
-				corner.Parent = parent
-				return corner
+			local function palette(themeName)
+				local preview = ThemeManager:GetPreviewPalette(themeName)
+				local theme = ThemeManager:GetTheme(themeName)
+				preview.CardSurface = theme.CardSurface or preview.Surface
+				preview.CardChip = theme.CardChip or preview.Surface2
+				preview.Hover = theme.Hover or preview.Surface2
+				preview.Pressed = theme.Pressed or preview.Surface2
+				preview.Scrollbar = theme.Scrollbar or preview.Accent
+				return preview, theme
 			end
 
-			local function makeStroke(parent, color, transparency)
-				local stroke = Instance.new("UIStroke")
-				stroke.Color = color or Color3.fromRGB(255, 255, 255)
-				stroke.Transparency = transparency or 0.9
-				stroke.Parent = parent
-				return stroke
+			local function corner(parent, radius)
+				local c = Instance.new("UICorner")
+				c.CornerRadius = radius or LabMetrics.Radius
+				c.Parent = parent
+				return c
 			end
 
-			local function makeMiniFrame(parent, color, transparency, pos, size, z, radius)
-				local frame = Instance.new("Frame")
-				frame.Parent = parent
-				frame.BackgroundColor3 = color
-				frame.BackgroundTransparency = transparency or 0
-				frame.BorderSizePixel = 0
-				frame.Position = pos
-				frame.Size = size
-				frame.ZIndex = z or parent.ZIndex + 1
+			local function stroke(parent, color, transparency)
+				local st = Instance.new("UIStroke")
+				st.Color = color or Color3.fromRGB(255, 255, 255)
+				st.Transparency = transparency or 0.9
+				st.Parent = parent
+				return st
+			end
+
+			local function frame(parent, name, pos, size, color, transparency, z, radius)
+				local f = Instance.new("Frame")
+				f.Name = name
+				f.Parent = parent
+				f.BackgroundColor3 = color or Color3.fromRGB(17, 17, 17)
+				f.BackgroundTransparency = transparency or 0
+				f.BorderSizePixel = 0
+				f.Position = pos or UDim2.fromOffset(0, 0)
+				f.Size = size or UDim2.fromOffset(10, 10)
+				f.ZIndex = z or ((parent and parent.ZIndex or 1) + 1)
 				if radius then
-					makeCorner(frame, radius)
+					corner(f, radius)
 				end
-				return frame
+				return f
 			end
 
-			local function buildMiniPreview(parent, palette)
-				local preview = makeMiniFrame(parent, palette.Background, 0.02, UDim2.new(0.05, 0, 0.36, 0), UDim2.new(0.9, 0, 0.35, 0), 25, UDim.new(0, 4))
-				makeStroke(preview, palette.Outline, 0.78)
-				makeMiniFrame(preview, palette.Surface, 0.05, UDim2.new(0, 0, 0, 0), UDim2.new(1, 0, 0.18, 0), 26, UDim.new(0, 4))
-				makeMiniFrame(preview, palette.Accent, 0.12, UDim2.new(0.06, 0, 0.06, 0), UDim2.new(0.2, 0, 0.06, 0), 27, UDim.new(1, 0))
-				makeMiniFrame(preview, palette.Surface2, 0.12, UDim2.new(0.06, 0, 0.27, 0), UDim2.new(0.18, 0, 0.6, 0), 26, UDim.new(0, 3))
-				makeMiniFrame(preview, palette.Accent, 0.08, UDim2.new(0.09, 0, 0.34, 0), UDim2.new(0.11, 0, 0.05, 0), 27, UDim.new(1, 0))
-				makeMiniFrame(preview, palette.Muted, 0.45, UDim2.new(0.09, 0, 0.49, 0), UDim2.new(0.09, 0, 0.04, 0), 27, UDim.new(1, 0))
-				makeMiniFrame(preview, palette.Muted, 0.55, UDim2.new(0.09, 0, 0.63, 0), UDim2.new(0.1, 0, 0.04, 0), 27, UDim.new(1, 0))
-				makeMiniFrame(preview, palette.Surface2, 0.18, UDim2.new(0.3, 0, 0.29, 0), UDim2.new(0.62, 0, 0.18, 0), 26, UDim.new(0, 3))
-				makeMiniFrame(preview, palette.Text, 0.35, UDim2.new(0.34, 0, 0.35, 0), UDim2.new(0.22, 0, 0.04, 0), 27, UDim.new(1, 0))
-				makeMiniFrame(preview, palette.Accent, 0.06, UDim2.new(0.74, 0, 0.36, 0), UDim2.new(0.12, 0, 0.05, 0), 27, UDim.new(1, 0))
-				makeMiniFrame(preview, palette.Surface2, 0.18, UDim2.new(0.3, 0, 0.54, 0), UDim2.new(0.62, 0, 0.18, 0), 26, UDim.new(0, 3))
-				makeMiniFrame(preview, palette.Accent, 0.04, UDim2.new(0.34, 0, 0.63, 0), UDim2.new(0.32, 0, 0.04, 0), 27, UDim.new(1, 0))
-				makeMiniFrame(preview, palette.Muted, 0.5, UDim2.new(0.34, 0, 0.62, 0), UDim2.new(0.48, 0, 0.04, 0), 26, UDim.new(1, 0))
-				makeMiniFrame(preview, palette.Accent, 0.08, UDim2.new(0.78, 0, 0.59, 0), UDim2.new(0.08, 0, 0.08, 0), 27, UDim.new(1, 0))
-
-				local textBox = makeMiniFrame(preview, palette.Background, 0.12, UDim2.new(0.3, 0, 0.77, 0), UDim2.new(0.42, 0, 0.12, 0), 26, UDim.new(0, 2))
-				makeStroke(textBox, palette.Outline, 0.72)
-				makeMiniFrame(textBox, palette.Muted, 0.45, UDim2.new(0.08, 0, 0.38, 0), UDim2.new(0.46, 0, 0.2, 0), 28, UDim.new(1, 0))
-				makeMiniFrame(textBox, palette.Accent, 0.05, UDim2.new(0.62, 0, 0.26, 0), UDim2.new(0.02, 0, 0.48, 0), 28, UDim.new(1, 0))
-				makeMiniFrame(preview, palette.Accent, 0.08, UDim2.new(0.76, 0, 0.78, 0), UDim2.new(0.13, 0, 0.1, 0), 27, UDim.new(0, 2))
-				return preview
+			local function label(parent, text, pos, size, textSize, transparency, align)
+				local l = Instance.new("TextLabel")
+				l.Parent = parent
+				l.BackgroundTransparency = 1
+				l.Position = pos or UDim2.fromOffset(0, 0)
+				l.Size = size or UDim2.fromOffset(80, 16)
+				l.Font = Enum.Font.GothamBold
+				l.Text = tostring(text or "")
+				l.TextColor3 = Color3.fromRGB(255, 255, 255)
+				l.TextScaled = true
+				l.TextSize = textSize or 12
+				l.TextTransparency = transparency or 0.2
+				l.TextWrapped = true
+				l.TextXAlignment = align or Enum.TextXAlignment.Left
+				l.ZIndex = (parent and parent.ZIndex or 1) + 1
+				return l
 			end
 
-			local function buildSwatches(parent, palette)
-				local swatches = {
-					{ "BG", palette.Background },
-					{ "S", palette.Surface2 },
-					{ "A", palette.Accent },
-					{ "O", palette.Outline },
-					{ "T", palette.Text },
-				}
-
-				for i, swatch in ipairs(swatches) do
-					local item = makeMiniFrame(parent, swatch[2], 0, UDim2.new(0.05 + ((i - 1) * 0.18), 0, 0.76, 0), UDim2.new(0, 14, 0, 14), 25, UDim.new(0, 3))
-					makeStroke(item, Color3.fromRGB(255, 255, 255), 0.9)
-					local label = Instance.new("TextLabel")
-					label.Parent = item
-					label.BackgroundTransparency = 1
-					label.Position = UDim2.new(1, 3, 0, -1)
-					label.Size = UDim2.new(0, 15, 1, 0)
-					label.Font = Enum.Font.GothamBold
-					label.Text = swatch[1]
-					label.TextColor3 = Color3.fromRGB(255, 255, 255)
-					label.TextScaled = true
-					label.TextTransparency = 0.55
-					label.ZIndex = 26
-				end
+			local function bindAccentStroke(st)
+				ThemeManager:BindAccentStroke(st)
+				return st
 			end
 
-			root.Name = "ThemePreview"
+			root.Name = "ThemeLab"
 			root.Parent = sectionRoot
-			root.BackgroundColor3 = Color3.fromRGB(17, 17, 17)
-			root.BackgroundTransparency = 0.8
+			root.BackgroundColor3 = ThemeManager:GetColor("CardSurface")
+			root.BackgroundTransparency = 0.22
 			root.BorderSizePixel = 0
 			root.ClipsDescendants = true
-			root.Size = UDim2.new(0.949999988, 0, 0, 260)
+			root.Size = UDim2.new(0.95, 0, 0, 560)
 			root.ZIndex = 17
-
-			rootCorner.CornerRadius = UDim.new(0, 3)
+			rootCorner.CornerRadius = UDim.new(0, 5)
 			rootCorner.Parent = root
-			rootStroke.Color = Color3.fromRGB(255, 255, 255)
-			rootStroke.Transparency = 0.93
+			rootStroke.Color = ThemeManager:GetColor("AccentStroke")
+			rootStroke.Transparency = 0.9
 			rootStroke.Parent = root
-			ThemeManager:BindAccentStroke(rootStroke)
+			ThemeManager:Bind(root, "BackgroundColor3", "CardSurface")
+			bindAccentStroke(rootStroke)
 
 			title.Name = "Title"
 			title.Parent = root
 			title.BackgroundTransparency = 1
-			title.Position = UDim2.new(0.05, 0, 0, 8)
-			title.Size = UDim2.new(0.9, 0, 0, 18)
+			title.Position = UDim2.fromOffset(10, 7)
+			title.Size = UDim2.new(1, -20, 0, 18)
 			title.Font = Enum.Font.GothamBold
-			title.Text = "Theme Preview"
+			title.Text = "Theme Lab"
 			title.TextColor3 = Color3.fromRGB(255, 255, 255)
 			title.TextScaled = true
-			title.TextTransparency = 0.08
+			title.TextTransparency = 0.05
 			title.TextXAlignment = Enum.TextXAlignment.Left
 			title.ZIndex = 18
-			titleGradient.Rotation = 90
-			titleGradient.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0.45) })
-			titleGradient.Parent = title
 
-			liveRow.Name = "LiveRow"
-			liveRow.Parent = root
-			liveRow.BackgroundTransparency = 1
-			liveRow.Position = UDim2.new(0.05, 0, 0, 32)
-			liveRow.Size = UDim2.new(0.9, 0, 0, 18)
-			liveRow.ZIndex = 18
+			subtitle.Name = "Subtitle"
+			subtitle.Parent = root
+			subtitle.BackgroundTransparency = 1
+			subtitle.Position = UDim2.fromOffset(10, 27)
+			subtitle.Size = UDim2.new(1, -122, 0, 14)
+			subtitle.Font = Enum.Font.GothamBold
+			subtitle.Text = "Appearance editor with live preview."
+			subtitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+			subtitle.TextScaled = true
+			subtitle.TextTransparency = 0.55
+			subtitle.TextXAlignment = Enum.TextXAlignment.Left
+			subtitle.ZIndex = 18
 
-			liveDot.Parent = liveRow
-			liveDot.AnchorPoint = Vector2.new(0, 0.5)
-			liveDot.BackgroundColor3 = ThemeManager:GetColor("Accent")
-			liveDot.BorderSizePixel = 0
-			liveDot.Position = UDim2.new(0, 0, 0.5, 0)
-			liveDot.Size = UDim2.new(0, 7, 0, 7)
-			liveDot.ZIndex = 19
-			ThemeManager:BindAccent(liveDot, "BackgroundColor3")
-			liveDotCorner.CornerRadius = UDim.new(1, 0)
-			liveDotCorner.Parent = liveDot
+			liveChip.Name = "LiveStatus"
+			liveChip.Parent = root
+			liveChip.AnchorPoint = Vector2.new(1, 0)
+			liveChip.BackgroundColor3 = ThemeManager:GetColor("CardChip")
+			liveChip.BackgroundTransparency = 0.45
+			liveChip.BorderSizePixel = 0
+			liveChip.Position = UDim2.new(1, -10, 0, 10)
+			liveChip.Size = UDim2.fromOffset(96, 18)
+			liveChip.ZIndex = 18
+			ThemeManager:Bind(liveChip, "BackgroundColor3", "CardChip")
+			liveChipCorner.CornerRadius = UDim.new(1, 0)
+			liveChipCorner.Parent = liveChip
+			liveChipStroke.Color = ThemeManager:GetColor("AccentStroke")
+			liveChipStroke.Transparency = 0.82
+			liveChipStroke.Parent = liveChip
+			bindAccentStroke(liveChipStroke)
+			liveChipText.Parent = liveChip
+			liveChipText.BackgroundTransparency = 1
+			liveChipText.Size = UDim2.new(1, 0, 1, 0)
+			liveChipText.Font = Enum.Font.GothamBold
+			liveChipText.Text = "LIVE PREVIEW"
+			liveChipText.TextColor3 = ThemeManager:GetColor("Accent")
+			liveChipText.TextScaled = true
+			liveChipText.TextSize = 10
+			liveChipText.TextTransparency = 0.12
+			liveChipText.ZIndex = 19
+			ThemeManager:BindAccent(liveChipText, "TextColor3")
 
-			liveText.Parent = liveRow
-			liveText.BackgroundTransparency = 1
-			liveText.Position = UDim2.new(0, 12, 0, 0)
-			liveText.Size = UDim2.new(0.38, 0, 1, 0)
-			liveText.Font = Enum.Font.GothamBold
-			liveText.Text = "Live Preview"
-			liveText.TextColor3 = Color3.fromRGB(255, 255, 255)
-			liveText.TextScaled = true
-			liveText.TextTransparency = 0.42
-			liveText.TextXAlignment = Enum.TextXAlignment.Left
-			liveText.ZIndex = 19
+			previewCard.Name = "ThemePreviewCard"
+			previewCard.Parent = root
+			previewCard.BackgroundColor3 = Color3.fromRGB(8, 8, 8)
+			previewCard.BackgroundTransparency = 0.08
+			previewCard.BorderSizePixel = 0
+			previewCard.Position = UDim2.fromOffset(10, 50)
+			previewCard.Size = UDim2.new(1, -20, 0, 138)
+			previewCard.ZIndex = 18
+			previewCorner.CornerRadius = UDim.new(0, 5)
+			previewCorner.Parent = previewCard
+			previewStroke.Color = ThemeManager:GetColor("AccentStroke")
+			previewStroke.Transparency = 0.86
+			previewStroke.Parent = previewCard
+			bindAccentStroke(previewStroke)
+			previewTitle = label(previewCard, "Preview", UDim2.fromOffset(9, 7), UDim2.new(0.5, 0, 0, 15), 11, 0.24)
 
-			currentText.Parent = liveRow
-			currentText.BackgroundTransparency = 1
-			currentText.Position = UDim2.new(0.45, 0, 0, 0)
-			currentText.Size = UDim2.new(0.55, 0, 1, 0)
-			currentText.Font = Enum.Font.GothamBold
-			currentText.Text = "Current Theme: " .. selectedTheme
-			currentText.TextColor3 = Color3.fromRGB(255, 255, 255)
-			currentText.TextScaled = true
-			currentText.TextTransparency = 0.2
-			currentText.TextXAlignment = Enum.TextXAlignment.Right
-			currentText.ZIndex = 19
+			compareButton.Name = "CompareThemes"
+			compareButton.Parent = previewCard
+			compareButton.AnchorPoint = Vector2.new(1, 0)
+			compareButton.BackgroundColor3 = ThemeManager:GetColor("CardChip")
+			compareButton.BackgroundTransparency = 0.45
+			compareButton.BorderSizePixel = 0
+			compareButton.Position = UDim2.new(1, -8, 0, 7)
+			compareButton.Size = UDim2.fromOffset(96, 18)
+			compareButton.Font = Enum.Font.GothamBold
+			compareButton.Text = "Compare Themes"
+			compareButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+			compareButton.TextScaled = true
+			compareButton.TextTransparency = 0.18
+			compareButton.ZIndex = 25
+			ThemeManager:Bind(compareButton, "BackgroundColor3", "CardChip")
+			compareCorner.CornerRadius = UDim.new(0, 4)
+			compareCorner.Parent = compareButton
+			compareStroke.Color = ThemeManager:GetColor("AccentStroke")
+			compareStroke.Transparency = 0.88
+			compareStroke.Parent = compareButton
+			bindAccentStroke(compareStroke)
 
-			cardHolder.Name = "Cards"
-			cardHolder.Parent = root
-			cardHolder.BackgroundTransparency = 1
-			cardHolder.Position = UDim2.new(0.05, 0, 0, 58)
-			cardHolder.Size = UDim2.new(0.9, 0, 0, 190)
-			cardHolder.ZIndex = 18
+			previewArea.Name = "PreviewArea"
+			previewArea.Parent = previewCard
+			previewArea.BackgroundTransparency = 1
+			previewArea.Position = UDim2.fromOffset(8, 30)
+			previewArea.Size = UDim2.new(1, -16, 0, 88)
+			previewArea.ZIndex = 19
 
-			grid.Parent = cardHolder
-			grid.FillDirection = Enum.FillDirection.Horizontal
-			grid.HorizontalAlignment = Enum.HorizontalAlignment.Center
-			grid.SortOrder = Enum.SortOrder.LayoutOrder
-			grid.CellPadding = UDim2.new(0, 6, 0, 6)
-			grid.CellSize = UDim2.new(1, 0, 0, 132)
+			compareDivider.Name = "CompareDivider"
+			compareDivider.Parent = previewArea
+			compareDivider.AnchorPoint = Vector2.new(0.5, 0)
+			compareDivider.BackgroundColor3 = ThemeManager:GetColor("Accent")
+			compareDivider.BackgroundTransparency = 1
+			compareDivider.BorderSizePixel = 0
+			compareDivider.Position = UDim2.new(0.5, 0, 0, 4)
+			compareDivider.Size = UDim2.new(0, 1, 1, -8)
+			compareDivider.ZIndex = 35
+			ThemeManager:BindAccent(compareDivider, "BackgroundColor3")
 
-			local selectionIndicator = Instance.new("Frame")
-			local selectionIndicatorCorner = Instance.new("UICorner")
-			selectionIndicator.Name = "SelectionIndicator"
-			selectionIndicator.Parent = root
-			selectionIndicator.BackgroundColor3 = ThemeManager:GetColor("Accent")
-			selectionIndicator.BackgroundTransparency = 1
-			selectionIndicator.BorderSizePixel = 0
-			selectionIndicator.Position = UDim2.fromOffset(0, 0)
-			selectionIndicator.Size = UDim2.fromOffset(24, 2)
-			selectionIndicator.ZIndex = 32
-			ThemeManager:BindAccent(selectionIndicator, "BackgroundColor3")
-			selectionIndicatorCorner.CornerRadius = UDim.new(1, 0)
-			selectionIndicatorCorner.Parent = selectionIndicator
+			accentStrip.Name = "AccentStrip"
+			accentStrip.Parent = previewCard
+			accentStrip.BackgroundColor3 = ThemeManager:GetColor("Accent")
+			accentStrip.BackgroundTransparency = 0.12
+			accentStrip.BorderSizePixel = 0
+			accentStrip.Position = UDim2.new(0, 8, 1, -12)
+			accentStrip.Size = UDim2.new(1, -16, 0, 3)
+			accentStrip.ZIndex = 20
+			ThemeManager:BindAccent(accentStrip, "BackgroundColor3")
+			accentStripCorner.CornerRadius = UDim.new(1, 0)
+			accentStripCorner.Parent = accentStrip
+			accentGradient.Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.9),
+				NumberSequenceKeypoint.new(0.5, 0),
+				NumberSequenceKeypoint.new(1, 0.9),
+			})
+			accentGradient.Parent = accentStrip
 
-			local function moveSelectionIndicator(card)
-				if not card or not card.Frame or card.Frame.AbsoluteSize.X <= 0 then
-					return
-				end
+			themeLabel = label(root, "Theme", UDim2.fromOffset(10, 198), UDim2.new(1, -20, 0, 14), 11, 0.28)
+			themeCards.Name = "ThemeCards"
+			themeCards.Parent = root
+			themeCards.BackgroundTransparency = 1
+			themeCards.Position = UDim2.fromOffset(10, 218)
+			themeCards.Size = UDim2.new(1, -20, 0, 78)
+			themeCards.ZIndex = 18
+			themeGrid.Parent = themeCards
+			themeGrid.FillDirection = Enum.FillDirection.Horizontal
+			themeGrid.HorizontalAlignment = Enum.HorizontalAlignment.Center
+			themeGrid.SortOrder = Enum.SortOrder.LayoutOrder
+			themeGrid.CellPadding = UDim2.fromOffset(6, 6)
 
-				local rootPos = root.AbsolutePosition
-				local cardPos = card.Frame.AbsolutePosition
-				tween(selectionIndicator, {
-					BackgroundTransparency = 0.12,
-					Position = UDim2.fromOffset(cardPos.X - rootPos.X + 8, cardPos.Y - rootPos.Y + card.Frame.AbsoluteSize.Y - 7),
-					Size = UDim2.fromOffset(math.max(24, card.Frame.AbsoluteSize.X - 16), 2),
-				})
+			paletteLabel = label(root, "Accent Preview", UDim2.fromOffset(10, 306), UDim2.new(1, -20, 0, 14), 11, 0.28)
+			paletteRow.Name = "PaletteRow"
+			paletteRow.Parent = root
+			paletteRow.BackgroundTransparency = 1
+			paletteRow.Position = UDim2.fromOffset(10, 326)
+			paletteRow.Size = UDim2.new(1, -20, 0, 24)
+			paletteRow.ZIndex = 18
+
+			infoLabel = label(root, "Theme Information", UDim2.fromOffset(10, 360), UDim2.new(1, -20, 0, 14), 11, 0.28)
+			infoGridFrame.Name = "InfoGrid"
+			infoGridFrame.Parent = root
+			infoGridFrame.BackgroundTransparency = 1
+			infoGridFrame.Position = UDim2.fromOffset(10, 380)
+			infoGridFrame.Size = UDim2.new(1, -20, 0, 58)
+			infoGridFrame.ZIndex = 18
+			infoGrid.Parent = infoGridFrame
+			infoGrid.FillDirection = Enum.FillDirection.Horizontal
+			infoGrid.HorizontalAlignment = Enum.HorizontalAlignment.Center
+			infoGrid.SortOrder = Enum.SortOrder.LayoutOrder
+			infoGrid.CellPadding = UDim2.fromOffset(6, 6)
+
+			motionLabel = label(root, "Motion Preview", UDim2.fromOffset(10, 448), UDim2.new(1, -20, 0, 14), 11, 0.28)
+			motionPanel.Name = "MotionPanel"
+			motionPanel.Parent = root
+			motionPanel.BackgroundColor3 = ThemeManager:GetColor("CardChip")
+			motionPanel.BackgroundTransparency = 0.56
+			motionPanel.BorderSizePixel = 0
+			motionPanel.Position = UDim2.fromOffset(10, 468)
+			motionPanel.Size = UDim2.new(1, -20, 0, 42)
+			motionPanel.ZIndex = 18
+			ThemeManager:Bind(motionPanel, "BackgroundColor3", "CardChip")
+			motionCorner.CornerRadius = UDim.new(0, 4)
+			motionCorner.Parent = motionPanel
+
+			historyText = label(root, "Current Theme: " .. selectedTheme, UDim2.fromOffset(10, 516), UDim2.new(1, -20, 0, 16), 10, 0.45)
+			statsFrame.Name = "ThemeStats"
+			statsFrame.Parent = root
+			statsFrame.BackgroundTransparency = 1
+			statsFrame.Position = UDim2.fromOffset(10, 538)
+			statsFrame.Size = UDim2.new(1, -20, 0, 50)
+			statsFrame.ZIndex = 18
+			statsGrid.Parent = statsFrame
+			statsGrid.FillDirection = Enum.FillDirection.Horizontal
+			statsGrid.HorizontalAlignment = Enum.HorizontalAlignment.Center
+			statsGrid.SortOrder = Enum.SortOrder.LayoutOrder
+			statsGrid.CellPadding = UDim2.fromOffset(5, 5)
+
+			local function miniPart(parent, role, pos, size, themeName)
+				local pal = palette(themeName or selectedTheme)
+				local f = frame(parent, role, pos, size, pal[role] or pal.Surface2, role == "Text" and 0.22 or 0.06, parent.ZIndex + 1, UDim.new(0, 2))
+				previewParts[#previewParts + 1] = { Instance = f, Role = role, Theme = themeName }
+				return f
 			end
 
-			local function applyCardState(card, active, hover)
-				local palette = card.Palette
-				local targetScale = active and 1.018 or (hover and 1.01 or 1)
-				tween(card.Scale, { Scale = targetScale })
-				tween(card.Stroke, {
-					Color = active and palette.Accent or Color3.fromRGB(255, 255, 255),
-					Transparency = active and 0.28 or (hover and 0.68 or 0.9),
-				})
-				tween(card.Frame, {
-					BackgroundTransparency = active and 0.64 or (hover and 0.7 or 0.78),
-				})
-				tween(card.Badge, {
-					BackgroundTransparency = active and 0.18 or 0.92,
-				})
-				tween(card.BadgeStroke, {
-					Transparency = active and 0.35 or 0.9,
-				})
-				tween(card.BadgeText, {
-					TextTransparency = active and 0.05 or 0.42,
-				})
-				card.BadgeText.Text = active and "USING" or "APPLY"
+			local function buildMiniUI(parent, themeName, xScale, widthScale)
+				local holder = frame(parent, "MiniUI", UDim2.new(xScale or 0, 0, 0, 0), UDim2.new(widthScale or 1, 0, 1, 0), Color3.fromRGB(0, 0, 0), 1, 20)
+				miniPart(holder, "Background", UDim2.new(0.02, 0, 0.08, 0), UDim2.new(0.96, 0, 0.84, 0), themeName)
+				miniPart(holder, "Surface", UDim2.new(0.04, 0, 0.12, 0), UDim2.new(0.92, 0, 0.14, 0), themeName)
+				miniPart(holder, "Accent", UDim2.new(0.07, 0, 0.17, 0), UDim2.new(0.18, 0, 0.04, 0), themeName)
+				miniPart(holder, "Surface2", UDim2.new(0.05, 0, 0.31, 0), UDim2.new(0.2, 0, 0.52, 0), themeName)
+				miniPart(holder, "Accent", UDim2.new(0.08, 0, 0.38, 0), UDim2.new(0.12, 0, 0.035, 0), themeName)
+				miniPart(holder, "Muted", UDim2.new(0.08, 0, 0.5, 0), UDim2.new(0.1, 0, 0.03, 0), themeName)
+				miniPart(holder, "CardSurface", UDim2.new(0.31, 0, 0.32, 0), UDim2.new(0.6, 0, 0.2, 0), themeName)
+				miniPart(holder, "Text", UDim2.new(0.35, 0, 0.39, 0), UDim2.new(0.24, 0, 0.028, 0), themeName)
+				miniPart(holder, "Accent", UDim2.new(0.74, 0, 0.39, 0), UDim2.new(0.1, 0, 0.035, 0), themeName)
+				miniPart(holder, "CardSurface", UDim2.new(0.31, 0, 0.57, 0), UDim2.new(0.6, 0, 0.2, 0), themeName)
+				miniPart(holder, "Muted", UDim2.new(0.35, 0, 0.66, 0), UDim2.new(0.42, 0, 0.03, 0), themeName)
+				miniPart(holder, "Accent", UDim2.new(0.35, 0, 0.66, 0), UDim2.new(0.27, 0, 0.03, 0), themeName)
+				miniPart(holder, "Scrollbar", UDim2.new(0.94, 0, 0.34, 0), UDim2.new(0.012, 0, 0.42, 0), themeName)
+				return holder
 			end
 
-			local ThemePreviewObject = {}
+			buildMiniUI(previewArea, nil, 0, 1)
+			buildMiniUI(previewArea, "Default", 0, 0.49)
+			buildMiniUI(previewArea, "Kronos", 0.51, 0.49)
 
-			local function setTheme(themeName, silent)
-				if destroyed then
-					return false
-				end
+			local ThemeLabObject = {}
 
-				local normalized = ThemeManager:GetThemeName(themeName)
-				local changed = normalized ~= selectedTheme
-				selectedTheme = normalized
-				currentText.Text = "Current Theme: " .. normalized
-
-				for name, card in pairs(cards) do
-					applyCardState(card, name == normalized, card.Hovered)
-				end
-				moveSelectionIndicator(cards[normalized])
-
-				if not silent then
-					ThemeManager:SetTheme(normalized)
-				end
-
-				return changed
-			end
-
-			local function createCard(themeName, order)
-				local palette = ThemeManager:GetPreviewPalette(themeName)
-				local card = Instance.new("Frame")
-				local cardCorner = Instance.new("UICorner")
-				local cardStroke = Instance.new("UIStroke")
-				local scale = Instance.new("UIScale")
-				local cardButton = Instance.new("TextButton")
-				local nameText = Instance.new("TextLabel")
-				local descText = Instance.new("TextLabel")
-				local badge = Instance.new("Frame")
-				local badgeCorner = Instance.new("UICorner")
-				local badgeStroke = Instance.new("UIStroke")
-				local badgeText = Instance.new("TextLabel")
-
-				card.Name = themeName .. "ThemeCard"
-				card.Parent = cardHolder
-				card.BackgroundColor3 = Color3.fromRGB(17, 17, 17)
-				card.BackgroundTransparency = 0.78
-				card.BorderSizePixel = 0
+			local function makeThemeCard(themeName, order)
+				local pal = palette(themeName)
+				local card = frame(themeCards, themeName .. "ThemeCard", nil, nil, pal.CardSurface, 0.28, 20, UDim.new(0, 4))
 				card.LayoutOrder = order
-				card.ZIndex = 19
-				cardCorner.CornerRadius = UDim.new(0, 4)
-				cardCorner.Parent = card
-				cardStroke.Color = Color3.fromRGB(255, 255, 255)
-				cardStroke.Transparency = 0.9
-				cardStroke.Parent = card
+				local st = stroke(card, pal.Outline, 0.88)
+				local scale = Instance.new("UIScale")
 				scale.Parent = card
-
-				nameText.Parent = card
-				nameText.BackgroundTransparency = 1
-				nameText.Position = UDim2.new(0.05, 0, 0.05, 0)
-				nameText.Size = UDim2.new(0.55, 0, 0, 18)
-				nameText.Font = Enum.Font.GothamBold
-				nameText.Text = themeName
-				nameText.TextColor3 = Color3.fromRGB(255, 255, 255)
-				nameText.TextScaled = true
-				nameText.TextTransparency = 0.06
-				nameText.TextXAlignment = Enum.TextXAlignment.Left
-				nameText.ZIndex = 22
-
-				descText.Parent = card
-				descText.BackgroundTransparency = 1
-				descText.Position = UDim2.new(0.05, 0, 0.19, 0)
-				descText.Size = UDim2.new(0.72, 0, 0, 14)
-				descText.Font = Enum.Font.GothamBold
-				descText.Text = ThemeManager:GetDescription(themeName)
-				descText.TextColor3 = Color3.fromRGB(255, 255, 255)
-				descText.TextScaled = true
-				descText.TextTransparency = 0.58
-				descText.TextXAlignment = Enum.TextXAlignment.Left
-				descText.ZIndex = 22
-
-				badge.Parent = card
-				badge.BackgroundColor3 = palette.Accent
-				badge.BackgroundTransparency = 0.92
-				badge.BorderSizePixel = 0
-				badge.Position = UDim2.new(0.7, 0, 0.055, 0)
-				badge.Size = UDim2.new(0.25, 0, 0, 18)
-				badge.ZIndex = 23
-				badgeCorner.CornerRadius = UDim.new(1, 0)
-				badgeCorner.Parent = badge
-				badgeStroke.Color = palette.Accent
-				badgeStroke.Transparency = 0.9
-				badgeStroke.Parent = badge
-
-				badgeText.Parent = badge
-				badgeText.BackgroundTransparency = 1
-				badgeText.Size = UDim2.new(1, 0, 1, 0)
-				badgeText.Font = Enum.Font.GothamBold
-				badgeText.Text = "APPLY"
-				badgeText.TextColor3 = Color3.fromRGB(255, 255, 255)
-				badgeText.TextScaled = true
-				badgeText.TextTransparency = 0.42
-				badgeText.ZIndex = 24
-
-				buildMiniPreview(card, palette)
-				buildSwatches(card, palette)
-
-				cardButton.Parent = card
-				cardButton.BackgroundTransparency = 1
-				cardButton.BorderSizePixel = 0
-				cardButton.Size = UDim2.new(1, 0, 1, 0)
-				cardButton.Text = ""
-				cardButton.ZIndex = 30
-
-				local cardData = {
-					Frame = card,
-					Stroke = cardStroke,
-					Scale = scale,
-					Badge = badge,
-					BadgeStroke = badgeStroke,
-					BadgeText = badgeText,
-					Palette = palette,
-					Hovered = false,
-				}
-				cards[themeName] = cardData
-
-				connections[#connections + 1] = cardButton.MouseEnter:Connect(function()
-					cardData.Hovered = true
-					applyCardState(cardData, selectedTheme == themeName, true)
+				label(card, themeName, UDim2.fromOffset(8, 6), UDim2.new(0.65, 0, 0, 14), 11, 0.08)
+				label(card, ThemeManager:GetDescription(themeName), UDim2.fromOffset(8, 23), UDim2.new(0.7, 0, 0, 16), 9, 0.58)
+				frame(card, "Stripe", UDim2.new(0, 8, 1, -12), UDim2.new(1, -16, 0, 2), pal.Accent, 0.06, 22, UDim.new(1, 0))
+				local dot = frame(card, "AccentDot", UDim2.new(1, -26, 0, 10), UDim2.fromOffset(16, 16), pal.Accent, 0, 22, UDim.new(1, 0))
+				stroke(dot, Color3.fromRGB(255, 255, 255), 0.86)
+				local badge = label(card, "○", UDim2.new(1, -48, 0, 8), UDim2.fromOffset(16, 16), 12, 0.2, Enum.TextXAlignment.Center)
+				local button = Instance.new("TextButton")
+				button.Parent = card
+				button.BackgroundTransparency = 1
+				button.BorderSizePixel = 0
+				button.Size = UDim2.new(1, 0, 1, 0)
+				button.Text = ""
+				button.ZIndex = 30
+				themeCardData[themeName] = { Frame = card, Stroke = st, Scale = scale, Badge = badge, Palette = pal, Hovered = false }
+				connections[#connections + 1] = button.MouseEnter:Connect(function()
+					themeCardData[themeName].Hovered = true
+					local active = selectedTheme == themeName
+					tween(scale, { Scale = active and 1.02 or 1.01 })
+					tween(st, { Transparency = active and 0.32 or 0.68, Color = pal.Accent })
 				end)
-				connections[#connections + 1] = cardButton.MouseLeave:Connect(function()
-					cardData.Hovered = false
-					applyCardState(cardData, selectedTheme == themeName, false)
+				connections[#connections + 1] = button.MouseLeave:Connect(function()
+					themeCardData[themeName].Hovered = false
+					local active = selectedTheme == themeName
+					tween(scale, { Scale = active and 1.015 or 1 })
+					tween(st, { Transparency = active and 0.28 or 0.88, Color = active and pal.Accent or pal.Outline })
 				end)
-				connections[#connections + 1] = cardButton.MouseButton1Click:Connect(function()
-					tween(scale, { Scale = 0.985 }, TweenInfo.new(0.08, Enum.EasingStyle.Quint, Enum.EasingDirection.Out))
-					task.delay(0.08, function()
-						if not destroyed then
-							setTheme(themeName, false)
-						end
-					end)
+				connections[#connections + 1] = button.MouseButton1Down:Connect(function()
+					tween(scale, { Scale = 0.985 }, LabMetrics.Press)
+				end)
+				connections[#connections + 1] = button.MouseButton1Click:Connect(function()
+					ThemeLabObject:SetValue(themeName, false)
 				end)
 			end
 
-			local function refreshLayout()
-				local width = math.max(180, cardHolder.AbsoluteSize.X)
-				local columns = width >= 390 and 2 or 1
-				local cellWidth = columns == 2 and math.floor((width - grid.CellPadding.X.Offset) / 2) or width
-				grid.CellSize = UDim2.new(0, cellWidth, 0, 132)
-				task.defer(function()
-					if destroyed then
-						return
-					end
-					local h = grid.AbsoluteContentSize.Y
-					cardHolder.Size = UDim2.new(0.9, 0, 0, h)
-					root.Size = UDim2.new(0.949999988, 0, 0, math.max(120, h + 72))
-					moveSelectionIndicator(cards[selectedTheme])
-				end)
+			local function makeInfoCard(parent, key)
+				local card = frame(parent, key .. "Card", nil, nil, ThemeManager:GetColor("CardChip"), 0.55, 19, UDim.new(0, 4))
+				ThemeManager:Bind(card, "BackgroundColor3", "CardChip")
+				stroke(card, ThemeManager:GetColor("AccentStroke"), 0.92)
+				local k = label(card, key, UDim2.fromOffset(6, 4), UDim2.new(1, -12, 0, 10), 8, 0.62)
+				local v = label(card, "-", UDim2.fromOffset(6, 18), UDim2.new(1, -12, 0, 14), 9, 0.16)
+				return { Root = card, Key = k, Value = v }
 			end
 
 			for order, themeName in ipairs(ThemeManager:GetThemeList()) do
-				createCard(themeName, order)
+				makeThemeCard(themeName, order)
+			end
+			for _, key in ipairs({ "Theme", "Accent", "Contrast", "Status" }) do
+				infoCards[key] = makeInfoCard(infoGridFrame, key)
+			end
+			for _, key in ipairs({ "Accent Elements", "Animation", "Radius", "Shadow", "Density" }) do
+				statCards[key] = makeInfoCard(statsFrame, key)
+			end
+			for i, role in ipairs({ "Accent", "AccentSoft", "AccentStroke", "CardSurface", "CardChip" }) do
+				local swatch = frame(paletteRow, role, UDim2.new((i - 1) * 0.2, 0, 0, 0), UDim2.new(0.18, 0, 1, 0), ThemeManager:GetColor("Accent"), 0, 19, UDim.new(0, 4))
+				stroke(swatch, Color3.fromRGB(255, 255, 255), 0.88)
+				paletteParts[#paletteParts + 1] = { Instance = swatch, Role = role }
+			end
+			motionParts.Button = frame(motionPanel, "Button", UDim2.new(0.04, 0, 0.25, 0), UDim2.new(0.24, 0, 0.5, 0), ThemeManager:GetColor("Accent"), 0.12, 20, UDim.new(0, 4))
+			motionParts.ToggleTrack = frame(motionPanel, "ToggleTrack", UDim2.new(0.38, 0, 0.35, 0), UDim2.new(0.2, 0, 0.3, 0), ThemeManager:GetColor("CardSurface"), 0.2, 20, UDim.new(1, 0))
+			motionParts.ToggleKnob = frame(motionPanel, "ToggleKnob", UDim2.new(0.39, 0, 0.39, 0), UDim2.new(0, 10, 0, 10), ThemeManager:GetColor("Accent"), 0.04, 21, UDim.new(1, 0))
+			motionParts.Card = frame(motionPanel, "Card", UDim2.new(0.68, 0, 0.22, 0), UDim2.new(0.24, 0, 0.56, 0), ThemeManager:GetColor("CardSurface"), 0.18, 20, UDim.new(0, 4))
+
+			local function updatePreview(themeName)
+				local pal, theme = palette(themeName)
+				for _, part in ipairs(previewParts) do
+					local partTheme = part.Theme or themeName
+					local partPalette = palette(partTheme)
+					local color = partPalette[part.Role] or partPalette.Surface2
+					local visible = compareEnabled == (part.Theme ~= nil)
+					tween(part.Instance, { BackgroundColor3 = color, BackgroundTransparency = visible and (part.Role == "Text" and 0.22 or 0.06) or 1 })
+				end
+				for _, swatch in ipairs(paletteParts) do
+					tween(swatch.Instance, { BackgroundColor3 = theme[swatch.Role] or pal[swatch.Role] or pal.Accent })
+				end
+				tween(previewCard, { BackgroundColor3 = pal.Background })
+				tween(compareDivider, { BackgroundTransparency = compareEnabled and 0.2 or 1 })
+				tween(accentStrip, { BackgroundColor3 = pal.Accent })
+				motionParts.Button.BackgroundColor3 = pal.Accent
+				motionParts.ToggleTrack.BackgroundColor3 = pal.CardSurface
+				motionParts.ToggleKnob.BackgroundColor3 = pal.Accent
+				motionParts.Card.BackgroundColor3 = pal.CardSurface
+				infoCards.Theme.Value.Text = themeName
+				infoCards.Accent.Value.Text = tostring(math.floor(pal.Accent.R * 255)) .. ", " .. tostring(math.floor(pal.Accent.G * 255)) .. ", " .. tostring(math.floor(pal.Accent.B * 255))
+				infoCards.Contrast.Value.Text = tostring(theme.Contrast or "High")
+				infoCards.Status.Value.Text = "Current Theme"
+				statCards["Accent Elements"].Value.Text = "12+"
+				statCards.Animation.Value.Text = tostring(theme.AnimationStyle or "Quint")
+				statCards.Radius.Value.Text = tostring(theme.CornerRadius or "3px")
+				statCards.Shadow.Value.Text = tostring(theme.ShadowStyle or "Soft")
+				statCards.Density.Value.Text = tostring(theme.SpacingDensity or "Compact")
+				historyText.Text = "Current Theme: " .. themeName .. "    Previous: " .. previousTheme .. "    Changed: " .. changedAt
 			end
 
-			connections[#connections + 1] = cardHolder:GetPropertyChangedSignal("AbsoluteSize"):Connect(refreshLayout)
-			connections[#connections + 1] = grid:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(refreshLayout)
-			task.defer(refreshLayout)
+			local function updateCards()
+				for themeName, card in pairs(themeCardData) do
+					local active = themeName == selectedTheme
+					card.Badge.Text = active and "●" or "○"
+					tween(card.Scale, { Scale = active and 1.015 or (card.Hovered and 1.01 or 1) })
+					tween(card.Stroke, { Color = active and card.Palette.Accent or card.Palette.Outline, Transparency = active and 0.28 or (card.Hovered and 0.68 or 0.88) })
+					tween(card.Frame, { BackgroundTransparency = active and 0.18 or 0.28 })
+				end
+			end
 
-			function ThemePreviewObject:GetValue()
+			function ThemeLabObject:GetValue()
 				return selectedTheme
 			end
 
-			function ThemePreviewObject:SetValue(value, silent)
-				return setTheme(value, silent == true)
+			function ThemeLabObject:SetValue(value, silent)
+				if destroyed then
+					return false
+				end
+				local normalized = ThemeManager:GetThemeName(value)
+				local changed = normalized ~= selectedTheme
+				if changed then
+					previousTheme = selectedTheme
+					changedAt = os.date("%H:%M:%S")
+				end
+				selectedTheme = normalized
+				updatePreview(selectedTheme)
+				updateCards()
+				if not silent then
+					ThemeManager:SetTheme(selectedTheme)
+				end
+				return changed
 			end
 
-			function ThemePreviewObject:Set(value, silent)
-				return setTheme(value, silent == true)
+			function ThemeLabObject:Set(value, silent)
+				return self:SetValue(value, silent)
 			end
 
-			function ThemePreviewObject:Refresh()
-				return setTheme(ThemeManager:GetThemeName(ThemeManager.ActiveTheme), true)
+			function ThemeLabObject:Refresh()
+				return self:SetValue(ThemeManager:GetThemeName(ThemeManager.ActiveTheme), true)
 			end
 
-			function ThemePreviewObject:Destroy()
+			function ThemeLabObject:SetCompare(value)
+				compareEnabled = value == true
+				compareButton.Text = compareEnabled and "Live Preview" or "Compare Themes"
+				updatePreview(selectedTheme)
+			end
+
+			function ThemeLabObject:Destroy()
 				if destroyed then
 					return
 				end
-
 				destroyed = true
 				for _, connection in ipairs(connections) do
 					connection:Disconnect()
@@ -2640,14 +2750,65 @@ function Library.new(config)
 				root:Destroy()
 			end
 
+			local function refreshLayout()
+				local width = math.max(180, root.AbsoluteSize.X)
+				local twoColumns = width >= 330
+				local cardWidth = twoColumns and math.floor((themeCards.AbsoluteSize.X - 6) / 2) or themeCards.AbsoluteSize.X
+				themeGrid.CellSize = UDim2.fromOffset(math.max(100, cardWidth), 72)
+				infoGrid.CellSize = UDim2.fromOffset(math.max(70, math.floor((infoGridFrame.AbsoluteSize.X - 18) / (twoColumns and 2 or 1))), 38)
+				statsGrid.CellSize = UDim2.fromOffset(math.max(62, math.floor((statsFrame.AbsoluteSize.X - 20) / (twoColumns and 3 or 1))), 38)
+				task.defer(function()
+					if destroyed then
+						return
+					end
+					local themeHeight = themeGrid.AbsoluteContentSize.Y
+					local infoTop = 236 + themeHeight + 44
+					paletteLabel.Position = UDim2.fromOffset(10, 226 + themeHeight)
+					paletteRow.Position = UDim2.fromOffset(10, 246 + themeHeight)
+					infoLabel.Position = UDim2.fromOffset(10, infoTop)
+					infoGridFrame.Position = UDim2.fromOffset(10, infoTop + 20)
+					local infoHeight = infoGrid.AbsoluteContentSize.Y
+					infoGridFrame.Size = UDim2.new(1, -20, 0, infoHeight)
+					local motionTop = infoTop + 26 + infoHeight
+					motionLabel.Position = UDim2.fromOffset(10, motionTop)
+					motionPanel.Position = UDim2.fromOffset(10, motionTop + 20)
+					historyText.Position = UDim2.fromOffset(10, motionTop + 68)
+					statsFrame.Position = UDim2.fromOffset(10, motionTop + 90)
+					local statsHeight = statsGrid.AbsoluteContentSize.Y
+					statsFrame.Size = UDim2.new(1, -20, 0, statsHeight)
+					root.Size = UDim2.new(0.95, 0, 0, math.max(500, motionTop + 98 + statsHeight))
+				end)
+			end
+
+			connections[#connections + 1] = root:GetPropertyChangedSignal("AbsoluteSize"):Connect(refreshLayout)
+			connections[#connections + 1] = themeGrid:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(refreshLayout)
+			connections[#connections + 1] = infoGrid:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(refreshLayout)
+			connections[#connections + 1] = statsGrid:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(refreshLayout)
+			connections[#connections + 1] = compareButton.MouseButton1Click:Connect(function()
+				ThemeLabObject:SetCompare(not compareEnabled)
+			end)
 			connections[#connections + 1] = root.AncestryChanged:Connect(function(_, parent)
 				if parent == nil then
-					ThemePreviewObject:Destroy()
+					ThemeLabObject:Destroy()
 				end
 			end)
 
-			setTheme(selectedTheme, true)
-			return ThemePreviewObject
+			task.spawn(function()
+				while not destroyed and root.Parent do
+					tween(motionParts.Button, { BackgroundTransparency = 0.02 })
+					tween(motionParts.ToggleKnob, { Position = UDim2.new(0.53, 0, 0.39, 0) })
+					tween(motionParts.Card, { BackgroundTransparency = 0.08 })
+					task.wait(0.9)
+					tween(motionParts.Button, { BackgroundTransparency = 0.2 })
+					tween(motionParts.ToggleKnob, { Position = UDim2.new(0.39, 0, 0.39, 0) })
+					tween(motionParts.Card, { BackgroundTransparency = 0.24 })
+					task.wait(0.9)
+				end
+			end)
+
+			task.defer(refreshLayout)
+			ThemeLabObject:SetValue(selectedTheme, true)
+			return ThemeLabObject
 		end
 
 		ConfigDropdown = ConfigSection:NewDropdown({
