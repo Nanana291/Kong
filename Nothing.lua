@@ -2221,6 +2221,8 @@ function Library.new(config)
 			local root = Instance.new("Frame")
 			local rootCorner = Instance.new("UICorner")
 			local rootStroke = Instance.new("UIStroke")
+			local headerRow = Instance.new("Frame")
+			local headerRowLayout = Instance.new("UIListLayout")
 			local headerFrame = Instance.new("Frame")
 			local headerLayout = Instance.new("UIListLayout")
 			local title = Instance.new("TextLabel")
@@ -2383,12 +2385,27 @@ function Library.new(config)
 			ThemeManager:Bind(root, "BackgroundColor3", "CardSurface")
 			bindAccentStroke(rootStroke)
 
+			headerRow.Name = "HeaderRow"
+			headerRow.Parent = root
+			headerRow.BackgroundTransparency = 1
+			headerRow.BorderSizePixel = 0
+			headerRow.Position = UDim2.fromOffset(10, 7)
+			headerRow.Size = UDim2.new(1, -20, 0, 36)
+			headerRow.ZIndex = 18
+			headerRowLayout.Parent = headerRow
+			headerRowLayout.FillDirection = Enum.FillDirection.Horizontal
+			headerRowLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+			headerRowLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+			headerRowLayout.SortOrder = Enum.SortOrder.LayoutOrder
+			headerRowLayout.Padding = UDim.new(0, 8)
+
 			headerFrame.Name = "Header"
-			headerFrame.Parent = root
+			headerFrame.Parent = headerRow
 			headerFrame.BackgroundTransparency = 1
 			headerFrame.BorderSizePixel = 0
-			headerFrame.Position = UDim2.fromOffset(10, 7)
-			headerFrame.Size = UDim2.new(1, -124, 0, 36)
+			headerFrame.LayoutOrder = 1
+			headerFrame.Position = UDim2.fromOffset(0, 0)
+			headerFrame.Size = UDim2.new(1, -104, 0, 36)
 			headerFrame.ZIndex = 18
 			headerLayout.Parent = headerFrame
 			headerLayout.FillDirection = Enum.FillDirection.Vertical
@@ -2425,12 +2442,13 @@ function Library.new(config)
 			textLimit(subtitle, 7, 10)
 
 			liveChip.Name = "LiveStatus"
-			liveChip.Parent = root
-			liveChip.AnchorPoint = Vector2.new(1, 0)
+			liveChip.Parent = headerRow
+			liveChip.AnchorPoint = Vector2.new(0, 0)
+			liveChip.LayoutOrder = 2
 			liveChip.BackgroundColor3 = ThemeManager:GetColor("CardChip")
 			liveChip.BackgroundTransparency = 0.45
 			liveChip.BorderSizePixel = 0
-			liveChip.Position = UDim2.new(1, -10, 0, 10)
+			liveChip.Position = UDim2.fromOffset(0, 0)
 			liveChip.Size = UDim2.fromOffset(96, 18)
 			liveChip.ZIndex = 18
 			ThemeManager:Bind(liveChip, "BackgroundColor3", "CardChip")
@@ -2797,15 +2815,16 @@ function Library.new(config)
 				local availableWidth = math.max(120, width - 20)
 
 				if compactHeader then
-					headerFrame.Size = UDim2.new(1, -20, 0, 36)
-					liveChip.AnchorPoint = Vector2.new(0, 0)
-					liveChip.Position = UDim2.fromOffset(10, 47)
+					headerRow.Size = UDim2.new(1, -20, 0, 60)
+					headerRowLayout.FillDirection = Enum.FillDirection.Vertical
+					headerFrame.Size = UDim2.new(1, 0, 0, 36)
 				else
-					headerFrame.Size = UDim2.new(1, -124, 0, 36)
-					liveChip.AnchorPoint = Vector2.new(1, 0)
-					liveChip.Position = UDim2.new(1, -10, 0, 10)
+					headerRow.Size = UDim2.new(1, -20, 0, 36)
+					headerRowLayout.FillDirection = Enum.FillDirection.Horizontal
+					headerFrame.Size = UDim2.new(1, -104, 0, 36)
 				end
 
+				previewTop = headerRow.Position.Y.Offset + headerRow.Size.Y.Offset + 8
 				previewCard.Position = UDim2.fromOffset(10, previewTop)
 				previewCard.Size = UDim2.new(1, -20, 0, previewHeight)
 				previewArea.Position = UDim2.fromOffset(8, 30)
@@ -3715,6 +3734,9 @@ function Library.new(config)
 			return tween
 		end
 
+		local InitLayout = Instance.new("UIListLayout")
+		local TopStack = Instance.new("Frame")
+		local TopStackLayout = Instance.new("UIListLayout")
 		local SubTabShadow = Instance.new("ImageLabel")
 		local SubTabBar = Instance.new("Frame")
 		local SubTabBarCorner = Instance.new("UICorner")
@@ -3724,9 +3746,30 @@ function Library.new(config)
 		local SubTabContent = Instance.new("Frame")
 		local DefaultPage = Instance.new("Frame")
 
+		InitLayout.Parent = Init
+		InitLayout.FillDirection = Enum.FillDirection.Vertical
+		InitLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+		InitLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		InitLayout.Padding = UDim.new(0, 8)
+
+		TopStack.Name = "TopStack"
+		TopStack.Parent = Init
+		TopStack.AutomaticSize = Enum.AutomaticSize.Y
+		TopStack.BackgroundTransparency = 1
+		TopStack.BorderSizePixel = 0
+		TopStack.LayoutOrder = 1
+		TopStack.Size = UDim2.new(1, 0, 0, 0)
+		TopStack.ZIndex = 19
+
+		TopStackLayout.Parent = TopStack
+		TopStackLayout.FillDirection = Enum.FillDirection.Vertical
+		TopStackLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+		TopStackLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		TopStackLayout.Padding = UDim.new(0, 6)
+
 		SubTabShadow.Name = "SubTabShadow"
-		SubTabShadow.Parent = Init
-		SubTabShadow.AnchorPoint = Vector2.new(0.5, 0)
+		SubTabShadow.Parent = SubTabBar
+		SubTabShadow.AnchorPoint = Vector2.new(0.5, 0.5)
 		SubTabShadow.BackgroundTransparency = 1
 		SubTabShadow.BorderSizePixel = 0
 		SubTabShadow.Image = "rbxassetid://6015897843"
@@ -3734,18 +3777,20 @@ function Library.new(config)
 		SubTabShadow.ImageTransparency = 0.88
 		SubTabShadow.ScaleType = Enum.ScaleType.Slice
 		SubTabShadow.SliceCenter = Rect.new(49, 49, 450, 450)
-		SubTabShadow.Size = UDim2.new(0.96, 24, 0, SubTabMetrics.BarHeight + 18)
+		SubTabShadow.Position = UDim2.new(0.5, 0, 0.5, 0)
+		SubTabShadow.Size = UDim2.new(1, 24, 1, 18)
 		SubTabShadow.Visible = false
 		SubTabShadow.ZIndex = 19
 
 		SubTabBar.Name = "SubTabBar"
-		SubTabBar.Parent = Init
-		SubTabBar.AnchorPoint = Vector2.new(0.5, 0)
+		SubTabBar.Parent = TopStack
+		SubTabBar.AnchorPoint = Vector2.new(0, 0)
+		SubTabBar.LayoutOrder = 2
 		SubTabBar.BackgroundColor3 = Color3.fromRGB(17, 17, 17)
 		SubTabBar.BackgroundTransparency = 0.86
 		SubTabBar.BorderSizePixel = 0
-		SubTabBar.ClipsDescendants = true
-		SubTabBar.Position = UDim2.new(0.5, 0, 0.09, 0)
+		SubTabBar.ClipsDescendants = false
+		SubTabBar.Position = UDim2.fromOffset(0, 0)
 		SubTabBar.Size = UDim2.new(0.96, 0, 0, SubTabMetrics.BarHeight)
 		SubTabBar.Visible = false
 		SubTabBar.ZIndex = 20
@@ -3785,7 +3830,8 @@ function Library.new(config)
 		SubTabContent.Parent = Init
 		SubTabContent.BackgroundTransparency = 1
 		SubTabContent.BorderSizePixel = 0
-		SubTabContent.Position = UDim2.new(0, 0, 0, 0)
+		SubTabContent.LayoutOrder = 2
+		SubTabContent.Position = UDim2.fromOffset(0, 0)
 		SubTabContent.Size = UDim2.new(1, 0, 1, 0)
 		SubTabContent.ZIndex = 4
 
@@ -3811,26 +3857,13 @@ function Library.new(config)
 
 		local function RefreshSubTabLayout()
 			local hasExplicit = ExplicitSubTabCount > 0
-			local initHeight = math.max(1, Init.AbsoluteSize.Y)
-			local contentTop = 0
-			local searchTop = SearchBarEnabled and math.max(4, math.floor(initHeight * 0.02)) or 0
-
 			SubTabBar.Visible = hasExplicit
 			SubTabShadow.Visible = hasExplicit
+			TopStack.Visible = SearchBarEnabled or hasExplicit
 
-			if SearchBarEnabled then
-				contentTop = searchTop + 28 + 8
-			end
-
-			if hasExplicit then
-				local barTop = contentTop + (SearchBarEnabled and 0 or 4)
-				SubTabBar.Position = UDim2.new(0.5, 0, 0, barTop)
-				SubTabShadow.Position = UDim2.new(0.5, 0, 0, barTop - 8)
-				contentTop = barTop + SubTabMetrics.BarHeight + 10
-			end
-
-			SubTabContent.Position = UDim2.new(0, 0, 0, contentTop)
-			SubTabContent.Size = UDim2.new(1, 0, 1, -contentTop)
+			local topHeight = TopStack.Visible and TopStackLayout.AbsoluteContentSize.Y or 0
+			local reservedHeight = topHeight + (TopStack.Visible and InitLayout.Padding.Offset or 0)
+			SubTabContent.Size = UDim2.new(1, 0, 1, -reservedHeight)
 
 			for _, subtab in ipairs(SubTabs) do
 				if subtab.Page then
@@ -3840,6 +3873,7 @@ function Library.new(config)
 		end
 
 		Init:GetPropertyChangedSignal("AbsoluteSize"):Connect(RefreshSubTabLayout)
+		TopStackLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(RefreshSubTabLayout)
 
 		local function CreateSubTabPage(name)
 			local page = Instance.new("Frame")
@@ -4437,13 +4471,14 @@ function Library.new(config)
 			SearchBox = Instance.new("TextBox")
 
 			SearchFrame.Name = "SearchFrame"
-			SearchFrame.Parent = Init
-			SearchFrame.AnchorPoint = Vector2.new(0.5, 0)
+			SearchFrame.Parent = TopStack
+			SearchFrame.AnchorPoint = Vector2.new(0, 0)
+			SearchFrame.LayoutOrder = 1
 			SearchFrame.BackgroundColor3 = Color3.fromRGB(17, 17, 17)
 			SearchFrame.BackgroundTransparency = 0.8
 			SearchFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
 			SearchFrame.BorderSizePixel = 0
-			SearchFrame.Position = UDim2.new(0.5, 0, 0.02, 0)
+			SearchFrame.Position = UDim2.fromOffset(0, 0)
 			SearchFrame.Size = UDim2.new(0.96, 0, 0, 28)
 			SearchFrame.ZIndex = 20
 
@@ -7606,7 +7641,7 @@ function Library.new(config)
 				Title.TextTransparency = 0.08
 				Title.TextWrapped = true
 				Title.TextXAlignment = Enum.TextXAlignment.Left
-				Title.TextYAlignment = Enum.TextYAlignment.Center
+				Title.TextYAlignment = Enum.TextYAlignment.Top
 				Title.ZIndex = 21
 				addTextLimit(Title, 8, 12)
 
@@ -7787,8 +7822,8 @@ function Library.new(config)
 						StatusChip.AnchorPoint = Vector2.new(0, 0)
 						Badge.AnchorPoint = Vector2.new(0, 0)
 						local textWidth = math.max(90, width - left - 34)
-						local titleHeight = measureLabelHeight(Title.Text, 12, Title.Font, textWidth, 15, 30)
-						local descHeight = Description.Visible and measureLabelHeight(Description.Text, 9, Description.Font, math.max(90, width - left - 18), 12, 28) or 0
+						local titleHeight = measureLabelHeight(Title.Text, 12, Title.Font, textWidth, 15, 64)
+						local descHeight = Description.Visible and measureLabelHeight(Description.Text, 9, Description.Font, math.max(90, width - left - 18), 12, 72) or 0
 						Title.Size = UDim2.fromOffset(textWidth, titleHeight)
 						Description.Position = UDim2.fromOffset(left, 8 + titleHeight + 3)
 						Description.Size = UDim2.new(1, -(left + 18), 0, descHeight)
@@ -7807,8 +7842,8 @@ function Library.new(config)
 						Badge.AnchorPoint = Vector2.new(1, 0)
 						local rightPad = 24 + metaWidth
 						local textWidth = math.max(96, width - left - rightPad)
-						local titleHeight = measureLabelHeight(Title.Text, 12, Title.Font, textWidth, 16, 24)
-						local descHeight = Description.Visible and measureLabelHeight(Description.Text, 9, Description.Font, textWidth, 13, 24) or 0
+						local titleHeight = measureLabelHeight(Title.Text, 12, Title.Font, textWidth, 16, 56)
+						local descHeight = Description.Visible and measureLabelHeight(Description.Text, 9, Description.Font, textWidth, 13, 72) or 0
 						Title.Size = UDim2.fromOffset(textWidth, titleHeight)
 						Description.Position = UDim2.fromOffset(left, 8 + titleHeight + 3)
 						Description.Size = UDim2.fromOffset(textWidth, descHeight)
@@ -7854,7 +7889,7 @@ function Library.new(config)
 					if Footer.Visible then
 						local footerWidth = math.max(90, Card.AbsoluteSize.X - 24)
 						local bounds = TextServ:GetTextSize(Footer.Text, 9, Footer.Font, Vector2.new(footerWidth, math.huge))
-						footerHeight = math.clamp(math.ceil(bounds.Y) + 5, 16, 48)
+						footerHeight = math.clamp(math.ceil(bounds.Y) + 5, 16, 90)
 						Footer.Size = UDim2.new(1, -24, 0, footerHeight)
 					end
 					local targetHeight = HeaderHeight + 8 + contentHeight + footerHeight
