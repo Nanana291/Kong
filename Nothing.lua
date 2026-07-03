@@ -2210,87 +2210,50 @@ function Library.new(config)
 				return nil
 			end
 
-			-- ── Design Tokens ──────────────────────────────────────
 			local LabMetrics = {
 				Radius = UDim.new(0, 4),
 				Pad = 8,
-				Gap = 4,
-				SectionGap = 10,
+				Gap = 6,
 				Motion = TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
 				Press = TweenInfo.new(0.08, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-				Font = Enum.Font.GothamBold,
-				TitleSize = 13,
-				SubtitleSize = 10,
-				SectionLabelSize = 10,
-				MetadataSize = 9,
-				ChipTextSize = 8,
 			}
 
-			-- ── Instance Pool ──────────────────────────────────────
 			local root = Instance.new("Frame")
-			local rootPad = Instance.new("UIPadding")
-			local rootLayout = Instance.new("UIListLayout")
 			local rootCorner = Instance.new("UICorner")
 			local rootStroke = Instance.new("UIStroke")
-
-			local headerRow = Instance.new("Frame")
 			local title = Instance.new("TextLabel")
-			local titleConstraint = Instance.new("UITextSizeConstraint")
 			local subtitle = Instance.new("TextLabel")
-			local subtitleConstraint = Instance.new("UITextSizeConstraint")
 			local liveChip = Instance.new("Frame")
 			local liveChipCorner = Instance.new("UICorner")
 			local liveChipStroke = Instance.new("UIStroke")
 			local liveChipText = Instance.new("TextLabel")
-			local liveChipConstraint = Instance.new("UITextSizeConstraint")
-
 			local previewCard = Instance.new("Frame")
-			local previewPad = Instance.new("UIPadding")
 			local previewCorner = Instance.new("UICorner")
 			local previewStroke = Instance.new("UIStroke")
-			local previewHeaderRow = Instance.new("Frame")
 			local previewTitle = Instance.new("TextLabel")
-			local previewTitleConstraint = Instance.new("UITextSizeConstraint")
 			local compareButton = Instance.new("TextButton")
 			local compareCorner = Instance.new("UICorner")
 			local compareStroke = Instance.new("UIStroke")
-			local compareConstraint = Instance.new("UITextSizeConstraint")
 			local previewArea = Instance.new("Frame")
 			local compareDivider = Instance.new("Frame")
 			local accentStrip = Instance.new("Frame")
 			local accentStripCorner = Instance.new("UICorner")
 			local accentGradient = Instance.new("UIGradient")
-
 			local themeLabel = Instance.new("TextLabel")
-			local themeLabelConstraint = Instance.new("UITextSizeConstraint")
 			local themeCards = Instance.new("Frame")
-			local themePad = Instance.new("UIPadding")
 			local themeGrid = Instance.new("UIGridLayout")
-
 			local paletteLabel = Instance.new("TextLabel")
-			local paletteLabelConstraint = Instance.new("UITextSizeConstraint")
 			local paletteRow = Instance.new("Frame")
-			local palettePad = Instance.new("UIPadding")
-			local paletteLayout = Instance.new("UIListLayout")
-
 			local infoLabel = Instance.new("TextLabel")
-			local infoLabelConstraint = Instance.new("UITextSizeConstraint")
 			local infoGridFrame = Instance.new("Frame")
-			local infoPad = Instance.new("UIPadding")
 			local infoGrid = Instance.new("UIGridLayout")
-
 			local motionLabel = Instance.new("TextLabel")
-			local motionLabelConstraint = Instance.new("UITextSizeConstraint")
 			local motionPanel = Instance.new("Frame")
 			local motionCorner = Instance.new("UICorner")
-
 			local historyText = Instance.new("TextLabel")
-			local historyConstraint = Instance.new("UITextSizeConstraint")
 			local statsFrame = Instance.new("Frame")
-			local statsPad = Instance.new("UIPadding")
 			local statsGrid = Instance.new("UIGridLayout")
 
-			-- ── State ──────────────────────────────────────────────
 			local selectedTheme = ThemeManager:GetThemeName(ThemeManager.ActiveTheme)
 			local previousTheme = selectedTheme
 			local changedAt = os.date("%H:%M:%S")
@@ -2309,7 +2272,6 @@ function Library.new(config)
 			local motionParts = {}
 			local tweens = setmetatable({}, { __mode = "k" })
 
-			-- ── Helpers ────────────────────────────────────────────
 			local function tween(instance, props, info)
 				if not instance then
 					return nil
@@ -2371,22 +2333,30 @@ function Library.new(config)
 				return f
 			end
 
+			local function textLimit(textObject, minSize, maxSize)
+				local limit = Instance.new("UITextSizeConstraint")
+				limit.MinTextSize = minSize or 7
+				limit.MaxTextSize = maxSize or 12
+				limit.Parent = textObject
+				return limit
+			end
+
 			local function label(parent, text, pos, size, textSize, transparency, align)
 				local l = Instance.new("TextLabel")
 				l.Parent = parent
 				l.BackgroundTransparency = 1
 				l.Position = pos or UDim2.fromOffset(0, 0)
-				l.Size = size or UDim2.new(1, 0, 0, 14)
-				l.Font = LabMetrics.Font
+				l.Size = size or UDim2.fromOffset(80, 16)
+				l.Font = Enum.Font.GothamBold
 				l.Text = tostring(text or "")
 				l.TextColor3 = Color3.fromRGB(255, 255, 255)
-				l.TextScaled = false
-				l.TextSize = textSize or LabMetrics.SectionLabelSize
+				l.TextScaled = true
+				l.TextSize = textSize or 12
 				l.TextTransparency = transparency or 0.2
 				l.TextWrapped = true
 				l.TextXAlignment = align or Enum.TextXAlignment.Left
-				l.AutomaticSize = Enum.AutomaticSize.Y
 				l.ZIndex = (parent and parent.ZIndex or 1) + 1
+				textLimit(l, 7, textSize or 12)
 				return l
 			end
 
@@ -2395,27 +2365,14 @@ function Library.new(config)
 				return st
 			end
 
-			-- ── Root Container ────────────────────────────────────
 			root.Name = "ThemeLab"
 			root.Parent = sectionRoot
 			root.BackgroundColor3 = ThemeManager:GetColor("CardSurface")
 			root.BackgroundTransparency = 0.22
 			root.BorderSizePixel = 0
 			root.ClipsDescendants = true
-			root.Size = UDim2.new(0.95, 0, 0, 400)
+			root.Size = UDim2.new(0.95, 0, 0, 560)
 			root.ZIndex = 17
-
-			rootPad.PaddingTop = UDim.new(0, 8)
-			rootPad.PaddingBottom = UDim.new(0, 10)
-			rootPad.PaddingLeft = UDim.new(0, 10)
-			rootPad.PaddingRight = UDim.new(0, 10)
-			rootPad.Parent = root
-
-			rootLayout.SortOrder = Enum.SortOrder.LayoutOrder
-			rootLayout.Padding = UDim.new(0, LabMetrics.SectionGap)
-			rootLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-			rootLayout.Parent = root
-
 			rootCorner.CornerRadius = UDim.new(0, 5)
 			rootCorner.Parent = root
 			rootStroke.Color = ThemeManager:GetColor("AccentStroke")
@@ -2424,57 +2381,42 @@ function Library.new(config)
 			ThemeManager:Bind(root, "BackgroundColor3", "CardSurface")
 			bindAccentStroke(rootStroke)
 
-			-- ── Header Row ────────────────────────────────────────
-			headerRow.Name = "HeaderRow"
-			headerRow.Parent = root
-			headerRow.BackgroundTransparency = 1
-			headerRow.Size = UDim2.new(1, 0, 0, 26)
-			headerRow.ZIndex = 18
-			headerRow.LayoutOrder = 1
-
 			title.Name = "Title"
-			title.Parent = headerRow
+			title.Parent = root
 			title.BackgroundTransparency = 1
-			title.Position = UDim2.fromOffset(0, 0)
-			title.Size = UDim2.new(1, -88, 0, 14)
-			title.Font = LabMetrics.Font
+			title.Position = UDim2.fromOffset(10, 7)
+			title.Size = UDim2.new(1, -20, 0, 18)
+			title.Font = Enum.Font.GothamBold
 			title.Text = "Theme Lab"
 			title.TextColor3 = Color3.fromRGB(255, 255, 255)
-			title.TextScaled = false
-			title.TextSize = LabMetrics.TitleSize
+			title.TextScaled = true
 			title.TextTransparency = 0.05
-			title.TextWrapped = true
 			title.TextXAlignment = Enum.TextXAlignment.Left
 			title.ZIndex = 18
-			titleConstraint.MaxTextSize = LabMetrics.TitleSize
-			titleConstraint.Parent = title
+			textLimit(title, 9, 14)
 
 			subtitle.Name = "Subtitle"
-			subtitle.Parent = headerRow
+			subtitle.Parent = root
 			subtitle.BackgroundTransparency = 1
-			subtitle.Position = UDim2.fromOffset(0, 16)
-			subtitle.Size = UDim2.new(1, -88, 0, 10)
-			subtitle.Font = LabMetrics.Font
+			subtitle.Position = UDim2.fromOffset(10, 27)
+			subtitle.Size = UDim2.new(1, -122, 0, 14)
+			subtitle.Font = Enum.Font.GothamBold
 			subtitle.Text = "Appearance editor with live preview."
 			subtitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-			subtitle.TextScaled = false
-			subtitle.TextSize = LabMetrics.SubtitleSize
+			subtitle.TextScaled = true
 			subtitle.TextTransparency = 0.55
-			subtitle.TextWrapped = true
 			subtitle.TextXAlignment = Enum.TextXAlignment.Left
-			subtitle.AutomaticSize = Enum.AutomaticSize.Y
 			subtitle.ZIndex = 18
-			subtitleConstraint.MaxTextSize = LabMetrics.SubtitleSize
-			subtitleConstraint.Parent = subtitle
+			textLimit(subtitle, 7, 10)
 
 			liveChip.Name = "LiveStatus"
-			liveChip.Parent = headerRow
+			liveChip.Parent = root
 			liveChip.AnchorPoint = Vector2.new(1, 0)
 			liveChip.BackgroundColor3 = ThemeManager:GetColor("CardChip")
 			liveChip.BackgroundTransparency = 0.45
 			liveChip.BorderSizePixel = 0
-			liveChip.Position = UDim2.new(1, 0, 0, 1)
-			liveChip.Size = UDim2.fromOffset(76, 15)
+			liveChip.Position = UDim2.new(1, -10, 0, 10)
+			liveChip.Size = UDim2.fromOffset(96, 18)
 			liveChip.ZIndex = 18
 			ThemeManager:Bind(liveChip, "BackgroundColor3", "CardChip")
 			liveChipCorner.CornerRadius = UDim.new(1, 0)
@@ -2485,77 +2427,48 @@ function Library.new(config)
 			bindAccentStroke(liveChipStroke)
 			liveChipText.Parent = liveChip
 			liveChipText.BackgroundTransparency = 1
-			liveChipText.Size = UDim2.new(1, -4, 1, 0)
-			liveChipText.Position = UDim2.fromOffset(2, 0)
-			liveChipText.Font = LabMetrics.Font
-			liveChipText.Text = "LIVE"
+			liveChipText.Size = UDim2.new(1, 0, 1, 0)
+			liveChipText.Font = Enum.Font.GothamBold
+			liveChipText.Text = "LIVE PREVIEW"
 			liveChipText.TextColor3 = ThemeManager:GetColor("Accent")
-			liveChipText.TextScaled = false
-			liveChipText.TextSize = LabMetrics.ChipTextSize
+			liveChipText.TextScaled = true
+			liveChipText.TextSize = 10
 			liveChipText.TextTransparency = 0.12
 			liveChipText.ZIndex = 19
+			textLimit(liveChipText, 7, 9)
 			ThemeManager:BindAccent(liveChipText, "TextColor3")
-			liveChipConstraint.MaxTextSize = LabMetrics.ChipTextSize
-			liveChipConstraint.Parent = liveChipText
 
-			-- ── Preview Card ──────────────────────────────────────
 			previewCard.Name = "ThemePreviewCard"
 			previewCard.Parent = root
 			previewCard.BackgroundColor3 = Color3.fromRGB(8, 8, 8)
 			previewCard.BackgroundTransparency = 0.08
 			previewCard.BorderSizePixel = 0
-			previewCard.Size = UDim2.new(1, 0, 0, 110)
+			previewCard.Position = UDim2.fromOffset(10, 50)
+			previewCard.Size = UDim2.new(1, -20, 0, 138)
 			previewCard.ZIndex = 18
-			previewCard.LayoutOrder = 2
 			previewCorner.CornerRadius = UDim.new(0, 5)
 			previewCorner.Parent = previewCard
 			previewStroke.Color = ThemeManager:GetColor("AccentStroke")
 			previewStroke.Transparency = 0.86
 			previewStroke.Parent = previewCard
 			bindAccentStroke(previewStroke)
-
-			previewPad.PaddingTop = UDim.new(0, 6)
-			previewPad.PaddingBottom = UDim.new(0, 6)
-			previewPad.PaddingLeft = UDim.new(0, 8)
-			previewPad.PaddingRight = UDim.new(0, 8)
-			previewPad.Parent = previewCard
-
-			previewHeaderRow.Name = "PreviewHeaderRow"
-			previewHeaderRow.Parent = previewCard
-			previewHeaderRow.BackgroundTransparency = 1
-			previewHeaderRow.Size = UDim2.new(1, 0, 0, 12)
-			previewHeaderRow.ZIndex = 19
-
-			previewTitle.Name = "PreviewTitle"
-			previewTitle.Parent = previewHeaderRow
-			previewTitle.BackgroundTransparency = 1
-			previewTitle.Size = UDim2.new(0.5, 0, 1, 0)
-			previewTitle.Font = LabMetrics.Font
-			previewTitle.Text = "Preview"
-			previewTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-			previewTitle.TextScaled = false
-			previewTitle.TextSize = LabMetrics.ChipTextSize
-			previewTitle.TextTransparency = 0.35
-			previewTitle.TextXAlignment = Enum.TextXAlignment.Left
-			previewTitle.ZIndex = 19
-			previewTitleConstraint.MaxTextSize = LabMetrics.ChipTextSize
-			previewTitleConstraint.Parent = previewTitle
+			previewTitle = label(previewCard, "Preview", UDim2.fromOffset(9, 7), UDim2.new(0.5, 0, 0, 15), 11, 0.24)
 
 			compareButton.Name = "CompareThemes"
-			compareButton.Parent = previewHeaderRow
+			compareButton.Parent = previewCard
 			compareButton.AnchorPoint = Vector2.new(1, 0)
 			compareButton.BackgroundColor3 = ThemeManager:GetColor("CardChip")
 			compareButton.BackgroundTransparency = 0.45
 			compareButton.BorderSizePixel = 0
-			compareButton.Position = UDim2.new(1, 0, 0, 0)
-			compareButton.Size = UDim2.fromOffset(70, 12)
-			compareButton.Font = LabMetrics.Font
-			compareButton.Text = "Compare"
+			compareButton.Position = UDim2.new(1, -8, 0, 7)
+			compareButton.Size = UDim2.fromOffset(96, 18)
+			compareButton.Font = Enum.Font.GothamBold
+			compareButton.Text = "Compare Themes"
 			compareButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-			compareButton.TextScaled = false
-			compareButton.TextSize = LabMetrics.ChipTextSize
+			compareButton.TextScaled = true
 			compareButton.TextTransparency = 0.18
 			compareButton.ZIndex = 25
+			textLimit(compareButton, 7, 9)
 			ThemeManager:Bind(compareButton, "BackgroundColor3", "CardChip")
 			compareCorner.CornerRadius = UDim.new(0, 4)
 			compareCorner.Parent = compareButton
@@ -2563,14 +2476,12 @@ function Library.new(config)
 			compareStroke.Transparency = 0.88
 			compareStroke.Parent = compareButton
 			bindAccentStroke(compareStroke)
-			compareConstraint.MaxTextSize = LabMetrics.ChipTextSize
-			compareConstraint.Parent = compareButton
 
 			previewArea.Name = "PreviewArea"
 			previewArea.Parent = previewCard
 			previewArea.BackgroundTransparency = 1
-			previewArea.Position = UDim2.fromOffset(0, 16)
-			previewArea.Size = UDim2.new(1, 0, 1, -24)
+			previewArea.Position = UDim2.fromOffset(8, 30)
+			previewArea.Size = UDim2.new(1, -16, 0, 88)
 			previewArea.ZIndex = 19
 
 			compareDivider.Name = "CompareDivider"
@@ -2579,8 +2490,8 @@ function Library.new(config)
 			compareDivider.BackgroundColor3 = ThemeManager:GetColor("Accent")
 			compareDivider.BackgroundTransparency = 1
 			compareDivider.BorderSizePixel = 0
-			compareDivider.Position = UDim2.new(0.5, 0, 0, 2)
-			compareDivider.Size = UDim2.new(0, 1, 1, -4)
+			compareDivider.Position = UDim2.new(0.5, 0, 0, 4)
+			compareDivider.Size = UDim2.new(0, 1, 1, -8)
 			compareDivider.ZIndex = 35
 			ThemeManager:BindAccent(compareDivider, "BackgroundColor3")
 
@@ -2589,9 +2500,8 @@ function Library.new(config)
 			accentStrip.BackgroundColor3 = ThemeManager:GetColor("Accent")
 			accentStrip.BackgroundTransparency = 0.12
 			accentStrip.BorderSizePixel = 0
-			accentStrip.AnchorPoint = Vector2.new(0, 1)
-			accentStrip.Position = UDim2.new(0, 8, 1, -4)
-			accentStrip.Size = UDim2.new(1, -16, 0, 2)
+			accentStrip.Position = UDim2.new(0, 8, 1, -12)
+			accentStrip.Size = UDim2.new(1, -16, 0, 3)
 			accentStrip.ZIndex = 20
 			ThemeManager:BindAccent(accentStrip, "BackgroundColor3")
 			accentStripCorner.CornerRadius = UDim.new(1, 0)
@@ -2603,176 +2513,65 @@ function Library.new(config)
 			})
 			accentGradient.Parent = accentStrip
 
-			-- ── Theme Section ─────────────────────────────────────
-			themeLabel.Name = "ThemeLabel"
-			themeLabel.Parent = root
-			themeLabel.BackgroundTransparency = 1
-			themeLabel.Size = UDim2.new(1, 0, 0, 10)
-			themeLabel.Font = LabMetrics.Font
-			themeLabel.Text = "Theme"
-			themeLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-			themeLabel.TextScaled = false
-			themeLabel.TextSize = LabMetrics.SectionLabelSize
-			themeLabel.TextTransparency = 0.35
-			themeLabel.TextWrapped = true
-			themeLabel.TextXAlignment = Enum.TextXAlignment.Left
-			themeLabel.LayoutOrder = 3
-			themeLabel.ZIndex = 18
-			themeLabelConstraint.MaxTextSize = LabMetrics.SectionLabelSize
-			themeLabelConstraint.Parent = themeLabel
-
+			themeLabel = label(root, "Theme", UDim2.fromOffset(10, 198), UDim2.new(1, -20, 0, 14), 11, 0.28)
 			themeCards.Name = "ThemeCards"
 			themeCards.Parent = root
 			themeCards.BackgroundTransparency = 1
-			themeCards.Size = UDim2.new(1, 0, 0, 62)
+			themeCards.Position = UDim2.fromOffset(10, 218)
+			themeCards.Size = UDim2.new(1, -20, 0, 90)
 			themeCards.ZIndex = 18
-			themeCards.LayoutOrder = 4
-			themePad.PaddingTop = UDim.new(0, 0)
-			themePad.PaddingBottom = UDim.new(0, 0)
-			themePad.PaddingLeft = UDim.new(0, 0)
-			themePad.PaddingRight = UDim.new(0, 0)
-			themePad.Parent = themeCards
 			themeGrid.Parent = themeCards
 			themeGrid.FillDirection = Enum.FillDirection.Horizontal
 			themeGrid.HorizontalAlignment = Enum.HorizontalAlignment.Center
 			themeGrid.SortOrder = Enum.SortOrder.LayoutOrder
-			themeGrid.CellPadding = UDim2.fromOffset(4, 4)
+			themeGrid.CellPadding = UDim2.fromOffset(6, 6)
 
-			-- ── Palette Section ──────────────────────────────────
-			paletteLabel.Name = "PaletteLabel"
-			paletteLabel.Parent = root
-			paletteLabel.BackgroundTransparency = 1
-			paletteLabel.Size = UDim2.new(1, 0, 0, 10)
-			paletteLabel.Font = LabMetrics.Font
-			paletteLabel.Text = "Accent Preview"
-			paletteLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-			paletteLabel.TextScaled = false
-			paletteLabel.TextSize = LabMetrics.SectionLabelSize
-			paletteLabel.TextTransparency = 0.35
-			paletteLabel.TextWrapped = true
-			paletteLabel.TextXAlignment = Enum.TextXAlignment.Left
-			paletteLabel.LayoutOrder = 5
-			paletteLabel.ZIndex = 18
-			paletteLabelConstraint.MaxTextSize = LabMetrics.SectionLabelSize
-			paletteLabelConstraint.Parent = paletteLabel
-
+			paletteLabel = label(root, "Accent Preview", UDim2.fromOffset(10, 306), UDim2.new(1, -20, 0, 14), 11, 0.28)
 			paletteRow.Name = "PaletteRow"
 			paletteRow.Parent = root
 			paletteRow.BackgroundTransparency = 1
-			paletteRow.Size = UDim2.new(1, 0, 0, 20)
+			paletteRow.Position = UDim2.fromOffset(10, 326)
+			paletteRow.Size = UDim2.new(1, -20, 0, 24)
 			paletteRow.ZIndex = 18
-			paletteRow.LayoutOrder = 6
-			palettePad.PaddingTop = UDim.new(0, 0)
-			palettePad.PaddingBottom = UDim.new(0, 0)
-			palettePad.PaddingLeft = UDim.new(0, 0)
-			palettePad.PaddingRight = UDim.new(0, 0)
-			palettePad.Parent = paletteRow
-			paletteLayout.FillDirection = Enum.FillDirection.Horizontal
-			paletteLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-			paletteLayout.SortOrder = Enum.SortOrder.LayoutOrder
-			paletteLayout.CellPadding = UDim2.new(0, 4)
-			paletteLayout.Parent = paletteRow
 
-			-- ── Info Section ──────────────────────────────────────
-			infoLabel.Name = "InfoLabel"
-			infoLabel.Parent = root
-			infoLabel.BackgroundTransparency = 1
-			infoLabel.Size = UDim2.new(1, 0, 0, 10)
-			infoLabel.Font = LabMetrics.Font
-			infoLabel.Text = "Theme Information"
-			infoLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-			infoLabel.TextScaled = false
-			infoLabel.TextSize = LabMetrics.SectionLabelSize
-			infoLabel.TextTransparency = 0.35
-			infoLabel.TextWrapped = true
-			infoLabel.TextXAlignment = Enum.TextXAlignment.Left
-			infoLabel.LayoutOrder = 7
-			infoLabel.ZIndex = 18
-			infoLabelConstraint.MaxTextSize = LabMetrics.SectionLabelSize
-			infoLabelConstraint.Parent = infoLabel
-
+			infoLabel = label(root, "Theme Information", UDim2.fromOffset(10, 360), UDim2.new(1, -20, 0, 14), 11, 0.28)
 			infoGridFrame.Name = "InfoGrid"
 			infoGridFrame.Parent = root
 			infoGridFrame.BackgroundTransparency = 1
-			infoGridFrame.Size = UDim2.new(1, 0, 0, 32)
+			infoGridFrame.Position = UDim2.fromOffset(10, 380)
+			infoGridFrame.Size = UDim2.new(1, -20, 0, 58)
 			infoGridFrame.ZIndex = 18
-			infoGridFrame.LayoutOrder = 8
-			infoPad.PaddingTop = UDim.new(0, 0)
-			infoPad.PaddingBottom = UDim.new(0, 0)
-			infoPad.PaddingLeft = UDim.new(0, 0)
-			infoPad.PaddingRight = UDim.new(0, 0)
-			infoPad.Parent = infoGridFrame
 			infoGrid.Parent = infoGridFrame
 			infoGrid.FillDirection = Enum.FillDirection.Horizontal
 			infoGrid.HorizontalAlignment = Enum.HorizontalAlignment.Center
 			infoGrid.SortOrder = Enum.SortOrder.LayoutOrder
-			infoGrid.CellPadding = UDim2.fromOffset(4, 4)
+			infoGrid.CellPadding = UDim2.fromOffset(6, 6)
 
-			-- ── Motion Section ────────────────────────────────────
-			motionLabel.Name = "MotionLabel"
-			motionLabel.Parent = root
-			motionLabel.BackgroundTransparency = 1
-			motionLabel.Size = UDim2.new(1, 0, 0, 10)
-			motionLabel.Font = LabMetrics.Font
-			motionLabel.Text = "Motion Preview"
-			motionLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-			motionLabel.TextScaled = false
-			motionLabel.TextSize = LabMetrics.SectionLabelSize
-			motionLabel.TextTransparency = 0.35
-			motionLabel.TextWrapped = true
-			motionLabel.TextXAlignment = Enum.TextXAlignment.Left
-			motionLabel.LayoutOrder = 9
-			motionLabel.ZIndex = 18
-			motionLabelConstraint.MaxTextSize = LabMetrics.SectionLabelSize
-			motionLabelConstraint.Parent = motionLabel
-
+			motionLabel = label(root, "Motion Preview", UDim2.fromOffset(10, 448), UDim2.new(1, -20, 0, 14), 11, 0.28)
 			motionPanel.Name = "MotionPanel"
 			motionPanel.Parent = root
 			motionPanel.BackgroundColor3 = ThemeManager:GetColor("CardChip")
 			motionPanel.BackgroundTransparency = 0.56
 			motionPanel.BorderSizePixel = 0
-			motionPanel.Size = UDim2.new(1, 0, 0, 34)
+			motionPanel.Position = UDim2.fromOffset(10, 468)
+			motionPanel.Size = UDim2.new(1, -20, 0, 42)
 			motionPanel.ZIndex = 18
-			motionPanel.LayoutOrder = 10
 			ThemeManager:Bind(motionPanel, "BackgroundColor3", "CardChip")
 			motionCorner.CornerRadius = UDim.new(0, 4)
 			motionCorner.Parent = motionPanel
 
-			-- ── Footer Section ────────────────────────────────────
-			historyText.Name = "HistoryText"
-			historyText.Parent = root
-			historyText.BackgroundTransparency = 1
-			historyText.Size = UDim2.new(1, 0, 0, 10)
-			historyText.Font = LabMetrics.Font
-			historyText.Text = "Current Theme: " .. selectedTheme
-			historyText.TextColor3 = Color3.fromRGB(255, 255, 255)
-			historyText.TextScaled = false
-			historyText.TextSize = LabMetrics.MetadataSize
-			historyText.TextTransparency = 0.55
-			historyText.TextWrapped = true
-			historyText.TextXAlignment = Enum.TextXAlignment.Left
-			historyText.AutomaticSize = Enum.AutomaticSize.Y
-			historyText.LayoutOrder = 11
-			historyText.ZIndex = 18
-			historyConstraint.MaxTextSize = LabMetrics.MetadataSize
-			historyConstraint.Parent = historyText
-
+			historyText = label(root, "Current Theme: " .. selectedTheme, UDim2.fromOffset(10, 516), UDim2.new(1, -20, 0, 16), 10, 0.45)
 			statsFrame.Name = "ThemeStats"
 			statsFrame.Parent = root
 			statsFrame.BackgroundTransparency = 1
-			statsFrame.Size = UDim2.new(1, 0, 0, 32)
+			statsFrame.Position = UDim2.fromOffset(10, 538)
+			statsFrame.Size = UDim2.new(1, -20, 0, 50)
 			statsFrame.ZIndex = 18
-			statsFrame.LayoutOrder = 12
-			statsPad.PaddingTop = UDim.new(0, 0)
-			statsPad.PaddingBottom = UDim.new(0, 0)
-			statsPad.PaddingLeft = UDim.new(0, 0)
-			statsPad.PaddingRight = UDim.new(0, 0)
-			statsPad.Parent = statsFrame
 			statsGrid.Parent = statsFrame
 			statsGrid.FillDirection = Enum.FillDirection.Horizontal
 			statsGrid.HorizontalAlignment = Enum.HorizontalAlignment.Center
 			statsGrid.SortOrder = Enum.SortOrder.LayoutOrder
-			statsGrid.CellPadding = UDim2.fromOffset(4, 4)
+			statsGrid.CellPadding = UDim2.fromOffset(5, 5)
 
 			local function miniPart(parent, role, pos, size, themeName)
 				local pal = palette(themeName or selectedTheme)
@@ -2812,57 +2611,12 @@ function Library.new(config)
 				local st = stroke(card, pal.Outline, 0.88)
 				local scale = Instance.new("UIScale")
 				scale.Parent = card
-				-- Theme card title: fixed size, no TextScaled
-				local cardTitle = Instance.new("TextLabel")
-				cardTitle.Parent = card
-				cardTitle.BackgroundTransparency = 1
-				cardTitle.Position = UDim2.fromOffset(6, 5)
-				cardTitle.Size = UDim2.new(0.6, 0, 0, 12)
-				cardTitle.Font = LabMetrics.Font
-				cardTitle.Text = themeName
-				cardTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-				cardTitle.TextScaled = false
-				cardTitle.TextSize = LabMetrics.SectionLabelSize
-				cardTitle.TextTransparency = 0.08
-				cardTitle.TextXAlignment = Enum.TextXAlignment.Left
-				cardTitle.ZIndex = 21
-				local cardTitleConstraint = Instance.new("UITextSizeConstraint")
-				cardTitleConstraint.MaxTextSize = LabMetrics.SectionLabelSize
-				cardTitleConstraint.Parent = cardTitle
-				-- Theme card description: fixed size, no TextScaled
-				local cardDesc = Instance.new("TextLabel")
-				cardDesc.Parent = card
-				cardDesc.BackgroundTransparency = 1
-				cardDesc.Position = UDim2.fromOffset(6, 19)
-				cardDesc.Size = UDim2.new(0.65, 0, 0, 12)
-				cardDesc.Font = LabMetrics.Font
-				cardDesc.Text = ThemeManager:GetDescription(themeName)
-				cardDesc.TextColor3 = Color3.fromRGB(255, 255, 255)
-				cardDesc.TextScaled = false
-				cardDesc.TextSize = LabMetrics.MetadataSize
-				cardDesc.TextTransparency = 0.58
-				cardDesc.TextWrapped = true
-				cardDesc.TextXAlignment = Enum.TextXAlignment.Left
-				cardDesc.ZIndex = 21
-				local cardDescConstraint = Instance.new("UITextSizeConstraint")
-				cardDescConstraint.MaxTextSize = LabMetrics.MetadataSize
-				cardDescConstraint.Parent = cardDesc
-				frame(card, "Stripe", UDim2.new(0, 6, 1, -8), UDim2.new(1, -12, 0, 2), pal.Accent, 0.06, 22, UDim.new(1, 0))
-				local dot = frame(card, "AccentDot", UDim2.new(1, -22, 0, 8), UDim2.fromOffset(12, 12), pal.Accent, 0, 22, UDim.new(1, 0))
+				label(card, themeName, UDim2.fromOffset(8, 6), UDim2.new(0.65, 0, 0, 14), 11, 0.08)
+				label(card, ThemeManager:GetDescription(themeName), UDim2.fromOffset(8, 23), UDim2.new(0.7, 0, 0, 16), 9, 0.58)
+				frame(card, "Stripe", UDim2.new(0, 8, 1, -12), UDim2.new(1, -16, 0, 2), pal.Accent, 0.06, 22, UDim.new(1, 0))
+				local dot = frame(card, "AccentDot", UDim2.new(1, -26, 0, 10), UDim2.fromOffset(16, 16), pal.Accent, 0, 22, UDim.new(1, 0))
 				stroke(dot, Color3.fromRGB(255, 255, 255), 0.86)
-				local badge = Instance.new("TextLabel")
-				badge.Parent = card
-				badge.BackgroundTransparency = 1
-				badge.Position = UDim2.new(1, -40, 0, 6)
-				badge.Size = UDim2.fromOffset(14, 14)
-				badge.Font = LabMetrics.Font
-				badge.Text = "\u25cb"
-				badge.TextColor3 = Color3.fromRGB(255, 255, 255)
-				badge.TextScaled = false
-				badge.TextSize = 10
-				badge.TextTransparency = 0.2
-				badge.TextXAlignment = Enum.TextXAlignment.Center
-				badge.ZIndex = 21
+				local badge = label(card, "○", UDim2.new(1, -48, 0, 8), UDim2.fromOffset(16, 16), 12, 0.2, Enum.TextXAlignment.Center)
 				local button = Instance.new("TextButton")
 				button.Parent = card
 				button.BackgroundTransparency = 1
@@ -2895,42 +2649,8 @@ function Library.new(config)
 				local card = frame(parent, key .. "Card", nil, nil, ThemeManager:GetColor("CardChip"), 0.55, 19, UDim.new(0, 4))
 				ThemeManager:Bind(card, "BackgroundColor3", "CardChip")
 				stroke(card, ThemeManager:GetColor("AccentStroke"), 0.92)
-				-- Key label: fixed size
-				local k = Instance.new("TextLabel")
-				k.Parent = card
-				k.BackgroundTransparency = 1
-				k.Position = UDim2.fromOffset(4, 3)
-				k.Size = UDim2.new(1, -8, 0, 8)
-				k.Font = LabMetrics.Font
-				k.Text = key
-				k.TextColor3 = Color3.fromRGB(255, 255, 255)
-				k.TextScaled = false
-				k.TextSize = 7
-				k.TextTransparency = 0.62
-				k.TextWrapped = true
-				k.TextXAlignment = Enum.TextXAlignment.Left
-				k.ZIndex = 20
-				local kConstraint = Instance.new("UITextSizeConstraint")
-				kConstraint.MaxTextSize = 7
-				kConstraint.Parent = k
-				-- Value label: fixed size
-				local v = Instance.new("TextLabel")
-				v.Parent = card
-				v.BackgroundTransparency = 1
-				v.Position = UDim2.fromOffset(4, 13)
-				v.Size = UDim2.new(1, -8, 0, 12)
-				v.Font = LabMetrics.Font
-				v.Text = "-"
-				v.TextColor3 = Color3.fromRGB(255, 255, 255)
-				v.TextScaled = false
-				v.TextSize = LabMetrics.MetadataSize
-				v.TextTransparency = 0.16
-				v.TextWrapped = true
-				v.TextXAlignment = Enum.TextXAlignment.Left
-				v.ZIndex = 20
-				local vConstraint = Instance.new("UITextSizeConstraint")
-				vConstraint.MaxTextSize = LabMetrics.MetadataSize
-				vConstraint.Parent = v
+				local k = label(card, key, UDim2.fromOffset(6, 4), UDim2.new(1, -12, 0, 10), 8, 0.62)
+				local v = label(card, "-", UDim2.fromOffset(6, 18), UDim2.new(1, -12, 0, 14), 9, 0.16)
 				return { Root = card, Key = k, Value = v }
 			end
 
@@ -2981,13 +2701,13 @@ function Library.new(config)
 				statCards.Radius.Value.Text = tostring(theme.CornerRadius or "3px")
 				statCards.Shadow.Value.Text = tostring(theme.ShadowStyle or "Soft")
 				statCards.Density.Value.Text = tostring(theme.SpacingDensity or "Compact")
-				historyText.Text = "Current Theme: " .. themeName .. "  \u2022  Previous: " .. previousTheme .. "  \u2022  Changed: " .. changedAt
+				historyText.Text = "Current Theme: " .. themeName .. "    Previous: " .. previousTheme .. "    Changed: " .. changedAt
 			end
 
 			local function updateCards()
 				for themeName, card in pairs(themeCardData) do
 					local active = themeName == selectedTheme
-					card.Badge.Text = active and "\u25cf" or "\u25cb"
+					card.Badge.Text = active and "●" or "○"
 					tween(card.Scale, { Scale = active and 1.015 or (card.Hovered and 1.01 or 1) })
 					tween(card.Stroke, { Color = active and card.Palette.Accent or card.Palette.Outline, Transparency = active and 0.28 or (card.Hovered and 0.68 or 0.88) })
 					tween(card.Frame, { BackgroundTransparency = active and 0.18 or 0.28 })
@@ -3027,7 +2747,7 @@ function Library.new(config)
 
 			function ThemeLabObject:SetCompare(value)
 				compareEnabled = value == true
-				compareButton.Text = compareEnabled and "Live" or "Compare"
+				compareButton.Text = compareEnabled and "Live Preview" or "Compare Themes"
 				updatePreview(selectedTheme)
 			end
 
@@ -3056,53 +2776,32 @@ function Library.new(config)
 				lastLayoutWidth = width
 
 				local twoColumns = width >= 330
-				local cardWidth = twoColumns and math.floor((themeCards.AbsoluteSize.X - 4) / 2) or themeCards.AbsoluteSize.X
-				themeGrid.CellSize = UDim2.fromOffset(math.max(80, cardWidth), 56)
-				infoGrid.CellSize = UDim2.fromOffset(math.max(60, math.floor((infoGridFrame.AbsoluteSize.X - 12) / (twoColumns and 2 or 1))), 28)
-				statsGrid.CellSize = UDim2.fromOffset(math.max(52, math.floor((statsFrame.AbsoluteSize.X - 16) / (twoColumns and 3 or 1))), 28)
-
+				local cardWidth = twoColumns and math.floor((themeCards.AbsoluteSize.X - 6) / 2) or themeCards.AbsoluteSize.X
+				themeGrid.CellSize = UDim2.fromOffset(math.max(100, cardWidth), 82)
+				infoGrid.CellSize = UDim2.fromOffset(math.max(70, math.floor((infoGridFrame.AbsoluteSize.X - 18) / (twoColumns and 2 or 1))), 42)
+				statsGrid.CellSize = UDim2.fromOffset(math.max(62, math.floor((statsFrame.AbsoluteSize.X - 20) / (twoColumns and 3 or 1))), 42)
 				task.defer(function()
 					layoutQueued = false
 					if destroyed then
 						return
 					end
-					-- Measure grid heights
 					local themeHeight = themeGrid.AbsoluteContentSize.Y
+					local infoTop = 236 + themeHeight + 44
+					paletteLabel.Position = UDim2.fromOffset(10, 226 + themeHeight)
+					paletteRow.Position = UDim2.fromOffset(10, 246 + themeHeight)
+					infoLabel.Position = UDim2.fromOffset(10, infoTop)
+					infoGridFrame.Position = UDim2.fromOffset(10, infoTop + 20)
 					local infoHeight = infoGrid.AbsoluteContentSize.Y
+					infoGridFrame.Size = UDim2.new(1, -20, 0, infoHeight)
+					local motionTop = infoTop + 26 + infoHeight
+					motionLabel.Position = UDim2.fromOffset(10, motionTop)
+					motionPanel.Position = UDim2.fromOffset(10, motionTop + 20)
+					historyText.Position = UDim2.fromOffset(10, motionTop + 68)
+					statsFrame.Position = UDim2.fromOffset(10, motionTop + 90)
 					local statsHeight = statsGrid.AbsoluteContentSize.Y
+					statsFrame.Size = UDim2.new(1, -20, 0, statsHeight)
 
-					-- Resize containers to match their grid content
-					themeCards.Size = UDim2.new(1, 0, 0, math.max(56, themeHeight))
-					infoGridFrame.Size = UDim2.new(1, 0, 0, math.max(28, infoHeight))
-					statsFrame.Size = UDim2.new(1, 0, 0, math.max(28, statsHeight))
-
-					-- Compute total height from layout
-					local contentHeight = 0
-					for _, child in ipairs(root:GetChildren()) do
-						if child:IsA("Frame") or child:IsA("TextLabel") or child:IsA("TextButton") then
-							if child.Visible and child ~= rootLayout and child ~= rootPad then
-								local childHeight = child.AbsoluteSize.Y
-								if child.AutomaticSize == Enum.AutomaticSize.Y then
-									childHeight = math.max(child.AbsoluteSize.Y, 10)
-								end
-								contentHeight = contentHeight + childHeight
-							end
-						end
-					end
-					-- Add padding and gaps
-					local totalPadding = 8 + 10 -- top + bottom padding
-					local gapCount = 0
-					local visibleChildren = 0
-					for _, child in ipairs(root:GetChildren()) do
-						if child:IsA("Frame") or child:IsA("TextLabel") then
-							if child.Visible then
-								visibleChildren = visibleChildren + 1
-							end
-						end
-					end
-					local gapsHeight = math.max(0, visibleChildren - 1) * LabMetrics.SectionGap
-
-					local targetHeight = math.max(300, totalPadding + gapsHeight + contentHeight + 4)
+					local targetHeight = math.max(500, motionTop + 98 + statsHeight)
 					if targetHeight ~= lastRootHeight then
 						lastRootHeight = targetHeight
 						root.Size = UDim2.new(0.95, 0, 0, targetHeight)
@@ -3110,18 +2809,10 @@ function Library.new(config)
 				end)
 			end
 
-			connections[#connections + 1] = root:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-				refreshLayout()
-			end)
-			connections[#connections + 1] = themeGrid:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-				refreshLayout()
-			end)
-			connections[#connections + 1] = infoGrid:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-				refreshLayout()
-			end)
-			connections[#connections + 1] = statsGrid:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-				refreshLayout()
-			end)
+			connections[#connections + 1] = root:GetPropertyChangedSignal("AbsoluteSize"):Connect(refreshLayout)
+			connections[#connections + 1] = themeGrid:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(refreshLayout)
+			connections[#connections + 1] = infoGrid:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(refreshLayout)
+			connections[#connections + 1] = statsGrid:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(refreshLayout)
 			connections[#connections + 1] = compareButton.MouseButton1Click:Connect(function()
 				ThemeLabObject:SetCompare(not compareEnabled)
 			end)
@@ -3149,7 +2840,6 @@ function Library.new(config)
 			ThemeLabObject:SetValue(selectedTheme, true)
 			return ThemeLabObject
 		end
-
 
 		ConfigDropdown = ConfigSection:NewDropdown({
 			Title = "Select Config",
@@ -4947,14 +4637,11 @@ function Library.new(config)
 				TitleText.Font = Enum.Font.GothamBold
 				TitleText.Text = ParagraphState.Title
 				TitleText.TextColor3 = Color3.fromRGB(255, 255, 255)
-				TitleText.TextScaled = false
+				TitleText.TextScaled = true
 				TitleText.TextSize = 12.000
 				TitleText.TextTransparency = 1
 				TitleText.TextWrapped = true
 				TitleText.TextXAlignment = Enum.TextXAlignment.Left
-				local TitleText_tc = Instance.new("UITextSizeConstraint")
-				TitleText_tc.MaxTextSize = 12
-				TitleText_tc.Parent = TitleText
 				TitleText.TextYAlignment = Enum.TextYAlignment.Top
 				Twen:Create(TitleText, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
 					TextTransparency = 0.25,
@@ -4977,14 +4664,11 @@ function Library.new(config)
 				DescriptionText.Font = Enum.Font.GothamBold
 				DescriptionText.Text = ParagraphState.Description
 				DescriptionText.TextColor3 = Color3.fromRGB(255, 255, 255)
-				DescriptionText.TextScaled = false
+				DescriptionText.TextScaled = true
 				DescriptionText.TextSize = 11.000
 				DescriptionText.TextTransparency = 1
 				DescriptionText.TextWrapped = true
 				DescriptionText.TextXAlignment = Enum.TextXAlignment.Left
-				local DescriptionText_tc = Instance.new("UITextSizeConstraint")
-				DescriptionText_tc.MaxTextSize = 11
-				DescriptionText_tc.Parent = DescriptionText
 				DescriptionText.TextYAlignment = Enum.TextYAlignment.Top
 				Twen:Create(DescriptionText, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
 					TextTransparency = 0.5,
@@ -5136,14 +4820,11 @@ function Library.new(config)
 				TextInt.Font = Enum.Font.GothamBold
 				TextInt.Text = toggle.Title
 				TextInt.TextColor3 = Color3.fromRGB(255, 255, 255)
-				TextInt.TextScaled = false
-				TextInt.TextSize = 12.000
+				TextInt.TextScaled = true
+				TextInt.TextSize = 14.000
 				TextInt.TextTransparency = 0.250
 				TextInt.TextWrapped = true
 				TextInt.TextXAlignment = Enum.TextXAlignment.Left
-				local TextInt_tc = Instance.new("UITextSizeConstraint")
-				TextInt_tc.MaxTextSize = 14
-				TextInt_tc.Parent = TextInt
 
 				UIGradient.Rotation = 90
 				UIGradient.Transparency = NumberSequence.new({
@@ -5385,13 +5066,10 @@ function Library.new(config)
 					KeybindText.Font = Enum.Font.GothamBold
 					KeybindText.Text = FormatKeybindValue(CurrentBind)
 					KeybindText.TextColor3 = Color3.fromRGB(255, 255, 255)
-					KeybindText.TextScaled = false
-					KeybindText.TextSize = 12.000
+					KeybindText.TextScaled = true
+					KeybindText.TextSize = 14.000
 					KeybindText.TextTransparency = 0.500
 					KeybindText.TextWrapped = true
-					local KeybindText_tc = Instance.new("UITextSizeConstraint")
-					KeybindText_tc.MaxTextSize = 14
-					KeybindText_tc.Parent = KeybindText
 
 					KeybindButton.Name = "Button"
 					KeybindButton.Parent = KeybindFrame
@@ -5690,14 +5368,11 @@ function Library.new(config)
 				TextInt.Font = Enum.Font.GothamBold
 				TextInt.Text = lrm
 				TextInt.TextColor3 = Color3.fromRGB(255, 255, 255)
-				TextInt.TextScaled = false
-				TextInt.TextSize = 12.000
+				TextInt.TextScaled = true
+				TextInt.TextSize = 14.000
 				TextInt.TextTransparency = 1
 				TextInt.TextWrapped = true
 				TextInt.TextXAlignment = Enum.TextXAlignment.Left
-				local TextInt_tc = Instance.new("UITextSizeConstraint")
-				TextInt_tc.MaxTextSize = 14
-				TextInt_tc.Parent = TextInt
 				Twen:Create(TextInt,TweenInfo1,{TextTransparency = 0.25}):Play();
 
 				UIGradient.Rotation = 90
@@ -5788,12 +5463,9 @@ function Library.new(config)
 				TextInt.Font = Enum.Font.GothamBold
 				TextInt.Text = cfg.Title
 				TextInt.TextColor3 = Color3.fromRGB(255, 255, 255)
-				TextInt.TextScaled = false
-				TextInt.TextSize = 12.000
+				TextInt.TextScaled = true
+				TextInt.TextSize = 14.000
 				TextInt.TextWrapped = true
-				local TextInt_tc = Instance.new("UITextSizeConstraint")
-				TextInt_tc.MaxTextSize = 14
-				TextInt_tc.Parent = TextInt
 				TextInt.TextTransparency = 0.25;
 
 				UIGradient.Rotation = 90
@@ -5912,14 +5584,11 @@ function Library.new(config)
 				TextInt.Font = Enum.Font.GothamBold
 				TextInt.Text = ctfx.Title
 				TextInt.TextColor3 = Color3.fromRGB(255, 255, 255)
-				TextInt.TextScaled = false
-				TextInt.TextSize = 12.000
+				TextInt.TextScaled = true
+				TextInt.TextSize = 14.000
 				TextInt.TextTransparency = 0.250
 				TextInt.TextWrapped = true
 				TextInt.TextXAlignment = Enum.TextXAlignment.Left
-				local TextInt_tc = Instance.new("UITextSizeConstraint")
-				TextInt_tc.MaxTextSize = 14
-				TextInt_tc.Parent = TextInt
 
 				UIGradient.Rotation = 90
 				UIGradient.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0.00, 0.00), NumberSequenceKeypoint.new(0.84, 0.25), NumberSequenceKeypoint.new(1.00, 1.00)}
@@ -5975,13 +5644,10 @@ function Library.new(config)
 				Bindkey.Font = Enum.Font.GothamBold
 				Bindkey.Text = FormatKeybindValue(ctfx.Default)
 				Bindkey.TextColor3 = Color3.fromRGB(255, 255, 255)
-				Bindkey.TextScaled = false
-				Bindkey.TextSize = 12.000
+				Bindkey.TextScaled = true
+				Bindkey.TextSize = 14.000
 				Bindkey.TextTransparency = 0.500
 				Bindkey.TextWrapped = true
-				local Bindkey_tc = Instance.new("UITextSizeConstraint")
-				Bindkey_tc.MaxTextSize = 14
-				Bindkey_tc.Parent = Bindkey
 
 				UICorner_2.CornerRadius = UDim.new(0, 2)
 				UICorner_2.Parent = FunctionKeybind
@@ -6162,14 +5828,11 @@ function Library.new(config)
 				TextInt.Font = Enum.Font.GothamBold
 				TextInt.Text = slider.Title
 				TextInt.TextColor3 = Color3.fromRGB(255, 255, 255)
-				TextInt.TextScaled = false
-				TextInt.TextSize = 12.000
+				TextInt.TextScaled = true
+				TextInt.TextSize = 14.000
 				TextInt.TextTransparency = 0.250
 				TextInt.TextWrapped = true
 				TextInt.TextXAlignment = Enum.TextXAlignment.Left
-				local TextInt_tc = Instance.new("UITextSizeConstraint")
-				TextInt_tc.MaxTextSize = 14
-				TextInt_tc.Parent = TextInt
 
 				UIGradient.Rotation = 90
 				UIGradient.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0.00, 0.00), NumberSequenceKeypoint.new(0.84, 0.25), NumberSequenceKeypoint.new(1.00, 1.00)}
@@ -6195,14 +5858,11 @@ function Library.new(config)
 				ValueText.Font = Enum.Font.GothamBold
 				ValueText.Text = tostring(slider.Default)..'/'..tostring(slider.Max)
 				ValueText.TextColor3 = Color3.fromRGB(255, 255, 255)
-				ValueText.TextScaled = false
-				ValueText.TextSize = 12.000
+				ValueText.TextScaled = true
+				ValueText.TextSize = 14.000
 				ValueText.TextTransparency = 0.500
 				ValueText.TextWrapped = true
 				ValueText.TextXAlignment = Enum.TextXAlignment.Right
-				local ValueText_tc = Instance.new("UITextSizeConstraint")
-				ValueText_tc.MaxTextSize = 14
-				ValueText_tc.Parent = ValueText
 
 				UIGradient_2.Rotation = 90
 				UIGradient_2.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0.00, 0.00), NumberSequenceKeypoint.new(0.84, 0.25), NumberSequenceKeypoint.new(1.00, 1.00)}
@@ -6393,14 +6053,11 @@ function Library.new(config)
 				TextInt.Font = Enum.Font.GothamBold
 				TextInt.Text = drop.Title
 				TextInt.TextColor3 = Color3.fromRGB(255, 255, 255)
-				TextInt.TextScaled = false
-				TextInt.TextSize = 12.000
+				TextInt.TextScaled = true
+				TextInt.TextSize = 14.000
 				TextInt.TextTransparency = 0.250
 				TextInt.TextWrapped = true
 				TextInt.TextXAlignment = Enum.TextXAlignment.Left
-				local TextInt_tc = Instance.new("UITextSizeConstraint")
-				TextInt_tc.MaxTextSize = 14
-				TextInt_tc.Parent = TextInt
 
 				UIGradient.Rotation = 90
 				UIGradient.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0.00, 0.00), NumberSequenceKeypoint.new(0.84, 0.25), NumberSequenceKeypoint.new(1.00, 1.00)}
@@ -6445,14 +6102,11 @@ function Library.new(config)
 				ValueText.Font = Enum.Font.GothamBold
 				ValueText.Text = FormatDropdownValue(drop.Data, drop.Default, drop.Multi)
 				ValueText.TextColor3 = Color3.fromRGB(255, 255, 255)
-				ValueText.TextScaled = false
-				ValueText.TextSize = 12.000
+				ValueText.TextScaled = true
+				ValueText.TextSize = 14.000
 				ValueText.TextTransparency = 0.500
 				ValueText.TextWrapped = true
 				ValueText.TextXAlignment = Enum.TextXAlignment.Left
-				local ValueText_tc = Instance.new("UITextSizeConstraint")
-				ValueText_tc.MaxTextSize = 14
-				ValueText_tc.Parent = ValueText
 
 				MFrame.MouseEnter:Connect(function()
 					Twen:Create(ValueText,TweenInfo.new(0.3),{
@@ -6664,14 +6318,11 @@ function Library.new(config)
 					DividerTextLabel.Font = Enum.Font.GothamBold
 					DividerTextLabel.Text = DividerText
 					DividerTextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-					DividerTextLabel.TextScaled = false
-					DividerTextLabel.TextSize = 12
+					DividerTextLabel.TextScaled = true
+					DividerTextLabel.TextSize = 14
 					DividerTextLabel.TextTransparency = 0.450
 					DividerTextLabel.TextWrapped = true
 					DividerTextLabel.TextXAlignment = Enum.TextXAlignment.Center
-					local DividerTextLabel_tc = Instance.new("UITextSizeConstraint")
-					DividerTextLabel_tc.MaxTextSize = 14
-					DividerTextLabel_tc.Parent = DividerTextLabel
 					DividerTextLabel.TextYAlignment = Enum.TextYAlignment.Center
 
 					TextGradient.Rotation = 90
@@ -7463,14 +7114,11 @@ function Library.new(config)
 				TextInt.Font = Enum.Font.GothamBold
 				TextInt.Text = conf.Title
 				TextInt.TextColor3 = Color3.fromRGB(255, 255, 255)
-				TextInt.TextScaled = false
-				TextInt.TextSize = 12.000
+				TextInt.TextScaled = true
+				TextInt.TextSize = 14.000
 				TextInt.TextTransparency = 0.250
 				TextInt.TextWrapped = true
 				TextInt.TextXAlignment = Enum.TextXAlignment.Left
-				local TextInt_tc = Instance.new("UITextSizeConstraint")
-				TextInt_tc.MaxTextSize = 14
-				TextInt_tc.Parent = TextInt
 
 				UIGradient.Rotation = 90
 				UIGradient.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0.00, 0.00), NumberSequenceKeypoint.new(0.84, 0.25), NumberSequenceKeypoint.new(1.00, 1.00)}
@@ -7517,14 +7165,11 @@ function Library.new(config)
 				FileType.Font = Enum.Font.GothamBold
 				FileType.Text = conf.FileType
 				FileType.TextColor3 = Color3.fromRGB(255, 255, 255)
-				FileType.TextScaled = false
-				FileType.TextSize = 12.000
+				FileType.TextScaled = true
+				FileType.TextSize = 14.000
 				FileType.TextTransparency = 0.100
 				FileType.TextWrapped = true
 				FileType.TextXAlignment = Enum.TextXAlignment.Right
-				local FileType_tc = Instance.new("UITextSizeConstraint")
-				FileType_tc.MaxTextSize = 14
-				FileType_tc.Parent = FileType
 
 				UIGradient_2.Rotation = 90
 				UIGradient_2.Transparency = NumberSequence.new{NumberSequenceKeypoint.new(0.00, 0.00), NumberSequenceKeypoint.new(0.84, 0.25), NumberSequenceKeypoint.new(1.00, 1.00)}
@@ -7543,14 +7188,11 @@ function Library.new(config)
 				TextBox.Font = Enum.Font.GothamBold
 				TextBox.Text = tostring(conf.Default or "");
 				TextBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-				TextBox.TextScaled = false
-				TextBox.TextSize = 12.000
+				TextBox.TextScaled = true
+				TextBox.TextSize = 14.000
 				TextBox.TextTransparency = 0.600
 				TextBox.TextWrapped = true
 				TextBox.TextXAlignment = Enum.TextXAlignment.Left
-				local TextBox_tc = Instance.new("UITextSizeConstraint")
-				TextBox_tc.MaxTextSize = 14
-				TextBox_tc.Parent = TextBox
 
 				Button.Name = "Button"
 				Button.Parent = FunctionTextbox
@@ -7787,24 +7429,17 @@ function Library.new(config)
 				local Collapsed = cardCfg.DefaultCollapsed == true
 				local Enabled = true
 				local AccentVisible = true
+				local HeaderHeight = 54
 				local StatusWidth = 0
 				local BadgeWidth = 0
 
-				-- Metrics
-				local HEADER_H = 44
-				local ICON_SIZE = 16
-				local ICON_X = 10
-				local ICON_Y = 12
-				local TEXT_LEFT = 32
-				local TEXT_NOICON = 10
-				local TITLE_H = 16
-				local DESC_H = 13
-				local CHIP_H = 14
-				local CHIP_TEXT = 9
-				local CHIP_MIN = 38
-				local CHIP_MAX = 80
-				local FOOTER_H = 14
-				local FOOTER_PAD = 6
+				local function addTextLimit(textObject, minSize, maxSize)
+					local limit = Instance.new("UITextSizeConstraint")
+					limit.MinTextSize = minSize or 7
+					limit.MaxTextSize = maxSize or 12
+					limit.Parent = textObject
+					return limit
+				end
 
 				local Card = Instance.new("Frame")
 				local CardCorner = Instance.new("UICorner")
@@ -7816,27 +7451,19 @@ function Library.new(config)
 				local Header = Instance.new("TextButton")
 				local Icon = Instance.new("ImageLabel")
 				local Title = Instance.new("TextLabel")
-				local TitleConstraint = Instance.new("UITextSizeConstraint")
 				local Description = Instance.new("TextLabel")
-				local DescriptionConstraint = Instance.new("UITextSizeConstraint")
 				local StatusChip = Instance.new("TextLabel")
 				local StatusCorner = Instance.new("UICorner")
 				local StatusStroke = Instance.new("UIStroke")
-				local StatusConstraint = Instance.new("UITextSizeConstraint")
 				local Badge = Instance.new("TextLabel")
 				local BadgeCorner = Instance.new("UICorner")
-				local BadgeStroke = Instance.new("UIStroke")
-				local BadgeConstraint = Instance.new("UITextSizeConstraint")
 				local ValueText = Instance.new("TextLabel")
-				local ValueConstraint = Instance.new("UITextSizeConstraint")
 				local ActionButton = Instance.new("TextButton")
 				local ActionIcon = Instance.new("ImageLabel")
 				local CollapseButton = Instance.new("TextButton")
 				local Content = Instance.new("Frame")
-				local ContentPadding = Instance.new("UIPadding")
 				local ContentLayout = Instance.new("UIListLayout")
 				local Footer = Instance.new("TextLabel")
-				local FooterConstraint = Instance.new("UITextSizeConstraint")
 				local DisabledOverlay = Instance.new("TextButton")
 
 				Card.Name = "ControlCard"
@@ -7853,7 +7480,7 @@ function Library.new(config)
 				CardCorner.Parent = Card
 
 				CardStroke.Color = Color3.fromRGB(255, 255, 255)
-				CardStroke.Transparency = 0.9
+				CardStroke.Transparency = 0.93
 				CardStroke.Parent = Card
 				ThemeManager:Bind(Card, "BackgroundColor3", "CardSurface")
 				ThemeManager:BindAccentStroke(CardStroke)
@@ -7893,7 +7520,7 @@ function Library.new(config)
 				Header.BackgroundTransparency = 1
 				Header.BorderSizePixel = 0
 				Header.Position = UDim2.fromOffset(0, 0)
-				Header.Size = UDim2.new(1, 0, 0, HEADER_H)
+				Header.Size = UDim2.new(1, 0, 0, HeaderHeight)
 				Header.Text = ""
 				Header.ZIndex = 20
 
@@ -7903,69 +7530,60 @@ function Library.new(config)
 				Icon.Image = cardCfg.Icon and ResolveIconSource(cardCfg.Icon) or ""
 				Icon.ImageColor3 = Color3.fromRGB(255, 255, 255)
 				Icon.ImageTransparency = cardCfg.Icon and 0.18 or 1
-				Icon.Position = UDim2.fromOffset(ICON_X, ICON_Y)
-				Icon.Size = UDim2.fromOffset(ICON_SIZE, ICON_SIZE)
+				Icon.Position = UDim2.fromOffset(12, 13)
+				Icon.Size = UDim2.fromOffset(18, 18)
 				Icon.ZIndex = 21
 				ThemeManager:BindAccent(Icon, "ImageColor3")
-
-				local textLeft = cardCfg.Icon and TEXT_LEFT or TEXT_NOICON
 
 				Title.Name = "Title"
 				Title.Parent = Header
 				Title.BackgroundTransparency = 1
 				Title.Font = Enum.Font.GothamBold
-				Title.Position = UDim2.fromOffset(textLeft, 8)
-				Title.Size = UDim2.new(1, -(textLeft + 24), 0, TITLE_H)
+				Title.Position = UDim2.fromOffset(cardCfg.Icon and 38 or 12, 8)
+				Title.Size = UDim2.new(1, -150, 0, 17)
 				Title.Text = tostring(cardCfg.Title or "")
 				Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-				Title.TextScaled = false
-				Title.TextSize = 13
+				Title.TextScaled = true
+				Title.TextSize = 12
 				Title.TextTransparency = 0.08
 				Title.TextWrapped = true
 				Title.TextXAlignment = Enum.TextXAlignment.Left
 				Title.TextYAlignment = Enum.TextYAlignment.Center
 				Title.ZIndex = 21
-				TitleConstraint.MaxTextSize = 14
-				TitleConstraint.Parent = Title
+				addTextLimit(Title, 8, 12)
 
 				Description.Name = "Description"
 				Description.Parent = Header
 				Description.BackgroundTransparency = 1
-				Description.Font = Enum.Font.Gotham
-				Description.Position = UDim2.fromOffset(textLeft, 8 + TITLE_H + 1)
-				Description.Size = UDim2.new(1, -(textLeft + 24), 0, DESC_H)
+				Description.Font = Enum.Font.GothamBold
+				Description.Position = UDim2.fromOffset(cardCfg.Icon and 38 or 12, 27)
+				Description.Size = UDim2.new(1, -150, 0, 13)
 				Description.Text = tostring(cardCfg.Description or "")
 				Description.TextColor3 = Color3.fromRGB(255, 255, 255)
-				Description.TextScaled = false
-				Description.TextSize = 11
+				Description.TextScaled = true
+				Description.TextSize = 9
 				Description.TextTransparency = 0.5
 				Description.TextWrapped = true
 				Description.TextXAlignment = Enum.TextXAlignment.Left
-				Description.TextYAlignment = Enum.TextYAlignment.Center
+				Description.TextYAlignment = Enum.TextYAlignment.Top
 				Description.ZIndex = 21
-				DescriptionConstraint.MaxTextSize = 12
-				DescriptionConstraint.Parent = Description
-				-- Hide description label when empty to reclaim space
-				if Description.Text == "" then
-					Description.Size = UDim2.new(1, -(textLeft + 24), 0, 0)
-				end
+				addTextLimit(Description, 7, 9)
 
-				local function setupChip(label, corner, stroke, constraint, xOffset)
+				local function setupChip(label, corner, stroke, xOffset)
 					label.Parent = Header
 					label.AnchorPoint = Vector2.new(1, 0)
 					label.BackgroundColor3 = ThemeManager:GetColor("CardChip")
 					label.BackgroundTransparency = 0.55
 					label.BorderSizePixel = 0
 					label.Font = Enum.Font.GothamBold
-					label.Position = UDim2.new(1, xOffset, 0, 6)
-					label.Size = UDim2.fromOffset(CHIP_MIN, CHIP_H)
+					label.Position = UDim2.new(1, xOffset, 0, 8)
+					label.Size = UDim2.fromOffset(58, 15)
 					label.TextColor3 = Color3.fromRGB(255, 255, 255)
-					label.TextScaled = false
-					label.TextSize = CHIP_TEXT
+					label.TextScaled = true
+					label.TextSize = 9
 					label.TextTransparency = 0.2
 					label.ZIndex = 22
-					constraint.MaxTextSize = CHIP_TEXT + 1
-					constraint.Parent = label
+					addTextLimit(label, 7, 9)
 					corner.CornerRadius = UDim.new(0.5, 0)
 					corner.Parent = label
 					stroke.Color = Color3.fromRGB(255, 255, 255)
@@ -7974,8 +7592,8 @@ function Library.new(config)
 					ThemeManager:BindAccentStroke(stroke)
 				end
 
-				setupChip(StatusChip, StatusCorner, StatusStroke, StatusConstraint, -10)
-				setupChip(Badge, BadgeCorner, BadgeStroke, BadgeConstraint, -10)
+				setupChip(StatusChip, StatusCorner, StatusStroke, -12)
+				setupChip(Badge, BadgeCorner, Instance.new("UIStroke"), -74)
 				Badge.BackgroundTransparency = 0.72
 				ThemeManager:BindAccent(StatusChip, "TextColor3")
 				ThemeManager:BindAccent(Badge, "TextColor3")
@@ -7985,17 +7603,15 @@ function Library.new(config)
 				ValueText.AnchorPoint = Vector2.new(1, 0)
 				ValueText.BackgroundTransparency = 1
 				ValueText.Font = Enum.Font.GothamBold
-				ValueText.Position = UDim2.new(1, -10, 0, 8 + TITLE_H + 1)
-				ValueText.Size = UDim2.fromOffset(80, DESC_H)
+				ValueText.Position = UDim2.new(1, -12, 0, 29)
+				ValueText.Size = UDim2.fromOffset(120, 14)
 				ValueText.TextColor3 = ThemeManager:GetColor("Accent")
-				ValueText.TextScaled = false
-				ValueText.TextSize = 10
+				ValueText.TextScaled = true
+				ValueText.TextSize = 9
 				ValueText.TextTransparency = 0.2
 				ValueText.TextXAlignment = Enum.TextXAlignment.Right
-				ValueText.TextYAlignment = Enum.TextYAlignment.Center
 				ValueText.ZIndex = 22
-				ValueConstraint.MaxTextSize = 11
-				ValueConstraint.Parent = ValueText
+				addTextLimit(ValueText, 7, 9)
 				ThemeManager:BindAccent(ValueText, "TextColor3")
 
 				ActionButton.Name = "Action"
@@ -8004,8 +7620,8 @@ function Library.new(config)
 				ActionButton.BackgroundColor3 = ThemeManager:GetColor("CardChip")
 				ActionButton.BackgroundTransparency = 0.55
 				ActionButton.BorderSizePixel = 0
-				ActionButton.Position = UDim2.new(1, -10, 0, 24)
-				ActionButton.Size = UDim2.fromOffset(22, 22)
+				ActionButton.Position = UDim2.new(1, -12, 0, 28)
+				ActionButton.Size = UDim2.fromOffset(18, 18)
 				ActionButton.Text = ""
 				ActionButton.Visible = type(cardCfg.Action) == "table" and type(cardCfg.Action.Callback) == "function"
 				ActionButton.ZIndex = 23
@@ -8018,22 +7634,22 @@ function Library.new(config)
 				ActionIcon.ImageColor3 = Color3.fromRGB(255, 255, 255)
 				ActionIcon.ImageTransparency = 0.2
 				ThemeManager:BindAccent(ActionIcon, "ImageColor3")
-				ActionIcon.Position = UDim2.fromOffset(5, 5)
-				ActionIcon.Size = UDim2.fromOffset(12, 12)
+				ActionIcon.Position = UDim2.fromOffset(4, 4)
+				ActionIcon.Size = UDim2.fromOffset(10, 10)
 				ActionIcon.ZIndex = 24
 
 				CollapseButton.Name = "Collapse"
 				CollapseButton.Parent = Header
 				CollapseButton.AnchorPoint = Vector2.new(1, 0)
 				CollapseButton.BackgroundTransparency = 1
-				CollapseButton.Position = UDim2.new(1, ActionButton.Visible and -36 or -10, 0, 25)
-				CollapseButton.Size = UDim2.fromOffset(20, 20)
+				CollapseButton.Position = UDim2.new(1, ActionButton.Visible and -34 or -12, 0, 29)
+				CollapseButton.Size = UDim2.fromOffset(16, 16)
 				CollapseButton.Font = Enum.Font.GothamBold
 				CollapseButton.Text = Collapsed and ">" or "v"
 				CollapseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-				CollapseButton.TextScaled = false
-				CollapseButton.TextSize = 10
+				CollapseButton.TextScaled = true
 				CollapseButton.TextTransparency = 0.35
+				addTextLimit(CollapseButton, 8, 11)
 				CollapseButton.Visible = cardCfg.Collapsible == true
 				CollapseButton.ZIndex = 23
 
@@ -8041,16 +7657,10 @@ function Library.new(config)
 				Content.Parent = Card
 				Content.BackgroundTransparency = 1
 				Content.BorderSizePixel = 0
-				Content.Position = UDim2.fromOffset(0, HEADER_H)
+				Content.Position = UDim2.fromOffset(0, 56)
 				Content.Size = UDim2.new(1, 0, 0, 1)
 				Content.Visible = not Collapsed
 				Content.ZIndex = 20
-
-				ContentPadding.PaddingLeft = UDim.new(0, 8)
-				ContentPadding.PaddingRight = UDim.new(0, 8)
-				ContentPadding.PaddingTop = UDim.new(0, 2)
-				ContentPadding.PaddingBottom = UDim.new(0, 4)
-				ContentPadding.Parent = Content
 
 				ContentLayout.Parent = Content
 				ContentLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -8060,20 +7670,18 @@ function Library.new(config)
 				Footer.Name = "Footer"
 				Footer.Parent = Card
 				Footer.BackgroundTransparency = 1
-				Footer.Font = Enum.Font.Gotham
-				Footer.Size = UDim2.new(1, -24, 0, FOOTER_H)
+				Footer.Font = Enum.Font.GothamBold
+				Footer.Size = UDim2.new(1, -24, 0, 14)
 				Footer.Text = tostring(cardCfg.Footer or "")
 				Footer.TextColor3 = Color3.fromRGB(255, 255, 255)
-				Footer.TextScaled = false
+				Footer.TextScaled = true
 				Footer.TextSize = 9
 				Footer.TextTransparency = 0.58
-				Footer.TextWrapped = true
 				Footer.TextXAlignment = Enum.TextXAlignment.Left
-				Footer.TextYAlignment = Enum.TextYAlignment.Center
+				Footer.TextYAlignment = Enum.TextYAlignment.Top
+				addTextLimit(Footer, 7, 9)
 				Footer.Visible = Footer.Text ~= ""
 				Footer.ZIndex = 21
-				FooterConstraint.MaxTextSize = 10
-				FooterConstraint.Parent = Footer
 
 				DisabledOverlay.Name = "DisabledOverlay"
 				DisabledOverlay.Parent = Card
@@ -8090,48 +7698,63 @@ function Library.new(config)
 					if text == "" then
 						return 0
 					end
-					local bounds = TextServ:GetTextSize(text, CHIP_TEXT, Enum.Font.GothamBold, Vector2.new(160, CHIP_H))
-					return math.clamp(bounds.X + 16, minWidth or CHIP_MIN, CHIP_MAX)
+					local bounds = TextServ:GetTextSize(text, 10, Enum.Font.GothamBold, Vector2.new(160, 16))
+					return math.clamp(bounds.X + 14, minWidth or 40, 76)
 				end
 
 				local function updateHeaderWidths()
-					local rightPad = 20
-					if StatusChip.Visible then
-						rightPad += StatusWidth + 6
+					local width = math.max(220, Card.AbsoluteSize.X)
+					local left = (cardCfg.Icon ~= nil and cardCfg.Icon ~= "") and 38 or 12
+					local metaWidth = (StatusChip.Visible and (StatusWidth + 6) or 0)
+						+ (Badge.Visible and (BadgeWidth + 6) or 0)
+						+ (ValueText.Visible and 62 or 0)
+						+ (ActionButton.Visible and 24 or 0)
+						+ (CollapseButton.Visible and 18 or 0)
+					local compact = width < 330 or metaWidth > width * 0.42
+
+					HeaderHeight = compact and ((StatusChip.Visible or Badge.Visible or ValueText.Visible) and 68 or 52) or 54
+					Header.Size = UDim2.new(1, 0, 0, HeaderHeight)
+					Title.Position = UDim2.fromOffset(left, 7)
+					Description.Position = UDim2.fromOffset(left, 25)
+
+					if compact then
+						Title.Size = UDim2.new(1, -(left + 36), 0, 15)
+						Description.Size = UDim2.new(1, -(left + 18), 0, 12)
+						local rowY = 43
+						StatusChip.Position = UDim2.fromOffset(left, rowY)
+						Badge.Position = UDim2.fromOffset(left + (StatusChip.Visible and (StatusWidth + 6) or 0), rowY)
+						local rightInset = 10 + (ActionButton.Visible and 24 or 0) + (CollapseButton.Visible and 18 or 0)
+						ValueText.Position = UDim2.new(1, -rightInset, 0, rowY + 1)
+						ValueText.Size = UDim2.fromOffset(54, 13)
+						ActionButton.Position = UDim2.new(1, -10, 0, 8)
+						CollapseButton.Position = UDim2.new(1, ActionButton.Visible and -32 or -10, 0, 9)
+					else
+						local rightPad = 24 + metaWidth
+						Title.Size = UDim2.new(1, -(left + rightPad), 0, 16)
+						Description.Size = UDim2.new(1, -(left + rightPad), 0, 13)
+						StatusChip.Position = UDim2.new(1, -12, 0, 8)
+						Badge.Position = UDim2.new(1, -(StatusChip.Visible and (StatusWidth + 20) or 12), 0, 8)
+						local valueRight = 12 + (ActionButton.Visible and 24 or 0) + (CollapseButton.Visible and 18 or 0)
+						ValueText.Position = UDim2.new(1, -valueRight, 0, 29)
+						ValueText.Size = UDim2.fromOffset(math.max(62, 120 - valueRight), 13)
+						ActionButton.Position = UDim2.new(1, -12, 0, 28)
+						CollapseButton.Position = UDim2.new(1, ActionButton.Visible and -34 or -12, 0, 29)
 					end
-					if Badge.Visible then
-						rightPad += BadgeWidth + 6
-					end
-					if ValueText.Visible then
-						rightPad += 68
-					end
-					if ActionButton.Visible then
-						rightPad += 26
-					end
-					if CollapseButton.Visible then
-						rightPad += 22
-					end
-					Title.Position = UDim2.fromOffset(textLeft, 8)
-					Description.Position = UDim2.fromOffset(textLeft, 8 + TITLE_H + 1)
-					Title.Size = UDim2.new(1, -(textLeft + rightPad), 0, TITLE_H)
-					Description.Size = UDim2.new(1, -(textLeft + rightPad), 0, Description.Text ~= "" and DESC_H or 0)
+
+					Content.Position = UDim2.fromOffset(0, HeaderHeight + 2)
 				end
 
 				local function updateChrome()
 					StatusChip.Text = tostring(cardCfg.Status or "")
 					StatusChip.Visible = StatusChip.Text ~= ""
-					StatusWidth = chipWidth(StatusChip.Text, CHIP_MIN)
-					Twen:Create(StatusChip, TweenInfo.new(0.14, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Size = UDim2.fromOffset(StatusWidth, CHIP_H) }):Play()
+					StatusWidth = chipWidth(StatusChip.Text, 52)
+					Twen:Create(StatusChip, TweenInfo.new(0.14, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Size = UDim2.fromOffset(StatusWidth, 15) }):Play()
 					Badge.Text = tostring(cardCfg.Badge or "")
 					Badge.Visible = Badge.Text ~= ""
-					BadgeWidth = chipWidth(Badge.Text, 32)
-					Twen:Create(Badge, TweenInfo.new(0.14, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Size = UDim2.fromOffset(BadgeWidth, CHIP_H) }):Play()
-					Badge.Position = UDim2.new(1, -(StatusChip.Visible and (StatusWidth + 16) or 10), 0, 6)
+					BadgeWidth = chipWidth(Badge.Text, 36)
+					Twen:Create(Badge, TweenInfo.new(0.14, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Size = UDim2.fromOffset(BadgeWidth, 15) }):Play()
 					ValueText.Text = tostring(cardCfg.Value or "")
 					ValueText.Visible = ValueText.Text ~= ""
-					local valueRight = 10 + (ActionButton.Visible and 28 or 0) + (CollapseButton.Visible and 22 or 0)
-					ValueText.Position = UDim2.new(1, -valueRight, 0, 8 + TITLE_H + 1)
-					ValueText.Size = UDim2.fromOffset(math.max(50, 80 - valueRight), DESC_H)
 					Footer.Text = tostring(cardCfg.Footer or "")
 					Footer.Visible = Footer.Text ~= ""
 					Icon.Visible = cardCfg.Icon ~= nil and cardCfg.Icon ~= ""
@@ -8143,32 +7766,18 @@ function Library.new(config)
 
 				local function updateSize(animated)
 					local contentHeight = Collapsed and 0 or ContentLayout.AbsoluteContentSize.Y
-					local contentPad = ContentPadding.PaddingTop.Offset + ContentPadding.PaddingBottom.Offset
-					local footerHeight = Footer.Visible and (FOOTER_H + FOOTER_PAD) or FOOTER_PAD
-					local targetHeight = HEADER_H + contentHeight + contentPad + footerHeight
-					if not Collapsed then
-						Content.Visible = true
-						Content.Size = UDim2.new(1, 0, 0, math.max(1, contentHeight))
-					end
-					Footer.Position = UDim2.fromOffset(12, HEADER_H + contentHeight + contentPad + 2)
-					Footer.Visible = Footer.Text ~= "" and not Collapsed
-					local target = UDim2.new(0.95, 0, 0, math.max(54, targetHeight))
+					local footerHeight = Footer.Visible and 18 or 6
+					local targetHeight = HeaderHeight + 8 + contentHeight + footerHeight
+					Content.Visible = not Collapsed
+					Content.Position = UDim2.fromOffset(0, HeaderHeight + 2)
+					Content.Size = UDim2.new(1, 0, 0, math.max(1, contentHeight))
+					Footer.Position = UDim2.fromOffset(12, HeaderHeight + contentHeight + 4)
+					local target = UDim2.new(0.95, 0, 0, math.max(HeaderHeight + 8, targetHeight))
 					if animated then
-						local tween = Twen:Create(Card, TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Size = target })
-						if Collapsed then
-							tween:Play()
-							task.delay(0.2, function()
-								Content.Visible = false
-							end)
-						else
-							tween:Play()
-						end
+						Twen:Create(Card, TweenInfo.new(0.16, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Size = target }):Play()
 					else
 						Card.Size = target
-						Content.Visible = not Collapsed
 					end
-				end
-
 				end
 
 				local function cardSearchPrefix()
@@ -8200,13 +7809,8 @@ function Library.new(config)
 					end
 					Collapsed = value == true
 					CollapseButton.Text = Collapsed and ">" or "v"
-					if not Collapsed then
-						Content.Visible = true
-					end
 					updateSize(animated ~= false)
 					return true
-				end
-
 				end
 
 				local function moveChild(element, title, desc)
@@ -8236,17 +7840,10 @@ function Library.new(config)
 					SetDescription = function(_, value)
 						cardCfg.Description = tostring(value or "")
 						Description.Text = cardCfg.Description
-						if Description.Text == "" then
-							Description.Size = UDim2.new(1, -(textLeft + 24), 0, 0)
-						else
-							Description.Size = UDim2.new(1, -(textLeft + 24), 0, DESC_H)
-						end
-						updateSize(true)
 						updateSearchText()
 					end,
 					SetIcon = function(_, value)
 						cardCfg.Icon = value
-						textLeft = cardCfg.Icon and TEXT_LEFT or TEXT_NOICON
 						updateChrome()
 					end,
 					SetStatus = function(_, value)
@@ -8350,6 +7947,10 @@ function Library.new(config)
 				updateSearchText()
 				updateSize(false)
 
+				Connections[#Connections + 1] = Card:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+					updateChrome()
+					updateSize(false)
+				end)
 				Connections[#Connections + 1] = ContentLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
 					updateSize(true)
 				end)
@@ -8388,6 +7989,8 @@ function Library.new(config)
 				return CardObject
 			end
 
+			return SectionTable;
+		end;
 
 		local function CreateSubTab(cfg, hidden)
 			cfg = Config(cfg, {
