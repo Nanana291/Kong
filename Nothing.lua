@@ -3534,13 +3534,13 @@ function Library.new(config)
 		LeftFrame.Parent = DefaultPage
 		RightFrame.Parent = DefaultPage
 
-		local function SetPageColumns(page, leftFrame, rightFrame, topScale, heightScale)
-			page.Position = UDim2.new(0, 0, topScale, 0)
-			page.Size = UDim2.new(1, 0, heightScale, 0)
-			leftFrame.Position = UDim2.new(0.25, 0, 0.5, 0)
-			leftFrame.Size = UDim2.new(0.5, 0, 1, 0)
-			rightFrame.Position = UDim2.new(0.75, 0, 0.5, 0)
-			rightFrame.Size = UDim2.new(0.5, 0, 1, 0)
+		local function SetPageColumns(page, leftFrame, rightFrame, centerScale, heightScale)
+			page.Position = UDim2.new(0, 0, 0, 0)
+			page.Size = UDim2.new(1, 0, 1, 0)
+			leftFrame.Position = UDim2.new(0.25, 0, centerScale, 0)
+			leftFrame.Size = UDim2.new(0.5, 0, heightScale, 0)
+			rightFrame.Position = UDim2.new(0.75, 0, centerScale, 0)
+			rightFrame.Size = UDim2.new(0.5, 0, heightScale, 0)
 		end
 
 		local function RefreshSubTabLayout()
