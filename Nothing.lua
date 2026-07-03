@@ -2258,6 +2258,10 @@ function Library.new(config)
 			local previousTheme = selectedTheme
 			local changedAt = os.date("%H:%M:%S")
 			local compareEnabled = false
+			local lastLayoutWidth = 0
+			local lastRootHeight = 0
+			local layoutQueued = false
+			local motionPhase = false
 			local destroyed = false
 			local connections = {}
 			local themeCardData = {}
@@ -2671,10 +2675,10 @@ function Library.new(config)
 				tween(previewCard, { BackgroundColor3 = pal.Background })
 				tween(compareDivider, { BackgroundTransparency = compareEnabled and 0.2 or 1 })
 				tween(accentStrip, { BackgroundColor3 = pal.Accent })
-				motionParts.Button.BackgroundColor3 = pal.Accent
-				motionParts.ToggleTrack.BackgroundColor3 = pal.CardSurface
-				motionParts.ToggleKnob.BackgroundColor3 = pal.Accent
-				motionParts.Card.BackgroundColor3 = pal.CardSurface
+				tween(motionParts.Button, { BackgroundColor3 = pal.Accent })
+				tween(motionParts.ToggleTrack, { BackgroundColor3 = pal.CardSurface })
+				tween(motionParts.ToggleKnob, { BackgroundColor3 = pal.Accent })
+				tween(motionParts.Card, { BackgroundColor3 = pal.CardSurface })
 				infoCards.Theme.Value.Text = themeName
 				infoCards.Accent.Value.Text = tostring(math.floor(pal.Accent.R * 255)) .. ", " .. tostring(math.floor(pal.Accent.G * 255)) .. ", " .. tostring(math.floor(pal.Accent.B * 255))
 				infoCards.Contrast.Value.Text = tostring(theme.Contrast or "High")
@@ -2750,14 +2754,21 @@ function Library.new(config)
 				root:Destroy()
 			end
 
-			local function refreshLayout()
-				local width = math.max(180, root.AbsoluteSize.X)
+			local function refreshLayout(force)
+				local width = math.max(180, math.floor(root.AbsoluteSize.X))
+				if not force and layoutQueued and width == lastLayoutWidth then
+					return
+				end
+				layoutQueued = true
+				lastLayoutWidth = width
+
 				local twoColumns = width >= 330
 				local cardWidth = twoColumns and math.floor((themeCards.AbsoluteSize.X - 6) / 2) or themeCards.AbsoluteSize.X
 				themeGrid.CellSize = UDim2.fromOffset(math.max(100, cardWidth), 72)
 				infoGrid.CellSize = UDim2.fromOffset(math.max(70, math.floor((infoGridFrame.AbsoluteSize.X - 18) / (twoColumns and 2 or 1))), 38)
 				statsGrid.CellSize = UDim2.fromOffset(math.max(62, math.floor((statsFrame.AbsoluteSize.X - 20) / (twoColumns and 3 or 1))), 38)
 				task.defer(function()
+					layoutQueued = false
 					if destroyed then
 						return
 					end
@@ -2776,7 +2787,12 @@ function Library.new(config)
 					statsFrame.Position = UDim2.fromOffset(10, motionTop + 90)
 					local statsHeight = statsGrid.AbsoluteContentSize.Y
 					statsFrame.Size = UDim2.new(1, -20, 0, statsHeight)
-					root.Size = UDim2.new(0.95, 0, 0, math.max(500, motionTop + 98 + statsHeight))
+
+					local targetHeight = math.max(500, motionTop + 98 + statsHeight)
+					if targetHeight ~= lastRootHeight then
+						lastRootHeight = targetHeight
+						root.Size = UDim2.new(0.95, 0, 0, targetHeight)
+					end
 				end)
 			end
 
@@ -2793,20 +2809,21 @@ function Library.new(config)
 				end
 			end)
 
-			task.spawn(function()
-				while not destroyed and root.Parent do
-					tween(motionParts.Button, { BackgroundTransparency = 0.02 })
-					tween(motionParts.ToggleKnob, { Position = UDim2.new(0.53, 0, 0.39, 0) })
-					tween(motionParts.Card, { BackgroundTransparency = 0.08 })
-					task.wait(0.9)
-					tween(motionParts.Button, { BackgroundTransparency = 0.2 })
-					tween(motionParts.ToggleKnob, { Position = UDim2.new(0.39, 0, 0.39, 0) })
-					tween(motionParts.Card, { BackgroundTransparency = 0.24 })
-					task.wait(0.9)
+			local function pulseMotionPreview()
+				if destroyed or not root.Parent then
+					return
 				end
-			end)
+				motionPhase = not motionPhase
+				tween(motionParts.Button, { BackgroundTransparency = motionPhase and 0.02 or 0.2 })
+				tween(motionParts.ToggleKnob, { Position = motionPhase and UDim2.new(0.53, 0, 0.39, 0) or UDim2.new(0.39, 0, 0.39, 0) })
+				tween(motionParts.Card, { BackgroundTransparency = motionPhase and 0.08 or 0.24 })
+				task.delay(0.9, pulseMotionPreview)
+			end
 
-			task.defer(refreshLayout)
+			task.defer(function()
+				refreshLayout(true)
+			end)
+			task.delay(0.25, pulseMotionPreview)
 			ThemeLabObject:SetValue(selectedTheme, true)
 			return ThemeLabObject
 		end
