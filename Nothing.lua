@@ -791,25 +791,21 @@ function Library.GradientImage(E : Frame , Color)
 end;
 
 function Library.new(config)
-	local UserSearchBar = config and config.SearchBar
 	local UserTheme = config and config.Theme
 	config = Config(config,{
 		Title = "UI Library",
 		Description = "discord.gg/BH6pE7jesa",
 		Keybind = Enum.KeyCode.LeftControl,
 		Size = UDim2.new(0.100000001, 445, 0.100000001, 315),
-		SearchBar = true,
+		SearchBar = false,
 		Theme = "Default",
 	});
 
-	if UserSearchBar == false then
-		config.SearchBar = false
-	end
 	if UserTheme ~= nil then
 		config.Theme = UserTheme
 	end
 
-	config.SearchBar = config.SearchBar ~= false
+	config.SearchBar = config.SearchBar == true
 	config.Theme = ThemeManager:NormalizeTheme(config.Theme or "Default")
 	ThemeManager.ActiveTheme = config.Theme
 
@@ -2167,34 +2163,14 @@ function Library.new(config)
 			Icon = "settings",
 		})
 
-		local GeneralSubTab = SettingsTab:SubTab({
-			Name = "General",
-			Icon = "settings",
-		})
-
-		local ConfigSubTab = SettingsTab:SubTab({
-			Name = "Configurations",
-			Icon = "folder-cog",
-		})
-
-		local ThemeSubTab = SettingsTab:SubTab({
-			Name = "Themes",
-			Icon = "palette",
-		})
-
-		GeneralSubTab:Paragraph({
-			Title = "Settings",
-			Description = "Manage Nothing UI configuration, autoload, and theme preferences.",
-		})
-
-		local ConfigSection = ConfigSubTab:NewSection({
+		local ConfigSection = SettingsTab:NewSection({
 			Position = "Left",
 			Title = "Configurations",
 			Icon = "settings",
 		})
 
-		local CustomizeSection = ThemeSubTab:NewSection({
-			Position = "Left",
+		local CustomizeSection = SettingsTab:NewSection({
+			Position = "Right",
 			Title = "Customize",
 			Icon = "palette",
 		})
@@ -2752,7 +2728,6 @@ function Library.new(config)
 			ThemePreview = ThemePreview,
 		}
 		ConfigManager:SyncSettingsUI()
-		GeneralSubTab:Select()
 
 		self.SettingsTab = SettingsTab
 		return SettingsTab
@@ -3463,6 +3438,41 @@ function Library.new(config)
 		local ActiveSubTab = nil
 		local ExplicitSubTabCount = 0
 		local DefaultSubTab = nil
+		local SubTabTweens = setmetatable({}, { __mode = "k" })
+		local SubTabMetrics = {
+			BarHeight = 20,
+			BarPadX = 4,
+			BarPadY = 3,
+			ChipHeight = 14,
+			ChipMinWidth = 58,
+			ChipMaxWidth = 114,
+			IconSize = 9,
+			Radius = 3,
+		}
+		local SubTabMotion = TweenInfo.new(0.16, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+		local SubTabPressMotion = TweenInfo.new(0.08, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+		local SubTabPulseMotion = TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+
+		local function TweenSubTab(instance, props, info)
+			if not instance then
+				return nil
+			end
+
+			local oldTween = SubTabTweens[instance]
+			if oldTween then
+				oldTween:Cancel()
+			end
+
+			local tween = Twen:Create(instance, info or SubTabMotion, props)
+			SubTabTweens[instance] = tween
+			tween.Completed:Connect(function()
+				if SubTabTweens[instance] == tween then
+					SubTabTweens[instance] = nil
+				end
+			end)
+			tween:Play()
+			return tween
+		end
 
 		local SubTabBar = Instance.new("Frame")
 		local SubTabBarCorner = Instance.new("UICorner")
@@ -3476,18 +3486,18 @@ function Library.new(config)
 		SubTabBar.Parent = Init
 		SubTabBar.AnchorPoint = Vector2.new(0.5, 0)
 		SubTabBar.BackgroundColor3 = Color3.fromRGB(17, 17, 17)
-		SubTabBar.BackgroundTransparency = 0.82
+		SubTabBar.BackgroundTransparency = 0.86
 		SubTabBar.BorderSizePixel = 0
 		SubTabBar.ClipsDescendants = true
 		SubTabBar.Position = UDim2.new(0.5, 0, 0.09, 0)
-		SubTabBar.Size = UDim2.new(0.96, 0, 0, 34)
+		SubTabBar.Size = UDim2.new(0.96, 0, 0, SubTabMetrics.BarHeight)
 		SubTabBar.Visible = false
 		SubTabBar.ZIndex = 20
 
-		SubTabBarCorner.CornerRadius = UDim.new(0, 4)
+		SubTabBarCorner.CornerRadius = UDim.new(0, SubTabMetrics.Radius)
 		SubTabBarCorner.Parent = SubTabBar
 		SubTabBarStroke.Color = Color3.fromRGB(255, 255, 255)
-		SubTabBarStroke.Transparency = 0.92
+		SubTabBarStroke.Transparency = 0.9
 		SubTabBarStroke.Parent = SubTabBar
 		ThemeManager:BindAccentStroke(SubTabBarStroke)
 
@@ -3498,11 +3508,11 @@ function Library.new(config)
 		SubTabScroller.BorderSizePixel = 0
 		SubTabScroller.BottomImage = ""
 		SubTabScroller.CanvasSize = UDim2.fromOffset(0, 0)
-		SubTabScroller.Position = UDim2.fromOffset(5, 4)
+		SubTabScroller.Position = UDim2.fromOffset(SubTabMetrics.BarPadX, SubTabMetrics.BarPadY)
 		SubTabScroller.ScrollBarImageTransparency = 1
 		SubTabScroller.ScrollBarThickness = 0
 		SubTabScroller.ScrollingDirection = Enum.ScrollingDirection.X
-		SubTabScroller.Size = UDim2.new(1, -10, 1, -8)
+		SubTabScroller.Size = UDim2.new(1, -(SubTabMetrics.BarPadX * 2), 1, -(SubTabMetrics.BarPadY * 2))
 		SubTabScroller.TopImage = ""
 		SubTabScroller.ZIndex = 21
 
@@ -3510,9 +3520,9 @@ function Library.new(config)
 		SubTabList.FillDirection = Enum.FillDirection.Horizontal
 		SubTabList.HorizontalAlignment = Enum.HorizontalAlignment.Left
 		SubTabList.SortOrder = Enum.SortOrder.LayoutOrder
-		SubTabList.Padding = UDim.new(0, 5)
+		SubTabList.Padding = UDim.new(0, 3)
 		SubTabList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-			SubTabScroller.CanvasSize = UDim2.fromOffset(SubTabList.AbsoluteContentSize.X + 8, 0)
+			SubTabScroller.CanvasSize = UDim2.fromOffset(SubTabList.AbsoluteContentSize.X + SubTabMetrics.BarPadX, 0)
 		end)
 
 		SubTabContent.Name = "SubTabContent"
@@ -3549,10 +3559,10 @@ function Library.new(config)
 			local top = SearchBarEnabled and 0.57 or 0.505
 			local height = SearchBarEnabled and 0.83 or 0.92
 			if hasExplicit then
-				local barTop = SearchBarEnabled and 0.105 or 0.035
+				local barTop = SearchBarEnabled and 0.088 or 0.024
 				SubTabBar.Position = UDim2.new(0.5, 0, barTop, 0)
-				top = SearchBarEnabled and 0.64 or 0.58
-				height = SearchBarEnabled and 0.75 or 0.84
+				top = SearchBarEnabled and 0.665 or 0.605
+				height = SearchBarEnabled and 0.69 or 0.79
 			end
 			for _, subtab in ipairs(SubTabs) do
 				if subtab.Page then
@@ -3616,25 +3626,29 @@ function Library.new(config)
 				return
 			end
 
-			Twen:Create(subtab.ButtonFrame, TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-				BackgroundTransparency = active and 0.62 or (subtab.Hovered and 0.72 or 0.88),
-			}):Play()
-			Twen:Create(subtab.Stroke, TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-				Transparency = active and 0.45 or (subtab.Hovered and 0.72 or 0.95),
-			}):Play()
-			Twen:Create(subtab.Indicator, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-				BackgroundTransparency = active and 0.08 or 1,
-				Size = active and UDim2.new(0.72, 0, 0, 2) or UDim2.new(0.2, 0, 0, 2),
-			}):Play()
-			Twen:Create(subtab.IconLabel, TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-				ImageTransparency = active and 0.05 or 0.48,
-			}):Play()
-			Twen:Create(subtab.TextLabel, TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-				TextTransparency = active and 0.05 or 0.42,
-			}):Play()
-			Twen:Create(subtab.Scale, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-				Scale = active and 1.02 or (subtab.Hovered and 1.01 or 1),
-			}):Play()
+			local hover = subtab.Hovered == true and not active
+			TweenSubTab(subtab.ButtonFrame, {
+				BackgroundTransparency = active and 0.64 or (hover and 0.78 or 0.93),
+			})
+			TweenSubTab(subtab.Stroke, {
+				Transparency = active and 0.5 or (hover and 0.74 or 0.96),
+			})
+			TweenSubTab(subtab.Indicator, {
+				BackgroundTransparency = active and 0.04 or 1,
+				Size = active and UDim2.new(0.58, 0, 0, 1) or UDim2.new(0.12, 0, 0, 1),
+			})
+			TweenSubTab(subtab.IconLabel, {
+				ImageTransparency = active and 0.04 or (hover and 0.28 or 0.62),
+			})
+			TweenSubTab(subtab.TextLabel, {
+				TextTransparency = active and 0.05 or (hover and 0.24 or 0.54),
+			})
+
+			if not subtab.Pressed then
+				TweenSubTab(subtab.Scale, {
+					Scale = active and 1.012 or (hover and 1.006 or 1),
+				}, SubTabPulseMotion)
+			end
 		end
 
 		local function SelectSubTab(subtab)
@@ -3656,6 +3670,15 @@ function Library.new(config)
 			if subtab.ScrollLeft then
 				subtab.LeftFrame.CanvasPosition = subtab.ScrollLeft
 				subtab.RightFrame.CanvasPosition = subtab.ScrollRight or Vector2.zero
+			end
+			if subtab.Scale then
+				subtab.Pressed = false
+				TweenSubTab(subtab.Scale, { Scale = 1.035 }, SubTabPressMotion)
+				task.delay(0.08, function()
+					if ActiveSubTab == subtab and subtab.Destroyed ~= true then
+						UpdateSubTabVisual(subtab, true)
+					end
+				end)
 			end
 			if SearchManager and SearchManager.Apply then
 				SearchManager:Apply()
@@ -7196,6 +7219,9 @@ function Library.new(config)
 				Hidden = hidden == true,
 				Destroyed = false,
 				Hovered = false,
+				Pressed = false,
+				PressStart = nil,
+				PressMoved = false,
 			}
 			SubTabs[#SubTabs + 1] = subtab
 
@@ -7213,17 +7239,18 @@ function Library.new(config)
 
 				buttonFrame.Name = subtabName .. "SubTab"
 				buttonFrame.Parent = SubTabScroller
-				buttonFrame.BackgroundColor3 = Color3.fromRGB(17, 17, 17)
-				buttonFrame.BackgroundTransparency = 0.88
+				buttonFrame.BackgroundColor3 = ThemeManager:GetColor("Accent")
+				buttonFrame.BackgroundTransparency = 0.93
 				buttonFrame.BorderSizePixel = 0
 				buttonFrame.LayoutOrder = ExplicitSubTabCount
-				buttonFrame.Size = UDim2.fromOffset(math.clamp(72 + (#subtabName * 6), 92, 150), 26)
+				buttonFrame.Size = UDim2.fromOffset(math.clamp(38 + (#subtabName * 4.75), SubTabMetrics.ChipMinWidth, SubTabMetrics.ChipMaxWidth), SubTabMetrics.ChipHeight)
 				buttonFrame.ZIndex = 22
-				buttonCorner.CornerRadius = UDim.new(0, 4)
+				buttonCorner.CornerRadius = UDim.new(0, SubTabMetrics.Radius)
 				buttonCorner.Parent = buttonFrame
 				buttonStroke.Color = Color3.fromRGB(255, 255, 255)
-				buttonStroke.Transparency = 0.95
+				buttonStroke.Transparency = 0.96
 				buttonStroke.Parent = buttonFrame
+				ThemeManager:BindAccent(buttonFrame, "BackgroundColor3")
 				ThemeManager:BindAccentStroke(buttonStroke)
 				scale.Parent = buttonFrame
 
@@ -7233,22 +7260,24 @@ function Library.new(config)
 				icon.BackgroundTransparency = 1
 				icon.BorderSizePixel = 0
 				icon.Image = ResolveIconSource(cfg.Icon)
-				icon.ImageTransparency = 0.48
-				icon.Position = UDim2.new(0, 9, 0.5, 0)
-				icon.Size = UDim2.fromOffset(13, 13)
+				icon.ImageTransparency = 0.62
+				icon.Position = UDim2.new(0, 7, 0.5, 0)
+				icon.Size = UDim2.fromOffset(SubTabMetrics.IconSize, SubTabMetrics.IconSize)
 				icon.ZIndex = 23
+				ThemeManager:BindAccent(icon, "ImageColor3")
 
 				text.Name = "Title"
 				text.Parent = buttonFrame
 				text.BackgroundTransparency = 1
 				text.BorderSizePixel = 0
 				text.Font = Enum.Font.GothamBold
-				text.Position = UDim2.new(0, 28, 0, 0)
-				text.Size = UDim2.new(1, -36, 1, -2)
+				text.Position = UDim2.new(0, 21, 0, 0)
+				text.Size = UDim2.new(1, -27, 1, 0)
 				text.Text = subtabName
 				text.TextColor3 = Color3.fromRGB(255, 255, 255)
-				text.TextScaled = true
-				text.TextTransparency = 0.42
+				text.TextScaled = false
+				text.TextSize = 9
+				text.TextTransparency = 0.54
 				text.TextXAlignment = Enum.TextXAlignment.Left
 				text.ZIndex = 23
 
@@ -7258,8 +7287,8 @@ function Library.new(config)
 				indicator.BackgroundColor3 = ThemeManager:GetColor("Accent")
 				indicator.BackgroundTransparency = 1
 				indicator.BorderSizePixel = 0
-				indicator.Position = UDim2.new(0.5, 0, 1, -2)
-				indicator.Size = UDim2.new(0.2, 0, 0, 2)
+				indicator.Position = UDim2.new(0.5, 0, 1, -1)
+				indicator.Size = UDim2.new(0.12, 0, 0, 1)
 				indicator.ZIndex = 24
 				ThemeManager:BindAccent(indicator, "BackgroundColor3")
 				indicatorCorner.CornerRadius = UDim.new(1, 0)
@@ -7285,15 +7314,44 @@ function Library.new(config)
 				end)
 				hitbox.MouseLeave:Connect(function()
 					subtab.Hovered = false
+					subtab.Pressed = false
 					UpdateSubTabVisual(subtab, ActiveSubTab == subtab)
 				end)
-				hitbox.MouseButton1Click:Connect(function()
-					Twen:Create(scale, TweenInfo.new(0.08, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Scale = 0.96 }):Play()
-					task.delay(0.06, function()
-						if not subtab.Destroyed then
+				hitbox.InputBegan:Connect(function(inputObject)
+					if inputObject.UserInputType ~= Enum.UserInputType.MouseButton1 and inputObject.UserInputType ~= Enum.UserInputType.Touch then
+						return
+					end
+					subtab.Pressed = true
+					subtab.PressStart = inputObject.Position
+					subtab.PressMoved = false
+					TweenSubTab(scale, { Scale = 0.965 }, SubTabPressMotion)
+				end)
+				hitbox.InputChanged:Connect(function(inputObject)
+					if not subtab.Pressed or not subtab.PressStart then
+						return
+					end
+					if inputObject.UserInputType ~= Enum.UserInputType.MouseMovement and inputObject.UserInputType ~= Enum.UserInputType.Touch then
+						return
+					end
+					if (inputObject.Position - subtab.PressStart).Magnitude > 6 then
+						subtab.PressMoved = true
+						TweenSubTab(scale, { Scale = ActiveSubTab == subtab and 1.012 or 1 }, SubTabPressMotion)
+					end
+				end)
+				hitbox.InputEnded:Connect(function(inputObject)
+					if inputObject.UserInputType ~= Enum.UserInputType.MouseButton1 and inputObject.UserInputType ~= Enum.UserInputType.Touch then
+						return
+					end
+					local shouldSelect = not subtab.PressMoved
+					subtab.Pressed = false
+					subtab.PressStart = nil
+					subtab.PressMoved = false
+					if not subtab.Destroyed then
+						if shouldSelect then
 							SelectSubTab(subtab)
 						end
-					end)
+						UpdateSubTabVisual(subtab, ActiveSubTab == subtab)
+					end
 				end)
 			end
 
