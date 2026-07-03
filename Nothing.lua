@@ -273,6 +273,8 @@ local ThemeManager = {
 			Accent = Color3.fromRGB(255, 255, 255),
 			AccentSoft = Color3.fromRGB(255, 255, 255),
 			AccentStroke = Color3.fromRGB(255, 255, 255),
+			CardSurface = Color3.fromRGB(10, 10, 10),
+			CardChip = Color3.fromRGB(17, 17, 17),
 			Description = "Nothing UI monochrome system.",
 			Preview = {
 				Background = Color3.fromRGB(8, 8, 8),
@@ -287,6 +289,8 @@ local ThemeManager = {
 			Accent = Color3.fromRGB(82, 128, 214),
 			AccentSoft = Color3.fromRGB(82, 128, 214),
 			AccentStroke = Color3.fromRGB(82, 128, 214),
+			CardSurface = Color3.fromRGB(8, 10, 16),
+			CardChip = Color3.fromRGB(15, 17, 24),
 			Description = "Kronos blue accent variant.",
 			Preview = {
 				Background = Color3.fromRGB(7, 8, 12),
@@ -6472,6 +6476,7 @@ function Library.new(config)
 					stroke.Transparency = 0.92
 					stroke.Color = Color3.fromRGB(255, 255, 255)
 					stroke.Parent = box
+					ThemeManager:Bind(label, "BackgroundColor3", "CardChip")
 					ThemeManager:BindAccentStroke(stroke)
 				end
 
@@ -7263,7 +7268,7 @@ function Library.new(config)
 
 				Card.Name = "ControlCard"
 				Card.Parent = Section
-				Card.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+				Card.BackgroundColor3 = ThemeManager:GetColor("CardSurface")
 				Card.BackgroundTransparency = 1
 				Card.BorderSizePixel = 0
 				Card.ClipsDescendants = false
@@ -7277,6 +7282,7 @@ function Library.new(config)
 				CardStroke.Color = Color3.fromRGB(255, 255, 255)
 				CardStroke.Transparency = 0.93
 				CardStroke.Parent = Card
+				ThemeManager:Bind(Card, "BackgroundColor3", "CardSurface")
 				ThemeManager:BindAccentStroke(CardStroke)
 
 				CardShadow.Name = "ControlCardShadow"
@@ -7362,7 +7368,7 @@ function Library.new(config)
 				local function setupChip(label, corner, stroke, xOffset)
 					label.Parent = Header
 					label.AnchorPoint = Vector2.new(1, 0)
-					label.BackgroundColor3 = Color3.fromRGB(17, 17, 17)
+					label.BackgroundColor3 = ThemeManager:GetColor("CardChip")
 					label.BackgroundTransparency = 0.55
 					label.BorderSizePixel = 0
 					label.Font = Enum.Font.GothamBold
@@ -7405,7 +7411,7 @@ function Library.new(config)
 				ActionButton.Name = "Action"
 				ActionButton.Parent = Header
 				ActionButton.AnchorPoint = Vector2.new(1, 0)
-				ActionButton.BackgroundColor3 = Color3.fromRGB(17, 17, 17)
+				ActionButton.BackgroundColor3 = ThemeManager:GetColor("CardChip")
 				ActionButton.BackgroundTransparency = 0.55
 				ActionButton.BorderSizePixel = 0
 				ActionButton.Position = UDim2.new(1, -12, 0, 28)
@@ -7413,6 +7419,7 @@ function Library.new(config)
 				ActionButton.Text = ""
 				ActionButton.Visible = type(cardCfg.Action) == "table" and type(cardCfg.Action.Callback) == "function"
 				ActionButton.ZIndex = 23
+				ThemeManager:Bind(ActionButton, "BackgroundColor3", "CardChip")
 				Instance.new("UICorner", ActionButton).CornerRadius = UDim.new(0, 4)
 
 				ActionIcon.Parent = ActionButton
