@@ -2221,6 +2221,8 @@ function Library.new(config)
 			local root = Instance.new("Frame")
 			local rootCorner = Instance.new("UICorner")
 			local rootStroke = Instance.new("UIStroke")
+			local headerFrame = Instance.new("Frame")
+			local headerLayout = Instance.new("UIListLayout")
 			local title = Instance.new("TextLabel")
 			local subtitle = Instance.new("TextLabel")
 			local liveChip = Instance.new("Frame")
@@ -2381,11 +2383,24 @@ function Library.new(config)
 			ThemeManager:Bind(root, "BackgroundColor3", "CardSurface")
 			bindAccentStroke(rootStroke)
 
+			headerFrame.Name = "Header"
+			headerFrame.Parent = root
+			headerFrame.BackgroundTransparency = 1
+			headerFrame.BorderSizePixel = 0
+			headerFrame.Position = UDim2.fromOffset(10, 7)
+			headerFrame.Size = UDim2.new(1, -124, 0, 36)
+			headerFrame.ZIndex = 18
+			headerLayout.Parent = headerFrame
+			headerLayout.FillDirection = Enum.FillDirection.Vertical
+			headerLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+			headerLayout.SortOrder = Enum.SortOrder.LayoutOrder
+			headerLayout.Padding = UDim.new(0, 2)
+
 			title.Name = "Title"
-			title.Parent = root
+			title.Parent = headerFrame
 			title.BackgroundTransparency = 1
-			title.Position = UDim2.fromOffset(10, 7)
-			title.Size = UDim2.new(1, -20, 0, 18)
+			title.Position = UDim2.fromOffset(0, 0)
+			title.Size = UDim2.new(1, 0, 0, 18)
 			title.Font = Enum.Font.GothamBold
 			title.Text = "Theme Lab"
 			title.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -2396,10 +2411,10 @@ function Library.new(config)
 			textLimit(title, 9, 14)
 
 			subtitle.Name = "Subtitle"
-			subtitle.Parent = root
+			subtitle.Parent = headerFrame
 			subtitle.BackgroundTransparency = 1
-			subtitle.Position = UDim2.fromOffset(10, 27)
-			subtitle.Size = UDim2.new(1, -122, 0, 14)
+			subtitle.Position = UDim2.fromOffset(0, 0)
+			subtitle.Size = UDim2.new(1, 0, 0, 14)
 			subtitle.Font = Enum.Font.GothamBold
 			subtitle.Text = "Appearance editor with live preview."
 			subtitle.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -2775,30 +2790,61 @@ function Library.new(config)
 				layoutQueued = true
 				lastLayoutWidth = width
 
+				local compactHeader = width < 300
 				local twoColumns = width >= 330
-				local cardWidth = twoColumns and math.floor((themeCards.AbsoluteSize.X - 6) / 2) or themeCards.AbsoluteSize.X
+				local previewTop = compactHeader and 72 or 50
+				local previewHeight = twoColumns and 138 or 132
+				local availableWidth = math.max(120, width - 20)
+
+				if compactHeader then
+					headerFrame.Size = UDim2.new(1, -20, 0, 36)
+					liveChip.AnchorPoint = Vector2.new(0, 0)
+					liveChip.Position = UDim2.fromOffset(10, 47)
+				else
+					headerFrame.Size = UDim2.new(1, -124, 0, 36)
+					liveChip.AnchorPoint = Vector2.new(1, 0)
+					liveChip.Position = UDim2.new(1, -10, 0, 10)
+				end
+
+				previewCard.Position = UDim2.fromOffset(10, previewTop)
+				previewCard.Size = UDim2.new(1, -20, 0, previewHeight)
+				previewArea.Position = UDim2.fromOffset(8, 30)
+				previewArea.Size = UDim2.new(1, -16, 0, previewHeight - 50)
+				accentStrip.Position = UDim2.new(0, 8, 1, -12)
+
+				local cardWidth = twoColumns and math.floor((availableWidth - 6) / 2) or availableWidth
 				themeGrid.CellSize = UDim2.fromOffset(math.max(100, cardWidth), 82)
-				infoGrid.CellSize = UDim2.fromOffset(math.max(70, math.floor((infoGridFrame.AbsoluteSize.X - 18) / (twoColumns and 2 or 1))), 42)
-				statsGrid.CellSize = UDim2.fromOffset(math.max(62, math.floor((statsFrame.AbsoluteSize.X - 20) / (twoColumns and 3 or 1))), 42)
+				infoGrid.CellSize = UDim2.fromOffset(math.max(70, math.floor((availableWidth - 18) / (twoColumns and 2 or 1))), 42)
+				statsGrid.CellSize = UDim2.fromOffset(math.max(62, math.floor((availableWidth - 20) / (twoColumns and 3 or 1))), 42)
+
 				task.defer(function()
 					layoutQueued = false
 					if destroyed then
 						return
 					end
-					local themeHeight = themeGrid.AbsoluteContentSize.Y
-					local infoTop = 236 + themeHeight + 44
-					paletteLabel.Position = UDim2.fromOffset(10, 226 + themeHeight)
-					paletteRow.Position = UDim2.fromOffset(10, 246 + themeHeight)
+
+					local themeTop = previewTop + previewHeight + 10
+					themeLabel.Position = UDim2.fromOffset(10, themeTop)
+					themeCards.Position = UDim2.fromOffset(10, themeTop + 20)
+					local themeHeight = math.max(82, themeGrid.AbsoluteContentSize.Y)
+					themeCards.Size = UDim2.new(1, -20, 0, themeHeight)
+
+					local paletteTop = themeTop + 20 + themeHeight + 12
+					paletteLabel.Position = UDim2.fromOffset(10, paletteTop)
+					paletteRow.Position = UDim2.fromOffset(10, paletteTop + 20)
+
+					local infoTop = paletteTop + 56
 					infoLabel.Position = UDim2.fromOffset(10, infoTop)
 					infoGridFrame.Position = UDim2.fromOffset(10, infoTop + 20)
-					local infoHeight = infoGrid.AbsoluteContentSize.Y
+					local infoHeight = math.max(42, infoGrid.AbsoluteContentSize.Y)
 					infoGridFrame.Size = UDim2.new(1, -20, 0, infoHeight)
-					local motionTop = infoTop + 26 + infoHeight
+
+					local motionTop = infoTop + 20 + infoHeight + 12
 					motionLabel.Position = UDim2.fromOffset(10, motionTop)
 					motionPanel.Position = UDim2.fromOffset(10, motionTop + 20)
 					historyText.Position = UDim2.fromOffset(10, motionTop + 68)
 					statsFrame.Position = UDim2.fromOffset(10, motionTop + 90)
-					local statsHeight = statsGrid.AbsoluteContentSize.Y
+					local statsHeight = math.max(42, statsGrid.AbsoluteContentSize.Y)
 					statsFrame.Size = UDim2.new(1, -20, 0, statsHeight)
 
 					local targetHeight = math.max(500, motionTop + 98 + statsHeight)
@@ -3754,34 +3800,46 @@ function Library.new(config)
 		LeftFrame.Parent = DefaultPage
 		RightFrame.Parent = DefaultPage
 
-		local function SetPageColumns(page, leftFrame, rightFrame, centerScale, heightScale)
-			page.Position = UDim2.new(0, 0, 0, 0)
+		local function SetPageColumns(page, leftFrame, rightFrame)
+			page.Position = UDim2.fromOffset(0, 0)
 			page.Size = UDim2.new(1, 0, 1, 0)
-			leftFrame.Position = UDim2.new(0.25, 0, centerScale, 0)
-			leftFrame.Size = UDim2.new(0.5, 0, heightScale, 0)
-			rightFrame.Position = UDim2.new(0.75, 0, centerScale, 0)
-			rightFrame.Size = UDim2.new(0.5, 0, heightScale, 0)
+			leftFrame.Position = UDim2.new(0.25, 0, 0.5, 0)
+			leftFrame.Size = UDim2.new(0.5, 0, 1, 0)
+			rightFrame.Position = UDim2.new(0.75, 0, 0.5, 0)
+			rightFrame.Size = UDim2.new(0.5, 0, 1, 0)
 		end
 
 		local function RefreshSubTabLayout()
 			local hasExplicit = ExplicitSubTabCount > 0
+			local initHeight = math.max(1, Init.AbsoluteSize.Y)
+			local contentTop = 0
+			local searchTop = SearchBarEnabled and math.max(4, math.floor(initHeight * 0.02)) or 0
+
 			SubTabBar.Visible = hasExplicit
 			SubTabShadow.Visible = hasExplicit
-			local top = SearchBarEnabled and 0.57 or 0.505
-			local height = SearchBarEnabled and 0.83 or 0.92
-			if hasExplicit then
-				local barTop = SearchBarEnabled and 0.088 or 0.024
-				SubTabBar.Position = UDim2.new(0.5, 0, barTop, 0)
-				SubTabShadow.Position = UDim2.new(0.5, 0, barTop, -8)
-				top = SearchBarEnabled and 0.665 or 0.605
-				height = SearchBarEnabled and 0.69 or 0.79
+
+			if SearchBarEnabled then
+				contentTop = searchTop + 28 + 8
 			end
+
+			if hasExplicit then
+				local barTop = contentTop + (SearchBarEnabled and 0 or 4)
+				SubTabBar.Position = UDim2.new(0.5, 0, 0, barTop)
+				SubTabShadow.Position = UDim2.new(0.5, 0, 0, barTop - 8)
+				contentTop = barTop + SubTabMetrics.BarHeight + 10
+			end
+
+			SubTabContent.Position = UDim2.new(0, 0, 0, contentTop)
+			SubTabContent.Size = UDim2.new(1, 0, 1, -contentTop)
+
 			for _, subtab in ipairs(SubTabs) do
 				if subtab.Page then
-					SetPageColumns(subtab.Page, subtab.LeftFrame, subtab.RightFrame, top, height)
+					SetPageColumns(subtab.Page, subtab.LeftFrame, subtab.RightFrame)
 				end
 			end
 		end
+
+		Init:GetPropertyChangedSignal("AbsoluteSize"):Connect(RefreshSubTabLayout)
 
 		local function CreateSubTabPage(name)
 			local page = Instance.new("Frame")
@@ -7679,6 +7737,7 @@ function Library.new(config)
 				Footer.TextTransparency = 0.58
 				Footer.TextXAlignment = Enum.TextXAlignment.Left
 				Footer.TextYAlignment = Enum.TextYAlignment.Top
+				Footer.TextWrapped = true
 				addTextLimit(Footer, 7, 9)
 				Footer.Visible = Footer.Text ~= ""
 				Footer.ZIndex = 21
@@ -7702,6 +7761,15 @@ function Library.new(config)
 					return math.clamp(bounds.X + 14, minWidth or 40, 76)
 				end
 
+				local function measureLabelHeight(text, size, font, width, minHeight, maxHeight)
+					text = tostring(text or "")
+					if text == "" or width <= 0 then
+						return minHeight or 0
+					end
+					local bounds = TextServ:GetTextSize(text, size, font, Vector2.new(width, math.huge))
+					return math.clamp(math.ceil(bounds.Y) + 2, minHeight or 0, maxHeight or math.huge)
+				end
+
 				local function updateHeaderWidths()
 					local width = math.max(220, Card.AbsoluteSize.X)
 					local left = (cardCfg.Icon ~= nil and cardCfg.Icon ~= "") and 38 or 12
@@ -7711,16 +7779,21 @@ function Library.new(config)
 						+ (ActionButton.Visible and 24 or 0)
 						+ (CollapseButton.Visible and 18 or 0)
 					local compact = width < 330 or metaWidth > width * 0.42
-
-					HeaderHeight = compact and ((StatusChip.Visible or Badge.Visible or ValueText.Visible) and 68 or 52) or 54
-					Header.Size = UDim2.new(1, 0, 0, HeaderHeight)
+					local descriptionText = tostring(cardCfg.Description or "")
+					Description.Visible = descriptionText ~= ""
 					Title.Position = UDim2.fromOffset(left, 7)
-					Description.Position = UDim2.fromOffset(left, 25)
 
 					if compact then
-						Title.Size = UDim2.new(1, -(left + 36), 0, 15)
-						Description.Size = UDim2.new(1, -(left + 18), 0, 12)
-						local rowY = 43
+						StatusChip.AnchorPoint = Vector2.new(0, 0)
+						Badge.AnchorPoint = Vector2.new(0, 0)
+						local textWidth = math.max(90, width - left - 34)
+						local titleHeight = measureLabelHeight(Title.Text, 12, Title.Font, textWidth, 15, 30)
+						local descHeight = Description.Visible and measureLabelHeight(Description.Text, 9, Description.Font, math.max(90, width - left - 18), 12, 28) or 0
+						Title.Size = UDim2.fromOffset(textWidth, titleHeight)
+						Description.Position = UDim2.fromOffset(left, 8 + titleHeight + 3)
+						Description.Size = UDim2.new(1, -(left + 18), 0, descHeight)
+						local textBottom = Description.Visible and (Description.Position.Y.Offset + descHeight) or (Title.Position.Y.Offset + titleHeight)
+						local rowY = math.max(43, textBottom + 7)
 						StatusChip.Position = UDim2.fromOffset(left, rowY)
 						Badge.Position = UDim2.fromOffset(left + (StatusChip.Visible and (StatusWidth + 6) or 0), rowY)
 						local rightInset = 10 + (ActionButton.Visible and 24 or 0) + (CollapseButton.Visible and 18 or 0)
@@ -7728,10 +7801,17 @@ function Library.new(config)
 						ValueText.Size = UDim2.fromOffset(54, 13)
 						ActionButton.Position = UDim2.new(1, -10, 0, 8)
 						CollapseButton.Position = UDim2.new(1, ActionButton.Visible and -32 or -10, 0, 9)
+						HeaderHeight = math.max((StatusChip.Visible or Badge.Visible or ValueText.Visible) and (rowY + 24) or 52, textBottom + 10)
 					else
+						StatusChip.AnchorPoint = Vector2.new(1, 0)
+						Badge.AnchorPoint = Vector2.new(1, 0)
 						local rightPad = 24 + metaWidth
-						Title.Size = UDim2.new(1, -(left + rightPad), 0, 16)
-						Description.Size = UDim2.new(1, -(left + rightPad), 0, 13)
+						local textWidth = math.max(96, width - left - rightPad)
+						local titleHeight = measureLabelHeight(Title.Text, 12, Title.Font, textWidth, 16, 24)
+						local descHeight = Description.Visible and measureLabelHeight(Description.Text, 9, Description.Font, textWidth, 13, 24) or 0
+						Title.Size = UDim2.fromOffset(textWidth, titleHeight)
+						Description.Position = UDim2.fromOffset(left, 8 + titleHeight + 3)
+						Description.Size = UDim2.fromOffset(textWidth, descHeight)
 						StatusChip.Position = UDim2.new(1, -12, 0, 8)
 						Badge.Position = UDim2.new(1, -(StatusChip.Visible and (StatusWidth + 20) or 12), 0, 8)
 						local valueRight = 12 + (ActionButton.Visible and 24 or 0) + (CollapseButton.Visible and 18 or 0)
@@ -7739,8 +7819,12 @@ function Library.new(config)
 						ValueText.Size = UDim2.fromOffset(math.max(62, 120 - valueRight), 13)
 						ActionButton.Position = UDim2.new(1, -12, 0, 28)
 						CollapseButton.Position = UDim2.new(1, ActionButton.Visible and -34 or -12, 0, 29)
+						local textBottom = Description.Visible and (Description.Position.Y.Offset + descHeight) or (Title.Position.Y.Offset + titleHeight)
+						HeaderHeight = math.max(54, textBottom + 10)
 					end
 
+					Icon.Position = UDim2.fromOffset(12, math.max(12, math.floor((HeaderHeight - 18) * 0.5)))
+					Header.Size = UDim2.new(1, 0, 0, HeaderHeight)
 					Content.Position = UDim2.fromOffset(0, HeaderHeight + 2)
 				end
 
@@ -7766,7 +7850,13 @@ function Library.new(config)
 
 				local function updateSize(animated)
 					local contentHeight = Collapsed and 0 or ContentLayout.AbsoluteContentSize.Y
-					local footerHeight = Footer.Visible and 18 or 6
+					local footerHeight = 6
+					if Footer.Visible then
+						local footerWidth = math.max(90, Card.AbsoluteSize.X - 24)
+						local bounds = TextServ:GetTextSize(Footer.Text, 9, Footer.Font, Vector2.new(footerWidth, math.huge))
+						footerHeight = math.clamp(math.ceil(bounds.Y) + 5, 16, 48)
+						Footer.Size = UDim2.new(1, -24, 0, footerHeight)
+					end
 					local targetHeight = HeaderHeight + 8 + contentHeight + footerHeight
 					Content.Visible = not Collapsed
 					Content.Position = UDim2.fromOffset(0, HeaderHeight + 2)
@@ -7835,30 +7925,38 @@ function Library.new(config)
 					SetTitle = function(_, value)
 						cardCfg.Title = tostring(value or "")
 						Title.Text = cardCfg.Title
+						updateChrome()
+						updateSize(true)
 						updateSearchText()
 					end,
 					SetDescription = function(_, value)
 						cardCfg.Description = tostring(value or "")
 						Description.Text = cardCfg.Description
+						updateChrome()
+						updateSize(true)
 						updateSearchText()
 					end,
 					SetIcon = function(_, value)
 						cardCfg.Icon = value
 						updateChrome()
+						updateSize(true)
 					end,
 					SetStatus = function(_, value)
 						cardCfg.Status = value
 						updateChrome()
+						updateSize(true)
 						updateSearchText()
 					end,
 					SetBadge = function(_, value)
 						cardCfg.Badge = value
 						updateChrome()
+						updateSize(true)
 						updateSearchText()
 					end,
 					SetValue = function(_, value)
 						cardCfg.Value = value
 						updateChrome()
+						updateSize(true)
 						updateSearchText()
 					end,
 					SetFooter = function(_, value)
