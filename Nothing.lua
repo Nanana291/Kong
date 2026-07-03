@@ -2167,14 +2167,34 @@ function Library.new(config)
 			Icon = "settings",
 		})
 
-		local ConfigSection = SettingsTab:NewSection({
+		local GeneralSubTab = SettingsTab:SubTab({
+			Name = "General",
+			Icon = "settings",
+		})
+
+		local ConfigSubTab = SettingsTab:SubTab({
+			Name = "Configurations",
+			Icon = "folder-cog",
+		})
+
+		local ThemeSubTab = SettingsTab:SubTab({
+			Name = "Themes",
+			Icon = "palette",
+		})
+
+		GeneralSubTab:Paragraph({
+			Title = "Settings",
+			Description = "Manage Nothing UI configuration, autoload, and theme preferences.",
+		})
+
+		local ConfigSection = ConfigSubTab:NewSection({
 			Position = "Left",
 			Title = "Configurations",
 			Icon = "settings",
 		})
 
-		local CustomizeSection = SettingsTab:NewSection({
-			Position = "Right",
+		local CustomizeSection = ThemeSubTab:NewSection({
+			Position = "Left",
 			Title = "Customize",
 			Icon = "palette",
 		})
@@ -2732,6 +2752,7 @@ function Library.new(config)
 			ThemePreview = ThemePreview,
 		}
 		ConfigManager:SyncSettingsUI()
+		GeneralSubTab:Select()
 
 		self.SettingsTab = SettingsTab
 		return SettingsTab
@@ -3238,6 +3259,9 @@ function Library.new(config)
 	end)
 
 	function WindowTable:NewTab(cfg)
+		if type(cfg) == "table" and cfg.Name ~= nil and cfg.Title == nil then
+			cfg.Title = cfg.Name
+		end
 		cfg = Config(cfg,{
 			Title = "Example",
 			Description = "Tab: "..tostring(#WindowTable.Tabs + 1),
@@ -3433,6 +3457,212 @@ function Library.new(config)
 		UIListLayout_2.SortOrder = Enum.SortOrder.LayoutOrder
 		UIListLayout_2.Padding = UDim.new(0, 3)
 
+		local SearchManager = nil
+		local SearchBarEnabled = config.SearchBar ~= false
+		local SubTabs = {}
+		local ActiveSubTab = nil
+		local ExplicitSubTabCount = 0
+		local DefaultSubTab = nil
+
+		local SubTabBar = Instance.new("Frame")
+		local SubTabBarCorner = Instance.new("UICorner")
+		local SubTabBarStroke = Instance.new("UIStroke")
+		local SubTabScroller = Instance.new("ScrollingFrame")
+		local SubTabList = Instance.new("UIListLayout")
+		local SubTabContent = Instance.new("Frame")
+		local DefaultPage = Instance.new("Frame")
+
+		SubTabBar.Name = "SubTabBar"
+		SubTabBar.Parent = Init
+		SubTabBar.AnchorPoint = Vector2.new(0.5, 0)
+		SubTabBar.BackgroundColor3 = Color3.fromRGB(17, 17, 17)
+		SubTabBar.BackgroundTransparency = 0.82
+		SubTabBar.BorderSizePixel = 0
+		SubTabBar.ClipsDescendants = true
+		SubTabBar.Position = UDim2.new(0.5, 0, 0.09, 0)
+		SubTabBar.Size = UDim2.new(0.96, 0, 0, 34)
+		SubTabBar.Visible = false
+		SubTabBar.ZIndex = 20
+
+		SubTabBarCorner.CornerRadius = UDim.new(0, 4)
+		SubTabBarCorner.Parent = SubTabBar
+		SubTabBarStroke.Color = Color3.fromRGB(255, 255, 255)
+		SubTabBarStroke.Transparency = 0.92
+		SubTabBarStroke.Parent = SubTabBar
+		ThemeManager:BindAccentStroke(SubTabBarStroke)
+
+		SubTabScroller.Name = "SubTabScroller"
+		SubTabScroller.Parent = SubTabBar
+		SubTabScroller.Active = true
+		SubTabScroller.BackgroundTransparency = 1
+		SubTabScroller.BorderSizePixel = 0
+		SubTabScroller.BottomImage = ""
+		SubTabScroller.CanvasSize = UDim2.fromOffset(0, 0)
+		SubTabScroller.Position = UDim2.fromOffset(5, 4)
+		SubTabScroller.ScrollBarImageTransparency = 1
+		SubTabScroller.ScrollBarThickness = 0
+		SubTabScroller.ScrollingDirection = Enum.ScrollingDirection.X
+		SubTabScroller.Size = UDim2.new(1, -10, 1, -8)
+		SubTabScroller.TopImage = ""
+		SubTabScroller.ZIndex = 21
+
+		SubTabList.Parent = SubTabScroller
+		SubTabList.FillDirection = Enum.FillDirection.Horizontal
+		SubTabList.HorizontalAlignment = Enum.HorizontalAlignment.Left
+		SubTabList.SortOrder = Enum.SortOrder.LayoutOrder
+		SubTabList.Padding = UDim.new(0, 5)
+		SubTabList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+			SubTabScroller.CanvasSize = UDim2.fromOffset(SubTabList.AbsoluteContentSize.X + 8, 0)
+		end)
+
+		SubTabContent.Name = "SubTabContent"
+		SubTabContent.Parent = Init
+		SubTabContent.BackgroundTransparency = 1
+		SubTabContent.BorderSizePixel = 0
+		SubTabContent.Position = UDim2.new(0, 0, 0, 0)
+		SubTabContent.Size = UDim2.new(1, 0, 1, 0)
+		SubTabContent.ZIndex = 4
+
+		DefaultPage.Name = "DefaultSubTabPage"
+		DefaultPage.Parent = SubTabContent
+		DefaultPage.BackgroundTransparency = 1
+		DefaultPage.BorderSizePixel = 0
+		DefaultPage.Size = UDim2.new(1, 0, 1, 0)
+		DefaultPage.Visible = true
+		DefaultPage.ZIndex = 4
+
+		LeftFrame.Parent = DefaultPage
+		RightFrame.Parent = DefaultPage
+
+		local function SetPageColumns(page, leftFrame, rightFrame, topScale, heightScale)
+			page.Position = UDim2.new(0, 0, topScale, 0)
+			page.Size = UDim2.new(1, 0, heightScale, 0)
+			leftFrame.Position = UDim2.new(0.25, 0, 0.5, 0)
+			leftFrame.Size = UDim2.new(0.5, 0, 1, 0)
+			rightFrame.Position = UDim2.new(0.75, 0, 0.5, 0)
+			rightFrame.Size = UDim2.new(0.5, 0, 1, 0)
+		end
+
+		local function RefreshSubTabLayout()
+			local hasExplicit = ExplicitSubTabCount > 0
+			SubTabBar.Visible = hasExplicit
+			local top = SearchBarEnabled and 0.57 or 0.505
+			local height = SearchBarEnabled and 0.83 or 0.92
+			if hasExplicit then
+				local barTop = SearchBarEnabled and 0.105 or 0.035
+				SubTabBar.Position = UDim2.new(0.5, 0, barTop, 0)
+				top = SearchBarEnabled and 0.64 or 0.58
+				height = SearchBarEnabled and 0.75 or 0.84
+			end
+			for _, subtab in ipairs(SubTabs) do
+				if subtab.Page then
+					SetPageColumns(subtab.Page, subtab.LeftFrame, subtab.RightFrame, top, height)
+				end
+			end
+		end
+
+		local function CreateSubTabPage(name)
+			local page = Instance.new("Frame")
+			local left = Instance.new("ScrollingFrame")
+			local leftLayout = Instance.new("UIListLayout")
+			local right = Instance.new("ScrollingFrame")
+			local rightLayout = Instance.new("UIListLayout")
+
+			page.Name = tostring(name or "SubTab") .. "Page"
+			page.Parent = SubTabContent
+			page.BackgroundTransparency = 1
+			page.BorderSizePixel = 0
+			page.Size = UDim2.new(1, 0, 1, 0)
+			page.Visible = false
+			page.ZIndex = 4
+
+			left.Name = "LeftFrame"
+			left.Parent = page
+			left.Active = true
+			left.AnchorPoint = Vector2.new(0.5, 0.5)
+			left.BackgroundTransparency = 1
+			left.BorderSizePixel = 0
+			left.ClipsDescendants = false
+			left.ScrollBarThickness = 0
+			leftLayout.Parent = left
+			leftLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+			leftLayout.SortOrder = Enum.SortOrder.LayoutOrder
+			leftLayout.Padding = UDim.new(0, 3)
+			leftLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+				left.CanvasSize = UDim2.fromOffset(0, leftLayout.AbsoluteContentSize.Y)
+			end)
+
+			right.Name = "RightFrame"
+			right.Parent = page
+			right.Active = true
+			right.AnchorPoint = Vector2.new(0.5, 0.5)
+			right.BackgroundTransparency = 1
+			right.BorderSizePixel = 0
+			right.ClipsDescendants = false
+			right.ScrollBarThickness = 0
+			rightLayout.Parent = right
+			rightLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+			rightLayout.SortOrder = Enum.SortOrder.LayoutOrder
+			rightLayout.Padding = UDim.new(0, 3)
+			rightLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+				right.CanvasSize = UDim2.fromOffset(0, rightLayout.AbsoluteContentSize.Y)
+			end)
+
+			return page, left, right
+		end
+
+		local function UpdateSubTabVisual(subtab, active)
+			if not subtab.ButtonFrame then
+				return
+			end
+
+			Twen:Create(subtab.ButtonFrame, TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+				BackgroundTransparency = active and 0.62 or (subtab.Hovered and 0.72 or 0.88),
+			}):Play()
+			Twen:Create(subtab.Stroke, TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+				Transparency = active and 0.45 or (subtab.Hovered and 0.72 or 0.95),
+			}):Play()
+			Twen:Create(subtab.Indicator, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+				BackgroundTransparency = active and 0.08 or 1,
+				Size = active and UDim2.new(0.72, 0, 0, 2) or UDim2.new(0.2, 0, 0, 2),
+			}):Play()
+			Twen:Create(subtab.IconLabel, TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+				ImageTransparency = active and 0.05 or 0.48,
+			}):Play()
+			Twen:Create(subtab.TextLabel, TweenInfo.new(0.18, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+				TextTransparency = active and 0.05 or 0.42,
+			}):Play()
+			Twen:Create(subtab.Scale, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+				Scale = active and 1.02 or (subtab.Hovered and 1.01 or 1),
+			}):Play()
+		end
+
+		local function SelectSubTab(subtab)
+			if not subtab or subtab.Destroyed or ActiveSubTab == subtab then
+				return false
+			end
+			local previous = ActiveSubTab
+			ActiveSubTab = subtab
+			for _, entry in ipairs(SubTabs) do
+				if entry.Page then
+					entry.Page.Visible = entry == subtab
+				end
+				UpdateSubTabVisual(entry, entry == subtab)
+			end
+			if previous and previous.LeftFrame then
+				previous.ScrollLeft = previous.LeftFrame.CanvasPosition
+				previous.ScrollRight = previous.RightFrame.CanvasPosition
+			end
+			if subtab.ScrollLeft then
+				subtab.LeftFrame.CanvasPosition = subtab.ScrollLeft
+				subtab.RightFrame.CanvasPosition = subtab.ScrollRight or Vector2.zero
+			end
+			if SearchManager and SearchManager.Apply then
+				SearchManager:Apply()
+			end
+			return true
+		end
+
 		local onFunction = function(value)
 			if value then
 				Init.Visible = true;
@@ -3494,12 +3724,12 @@ function Library.new(config)
 			end;
 		end)
 
-		local SearchManager = {
+		SearchManager = {
 			Query = "",
 			Sections = setmetatable({}, { __mode = "k" }),
 			Controls = setmetatable({}, { __mode = "k" }),
 		}
-		local SearchBarEnabled = config.SearchBar ~= false
+		SearchBarEnabled = config.SearchBar ~= false
 
 		local function NormalizeSearchText(...)
 			local parts = {}
@@ -3538,14 +3768,16 @@ function Library.new(config)
 
 			for sectionObject, sectionEntry in pairs(self.Sections) do
 				if sectionObject and sectionObject.Destroyed ~= true then
-					local sectionMatch = query ~= "" and SearchContains(sectionEntry.Text, query)
+					local activeSubTab = sectionEntry.SubTab == nil or sectionEntry.SubTab == ActiveSubTab
+					local sectionMatch = activeSubTab and query ~= "" and SearchContains(sectionEntry.Text, query)
 					local anyChildVisible = false
 
 					for i = 1, #sectionEntry.Children do
 						local child = sectionEntry.Children[i]
 						if child and child.Object and child.Object.Destroyed ~= true then
-							local childMatch = query == "" or SearchContains(child.Text, query)
-							local visible = child.BaseVisible and (query == "" or childMatch or sectionMatch)
+							local childActiveSubTab = child.SubTab == nil or child.SubTab == ActiveSubTab
+							local childMatch = childActiveSubTab and (query == "" or SearchContains(child.Text, query))
+							local visible = childActiveSubTab and child.BaseVisible and (query == "" or childMatch or sectionMatch)
 							SetInstanceVisible(child.Object, visible)
 							if visible then
 								anyChildVisible = true
@@ -3553,14 +3785,15 @@ function Library.new(config)
 						end
 					end
 
-					local sectionVisible = sectionEntry.BaseVisible and (query == "" or sectionMatch or anyChildVisible)
+					local sectionVisible = activeSubTab and sectionEntry.BaseVisible and (query == "" or sectionMatch or anyChildVisible)
 					SetInstanceVisible(sectionObject, sectionVisible)
 				end
 			end
 
 			for controlObject, controlEntry in pairs(self.Controls) do
 				if controlObject and controlObject.Destroyed ~= true and controlEntry.Section == nil then
-					local visible = controlEntry.BaseVisible and (query == "" or SearchContains(controlEntry.Text, query))
+					local activeSubTab = controlEntry.SubTab == nil or controlEntry.SubTab == ActiveSubTab
+					local visible = activeSubTab and controlEntry.BaseVisible and (query == "" or SearchContains(controlEntry.Text, query))
 					SetInstanceVisible(controlObject, visible)
 				end
 			end
@@ -3584,6 +3817,7 @@ function Library.new(config)
 				Text = NormalizeSearchText(title),
 				BaseVisible = true,
 				Children = {},
+				SubTab = object and object._SubTab or nil,
 			}
 
 			self.Sections[object] = entry
@@ -3601,6 +3835,7 @@ function Library.new(config)
 				Text = NormalizeSearchText(title, description),
 				BaseVisible = true,
 				Section = sectionEntry,
+				SubTab = sectionEntry and sectionEntry.SubTab or (object and object._SubTab or nil),
 			}
 
 			self.Controls[object] = entry
@@ -3884,6 +4119,10 @@ function Library.new(config)
 
 		local function RegisterSearchableControl(object, root, title, description, tooltipText, tooltipTarget, sectionObject)
 			SearchManager:RegisterControl(object, root, title, description, sectionObject)
+			local subtab = sectionObject and sectionObject._SubTab
+			if subtab and subtab.Elements and object and not table.find(subtab.Elements, object) then
+				subtab.Elements[#subtab.Elements + 1] = object
+			end
 			if tooltipText ~= nil and tooltipText ~= "" then
 				TooltipManager:Attach(tooltipTarget or root, tooltipText)
 			end
@@ -3949,12 +4188,7 @@ function Library.new(config)
 			SearchManager:SetQuery("")
 		end
 
-		local contentTop = SearchBarEnabled and 0.57 or 0.505
-		local contentHeight = SearchBarEnabled and 0.83 or 0.92
-		LeftFrame.Position = UDim2.new(0.25, 0, contentTop, 0)
-		LeftFrame.Size = UDim2.new(0.5, 0, contentHeight, 0)
-		RightFrame.Position = UDim2.new(0.75, 0, contentTop, 0)
-		RightFrame.Size = UDim2.new(0.5, 0, contentHeight, 0)
+		RefreshSubTabLayout()
 
 		function TabTable:NewSection(c_o_n_f_i_g)
 			c_o_n_f_i_g = Config(c_o_n_f_i_g,{
@@ -3962,6 +4196,9 @@ function Library.new(config)
 				Title = "Section",
 				Icon = 'rbxassetid://7733964640'
 			});
+			c_o_n_f_i_g._SubTab = c_o_n_f_i_g._SubTab or DefaultSubTab
+			c_o_n_f_i_g._SubTabLeftFrame = c_o_n_f_i_g._SubTabLeftFrame or LeftFrame
+			c_o_n_f_i_g._SubTabRightFrame = c_o_n_f_i_g._SubTabRightFrame or RightFrame
 
 			local SectionTable = {};
 			local Section = Instance.new("Frame")
@@ -3982,7 +4219,7 @@ function Library.new(config)
 			local UIGradient_4 = Instance.new("UIGradient")
 
 			Section.Name = "Section"
-			Section.Parent = (c_o_n_f_i_g.Position == "Left" and LeftFrame) or RightFrame;
+			Section.Parent = (c_o_n_f_i_g.Position == "Left" and c_o_n_f_i_g._SubTabLeftFrame) or c_o_n_f_i_g._SubTabRightFrame;
 			Section.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 			Section.BackgroundTransparency = 1
 			Section.BorderColor3 = Color3.fromRGB(0, 0, 0)
@@ -4070,6 +4307,10 @@ function Library.new(config)
 			Title.TextTransparency = 1
 			Twen:Create(Title,TweenInfo2,{TextTransparency = 0}):Play();
 			SectionTable.Root = Section
+			SectionTable._SubTab = c_o_n_f_i_g._SubTab
+			if c_o_n_f_i_g._SubTab and c_o_n_f_i_g._SubTab.Sections then
+				c_o_n_f_i_g._SubTab.Sections[#c_o_n_f_i_g._SubTab.Sections + 1] = SectionTable
+			end
 			SectionTable.Visible = function(newindx)
 				SearchManager:SetObjectVisible(SectionTable, newindx)
 			end
@@ -6929,6 +7170,254 @@ function Library.new(config)
 
 			return SectionTable;
 		end;
+
+		local function CreateSubTab(cfg, hidden)
+			cfg = Config(cfg, {
+				Name = nil,
+				Title = nil,
+				Icon = "circle",
+			})
+			local subtabName = tostring(cfg.Name or cfg.Title or "SubTab")
+			local page, subLeft, subRight
+			if hidden then
+				page, subLeft, subRight = DefaultPage, LeftFrame, RightFrame
+			else
+				page, subLeft, subRight = CreateSubTabPage(subtabName)
+			end
+
+			local subtab = {
+				Name = subtabName,
+				Icon = cfg.Icon,
+				Page = page,
+				LeftFrame = subLeft,
+				RightFrame = subRight,
+				Sections = {},
+				Elements = {},
+				Hidden = hidden == true,
+				Destroyed = false,
+				Hovered = false,
+			}
+			SubTabs[#SubTabs + 1] = subtab
+
+			if not hidden then
+				ExplicitSubTabCount = ExplicitSubTabCount + 1
+				local buttonFrame = Instance.new("Frame")
+				local buttonCorner = Instance.new("UICorner")
+				local buttonStroke = Instance.new("UIStroke")
+				local scale = Instance.new("UIScale")
+				local icon = Instance.new("ImageLabel")
+				local text = Instance.new("TextLabel")
+				local indicator = Instance.new("Frame")
+				local indicatorCorner = Instance.new("UICorner")
+				local hitbox = Instance.new("TextButton")
+
+				buttonFrame.Name = subtabName .. "SubTab"
+				buttonFrame.Parent = SubTabScroller
+				buttonFrame.BackgroundColor3 = Color3.fromRGB(17, 17, 17)
+				buttonFrame.BackgroundTransparency = 0.88
+				buttonFrame.BorderSizePixel = 0
+				buttonFrame.LayoutOrder = ExplicitSubTabCount
+				buttonFrame.Size = UDim2.fromOffset(math.clamp(72 + (#subtabName * 6), 92, 150), 26)
+				buttonFrame.ZIndex = 22
+				buttonCorner.CornerRadius = UDim.new(0, 4)
+				buttonCorner.Parent = buttonFrame
+				buttonStroke.Color = Color3.fromRGB(255, 255, 255)
+				buttonStroke.Transparency = 0.95
+				buttonStroke.Parent = buttonFrame
+				ThemeManager:BindAccentStroke(buttonStroke)
+				scale.Parent = buttonFrame
+
+				icon.Name = "Icon"
+				icon.Parent = buttonFrame
+				icon.AnchorPoint = Vector2.new(0, 0.5)
+				icon.BackgroundTransparency = 1
+				icon.BorderSizePixel = 0
+				icon.Image = ResolveIconSource(cfg.Icon)
+				icon.ImageTransparency = 0.48
+				icon.Position = UDim2.new(0, 9, 0.5, 0)
+				icon.Size = UDim2.fromOffset(13, 13)
+				icon.ZIndex = 23
+
+				text.Name = "Title"
+				text.Parent = buttonFrame
+				text.BackgroundTransparency = 1
+				text.BorderSizePixel = 0
+				text.Font = Enum.Font.GothamBold
+				text.Position = UDim2.new(0, 28, 0, 0)
+				text.Size = UDim2.new(1, -36, 1, -2)
+				text.Text = subtabName
+				text.TextColor3 = Color3.fromRGB(255, 255, 255)
+				text.TextScaled = true
+				text.TextTransparency = 0.42
+				text.TextXAlignment = Enum.TextXAlignment.Left
+				text.ZIndex = 23
+
+				indicator.Name = "Indicator"
+				indicator.Parent = buttonFrame
+				indicator.AnchorPoint = Vector2.new(0.5, 1)
+				indicator.BackgroundColor3 = ThemeManager:GetColor("Accent")
+				indicator.BackgroundTransparency = 1
+				indicator.BorderSizePixel = 0
+				indicator.Position = UDim2.new(0.5, 0, 1, -2)
+				indicator.Size = UDim2.new(0.2, 0, 0, 2)
+				indicator.ZIndex = 24
+				ThemeManager:BindAccent(indicator, "BackgroundColor3")
+				indicatorCorner.CornerRadius = UDim.new(1, 0)
+				indicatorCorner.Parent = indicator
+
+				hitbox.Parent = buttonFrame
+				hitbox.BackgroundTransparency = 1
+				hitbox.BorderSizePixel = 0
+				hitbox.Size = UDim2.new(1, 0, 1, 0)
+				hitbox.Text = ""
+				hitbox.ZIndex = 30
+
+				subtab.ButtonFrame = buttonFrame
+				subtab.Stroke = buttonStroke
+				subtab.Scale = scale
+				subtab.IconLabel = icon
+				subtab.TextLabel = text
+				subtab.Indicator = indicator
+				subtab.Hitbox = hitbox
+				hitbox.MouseEnter:Connect(function()
+					subtab.Hovered = true
+					UpdateSubTabVisual(subtab, ActiveSubTab == subtab)
+				end)
+				hitbox.MouseLeave:Connect(function()
+					subtab.Hovered = false
+					UpdateSubTabVisual(subtab, ActiveSubTab == subtab)
+				end)
+				hitbox.MouseButton1Click:Connect(function()
+					Twen:Create(scale, TweenInfo.new(0.08, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Scale = 0.96 }):Play()
+					task.delay(0.06, function()
+						if not subtab.Destroyed then
+							SelectSubTab(subtab)
+						end
+					end)
+				end)
+			end
+
+			function subtab:NewSection(sectionCfg)
+				sectionCfg = type(sectionCfg) == "table" and sectionCfg or { Title = tostring(sectionCfg or "Section") }
+				sectionCfg._SubTab = self
+				sectionCfg._SubTabLeftFrame = self.LeftFrame
+				sectionCfg._SubTabRightFrame = self.RightFrame
+				return TabTable:NewSection(sectionCfg)
+			end
+
+			function subtab:GetSections()
+				return self.Sections
+			end
+
+			function subtab:GetElements()
+				return self.Elements
+			end
+
+			function subtab:_DefaultSection()
+				if self.DefaultSection and self.DefaultSection.Root and self.DefaultSection.Root.Parent then
+					return self.DefaultSection
+				end
+				self.DefaultSection = self:NewSection({ Title = self.Name, Icon = self.Icon, Position = "Left" })
+				return self.DefaultSection
+			end
+
+			local function forward(methodName)
+				subtab[methodName] = function(self, ...)
+					local section = self:_DefaultSection()
+					local method = section and section[methodName]
+					if type(method) ~= "function" then
+						return nil
+					end
+					local element = method(section, ...)
+					if element ~= nil and self.Elements and not table.find(self.Elements, element) then
+						self.Elements[#self.Elements + 1] = element
+					end
+					return element
+				end
+			end
+
+			for _, methodName in ipairs({
+				"Paragraph", "AddParagraph", "NewToggle", "NewTitle", "NewButton", "NewKeybind", "NewSlider",
+				"NewDropdown", "Divider", "NewColorpicker", "NewTextbox",
+			}) do
+				forward(methodName)
+			end
+
+			function subtab:SetName(value)
+				self.Name = tostring(value or self.Name)
+				if self.TextLabel then
+					self.TextLabel.Text = self.Name
+				end
+			end
+
+			function subtab:SetIcon(value)
+				self.Icon = value
+				if self.IconLabel then
+					self.IconLabel.Image = ResolveIconSource(value)
+				end
+			end
+
+			function subtab:Select()
+				return SelectSubTab(self)
+			end
+
+			function subtab:IsSelected()
+				return ActiveSubTab == self
+			end
+
+			function subtab:Destroy()
+				if self.Destroyed then
+					return
+				end
+				self.Destroyed = true
+				if ActiveSubTab == self then
+					ActiveSubTab = nil
+				end
+				if self.ButtonFrame then
+					self.ButtonFrame:Destroy()
+					ExplicitSubTabCount = math.max(0, ExplicitSubTabCount - 1)
+				end
+				if self.Page and self.Page ~= DefaultPage then
+					self.Page:Destroy()
+				end
+				RefreshSubTabLayout()
+				for _, entry in ipairs(SubTabs) do
+					if not entry.Destroyed then
+						SelectSubTab(entry)
+						break
+					end
+				end
+			end
+
+			if not ActiveSubTab then
+				ActiveSubTab = subtab
+				page.Visible = true
+			end
+			RefreshSubTabLayout()
+			UpdateSubTabVisual(subtab, ActiveSubTab == subtab)
+			return subtab
+		end
+
+		DefaultSubTab = CreateSubTab({ Name = "Default", Icon = cfg.Icon }, true)
+		TabTable.DefaultSubTab = DefaultSubTab
+		TabTable.SubTabs = SubTabs
+
+		function TabTable:SubTab(subCfg)
+			local subtab = CreateSubTab(subCfg, false)
+			SelectSubTab(subtab)
+			return subtab
+		end
+
+		TabTable.NewSubTab = TabTable.SubTab
+
+		for _, methodName in ipairs({
+			"Paragraph", "AddParagraph", "NewToggle", "NewTitle", "NewButton", "NewKeybind", "NewSlider",
+			"NewDropdown", "Divider", "NewColorpicker", "NewTextbox",
+		}) do
+			TabTable[methodName] = function(self, ...)
+				return DefaultSubTab[methodName](DefaultSubTab, ...)
+			end
+		end
 
 		return TabTable;
 	end;
