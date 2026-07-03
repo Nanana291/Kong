@@ -6152,6 +6152,7 @@ function Library.new(config)
 				end
 
 				return {
+					Root = FunctionDivider,
 					Visible = function(newindx)
 						FunctionDivider.Visible = newindx
 					end,
@@ -7208,6 +7209,527 @@ function Library.new(config)
 				return TextboxObject
 			end;
 
+
+			-- Control Cards: premium section-local containers that reuse existing controls.
+			function SectionTable:NewControlCard(cardCfg)
+				cardCfg = Config(cardCfg, {
+					Title = "Control Card",
+					Description = "",
+					Icon = nil,
+					Status = nil,
+					Badge = nil,
+					Footer = nil,
+					Value = nil,
+					Action = nil,
+					Collapsible = false,
+					DefaultCollapsed = false,
+				})
+
+				local CardObject = nil
+				local Children = {}
+				local ChildText = {}
+				local Connections = {}
+				local Collapsed = cardCfg.DefaultCollapsed == true
+				local Enabled = true
+				local AccentVisible = true
+
+				local Card = Instance.new("Frame")
+				local CardCorner = Instance.new("UICorner")
+				local CardStroke = Instance.new("UIStroke")
+				local CardShadow = Instance.new("ImageLabel")
+				local Scale = Instance.new("UIScale")
+				local Accent = Instance.new("Frame")
+				local AccentCorner = Instance.new("UICorner")
+				local Header = Instance.new("TextButton")
+				local Icon = Instance.new("ImageLabel")
+				local Title = Instance.new("TextLabel")
+				local Description = Instance.new("TextLabel")
+				local StatusChip = Instance.new("TextLabel")
+				local StatusCorner = Instance.new("UICorner")
+				local StatusStroke = Instance.new("UIStroke")
+				local Badge = Instance.new("TextLabel")
+				local BadgeCorner = Instance.new("UICorner")
+				local ValueText = Instance.new("TextLabel")
+				local ActionButton = Instance.new("TextButton")
+				local ActionIcon = Instance.new("ImageLabel")
+				local CollapseButton = Instance.new("TextButton")
+				local Content = Instance.new("Frame")
+				local ContentLayout = Instance.new("UIListLayout")
+				local Footer = Instance.new("TextLabel")
+
+				Card.Name = "ControlCard"
+				Card.Parent = Section
+				Card.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+				Card.BackgroundTransparency = 1
+				Card.BorderSizePixel = 0
+				Card.ClipsDescendants = true
+				Card.Size = UDim2.new(0.95, 0, 0, 72)
+				Card.ZIndex = 17
+				Twen:Create(Card, TweenInfo1, { BackgroundTransparency = 0.28 }):Play()
+
+				CardCorner.CornerRadius = UDim.new(0, 5)
+				CardCorner.Parent = Card
+
+				CardStroke.Color = Color3.fromRGB(255, 255, 255)
+				CardStroke.Transparency = 0.93
+				CardStroke.Parent = Card
+				ThemeManager:BindAccentStroke(CardStroke)
+
+				CardShadow.Name = "ControlCardShadow"
+				CardShadow.Parent = Card
+				CardShadow.AnchorPoint = Vector2.new(0.5, 0.5)
+				CardShadow.BackgroundTransparency = 1
+				CardShadow.BorderSizePixel = 0
+				CardShadow.Position = UDim2.new(0.5, 0, 0.5, 0)
+				CardShadow.Size = UDim2.new(1, 18, 1, 18)
+				CardShadow.ZIndex = 16
+				CardShadow.Image = "rbxassetid://6015897843"
+				CardShadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+				CardShadow.ImageTransparency = 0.82
+				CardShadow.ScaleType = Enum.ScaleType.Slice
+				CardShadow.SliceCenter = Rect.new(49, 49, 450, 450)
+
+				Scale.Parent = Card
+				Scale.Scale = 1
+
+				Accent.Name = "Accent"
+				Accent.Parent = Card
+				Accent.BackgroundColor3 = ThemeManager:GetColor("Accent")
+				Accent.BackgroundTransparency = 0.2
+				Accent.BorderSizePixel = 0
+				Accent.Position = UDim2.fromOffset(0, 0)
+				Accent.Size = UDim2.new(0, 2, 1, 0)
+				Accent.ZIndex = 18
+				ThemeManager:BindAccent(Accent, "BackgroundColor3")
+
+				AccentCorner.CornerRadius = UDim.new(0, 5)
+				AccentCorner.Parent = Accent
+
+				Header.Name = "Header"
+				Header.Parent = Card
+				Header.BackgroundTransparency = 1
+				Header.BorderSizePixel = 0
+				Header.Position = UDim2.fromOffset(0, 0)
+				Header.Size = UDim2.new(1, 0, 0, 54)
+				Header.Text = ""
+				Header.ZIndex = 20
+
+				Icon.Name = "Icon"
+				Icon.Parent = Header
+				Icon.BackgroundTransparency = 1
+				Icon.Image = cardCfg.Icon and ResolveIconSource(cardCfg.Icon) or ""
+				Icon.ImageColor3 = Color3.fromRGB(255, 255, 255)
+				Icon.ImageTransparency = cardCfg.Icon and 0.18 or 1
+				Icon.Position = UDim2.fromOffset(12, 13)
+				Icon.Size = UDim2.fromOffset(18, 18)
+				Icon.ZIndex = 21
+				ThemeManager:BindAccent(Icon, "ImageColor3")
+
+				Title.Name = "Title"
+				Title.Parent = Header
+				Title.BackgroundTransparency = 1
+				Title.Font = Enum.Font.GothamBold
+				Title.Position = UDim2.fromOffset(cardCfg.Icon and 38 or 12, 8)
+				Title.Size = UDim2.new(1, -150, 0, 17)
+				Title.Text = tostring(cardCfg.Title or "")
+				Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+				Title.TextScaled = true
+				Title.TextSize = 14
+				Title.TextTransparency = 0.08
+				Title.TextWrapped = true
+				Title.TextXAlignment = Enum.TextXAlignment.Left
+				Title.ZIndex = 21
+
+				Description.Name = "Description"
+				Description.Parent = Header
+				Description.BackgroundTransparency = 1
+				Description.Font = Enum.Font.GothamBold
+				Description.Position = UDim2.fromOffset(cardCfg.Icon and 38 or 12, 27)
+				Description.Size = UDim2.new(1, -150, 0, 13)
+				Description.Text = tostring(cardCfg.Description or "")
+				Description.TextColor3 = Color3.fromRGB(255, 255, 255)
+				Description.TextScaled = true
+				Description.TextSize = 11
+				Description.TextTransparency = 0.5
+				Description.TextWrapped = true
+				Description.TextXAlignment = Enum.TextXAlignment.Left
+				Description.ZIndex = 21
+
+				local function setupChip(label, corner, stroke, xOffset)
+					label.Parent = Header
+					label.AnchorPoint = Vector2.new(1, 0)
+					label.BackgroundColor3 = Color3.fromRGB(17, 17, 17)
+					label.BackgroundTransparency = 0.55
+					label.BorderSizePixel = 0
+					label.Font = Enum.Font.GothamBold
+					label.Position = UDim2.new(1, xOffset, 0, 8)
+					label.Size = UDim2.fromOffset(58, 15)
+					label.TextColor3 = Color3.fromRGB(255, 255, 255)
+					label.TextScaled = true
+					label.TextSize = 10
+					label.TextTransparency = 0.2
+					label.ZIndex = 22
+					corner.CornerRadius = UDim.new(0.5, 0)
+					corner.Parent = label
+					stroke.Color = Color3.fromRGB(255, 255, 255)
+					stroke.Transparency = 0.92
+					stroke.Parent = label
+					ThemeManager:BindAccentStroke(stroke)
+				end
+
+				setupChip(StatusChip, StatusCorner, StatusStroke, -12)
+				setupChip(Badge, BadgeCorner, Instance.new("UIStroke"), -74)
+				Badge.BackgroundTransparency = 0.72
+
+				ValueText.Name = "Value"
+				ValueText.Parent = Header
+				ValueText.AnchorPoint = Vector2.new(1, 0)
+				ValueText.BackgroundTransparency = 1
+				ValueText.Font = Enum.Font.GothamBold
+				ValueText.Position = UDim2.new(1, -12, 0, 29)
+				ValueText.Size = UDim2.fromOffset(120, 14)
+				ValueText.TextColor3 = ThemeManager:GetColor("Accent")
+				ValueText.TextScaled = true
+				ValueText.TextSize = 11
+				ValueText.TextTransparency = 0.2
+				ValueText.TextXAlignment = Enum.TextXAlignment.Right
+				ValueText.ZIndex = 22
+				ThemeManager:BindAccent(ValueText, "TextColor3")
+
+				ActionButton.Name = "Action"
+				ActionButton.Parent = Header
+				ActionButton.AnchorPoint = Vector2.new(1, 0)
+				ActionButton.BackgroundColor3 = Color3.fromRGB(17, 17, 17)
+				ActionButton.BackgroundTransparency = 0.55
+				ActionButton.BorderSizePixel = 0
+				ActionButton.Position = UDim2.new(1, -12, 0, 28)
+				ActionButton.Size = UDim2.fromOffset(18, 18)
+				ActionButton.Text = ""
+				ActionButton.Visible = type(cardCfg.Action) == "table" and type(cardCfg.Action.Callback) == "function"
+				ActionButton.ZIndex = 23
+				Instance.new("UICorner", ActionButton).CornerRadius = UDim.new(0, 4)
+
+				ActionIcon.Parent = ActionButton
+				ActionIcon.BackgroundTransparency = 1
+				ActionIcon.Image = ResolveIconSource(type(cardCfg.Action) == "table" and (cardCfg.Action.Icon or "refresh-cw") or "refresh-cw")
+				ActionIcon.ImageColor3 = Color3.fromRGB(255, 255, 255)
+				ActionIcon.ImageTransparency = 0.2
+				ActionIcon.Position = UDim2.fromOffset(4, 4)
+				ActionIcon.Size = UDim2.fromOffset(10, 10)
+				ActionIcon.ZIndex = 24
+
+				CollapseButton.Name = "Collapse"
+				CollapseButton.Parent = Header
+				CollapseButton.AnchorPoint = Vector2.new(1, 0)
+				CollapseButton.BackgroundTransparency = 1
+				CollapseButton.Position = UDim2.new(1, ActionButton.Visible and -34 or -12, 0, 29)
+				CollapseButton.Size = UDim2.fromOffset(16, 16)
+				CollapseButton.Font = Enum.Font.GothamBold
+				CollapseButton.Text = Collapsed and ">" or "v"
+				CollapseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+				CollapseButton.TextScaled = true
+				CollapseButton.TextTransparency = 0.35
+				CollapseButton.Visible = cardCfg.Collapsible == true
+				CollapseButton.ZIndex = 23
+
+				Content.Name = "Content"
+				Content.Parent = Card
+				Content.BackgroundTransparency = 1
+				Content.BorderSizePixel = 0
+				Content.Position = UDim2.fromOffset(0, 56)
+				Content.Size = UDim2.new(1, 0, 0, 1)
+				Content.Visible = not Collapsed
+				Content.ZIndex = 20
+
+				ContentLayout.Parent = Content
+				ContentLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+				ContentLayout.SortOrder = Enum.SortOrder.LayoutOrder
+				ContentLayout.Padding = UDim.new(0, 4)
+
+				Footer.Name = "Footer"
+				Footer.Parent = Card
+				Footer.BackgroundTransparency = 1
+				Footer.Font = Enum.Font.GothamBold
+				Footer.Size = UDim2.new(1, -24, 0, 14)
+				Footer.Text = tostring(cardCfg.Footer or "")
+				Footer.TextColor3 = Color3.fromRGB(255, 255, 255)
+				Footer.TextScaled = true
+				Footer.TextSize = 10
+				Footer.TextTransparency = 0.58
+				Footer.TextXAlignment = Enum.TextXAlignment.Left
+				Footer.Visible = Footer.Text ~= ""
+				Footer.ZIndex = 21
+
+				local function chipWidth(text, minWidth)
+					text = tostring(text or "")
+					if text == "" then
+						return 0
+					end
+					local bounds = TextServ:GetTextSize(text, 10, Enum.Font.GothamBold, Vector2.new(160, 16))
+					return math.clamp(bounds.X + 18, minWidth or 42, 92)
+				end
+
+				local function updateHeaderWidths()
+					local rightPad = 24
+					if StatusChip.Visible then
+						rightPad += StatusChip.AbsoluteSize.X + 8
+					end
+					if Badge.Visible then
+						rightPad += Badge.AbsoluteSize.X + 8
+					end
+					if ValueText.Visible then
+						rightPad += 92
+					end
+					if ActionButton.Visible then
+						rightPad += 22
+					end
+					if CollapseButton.Visible then
+						rightPad += 18
+					end
+					Title.Position = UDim2.fromOffset(cardCfg.Icon and 38 or 12, 8)
+					Description.Position = UDim2.fromOffset(cardCfg.Icon and 38 or 12, 27)
+					Title.Size = UDim2.new(1, -((cardCfg.Icon and 38 or 12) + rightPad), 0, 17)
+					Description.Size = UDim2.new(1, -((cardCfg.Icon and 38 or 12) + rightPad), 0, 13)
+				end
+
+				local function updateChrome()
+					StatusChip.Text = tostring(cardCfg.Status or "")
+					StatusChip.Visible = StatusChip.Text ~= ""
+					local statusWidth = chipWidth(StatusChip.Text, 52)
+					StatusChip.Size = UDim2.fromOffset(statusWidth, 15)
+					Badge.Text = tostring(cardCfg.Badge or "")
+					Badge.Visible = Badge.Text ~= ""
+					Badge.Size = UDim2.fromOffset(chipWidth(Badge.Text, 36), 15)
+					Badge.Position = UDim2.new(1, -(StatusChip.Visible and (statusWidth + 20) or 12), 0, 8)
+					ValueText.Text = tostring(cardCfg.Value or "")
+					ValueText.Visible = ValueText.Text ~= ""
+					Footer.Text = tostring(cardCfg.Footer or "")
+					Footer.Visible = Footer.Text ~= ""
+					Icon.Visible = cardCfg.Icon ~= nil and cardCfg.Icon ~= ""
+					Icon.Image = Icon.Visible and ResolveIconSource(cardCfg.Icon) or ""
+					Icon.ImageTransparency = Icon.Visible and 0.18 or 1
+					CollapseButton.Text = Collapsed and ">" or "v"
+					updateHeaderWidths()
+				end
+
+				local function updateSize(animated)
+					local contentHeight = Collapsed and 0 or ContentLayout.AbsoluteContentSize.Y
+					local footerHeight = Footer.Visible and 20 or 6
+					local targetHeight = 58 + contentHeight + footerHeight
+					Content.Visible = not Collapsed
+					Content.Size = UDim2.new(1, 0, 0, math.max(1, contentHeight))
+					Footer.Position = UDim2.fromOffset(12, 58 + contentHeight + 2)
+					local target = UDim2.new(0.95, 0, 0, math.max(62, targetHeight))
+					if animated then
+						Twen:Create(Card, TweenInfo.new(0.16, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Size = target }):Play()
+					else
+						Card.Size = target
+					end
+				end
+
+				local function cardSearchPrefix()
+					return table.concat({
+						tostring(cardCfg.Title or ""),
+						tostring(cardCfg.Description or ""),
+						tostring(cardCfg.Status or ""),
+						tostring(cardCfg.Badge or ""),
+						tostring(cardCfg.Value or ""),
+						tostring(cardCfg.Footer or ""),
+					}, " ")
+				end
+
+				local function updateSearchText()
+					local prefix = cardSearchPrefix()
+					local parts = { prefix }
+					for i = 1, #ChildText do
+						parts[#parts + 1] = ChildText[i]
+						if Children[i] then
+							SearchManager:UpdateControlText(Children[i], prefix .. " " .. ChildText[i], nil)
+						end
+					end
+					SearchManager:UpdateControlText(CardObject, table.concat(parts, " "), nil)
+				end
+
+				local function setCollapsed(value, animated)
+					if cardCfg.Collapsible ~= true then
+						return false
+					end
+					Collapsed = value == true
+					CollapseButton.Text = Collapsed and ">" or "v"
+					updateSize(animated ~= false)
+					return true
+				end
+
+				local function moveChild(element, title, desc)
+					if element and element.Root then
+						element.Root.Parent = Content
+						Children[#Children + 1] = element
+						ChildText[#ChildText + 1] = tostring(title or "") .. " " .. tostring(desc or "")
+						updateSearchText()
+						task.defer(function()
+							updateSize(true)
+						end)
+					end
+					return element
+				end
+
+				CardObject = {
+					Root = Card,
+					Type = "ControlCard",
+					GetChildren = function()
+						return Children
+					end,
+					SetTitle = function(_, value)
+						cardCfg.Title = tostring(value or "")
+						Title.Text = cardCfg.Title
+						updateSearchText()
+					end,
+					SetDescription = function(_, value)
+						cardCfg.Description = tostring(value or "")
+						Description.Text = cardCfg.Description
+						updateSearchText()
+					end,
+					SetIcon = function(_, value)
+						cardCfg.Icon = value
+						updateChrome()
+					end,
+					SetStatus = function(_, value)
+						cardCfg.Status = value
+						updateChrome()
+						updateSearchText()
+					end,
+					SetBadge = function(_, value)
+						cardCfg.Badge = value
+						updateChrome()
+						updateSearchText()
+					end,
+					SetValue = function(_, value)
+						cardCfg.Value = value
+						updateChrome()
+						updateSearchText()
+					end,
+					SetFooter = function(_, value)
+						cardCfg.Footer = value
+						updateChrome()
+						updateSearchText()
+						updateSize(true)
+					end,
+					Collapse = function()
+						return setCollapsed(true, true)
+					end,
+					Expand = function()
+						return setCollapsed(false, true)
+					end,
+					Toggle = function()
+						return setCollapsed(not Collapsed, true)
+					end,
+					IsCollapsed = function()
+						return Collapsed
+					end,
+					SetAccentVisible = function(_, value)
+						AccentVisible = value ~= false
+						Twen:Create(Accent, TweenInfo.new(0.14), { BackgroundTransparency = AccentVisible and 0.2 or 1 }):Play()
+					end,
+					SetEnabled = function(_, value)
+						Enabled = value ~= false
+						Header.Active = Enabled
+						Twen:Create(Card, TweenInfo.new(0.14), { BackgroundTransparency = Enabled and 0.28 or 0.5 }):Play()
+					end,
+					Clear = function()
+						for i = #Children, 1, -1 do
+							local child = Children[i]
+							if child and type(child.Destroy) == "function" then
+								child:Destroy()
+							elseif child and child.Root then
+								child.Root:Destroy()
+							end
+							Children[i] = nil
+							ChildText[i] = nil
+						end
+						updateSearchText()
+						updateSize(true)
+					end,
+					Visible = function(_, newindx)
+						SearchManager:SetObjectVisible(CardObject, newindx)
+					end,
+					Destroy = function()
+						if CardObject.Destroyed then
+							return
+						end
+						CardObject:Clear()
+						for i = 1, #Connections do
+							Connections[i]:Disconnect()
+						end
+						SearchManager.Controls[CardObject] = nil
+						CardObject.Destroyed = true
+						Card:Destroy()
+					end,
+				}
+
+				local function wrap(methodName)
+					CardObject[methodName] = function(self, cfg, ...)
+						local element = SectionTable[methodName](SectionTable, cfg, ...)
+						local title, desc = "", ""
+						if type(cfg) == "table" then
+							title = cfg.Title or cfg.Text or cfg.Name or ""
+							desc = cfg.Description or cfg.Tooltip or ""
+						elseif cfg ~= nil then
+							title = tostring(cfg)
+						end
+						return moveChild(element, title, desc)
+					end
+				end
+
+				for _, methodName in ipairs({
+					"Paragraph", "AddParagraph", "NewToggle", "NewTitle", "NewButton", "NewKeybind", "NewSlider",
+					"NewDropdown", "Divider", "AddDivider", "NewColorpicker", "NewTextbox", "NewControlCard",
+				}) do
+					wrap(methodName)
+				end
+
+				RegisterSearchableControl(CardObject, Card, cardCfg.Title, cardCfg.Description, cardCfg.Tooltip, Header, SectionTable)
+				updateChrome()
+				updateSearchText()
+				updateSize(false)
+
+				Connections[#Connections + 1] = ContentLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+					updateSize(true)
+				end)
+				Connections[#Connections + 1] = Header.MouseEnter:Connect(function()
+					if not Enabled then
+						return
+					end
+					Twen:Create(Card, TweenInfo.new(0.16, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = 0.2 }):Play()
+					Twen:Create(CardStroke, TweenInfo.new(0.16), { Transparency = 0.84 }):Play()
+					Twen:Create(CardShadow, TweenInfo.new(0.16), { ImageTransparency = 0.72 }):Play()
+				end)
+				Connections[#Connections + 1] = Header.MouseLeave:Connect(function()
+					Twen:Create(Card, TweenInfo.new(0.16, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { BackgroundTransparency = Enabled and 0.28 or 0.5 }):Play()
+					Twen:Create(CardStroke, TweenInfo.new(0.16), { Transparency = 0.93 }):Play()
+					Twen:Create(CardShadow, TweenInfo.new(0.16), { ImageTransparency = 0.82 }):Play()
+				end)
+				Connections[#Connections + 1] = Header.MouseButton1Down:Connect(function()
+					if Enabled then
+						Twen:Create(Scale, TweenInfo.new(0.08), { Scale = 0.992 }):Play()
+					end
+				end)
+				Connections[#Connections + 1] = Header.MouseButton1Up:Connect(function()
+					Twen:Create(Scale, TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+				end)
+				Connections[#Connections + 1] = CollapseButton.MouseButton1Click:Connect(function()
+					CardObject:Toggle()
+				end)
+				if ActionButton.Visible then
+					Connections[#Connections + 1] = ActionButton.MouseButton1Click:Connect(function()
+						if Enabled and type(cardCfg.Action) == "table" and type(cardCfg.Action.Callback) == "function" then
+							task.spawn(cardCfg.Action.Callback)
+						end
+					end)
+				end
+
+				return CardObject
+			end
+
 			return SectionTable;
 		end;
 
@@ -7413,7 +7935,7 @@ function Library.new(config)
 
 			for _, methodName in ipairs({
 				"Paragraph", "AddParagraph", "NewToggle", "NewTitle", "NewButton", "NewKeybind", "NewSlider",
-				"NewDropdown", "Divider", "NewColorpicker", "NewTextbox",
+				"NewDropdown", "Divider", "NewColorpicker", "NewTextbox", "NewControlCard",
 			}) do
 				forward(methodName)
 			end
@@ -7487,7 +8009,7 @@ function Library.new(config)
 
 		for _, methodName in ipairs({
 			"Paragraph", "AddParagraph", "NewToggle", "NewTitle", "NewButton", "NewKeybind", "NewSlider",
-			"NewDropdown", "Divider", "NewColorpicker", "NewTextbox",
+			"NewDropdown", "Divider", "NewColorpicker", "NewTextbox", "NewControlCard",
 		}) do
 			TabTable[methodName] = function(self, ...)
 				return DefaultSubTab[methodName](DefaultSubTab, ...)
