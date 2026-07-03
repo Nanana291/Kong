@@ -2270,6 +2270,12 @@ function Library.new(config)
 				makeMiniFrame(preview, palette.Accent, 0.04, UDim2.new(0.34, 0, 0.63, 0), UDim2.new(0.32, 0, 0.04, 0), 27, UDim.new(1, 0))
 				makeMiniFrame(preview, palette.Muted, 0.5, UDim2.new(0.34, 0, 0.62, 0), UDim2.new(0.48, 0, 0.04, 0), 26, UDim.new(1, 0))
 				makeMiniFrame(preview, palette.Accent, 0.08, UDim2.new(0.78, 0, 0.59, 0), UDim2.new(0.08, 0, 0.08, 0), 27, UDim.new(1, 0))
+
+				local textBox = makeMiniFrame(preview, palette.Background, 0.12, UDim2.new(0.3, 0, 0.77, 0), UDim2.new(0.42, 0, 0.12, 0), 26, UDim.new(0, 2))
+				makeStroke(textBox, palette.Outline, 0.72)
+				makeMiniFrame(textBox, palette.Muted, 0.45, UDim2.new(0.08, 0, 0.38, 0), UDim2.new(0.46, 0, 0.2, 0), 28, UDim.new(1, 0))
+				makeMiniFrame(textBox, palette.Accent, 0.05, UDim2.new(0.62, 0, 0.26, 0), UDim2.new(0.02, 0, 0.48, 0), 28, UDim.new(1, 0))
+				makeMiniFrame(preview, palette.Accent, 0.08, UDim2.new(0.76, 0, 0.78, 0), UDim2.new(0.13, 0, 0.1, 0), 27, UDim.new(0, 2))
 				return preview
 			end
 
@@ -2387,6 +2393,34 @@ function Library.new(config)
 			grid.CellPadding = UDim2.new(0, 6, 0, 6)
 			grid.CellSize = UDim2.new(1, 0, 0, 132)
 
+			local selectionIndicator = Instance.new("Frame")
+			local selectionIndicatorCorner = Instance.new("UICorner")
+			selectionIndicator.Name = "SelectionIndicator"
+			selectionIndicator.Parent = root
+			selectionIndicator.BackgroundColor3 = ThemeManager:GetColor("Accent")
+			selectionIndicator.BackgroundTransparency = 1
+			selectionIndicator.BorderSizePixel = 0
+			selectionIndicator.Position = UDim2.fromOffset(0, 0)
+			selectionIndicator.Size = UDim2.fromOffset(24, 2)
+			selectionIndicator.ZIndex = 32
+			ThemeManager:BindAccent(selectionIndicator, "BackgroundColor3")
+			selectionIndicatorCorner.CornerRadius = UDim.new(1, 0)
+			selectionIndicatorCorner.Parent = selectionIndicator
+
+			local function moveSelectionIndicator(card)
+				if not card or not card.Frame or card.Frame.AbsoluteSize.X <= 0 then
+					return
+				end
+
+				local rootPos = root.AbsolutePosition
+				local cardPos = card.Frame.AbsolutePosition
+				tween(selectionIndicator, {
+					BackgroundTransparency = 0.12,
+					Position = UDim2.fromOffset(cardPos.X - rootPos.X + 8, cardPos.Y - rootPos.Y + card.Frame.AbsoluteSize.Y - 7),
+					Size = UDim2.fromOffset(math.max(24, card.Frame.AbsoluteSize.X - 16), 2),
+				})
+			end
+
 			local function applyCardState(card, active, hover)
 				local palette = card.Palette
 				local targetScale = active and 1.018 or (hover and 1.01 or 1)
@@ -2425,6 +2459,7 @@ function Library.new(config)
 				for name, card in pairs(cards) do
 					applyCardState(card, name == normalized, card.Hovered)
 				end
+				moveSelectionIndicator(cards[normalized])
 
 				if not silent then
 					ThemeManager:SetTheme(normalized)
@@ -2560,6 +2595,7 @@ function Library.new(config)
 					local h = grid.AbsoluteContentSize.Y
 					cardHolder.Size = UDim2.new(0.9, 0, 0, h)
 					root.Size = UDim2.new(0.949999988, 0, 0, math.max(120, h + 72))
+					moveSelectionIndicator(cards[selectedTheme])
 				end)
 			end
 
