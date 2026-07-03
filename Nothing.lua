@@ -3433,7 +3433,7 @@ function Library.new(config)
 		UIListLayout_2.Padding = UDim.new(0, 3)
 
 		local SearchManager = nil
-		local SearchBarEnabled = config.SearchBar ~= false
+		local SearchBarEnabled = config.SearchBar == true
 		local SubTabs = {}
 		local ActiveSubTab = nil
 		local ExplicitSubTabCount = 0
@@ -3474,6 +3474,7 @@ function Library.new(config)
 			return tween
 		end
 
+		local SubTabShadow = Instance.new("ImageLabel")
 		local SubTabBar = Instance.new("Frame")
 		local SubTabBarCorner = Instance.new("UICorner")
 		local SubTabBarStroke = Instance.new("UIStroke")
@@ -3481,6 +3482,20 @@ function Library.new(config)
 		local SubTabList = Instance.new("UIListLayout")
 		local SubTabContent = Instance.new("Frame")
 		local DefaultPage = Instance.new("Frame")
+
+		SubTabShadow.Name = "SubTabShadow"
+		SubTabShadow.Parent = Init
+		SubTabShadow.AnchorPoint = Vector2.new(0.5, 0)
+		SubTabShadow.BackgroundTransparency = 1
+		SubTabShadow.BorderSizePixel = 0
+		SubTabShadow.Image = "rbxassetid://6015897843"
+		SubTabShadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+		SubTabShadow.ImageTransparency = 0.88
+		SubTabShadow.ScaleType = Enum.ScaleType.Slice
+		SubTabShadow.SliceCenter = Rect.new(49, 49, 450, 450)
+		SubTabShadow.Size = UDim2.new(0.96, 24, 0, SubTabMetrics.BarHeight + 18)
+		SubTabShadow.Visible = false
+		SubTabShadow.ZIndex = 19
 
 		SubTabBar.Name = "SubTabBar"
 		SubTabBar.Parent = Init
@@ -3556,11 +3571,13 @@ function Library.new(config)
 		local function RefreshSubTabLayout()
 			local hasExplicit = ExplicitSubTabCount > 0
 			SubTabBar.Visible = hasExplicit
+			SubTabShadow.Visible = hasExplicit
 			local top = SearchBarEnabled and 0.57 or 0.505
 			local height = SearchBarEnabled and 0.83 or 0.92
 			if hasExplicit then
 				local barTop = SearchBarEnabled and 0.088 or 0.024
 				SubTabBar.Position = UDim2.new(0.5, 0, barTop, 0)
+				SubTabShadow.Position = UDim2.new(0.5, 0, barTop, -8)
 				top = SearchBarEnabled and 0.665 or 0.605
 				height = SearchBarEnabled and 0.69 or 0.79
 			end
@@ -3752,7 +3769,7 @@ function Library.new(config)
 			Sections = setmetatable({}, { __mode = "k" }),
 			Controls = setmetatable({}, { __mode = "k" }),
 		}
-		SearchBarEnabled = config.SearchBar ~= false
+		SearchBarEnabled = config.SearchBar == true
 
 		local function NormalizeSearchText(...)
 			local parts = {}
