@@ -7232,6 +7232,8 @@ function Library.new(config)
 				local Collapsed = cardCfg.DefaultCollapsed == true
 				local Enabled = true
 				local AccentVisible = true
+				local StatusWidth = 0
+				local BadgeWidth = 0
 
 				local Card = Instance.new("Frame")
 				local CardCorner = Instance.new("UICorner")
@@ -7256,6 +7258,7 @@ function Library.new(config)
 				local Content = Instance.new("Frame")
 				local ContentLayout = Instance.new("UIListLayout")
 				local Footer = Instance.new("TextLabel")
+				local DisabledOverlay = Instance.new("TextButton")
 
 				Card.Name = "ControlCard"
 				Card.Parent = Section
@@ -7380,6 +7383,8 @@ function Library.new(config)
 				setupChip(StatusChip, StatusCorner, StatusStroke, -12)
 				setupChip(Badge, BadgeCorner, Instance.new("UIStroke"), -74)
 				Badge.BackgroundTransparency = 0.72
+				ThemeManager:BindAccent(StatusChip, "TextColor3")
+				ThemeManager:BindAccent(Badge, "TextColor3")
 
 				ValueText.Name = "Value"
 				ValueText.Parent = Header
@@ -7414,6 +7419,7 @@ function Library.new(config)
 				ActionIcon.Image = ResolveIconSource(type(cardCfg.Action) == "table" and (cardCfg.Action.Icon or "refresh-cw") or "refresh-cw")
 				ActionIcon.ImageColor3 = Color3.fromRGB(255, 255, 255)
 				ActionIcon.ImageTransparency = 0.2
+				ThemeManager:BindAccent(ActionIcon, "ImageColor3")
 				ActionIcon.Position = UDim2.fromOffset(4, 4)
 				ActionIcon.Size = UDim2.fromOffset(10, 10)
 				ActionIcon.ZIndex = 24
@@ -7460,6 +7466,16 @@ function Library.new(config)
 				Footer.Visible = Footer.Text ~= ""
 				Footer.ZIndex = 21
 
+				DisabledOverlay.Name = "DisabledOverlay"
+				DisabledOverlay.Parent = Card
+				DisabledOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+				DisabledOverlay.BackgroundTransparency = 1
+				DisabledOverlay.BorderSizePixel = 0
+				DisabledOverlay.Size = UDim2.new(1, 0, 1, 0)
+				DisabledOverlay.Text = ""
+				DisabledOverlay.Visible = false
+				DisabledOverlay.ZIndex = 240
+
 				local function chipWidth(text, minWidth)
 					text = tostring(text or "")
 					if text == "" then
@@ -7472,10 +7488,10 @@ function Library.new(config)
 				local function updateHeaderWidths()
 					local rightPad = 24
 					if StatusChip.Visible then
-						rightPad += StatusChip.AbsoluteSize.X + 8
+						rightPad += StatusWidth + 8
 					end
 					if Badge.Visible then
-						rightPad += Badge.AbsoluteSize.X + 8
+						rightPad += BadgeWidth + 8
 					end
 					if ValueText.Visible then
 						rightPad += 92
@@ -7495,14 +7511,18 @@ function Library.new(config)
 				local function updateChrome()
 					StatusChip.Text = tostring(cardCfg.Status or "")
 					StatusChip.Visible = StatusChip.Text ~= ""
-					local statusWidth = chipWidth(StatusChip.Text, 52)
-					StatusChip.Size = UDim2.fromOffset(statusWidth, 15)
+					StatusWidth = chipWidth(StatusChip.Text, 52)
+					Twen:Create(StatusChip, TweenInfo.new(0.14, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Size = UDim2.fromOffset(StatusWidth, 15) }):Play()
 					Badge.Text = tostring(cardCfg.Badge or "")
 					Badge.Visible = Badge.Text ~= ""
-					Badge.Size = UDim2.fromOffset(chipWidth(Badge.Text, 36), 15)
-					Badge.Position = UDim2.new(1, -(StatusChip.Visible and (statusWidth + 20) or 12), 0, 8)
+					BadgeWidth = chipWidth(Badge.Text, 36)
+					Twen:Create(Badge, TweenInfo.new(0.14, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Size = UDim2.fromOffset(BadgeWidth, 15) }):Play()
+					Badge.Position = UDim2.new(1, -(StatusChip.Visible and (StatusWidth + 20) or 12), 0, 8)
 					ValueText.Text = tostring(cardCfg.Value or "")
 					ValueText.Visible = ValueText.Text ~= ""
+					local valueRight = 12 + (ActionButton.Visible and 24 or 0) + (CollapseButton.Visible and 18 or 0)
+					ValueText.Position = UDim2.new(1, -valueRight, 0, 29)
+					ValueText.Size = UDim2.fromOffset(math.max(62, 120 - valueRight), 14)
 					Footer.Text = tostring(cardCfg.Footer or "")
 					Footer.Visible = Footer.Text ~= ""
 					Icon.Visible = cardCfg.Icon ~= nil and cardCfg.Icon ~= ""
@@ -7633,6 +7653,8 @@ function Library.new(config)
 					SetEnabled = function(_, value)
 						Enabled = value ~= false
 						Header.Active = Enabled
+						DisabledOverlay.Visible = not Enabled
+						Twen:Create(DisabledOverlay, TweenInfo.new(0.14), { BackgroundTransparency = Enabled and 1 or 0.72 }):Play()
 						Twen:Create(Card, TweenInfo.new(0.14), { BackgroundTransparency = Enabled and 0.28 or 0.5 }):Play()
 					end,
 					Clear = function()
