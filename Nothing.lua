@@ -2221,25 +2221,26 @@ function Library.new(config)
 			local root = Instance.new("Frame")
 			local rootCorner = Instance.new("UICorner")
 			local rootStroke = Instance.new("UIStroke")
+			local rootLayout = Instance.new("UIListLayout")
+			local rootPadding = Instance.new("UIPadding")
 			local headerRow = Instance.new("Frame")
 			local headerRowLayout = Instance.new("UIListLayout")
 			local headerFrame = Instance.new("Frame")
 			local headerLayout = Instance.new("UIListLayout")
 			local title = Instance.new("TextLabel")
 			local subtitle = Instance.new("TextLabel")
-			local liveChip = Instance.new("Frame")
-			local liveChipCorner = Instance.new("UICorner")
-			local liveChipStroke = Instance.new("UIStroke")
-			local liveChipText = Instance.new("TextLabel")
 			local previewCard = Instance.new("Frame")
-			local previewCorner = Instance.new("UICorner")
-			local previewStroke = Instance.new("UIStroke")
-			local previewTitle = Instance.new("TextLabel")
-			local compareButton = Instance.new("TextButton")
-			local compareCorner = Instance.new("UICorner")
-			local compareStroke = Instance.new("UIStroke")
-			local previewArea = Instance.new("Frame")
-			local compareDivider = Instance.new("Frame")
+				local previewCorner = Instance.new("UICorner")
+				local previewStroke = Instance.new("UIStroke")
+				local previewCardLayout = Instance.new("UIListLayout")
+				local previewTitle = Instance.new("TextLabel")
+				local compareButton = Instance.new("TextButton")
+				local compareCorner = Instance.new("UICorner")
+				local compareStroke = Instance.new("UIStroke")
+				local previewArea = Instance.new("Frame")
+				local previewSlots = Instance.new("Frame")
+				local previewAreaLayout = Instance.new("UIListLayout")
+				local compareDivider = Instance.new("Frame")
 			local accentStrip = Instance.new("Frame")
 			local accentStripCorner = Instance.new("UICorner")
 			local accentGradient = Instance.new("UIGradient")
@@ -2351,10 +2352,11 @@ function Library.new(config)
 				l.BackgroundTransparency = 1
 				l.Position = pos or UDim2.fromOffset(0, 0)
 				l.Size = size or UDim2.fromOffset(80, 16)
+				l.AutomaticSize = Enum.AutomaticSize.Y
 				l.Font = Enum.Font.GothamBold
 				l.Text = tostring(text or "")
 				l.TextColor3 = Color3.fromRGB(255, 255, 255)
-				l.TextScaled = true
+				l.TextScaled = false
 				l.TextSize = textSize or 12
 				l.TextTransparency = transparency or 0.2
 				l.TextWrapped = true
@@ -2375,7 +2377,8 @@ function Library.new(config)
 			root.BackgroundTransparency = 0.22
 			root.BorderSizePixel = 0
 			root.ClipsDescendants = true
-			root.Size = UDim2.new(0.95, 0, 0, 560)
+			root.AutomaticSize = Enum.AutomaticSize.Y
+			root.Size = UDim2.new(0.95, 0, 0, 0)
 			root.ZIndex = 17
 			rootCorner.CornerRadius = UDim.new(0, 5)
 			rootCorner.Parent = root
@@ -2384,20 +2387,32 @@ function Library.new(config)
 			rootStroke.Parent = root
 			ThemeManager:Bind(root, "BackgroundColor3", "CardSurface")
 			bindAccentStroke(rootStroke)
+			rootLayout.Parent = root
+			rootLayout.FillDirection = Enum.FillDirection.Vertical
+			rootLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+			rootLayout.SortOrder = Enum.SortOrder.LayoutOrder
+			rootLayout.Padding = UDim.new(0, 8)
+			rootPadding.Parent = root
+			rootPadding.PaddingTop = UDim.new(0, 8)
+			rootPadding.PaddingBottom = UDim.new(0, 8)
+			rootPadding.PaddingLeft = UDim.new(0, 8)
+			rootPadding.PaddingRight = UDim.new(0, 8)
 
 			headerRow.Name = "HeaderRow"
 			headerRow.Parent = root
 			headerRow.BackgroundTransparency = 1
 			headerRow.BorderSizePixel = 0
 			headerRow.Position = UDim2.fromOffset(10, 7)
-			headerRow.Size = UDim2.new(1, -20, 0, 36)
+			headerRow.AutomaticSize = Enum.AutomaticSize.Y
+			headerRow.Size = UDim2.new(1, -20, 0, 0)
+			headerRow.LayoutOrder = 1
 			headerRow.ZIndex = 18
 			headerRowLayout.Parent = headerRow
-			headerRowLayout.FillDirection = Enum.FillDirection.Horizontal
+			headerRowLayout.FillDirection = Enum.FillDirection.Vertical
 			headerRowLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
 			headerRowLayout.VerticalAlignment = Enum.VerticalAlignment.Top
 			headerRowLayout.SortOrder = Enum.SortOrder.LayoutOrder
-			headerRowLayout.Padding = UDim.new(0, 8)
+			headerRowLayout.Padding = UDim.new(0, 4)
 
 			headerFrame.Name = "Header"
 			headerFrame.Parent = headerRow
@@ -2405,7 +2420,8 @@ function Library.new(config)
 			headerFrame.BorderSizePixel = 0
 			headerFrame.LayoutOrder = 1
 			headerFrame.Position = UDim2.fromOffset(0, 0)
-			headerFrame.Size = UDim2.new(1, -104, 0, 36)
+			headerFrame.AutomaticSize = Enum.AutomaticSize.Y
+			headerFrame.Size = UDim2.new(1, 0, 0, 0)
 			headerFrame.ZIndex = 18
 			headerLayout.Parent = headerFrame
 			headerLayout.FillDirection = Enum.FillDirection.Vertical
@@ -2417,67 +2433,45 @@ function Library.new(config)
 			title.Parent = headerFrame
 			title.BackgroundTransparency = 1
 			title.Position = UDim2.fromOffset(0, 0)
-			title.Size = UDim2.new(1, 0, 0, 18)
+			title.Size = UDim2.new(1, 0, 0, 0)
 			title.Font = Enum.Font.GothamBold
 			title.Text = "Theme Lab"
 			title.TextColor3 = Color3.fromRGB(255, 255, 255)
-			title.TextScaled = true
+			title.TextScaled = false
+			title.TextSize = 12
 			title.TextTransparency = 0.05
+			title.TextWrapped = true
 			title.TextXAlignment = Enum.TextXAlignment.Left
 			title.ZIndex = 18
 			textLimit(title, 9, 14)
+			title.AutomaticSize = Enum.AutomaticSize.Y
 
 			subtitle.Name = "Subtitle"
 			subtitle.Parent = headerFrame
 			subtitle.BackgroundTransparency = 1
 			subtitle.Position = UDim2.fromOffset(0, 0)
-			subtitle.Size = UDim2.new(1, 0, 0, 14)
+			subtitle.AutomaticSize = Enum.AutomaticSize.Y
+			subtitle.Size = UDim2.new(1, 0, 0, 0)
 			subtitle.Font = Enum.Font.GothamBold
 			subtitle.Text = "Appearance editor with live preview."
 			subtitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-			subtitle.TextScaled = true
+			subtitle.TextScaled = false
+			subtitle.TextSize = 9
 			subtitle.TextTransparency = 0.55
+			subtitle.TextWrapped = true
 			subtitle.TextXAlignment = Enum.TextXAlignment.Left
 			subtitle.ZIndex = 18
 			textLimit(subtitle, 7, 10)
-
-			liveChip.Name = "LiveStatus"
-			liveChip.Parent = headerRow
-			liveChip.AnchorPoint = Vector2.new(0, 0)
-			liveChip.LayoutOrder = 2
-			liveChip.BackgroundColor3 = ThemeManager:GetColor("CardChip")
-			liveChip.BackgroundTransparency = 0.45
-			liveChip.BorderSizePixel = 0
-			liveChip.Position = UDim2.fromOffset(0, 0)
-			liveChip.Size = UDim2.fromOffset(96, 18)
-			liveChip.ZIndex = 18
-			ThemeManager:Bind(liveChip, "BackgroundColor3", "CardChip")
-			liveChipCorner.CornerRadius = UDim.new(1, 0)
-			liveChipCorner.Parent = liveChip
-			liveChipStroke.Color = ThemeManager:GetColor("AccentStroke")
-			liveChipStroke.Transparency = 0.82
-			liveChipStroke.Parent = liveChip
-			bindAccentStroke(liveChipStroke)
-			liveChipText.Parent = liveChip
-			liveChipText.BackgroundTransparency = 1
-			liveChipText.Size = UDim2.new(1, 0, 1, 0)
-			liveChipText.Font = Enum.Font.GothamBold
-			liveChipText.Text = "LIVE PREVIEW"
-			liveChipText.TextColor3 = ThemeManager:GetColor("Accent")
-			liveChipText.TextScaled = true
-			liveChipText.TextSize = 10
-			liveChipText.TextTransparency = 0.12
-			liveChipText.ZIndex = 19
-			textLimit(liveChipText, 7, 9)
-			ThemeManager:BindAccent(liveChipText, "TextColor3")
 
 			previewCard.Name = "ThemePreviewCard"
 			previewCard.Parent = root
 			previewCard.BackgroundColor3 = Color3.fromRGB(8, 8, 8)
 			previewCard.BackgroundTransparency = 0.08
 			previewCard.BorderSizePixel = 0
-			previewCard.Position = UDim2.fromOffset(10, 50)
-			previewCard.Size = UDim2.new(1, -20, 0, 138)
+			previewCard.ClipsDescendants = true
+			previewCard.AutomaticSize = Enum.AutomaticSize.Y
+			previewCard.Size = UDim2.new(1, 0, 0, 0)
+			previewCard.LayoutOrder = 2
 			previewCard.ZIndex = 18
 			previewCorner.CornerRadius = UDim.new(0, 5)
 			previewCorner.Parent = previewCard
@@ -2485,56 +2479,43 @@ function Library.new(config)
 			previewStroke.Transparency = 0.86
 			previewStroke.Parent = previewCard
 			bindAccentStroke(previewStroke)
-			previewTitle = label(previewCard, "Preview", UDim2.fromOffset(9, 7), UDim2.new(0.5, 0, 0, 15), 11, 0.24)
+			previewCardLayout.Parent = previewCard
+			previewCardLayout.FillDirection = Enum.FillDirection.Vertical
+			previewCardLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+			previewCardLayout.SortOrder = Enum.SortOrder.LayoutOrder
+			previewCardLayout.Padding = UDim.new(0, 4)
+			previewTitle = label(previewCard, "Preview", UDim2.fromOffset(9, 7), UDim2.new(1, -18, 0, 15), 11, 0.24)
+			previewTitle.TextScaled = false
+			previewTitle.LayoutOrder = 1
 
-			compareButton.Name = "CompareThemes"
-			compareButton.Parent = previewCard
-			compareButton.AnchorPoint = Vector2.new(1, 0)
-			compareButton.BackgroundColor3 = ThemeManager:GetColor("CardChip")
-			compareButton.BackgroundTransparency = 0.45
-			compareButton.BorderSizePixel = 0
-			compareButton.Position = UDim2.new(1, -8, 0, 7)
-			compareButton.Size = UDim2.fromOffset(96, 18)
-			compareButton.Font = Enum.Font.GothamBold
-			compareButton.Text = "Compare Themes"
-			compareButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-			compareButton.TextScaled = true
-			compareButton.TextTransparency = 0.18
-			compareButton.ZIndex = 25
-			textLimit(compareButton, 7, 9)
-			ThemeManager:Bind(compareButton, "BackgroundColor3", "CardChip")
-			compareCorner.CornerRadius = UDim.new(0, 4)
-			compareCorner.Parent = compareButton
-			compareStroke.Color = ThemeManager:GetColor("AccentStroke")
-			compareStroke.Transparency = 0.88
-			compareStroke.Parent = compareButton
-			bindAccentStroke(compareStroke)
-
-			previewArea.Name = "PreviewArea"
-			previewArea.Parent = previewCard
-			previewArea.BackgroundTransparency = 1
-			previewArea.Position = UDim2.fromOffset(8, 30)
-			previewArea.Size = UDim2.new(1, -16, 0, 88)
-			previewArea.ZIndex = 19
-
-			compareDivider.Name = "CompareDivider"
-			compareDivider.Parent = previewArea
-			compareDivider.AnchorPoint = Vector2.new(0.5, 0)
-			compareDivider.BackgroundColor3 = ThemeManager:GetColor("Accent")
-			compareDivider.BackgroundTransparency = 1
-			compareDivider.BorderSizePixel = 0
-			compareDivider.Position = UDim2.new(0.5, 0, 0, 4)
-			compareDivider.Size = UDim2.new(0, 1, 1, -8)
-			compareDivider.ZIndex = 35
-			ThemeManager:BindAccent(compareDivider, "BackgroundColor3")
+				previewArea.Name = "PreviewArea"
+				previewArea.Parent = previewCard
+				previewArea.BackgroundTransparency = 1
+				previewArea.Size = UDim2.new(1, -16, 0, 88)
+				previewArea.LayoutOrder = 2
+				previewArea.ZIndex = 19
+				previewSlots.Name = "PreviewSlots"
+				previewSlots.Parent = previewArea
+				previewSlots.BackgroundTransparency = 1
+				previewSlots.BorderSizePixel = 0
+				previewSlots.ClipsDescendants = true
+				previewSlots.Position = UDim2.fromOffset(0, 0)
+				previewSlots.Size = UDim2.new(1, 0, 1, 0)
+				previewSlots.ZIndex = 19
+				previewAreaLayout.Parent = previewSlots
+				previewAreaLayout.FillDirection = Enum.FillDirection.Horizontal
+				previewAreaLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+				previewAreaLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+				previewAreaLayout.SortOrder = Enum.SortOrder.LayoutOrder
+				previewAreaLayout.Padding = UDim.new(0, 6)
 
 			accentStrip.Name = "AccentStrip"
 			accentStrip.Parent = previewCard
 			accentStrip.BackgroundColor3 = ThemeManager:GetColor("Accent")
 			accentStrip.BackgroundTransparency = 0.12
 			accentStrip.BorderSizePixel = 0
-			accentStrip.Position = UDim2.new(0, 8, 1, -12)
 			accentStrip.Size = UDim2.new(1, -16, 0, 3)
+			accentStrip.LayoutOrder = 3
 			accentStrip.ZIndex = 20
 			ThemeManager:BindAccent(accentStrip, "BackgroundColor3")
 			accentStripCorner.CornerRadius = UDim.new(1, 0)
@@ -2547,11 +2528,14 @@ function Library.new(config)
 			accentGradient.Parent = accentStrip
 
 			themeLabel = label(root, "Theme", UDim2.fromOffset(10, 198), UDim2.new(1, -20, 0, 14), 11, 0.28)
+			themeLabel.LayoutOrder = 3
 			themeCards.Name = "ThemeCards"
 			themeCards.Parent = root
 			themeCards.BackgroundTransparency = 1
+			themeCards.AutomaticSize = Enum.AutomaticSize.Y
 			themeCards.Position = UDim2.fromOffset(10, 218)
-			themeCards.Size = UDim2.new(1, -20, 0, 90)
+			themeCards.Size = UDim2.new(1, -20, 0, 0)
+			themeCards.LayoutOrder = 4
 			themeCards.ZIndex = 18
 			themeGrid.Parent = themeCards
 			themeGrid.FillDirection = Enum.FillDirection.Horizontal
@@ -2560,19 +2544,25 @@ function Library.new(config)
 			themeGrid.CellPadding = UDim2.fromOffset(6, 6)
 
 			paletteLabel = label(root, "Accent Preview", UDim2.fromOffset(10, 306), UDim2.new(1, -20, 0, 14), 11, 0.28)
+			paletteLabel.LayoutOrder = 5
 			paletteRow.Name = "PaletteRow"
 			paletteRow.Parent = root
 			paletteRow.BackgroundTransparency = 1
+			paletteRow.AutomaticSize = Enum.AutomaticSize.Y
 			paletteRow.Position = UDim2.fromOffset(10, 326)
-			paletteRow.Size = UDim2.new(1, -20, 0, 24)
+			paletteRow.Size = UDim2.new(1, -20, 0, 0)
+			paletteRow.LayoutOrder = 6
 			paletteRow.ZIndex = 18
 
 			infoLabel = label(root, "Theme Information", UDim2.fromOffset(10, 360), UDim2.new(1, -20, 0, 14), 11, 0.28)
+			infoLabel.LayoutOrder = 7
 			infoGridFrame.Name = "InfoGrid"
 			infoGridFrame.Parent = root
 			infoGridFrame.BackgroundTransparency = 1
+			infoGridFrame.AutomaticSize = Enum.AutomaticSize.Y
 			infoGridFrame.Position = UDim2.fromOffset(10, 380)
-			infoGridFrame.Size = UDim2.new(1, -20, 0, 58)
+			infoGridFrame.Size = UDim2.new(1, -20, 0, 0)
+			infoGridFrame.LayoutOrder = 8
 			infoGridFrame.ZIndex = 18
 			infoGrid.Parent = infoGridFrame
 			infoGrid.FillDirection = Enum.FillDirection.Horizontal
@@ -2581,6 +2571,7 @@ function Library.new(config)
 			infoGrid.CellPadding = UDim2.fromOffset(6, 6)
 
 			motionLabel = label(root, "Motion Preview", UDim2.fromOffset(10, 448), UDim2.new(1, -20, 0, 14), 11, 0.28)
+			motionLabel.LayoutOrder = 9
 			motionPanel.Name = "MotionPanel"
 			motionPanel.Parent = root
 			motionPanel.BackgroundColor3 = ThemeManager:GetColor("CardChip")
@@ -2588,17 +2579,21 @@ function Library.new(config)
 			motionPanel.BorderSizePixel = 0
 			motionPanel.Position = UDim2.fromOffset(10, 468)
 			motionPanel.Size = UDim2.new(1, -20, 0, 42)
+			motionPanel.LayoutOrder = 10
 			motionPanel.ZIndex = 18
 			ThemeManager:Bind(motionPanel, "BackgroundColor3", "CardChip")
 			motionCorner.CornerRadius = UDim.new(0, 4)
 			motionCorner.Parent = motionPanel
 
 			historyText = label(root, "Current Theme: " .. selectedTheme, UDim2.fromOffset(10, 516), UDim2.new(1, -20, 0, 16), 10, 0.45)
+			historyText.LayoutOrder = 11
 			statsFrame.Name = "ThemeStats"
 			statsFrame.Parent = root
 			statsFrame.BackgroundTransparency = 1
+			statsFrame.AutomaticSize = Enum.AutomaticSize.Y
 			statsFrame.Position = UDim2.fromOffset(10, 538)
-			statsFrame.Size = UDim2.new(1, -20, 0, 50)
+			statsFrame.Size = UDim2.new(1, -20, 0, 0)
+			statsFrame.LayoutOrder = 12
 			statsFrame.ZIndex = 18
 			statsGrid.Parent = statsFrame
 			statsGrid.FillDirection = Enum.FillDirection.Horizontal
@@ -2613,9 +2608,10 @@ function Library.new(config)
 				return f
 			end
 
-			local function buildMiniUI(parent, themeName, xScale, widthScale)
-				local holder = frame(parent, "MiniUI", UDim2.new(xScale or 0, 0, 0, 0), UDim2.new(widthScale or 1, 0, 1, 0), Color3.fromRGB(0, 0, 0), 1, 20)
-				miniPart(holder, "Background", UDim2.new(0.02, 0, 0.08, 0), UDim2.new(0.96, 0, 0.84, 0), themeName)
+				local function buildMiniUI(parent, themeName, order)
+					local holder = frame(parent, "MiniUI", nil, UDim2.new(0.31, 0, 1, 0), Color3.fromRGB(0, 0, 0), 1, 20)
+					holder.LayoutOrder = order or 1
+					miniPart(holder, "Background", UDim2.new(0.02, 0, 0.08, 0), UDim2.new(0.96, 0, 0.84, 0), themeName)
 				miniPart(holder, "Surface", UDim2.new(0.04, 0, 0.12, 0), UDim2.new(0.92, 0, 0.14, 0), themeName)
 				miniPart(holder, "Accent", UDim2.new(0.07, 0, 0.17, 0), UDim2.new(0.18, 0, 0.04, 0), themeName)
 				miniPart(holder, "Surface2", UDim2.new(0.05, 0, 0.31, 0), UDim2.new(0.2, 0, 0.52, 0), themeName)
@@ -2631,9 +2627,9 @@ function Library.new(config)
 				return holder
 			end
 
-			buildMiniUI(previewArea, nil, 0, 1)
-			buildMiniUI(previewArea, "Default", 0, 0.49)
-			buildMiniUI(previewArea, "Kronos", 0.51, 0.49)
+				buildMiniUI(previewSlots, nil, 1)
+				buildMiniUI(previewSlots, "Default", 2)
+				buildMiniUI(previewSlots, "Kronos", 3)
 
 			local ThemeLabObject = {}
 
@@ -2719,7 +2715,6 @@ function Library.new(config)
 					tween(swatch.Instance, { BackgroundColor3 = theme[swatch.Role] or pal[swatch.Role] or pal.Accent })
 				end
 				tween(previewCard, { BackgroundColor3 = pal.Background })
-				tween(compareDivider, { BackgroundTransparency = compareEnabled and 0.2 or 1 })
 				tween(accentStrip, { BackgroundColor3 = pal.Accent })
 				tween(motionParts.Button, { BackgroundColor3 = pal.Accent })
 				tween(motionParts.ToggleTrack, { BackgroundColor3 = pal.CardSurface })
@@ -2780,7 +2775,6 @@ function Library.new(config)
 
 			function ThemeLabObject:SetCompare(value)
 				compareEnabled = value == true
-				compareButton.Text = compareEnabled and "Live Preview" or "Compare Themes"
 				updatePreview(selectedTheme)
 			end
 
@@ -2810,77 +2804,32 @@ function Library.new(config)
 
 				local compactHeader = width < 300
 				local twoColumns = width >= 330
-				local previewTop = compactHeader and 72 or 50
-				local previewHeight = twoColumns and 138 or 132
 				local availableWidth = math.max(120, width - 20)
 
 				if compactHeader then
-					headerRow.Size = UDim2.new(1, -20, 0, 60)
 					headerRowLayout.FillDirection = Enum.FillDirection.Vertical
-					headerFrame.Size = UDim2.new(1, 0, 0, 36)
+					headerFrame.Size = UDim2.new(1, 0, 0, 0)
 				else
-					headerRow.Size = UDim2.new(1, -20, 0, 36)
 					headerRowLayout.FillDirection = Enum.FillDirection.Horizontal
-					headerFrame.Size = UDim2.new(1, -104, 0, 36)
+					headerFrame.Size = UDim2.new(1, -104, 0, 0)
 				end
 
-				previewTop = headerRow.Position.Y.Offset + headerRow.Size.Y.Offset + 8
-				previewCard.Position = UDim2.fromOffset(10, previewTop)
-				previewCard.Size = UDim2.new(1, -20, 0, previewHeight)
-				previewArea.Position = UDim2.fromOffset(8, 30)
-				previewArea.Size = UDim2.new(1, -16, 0, previewHeight - 50)
+				headerRow.Size = UDim2.new(1, -20, 0, 0)
+				previewCard.Size = UDim2.new(1, 0, 0, 0)
+				previewArea.Size = UDim2.new(1, -16, 0, 88)
 				accentStrip.Position = UDim2.new(0, 8, 1, -12)
 
 				local cardWidth = twoColumns and math.floor((availableWidth - 6) / 2) or availableWidth
 				themeGrid.CellSize = UDim2.fromOffset(math.max(100, cardWidth), 82)
 				infoGrid.CellSize = UDim2.fromOffset(math.max(70, math.floor((availableWidth - 18) / (twoColumns and 2 or 1))), 42)
 				statsGrid.CellSize = UDim2.fromOffset(math.max(62, math.floor((availableWidth - 20) / (twoColumns and 3 or 1))), 42)
-
-				task.defer(function()
-					layoutQueued = false
-					if destroyed then
-						return
-					end
-
-					local themeTop = previewTop + previewHeight + 10
-					themeLabel.Position = UDim2.fromOffset(10, themeTop)
-					themeCards.Position = UDim2.fromOffset(10, themeTop + 20)
-					local themeHeight = math.max(82, themeGrid.AbsoluteContentSize.Y)
-					themeCards.Size = UDim2.new(1, -20, 0, themeHeight)
-
-					local paletteTop = themeTop + 20 + themeHeight + 12
-					paletteLabel.Position = UDim2.fromOffset(10, paletteTop)
-					paletteRow.Position = UDim2.fromOffset(10, paletteTop + 20)
-
-					local infoTop = paletteTop + 56
-					infoLabel.Position = UDim2.fromOffset(10, infoTop)
-					infoGridFrame.Position = UDim2.fromOffset(10, infoTop + 20)
-					local infoHeight = math.max(42, infoGrid.AbsoluteContentSize.Y)
-					infoGridFrame.Size = UDim2.new(1, -20, 0, infoHeight)
-
-					local motionTop = infoTop + 20 + infoHeight + 12
-					motionLabel.Position = UDim2.fromOffset(10, motionTop)
-					motionPanel.Position = UDim2.fromOffset(10, motionTop + 20)
-					historyText.Position = UDim2.fromOffset(10, motionTop + 68)
-					statsFrame.Position = UDim2.fromOffset(10, motionTop + 90)
-					local statsHeight = math.max(42, statsGrid.AbsoluteContentSize.Y)
-					statsFrame.Size = UDim2.new(1, -20, 0, statsHeight)
-
-					local targetHeight = math.max(500, motionTop + 98 + statsHeight)
-					if targetHeight ~= lastRootHeight then
-						lastRootHeight = targetHeight
-						root.Size = UDim2.new(0.95, 0, 0, targetHeight)
-					end
-				end)
+				layoutQueued = false
 			end
 
 			connections[#connections + 1] = root:GetPropertyChangedSignal("AbsoluteSize"):Connect(refreshLayout)
 			connections[#connections + 1] = themeGrid:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(refreshLayout)
 			connections[#connections + 1] = infoGrid:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(refreshLayout)
 			connections[#connections + 1] = statsGrid:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(refreshLayout)
-			connections[#connections + 1] = compareButton.MouseButton1Click:Connect(function()
-				ThemeLabObject:SetCompare(not compareEnabled)
-			end)
 			connections[#connections + 1] = root.AncestryChanged:Connect(function(_, parent)
 				if parent == nil then
 					ThemeLabObject:Destroy()
@@ -3660,7 +3609,7 @@ function Library.new(config)
 		LeftFrame.BackgroundTransparency = 1.000
 		LeftFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		LeftFrame.BorderSizePixel = 0
-		LeftFrame.ClipsDescendants = false
+		LeftFrame.ClipsDescendants = true
 		LeftFrame.Position = UDim2.new(0.25, 0, 0.5, 0)
 		LeftFrame.Size = UDim2.new(0.5, 0, 1, 0)
 		LeftFrame.ScrollBarThickness = 0
@@ -3680,7 +3629,7 @@ function Library.new(config)
 		RightFrame.BackgroundTransparency = 1.000
 		RightFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
 		RightFrame.BorderSizePixel = 0
-		RightFrame.ClipsDescendants = false
+		RightFrame.ClipsDescendants = true
 		RightFrame.Position = UDim2.new(0.75, 0, 0.5, 0)
 		RightFrame.Size = UDim2.new(0.5, 0, 1, 0)
 		RightFrame.ScrollBarThickness = 0
@@ -3743,12 +3692,14 @@ function Library.new(config)
 		local SubTabBarStroke = Instance.new("UIStroke")
 		local SubTabScroller = Instance.new("ScrollingFrame")
 		local SubTabList = Instance.new("UIListLayout")
+		local SubTabContentShell = Instance.new("Frame")
 		local SubTabContent = Instance.new("Frame")
 		local DefaultPage = Instance.new("Frame")
 
 		InitLayout.Parent = Init
 		InitLayout.FillDirection = Enum.FillDirection.Vertical
 		InitLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+		InitLayout.VerticalAlignment = Enum.VerticalAlignment.Top
 		InitLayout.SortOrder = Enum.SortOrder.LayoutOrder
 		InitLayout.Padding = UDim.new(0, 8)
 
@@ -3809,6 +3760,7 @@ function Library.new(config)
 		SubTabScroller.BorderSizePixel = 0
 		SubTabScroller.BottomImage = ""
 		SubTabScroller.CanvasSize = UDim2.fromOffset(0, 0)
+		SubTabScroller.ClipsDescendants = true
 		SubTabScroller.Position = UDim2.fromOffset(SubTabMetrics.BarPadX, SubTabMetrics.BarPadY)
 		SubTabScroller.ScrollBarImageTransparency = 1
 		SubTabScroller.ScrollBarThickness = 0
@@ -3826,13 +3778,24 @@ function Library.new(config)
 			SubTabScroller.CanvasSize = UDim2.fromOffset(SubTabList.AbsoluteContentSize.X + SubTabMetrics.BarPadX, 0)
 		end)
 
+		SubTabContentShell.Name = "SubTabContentShell"
+		SubTabContentShell.Parent = Init
+		SubTabContentShell.BackgroundTransparency = 1
+		SubTabContentShell.BorderSizePixel = 0
+		SubTabContentShell.LayoutOrder = 2
+		SubTabContentShell.Position = UDim2.fromOffset(0, 0)
+		SubTabContentShell.Size = UDim2.new(1, 0, 1, 0)
+		SubTabContentShell.ClipsDescendants = true
+		SubTabContentShell.ZIndex = 4
+
 		SubTabContent.Name = "SubTabContent"
-		SubTabContent.Parent = Init
+		SubTabContent.Parent = SubTabContentShell
 		SubTabContent.BackgroundTransparency = 1
 		SubTabContent.BorderSizePixel = 0
-		SubTabContent.LayoutOrder = 2
+		SubTabContent.LayoutOrder = 1
 		SubTabContent.Position = UDim2.fromOffset(0, 0)
 		SubTabContent.Size = UDim2.new(1, 0, 1, 0)
+		SubTabContent.ClipsDescendants = true
 		SubTabContent.ZIndex = 4
 
 		DefaultPage.Name = "DefaultSubTabPage"
@@ -3840,6 +3803,7 @@ function Library.new(config)
 		DefaultPage.BackgroundTransparency = 1
 		DefaultPage.BorderSizePixel = 0
 		DefaultPage.Size = UDim2.new(1, 0, 1, 0)
+		DefaultPage.ClipsDescendants = true
 		DefaultPage.Visible = true
 		DefaultPage.ZIndex = 4
 
@@ -3855,19 +3819,19 @@ function Library.new(config)
 			rightFrame.Size = UDim2.new(0.5, 0, 1, 0)
 		end
 
-		local function RefreshSubTabLayout()
-			local hasExplicit = ExplicitSubTabCount > 0
-			SubTabBar.Visible = hasExplicit
-			SubTabShadow.Visible = hasExplicit
-			TopStack.Visible = SearchBarEnabled or hasExplicit
+			local function RefreshSubTabLayout()
+				local hasExplicit = ExplicitSubTabCount > 0
+				SubTabBar.Visible = hasExplicit
+				SubTabShadow.Visible = hasExplicit
+				TopStack.Visible = true
+				local headerHeight = hasExplicit and math.max(TopStack.AbsoluteSize.Y, SubTabMetrics.BarHeight + (SubTabMetrics.BarPadY * 2)) or 0
+				local contentY = headerHeight + 8
+				SubTabContentShell.Position = UDim2.fromOffset(0, contentY)
+				SubTabContentShell.Size = UDim2.new(1, 0, 1, -contentY)
 
-			local topHeight = TopStack.Visible and TopStackLayout.AbsoluteContentSize.Y or 0
-			local reservedHeight = topHeight + (TopStack.Visible and InitLayout.Padding.Offset or 0)
-			SubTabContent.Size = UDim2.new(1, 0, 1, -reservedHeight)
-
-			for _, subtab in ipairs(SubTabs) do
-				if subtab.Page then
-					SetPageColumns(subtab.Page, subtab.LeftFrame, subtab.RightFrame)
+				for _, subtab in ipairs(SubTabs) do
+					if subtab.Page then
+						SetPageColumns(subtab.Page, subtab.LeftFrame, subtab.RightFrame)
 				end
 			end
 		end
@@ -3887,6 +3851,7 @@ function Library.new(config)
 			page.BackgroundTransparency = 1
 			page.BorderSizePixel = 0
 			page.Size = UDim2.new(1, 0, 1, 0)
+			page.ClipsDescendants = true
 			page.Visible = false
 			page.ZIndex = 4
 
@@ -3896,7 +3861,7 @@ function Library.new(config)
 			left.AnchorPoint = Vector2.new(0.5, 0.5)
 			left.BackgroundTransparency = 1
 			left.BorderSizePixel = 0
-			left.ClipsDescendants = false
+			left.ClipsDescendants = true
 			left.ScrollBarThickness = 0
 			leftLayout.Parent = left
 			leftLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -3912,7 +3877,7 @@ function Library.new(config)
 			right.AnchorPoint = Vector2.new(0.5, 0.5)
 			right.BackgroundTransparency = 1
 			right.BorderSizePixel = 0
-			right.ClipsDescendants = false
+			right.ClipsDescendants = true
 			right.ScrollBarThickness = 0
 			rightLayout.Parent = right
 			rightLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -4586,9 +4551,10 @@ function Library.new(config)
 			Icon.Size = UDim2.new(0.600000024, 0, 0.600000024, 0)
 			Icon.SizeConstraint = Enum.SizeConstraint.RelativeYY
 			Icon.ZIndex = 6
-				Icon.Image = ResolveIconSource(c_o_n_f_i_g.Icon)
-			Icon.ImageTransparency = 1
-			Twen:Create(Icon,TweenInfo2,{ImageTransparency = 0.1}):Play();
+					Icon.Image = ResolveIconSource(c_o_n_f_i_g.Icon)
+					Icon.ImageTransparency = 1
+					Icon.LayoutOrder = 1
+					Twen:Create(Icon,TweenInfo2,{ImageTransparency = 0.1}):Play();
 
 			UICorner_3.CornerRadius = UDim.new(0, 3)
 			UICorner_3.Parent = Icon
@@ -4630,10 +4596,11 @@ function Library.new(config)
 			Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 			Title.TextScaled = true
 			Title.TextSize = 14.000
-			Title.TextWrapped = true
-			Title.TextXAlignment = Enum.TextXAlignment.Left
-			Title.TextTransparency = 1
-			Twen:Create(Title,TweenInfo2,{TextTransparency = 0}):Play();
+					Title.TextWrapped = true
+					Title.TextXAlignment = Enum.TextXAlignment.Left
+					Title.TextTransparency = 1
+					Title.LayoutOrder = 2
+					Twen:Create(Title,TweenInfo2,{TextTransparency = 0}):Play();
 			SectionTable.Root = Section
 			SectionTable._SubTab = c_o_n_f_i_g._SubTab
 			if c_o_n_f_i_g._SubTab and c_o_n_f_i_g._SubTab.Sections then
@@ -7534,17 +7501,26 @@ function Library.new(config)
 					return limit
 				end
 
-				local Card = Instance.new("Frame")
-				local CardCorner = Instance.new("UICorner")
-				local CardStroke = Instance.new("UIStroke")
-				local CardShadow = Instance.new("ImageLabel")
-				local Scale = Instance.new("UIScale")
-				local Accent = Instance.new("Frame")
-				local AccentCorner = Instance.new("UICorner")
-				local Header = Instance.new("TextButton")
-				local Icon = Instance.new("ImageLabel")
-				local Title = Instance.new("TextLabel")
-				local Description = Instance.new("TextLabel")
+					local Card = Instance.new("Frame")
+					local CardCorner = Instance.new("UICorner")
+					local CardStroke = Instance.new("UIStroke")
+					local CardShadow = Instance.new("ImageLabel")
+					local Scale = Instance.new("UIScale")
+					local Accent = Instance.new("Frame")
+					local AccentCorner = Instance.new("UICorner")
+					local Body = Instance.new("Frame")
+					local BodyLayout = Instance.new("UIListLayout")
+					local BodyPadding = Instance.new("UIPadding")
+					local Header = Instance.new("TextButton")
+					local HeaderTop = Instance.new("Frame")
+					local HeaderTopLayout = Instance.new("UIListLayout")
+					local HeaderTextStack = Instance.new("Frame")
+					local HeaderTextStackLayout = Instance.new("UIListLayout")
+					local HeaderMetaRow = Instance.new("Frame")
+					local HeaderMetaRowLayout = Instance.new("UIListLayout")
+					local Icon = Instance.new("ImageLabel")
+					local Title = Instance.new("TextLabel")
+					local Description = Instance.new("TextLabel")
 				local StatusChip = Instance.new("TextLabel")
 				local StatusCorner = Instance.new("UICorner")
 				local StatusStroke = Instance.new("UIStroke")
@@ -7560,14 +7536,15 @@ function Library.new(config)
 				local DisabledOverlay = Instance.new("TextButton")
 
 				Card.Name = "ControlCard"
-				Card.Parent = Section
-				Card.BackgroundColor3 = ThemeManager:GetColor("CardSurface")
-				Card.BackgroundTransparency = 1
-				Card.BorderSizePixel = 0
-				Card.ClipsDescendants = false
-				Card.Size = UDim2.new(0.95, 0, 0, 72)
-				Card.ZIndex = 17
-				Twen:Create(Card, TweenInfo1, { BackgroundTransparency = 0.28 }):Play()
+					Card.Parent = Section
+					Card.BackgroundColor3 = ThemeManager:GetColor("CardSurface")
+					Card.BackgroundTransparency = 1
+					Card.BorderSizePixel = 0
+					Card.ClipsDescendants = false
+					Card.AutomaticSize = Enum.AutomaticSize.Y
+					Card.Size = UDim2.new(0.95, 0, 0, 0)
+					Card.ZIndex = 17
+					Twen:Create(Card, TweenInfo1, { BackgroundTransparency = 0.28 }):Play()
 
 				CardCorner.CornerRadius = UDim.new(0, 5)
 				CardCorner.Parent = Card
@@ -7592,10 +7569,29 @@ function Library.new(config)
 				CardShadow.ScaleType = Enum.ScaleType.Slice
 				CardShadow.SliceCenter = Rect.new(49, 49, 450, 450)
 
-				Scale.Parent = Card
-				Scale.Scale = 1
+					Scale.Parent = Card
+					Scale.Scale = 1
 
-				Accent.Name = "Accent"
+					Body.Name = "Body"
+					Body.Parent = Card
+					Body.BackgroundTransparency = 1
+					Body.BorderSizePixel = 0
+					Body.AutomaticSize = Enum.AutomaticSize.Y
+					Body.Size = UDim2.new(1, 0, 0, 0)
+					Body.LayoutOrder = 1
+					Body.ZIndex = 18
+					BodyLayout.Parent = Body
+					BodyLayout.FillDirection = Enum.FillDirection.Vertical
+					BodyLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+					BodyLayout.SortOrder = Enum.SortOrder.LayoutOrder
+					BodyLayout.Padding = UDim.new(0, 6)
+					BodyPadding.Parent = Body
+					BodyPadding.PaddingTop = UDim.new(0, 10)
+					BodyPadding.PaddingBottom = UDim.new(0, 10)
+					BodyPadding.PaddingLeft = UDim.new(0, 12)
+					BodyPadding.PaddingRight = UDim.new(0, 12)
+
+					Accent.Name = "Accent"
 				Accent.Parent = Card
 				Accent.BackgroundColor3 = ThemeManager:GetColor("Accent")
 				Accent.BackgroundTransparency = 0.2
@@ -7608,174 +7604,232 @@ function Library.new(config)
 				AccentCorner.CornerRadius = UDim.new(0, 5)
 				AccentCorner.Parent = Accent
 
-				Header.Name = "Header"
-				Header.Parent = Card
-				Header.BackgroundTransparency = 1
-				Header.BorderSizePixel = 0
-				Header.Position = UDim2.fromOffset(0, 0)
-				Header.Size = UDim2.new(1, 0, 0, HeaderHeight)
-				Header.Text = ""
-				Header.ZIndex = 20
+					Header.Name = "Header"
+					Header.Parent = Body
+					Header.BackgroundTransparency = 1
+					Header.BorderSizePixel = 0
+					Header.ClipsDescendants = false
+					Header.Position = UDim2.fromOffset(0, 0)
+					Header.AutomaticSize = Enum.AutomaticSize.Y
+					Header.Size = UDim2.new(1, 0, 0, 0)
+					Header.LayoutOrder = 1
+					Header.Text = ""
+					Header.ZIndex = 20
 
-				Icon.Name = "Icon"
-				Icon.Parent = Header
-				Icon.BackgroundTransparency = 1
-				Icon.Image = cardCfg.Icon and ResolveIconSource(cardCfg.Icon) or ""
-				Icon.ImageColor3 = Color3.fromRGB(255, 255, 255)
-				Icon.ImageTransparency = cardCfg.Icon and 0.18 or 1
-				Icon.Position = UDim2.fromOffset(12, 13)
-				Icon.Size = UDim2.fromOffset(18, 18)
-				Icon.ZIndex = 21
-				ThemeManager:BindAccent(Icon, "ImageColor3")
+					HeaderTop.Name = "HeaderTop"
+					HeaderTop.Parent = Header
+					HeaderTop.BackgroundTransparency = 1
+					HeaderTop.BorderSizePixel = 0
+					HeaderTop.LayoutOrder = 1
+					HeaderTop.AutomaticSize = Enum.AutomaticSize.Y
+					HeaderTop.Size = UDim2.new(1, 0, 0, 0)
+					HeaderTop.ClipsDescendants = false
+					HeaderTop.ZIndex = 20
+					HeaderTopLayout.Parent = HeaderTop
+					HeaderTopLayout.FillDirection = Enum.FillDirection.Horizontal
+					HeaderTopLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+					HeaderTopLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+					HeaderTopLayout.SortOrder = Enum.SortOrder.LayoutOrder
+					HeaderTopLayout.Padding = UDim.new(0, 8)
 
-				Title.Name = "Title"
-				Title.Parent = Header
-				Title.BackgroundTransparency = 1
-				Title.Font = Enum.Font.GothamBold
-				Title.Position = UDim2.fromOffset(cardCfg.Icon and 38 or 12, 8)
-				Title.Size = UDim2.new(1, -150, 0, 17)
-				Title.Text = tostring(cardCfg.Title or "")
-				Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-				Title.TextScaled = true
-				Title.TextSize = 12
-				Title.TextTransparency = 0.08
-				Title.TextWrapped = true
-				Title.TextXAlignment = Enum.TextXAlignment.Left
-				Title.TextYAlignment = Enum.TextYAlignment.Top
-				Title.ZIndex = 21
-				addTextLimit(Title, 8, 12)
+					Icon.Name = "Icon"
+					Icon.Parent = HeaderTop
+					Icon.BackgroundTransparency = 1
+					Icon.Image = cardCfg.Icon and ResolveIconSource(cardCfg.Icon) or ""
+					Icon.ImageColor3 = Color3.fromRGB(255, 255, 255)
+					Icon.ImageTransparency = cardCfg.Icon and 0.18 or 1
+					Icon.Size = UDim2.fromOffset(18, 18)
+					Icon.ZIndex = 21
+					ThemeManager:BindAccent(Icon, "ImageColor3")
 
-				Description.Name = "Description"
-				Description.Parent = Header
-				Description.BackgroundTransparency = 1
-				Description.Font = Enum.Font.GothamBold
-				Description.Position = UDim2.fromOffset(cardCfg.Icon and 38 or 12, 27)
-				Description.Size = UDim2.new(1, -150, 0, 13)
-				Description.Text = tostring(cardCfg.Description or "")
-				Description.TextColor3 = Color3.fromRGB(255, 255, 255)
-				Description.TextScaled = true
-				Description.TextSize = 9
-				Description.TextTransparency = 0.5
-				Description.TextWrapped = true
-				Description.TextXAlignment = Enum.TextXAlignment.Left
-				Description.TextYAlignment = Enum.TextYAlignment.Top
-				Description.ZIndex = 21
-				addTextLimit(Description, 7, 9)
+					HeaderTextStack.Name = "TextStack"
+					HeaderTextStack.Parent = HeaderTop
+					HeaderTextStack.BackgroundTransparency = 1
+					HeaderTextStack.BorderSizePixel = 0
+					HeaderTextStack.LayoutOrder = 2
+					HeaderTextStack.AutomaticSize = Enum.AutomaticSize.Y
+					HeaderTextStack.Size = UDim2.new(0, 0, 0, 0)
+					HeaderTextStack.ZIndex = 20
+					HeaderTextStackLayout.Parent = HeaderTextStack
+					HeaderTextStackLayout.FillDirection = Enum.FillDirection.Vertical
+					HeaderTextStackLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+					HeaderTextStackLayout.SortOrder = Enum.SortOrder.LayoutOrder
+					HeaderTextStackLayout.Padding = UDim.new(0, 2)
 
-				local function setupChip(label, corner, stroke, xOffset)
-					label.Parent = Header
-					label.AnchorPoint = Vector2.new(1, 0)
-					label.BackgroundColor3 = ThemeManager:GetColor("CardChip")
-					label.BackgroundTransparency = 0.55
-					label.BorderSizePixel = 0
-					label.Font = Enum.Font.GothamBold
-					label.Position = UDim2.new(1, xOffset, 0, 8)
-					label.Size = UDim2.fromOffset(58, 15)
-					label.TextColor3 = Color3.fromRGB(255, 255, 255)
-					label.TextScaled = true
-					label.TextSize = 9
-					label.TextTransparency = 0.2
-					label.ZIndex = 22
-					addTextLimit(label, 7, 9)
-					corner.CornerRadius = UDim.new(0.5, 0)
-					corner.Parent = label
-					stroke.Color = Color3.fromRGB(255, 255, 255)
-					stroke.Transparency = 0.92
-					stroke.Parent = label
-					ThemeManager:BindAccentStroke(stroke)
-				end
+					Title.Name = "Title"
+					Title.Parent = HeaderTextStack
+					Title.BackgroundTransparency = 1
+					Title.Font = Enum.Font.GothamBold
+					Title.Position = UDim2.fromOffset(0, 0)
+					Title.Size = UDim2.new(1, 0, 0, 0)
+					Title.Text = tostring(cardCfg.Title or "")
+					Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+					Title.TextScaled = false
+					Title.TextSize = 11
+					Title.TextTransparency = 0.08
+					Title.TextWrapped = true
+					Title.TextXAlignment = Enum.TextXAlignment.Left
+					Title.TextYAlignment = Enum.TextYAlignment.Top
+					Title.ZIndex = 21
+					Title.AutomaticSize = Enum.AutomaticSize.Y
+					Title.LayoutOrder = 1
+					addTextLimit(Title, 8, 11)
 
-				setupChip(StatusChip, StatusCorner, StatusStroke, -12)
-				setupChip(Badge, BadgeCorner, Instance.new("UIStroke"), -74)
-				Badge.BackgroundTransparency = 0.72
-				ThemeManager:BindAccent(StatusChip, "TextColor3")
-				ThemeManager:BindAccent(Badge, "TextColor3")
+					Description.Name = "Description"
+					Description.Parent = HeaderTextStack
+					Description.BackgroundTransparency = 1
+					Description.Font = Enum.Font.GothamBold
+					Description.Position = UDim2.fromOffset(0, 0)
+					Description.Size = UDim2.new(1, 0, 0, 0)
+					Description.Text = tostring(cardCfg.Description or "")
+					Description.TextColor3 = Color3.fromRGB(255, 255, 255)
+					Description.TextScaled = false
+					Description.TextSize = 8
+					Description.TextTransparency = 0.5
+					Description.TextWrapped = true
+					Description.TextXAlignment = Enum.TextXAlignment.Left
+					Description.TextYAlignment = Enum.TextYAlignment.Top
+					Description.ZIndex = 21
+					Description.LayoutOrder = 2
+					Description.AutomaticSize = Enum.AutomaticSize.Y
+					addTextLimit(Description, 7, 8)
 
-				ValueText.Name = "Value"
-				ValueText.Parent = Header
-				ValueText.AnchorPoint = Vector2.new(1, 0)
-				ValueText.BackgroundTransparency = 1
-				ValueText.Font = Enum.Font.GothamBold
-				ValueText.Position = UDim2.new(1, -12, 0, 29)
-				ValueText.Size = UDim2.fromOffset(120, 14)
-				ValueText.TextColor3 = ThemeManager:GetColor("Accent")
-				ValueText.TextScaled = true
-				ValueText.TextSize = 9
-				ValueText.TextTransparency = 0.2
-				ValueText.TextXAlignment = Enum.TextXAlignment.Right
-				ValueText.ZIndex = 22
-				addTextLimit(ValueText, 7, 9)
-				ThemeManager:BindAccent(ValueText, "TextColor3")
+					HeaderMetaRow.Name = "MetaRow"
+					HeaderMetaRow.Parent = HeaderTop
+					HeaderMetaRow.BackgroundTransparency = 1
+					HeaderMetaRow.BorderSizePixel = 0
+					HeaderMetaRow.LayoutOrder = 3
+					HeaderMetaRow.AutomaticSize = Enum.AutomaticSize.Y
+					HeaderMetaRow.Size = UDim2.fromOffset(0, 0)
+					HeaderMetaRow.ZIndex = 21
+					HeaderMetaRowLayout.Parent = HeaderMetaRow
+					HeaderMetaRowLayout.FillDirection = Enum.FillDirection.Horizontal
+					HeaderMetaRowLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+					HeaderMetaRowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+					HeaderMetaRowLayout.SortOrder = Enum.SortOrder.LayoutOrder
+					HeaderMetaRowLayout.Padding = UDim.new(0, 4)
 
-				ActionButton.Name = "Action"
-				ActionButton.Parent = Header
-				ActionButton.AnchorPoint = Vector2.new(1, 0)
-				ActionButton.BackgroundColor3 = ThemeManager:GetColor("CardChip")
-				ActionButton.BackgroundTransparency = 0.55
-				ActionButton.BorderSizePixel = 0
-				ActionButton.Position = UDim2.new(1, -12, 0, 28)
-				ActionButton.Size = UDim2.fromOffset(18, 18)
-				ActionButton.Text = ""
-				ActionButton.Visible = type(cardCfg.Action) == "table" and type(cardCfg.Action.Callback) == "function"
-				ActionButton.ZIndex = 23
-				ThemeManager:Bind(ActionButton, "BackgroundColor3", "CardChip")
-				Instance.new("UICorner", ActionButton).CornerRadius = UDim.new(0, 4)
+					local function setupChip(label, corner, stroke)
+						label.Parent = HeaderMetaRow
+						label.AnchorPoint = Vector2.new(0, 0)
+						label.BackgroundColor3 = ThemeManager:GetColor("CardChip")
+						label.BackgroundTransparency = 0.55
+						label.BorderSizePixel = 0
+						label.Font = Enum.Font.GothamBold
+						label.Size = UDim2.fromOffset(58, 15)
+						label.TextColor3 = Color3.fromRGB(255, 255, 255)
+						label.TextScaled = false
+						label.TextSize = 8
+						label.TextTransparency = 0.2
+						label.ZIndex = 22
+						addTextLimit(label, 7, 8)
+						corner.CornerRadius = UDim.new(0.5, 0)
+						corner.Parent = label
+						stroke.Color = Color3.fromRGB(255, 255, 255)
+						stroke.Transparency = 0.92
+						stroke.Parent = label
+						ThemeManager:BindAccentStroke(stroke)
+					end
 
-				ActionIcon.Parent = ActionButton
-				ActionIcon.BackgroundTransparency = 1
-				ActionIcon.Image = ResolveIconSource(type(cardCfg.Action) == "table" and (cardCfg.Action.Icon or "refresh-cw") or "refresh-cw")
-				ActionIcon.ImageColor3 = Color3.fromRGB(255, 255, 255)
-				ActionIcon.ImageTransparency = 0.2
-				ThemeManager:BindAccent(ActionIcon, "ImageColor3")
-				ActionIcon.Position = UDim2.fromOffset(4, 4)
-				ActionIcon.Size = UDim2.fromOffset(10, 10)
-				ActionIcon.ZIndex = 24
+					setupChip(StatusChip, StatusCorner, StatusStroke)
+					setupChip(Badge, BadgeCorner, Instance.new("UIStroke"))
+					Badge.BackgroundTransparency = 0.72
+					ThemeManager:BindAccent(StatusChip, "TextColor3")
+					ThemeManager:BindAccent(Badge, "TextColor3")
+					StatusChip.LayoutOrder = 1
+					Badge.LayoutOrder = 2
 
-				CollapseButton.Name = "Collapse"
-				CollapseButton.Parent = Header
-				CollapseButton.AnchorPoint = Vector2.new(1, 0)
-				CollapseButton.BackgroundTransparency = 1
-				CollapseButton.Position = UDim2.new(1, ActionButton.Visible and -34 or -12, 0, 29)
-				CollapseButton.Size = UDim2.fromOffset(16, 16)
-				CollapseButton.Font = Enum.Font.GothamBold
-				CollapseButton.Text = Collapsed and ">" or "v"
-				CollapseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-				CollapseButton.TextScaled = true
-				CollapseButton.TextTransparency = 0.35
-				addTextLimit(CollapseButton, 8, 11)
-				CollapseButton.Visible = cardCfg.Collapsible == true
-				CollapseButton.ZIndex = 23
+					ValueText.Name = "Value"
+					ValueText.Parent = HeaderMetaRow
+					ValueText.AnchorPoint = Vector2.new(0, 0)
+					ValueText.BackgroundTransparency = 1
+					ValueText.Font = Enum.Font.GothamBold
+					ValueText.Size = UDim2.fromOffset(120, 14)
+					ValueText.TextColor3 = ThemeManager:GetColor("Accent")
+					ValueText.TextScaled = false
+					ValueText.TextSize = 9
+					ValueText.TextTransparency = 0.2
+					ValueText.TextXAlignment = Enum.TextXAlignment.Right
+					ValueText.ZIndex = 22
+					ValueText.LayoutOrder = 3
+					addTextLimit(ValueText, 7, 9)
+					ThemeManager:BindAccent(ValueText, "TextColor3")
 
-				Content.Name = "Content"
-				Content.Parent = Card
-				Content.BackgroundTransparency = 1
-				Content.BorderSizePixel = 0
-				Content.Position = UDim2.fromOffset(0, 56)
-				Content.Size = UDim2.new(1, 0, 0, 1)
-				Content.Visible = not Collapsed
-				Content.ZIndex = 20
+					ActionButton.Name = "Action"
+					ActionButton.Parent = HeaderMetaRow
+					ActionButton.AnchorPoint = Vector2.new(0, 0)
+					ActionButton.BackgroundColor3 = ThemeManager:GetColor("CardChip")
+					ActionButton.BackgroundTransparency = 0.55
+					ActionButton.BorderSizePixel = 0
+					ActionButton.Size = UDim2.fromOffset(18, 18)
+					ActionButton.Text = ""
+					ActionButton.Visible = type(cardCfg.Action) == "table" and type(cardCfg.Action.Callback) == "function"
+					ActionButton.ZIndex = 23
+					ThemeManager:Bind(ActionButton, "BackgroundColor3", "CardChip")
+					Instance.new("UICorner", ActionButton).CornerRadius = UDim.new(0, 4)
+					ActionButton.LayoutOrder = 4
 
-				ContentLayout.Parent = Content
-				ContentLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-				ContentLayout.SortOrder = Enum.SortOrder.LayoutOrder
-				ContentLayout.Padding = UDim.new(0, 4)
+					ActionIcon.Parent = ActionButton
+					ActionIcon.BackgroundTransparency = 1
+					ActionIcon.Image = ResolveIconSource(type(cardCfg.Action) == "table" and (cardCfg.Action.Icon or "refresh-cw") or "refresh-cw")
+					ActionIcon.ImageColor3 = Color3.fromRGB(255, 255, 255)
+					ActionIcon.ImageTransparency = 0.2
+					ThemeManager:BindAccent(ActionIcon, "ImageColor3")
+					ActionIcon.Position = UDim2.fromOffset(4, 4)
+					ActionIcon.Size = UDim2.fromOffset(10, 10)
+					ActionIcon.ZIndex = 24
 
-				Footer.Name = "Footer"
-				Footer.Parent = Card
-				Footer.BackgroundTransparency = 1
-				Footer.Font = Enum.Font.GothamBold
-				Footer.Size = UDim2.new(1, -24, 0, 14)
-				Footer.Text = tostring(cardCfg.Footer or "")
-				Footer.TextColor3 = Color3.fromRGB(255, 255, 255)
-				Footer.TextScaled = true
-				Footer.TextSize = 9
+					CollapseButton.Name = "Collapse"
+					CollapseButton.Parent = HeaderMetaRow
+					CollapseButton.AnchorPoint = Vector2.new(0, 0)
+					CollapseButton.BackgroundTransparency = 1
+					CollapseButton.Size = UDim2.fromOffset(16, 16)
+					CollapseButton.Font = Enum.Font.GothamBold
+					CollapseButton.Text = Collapsed and ">" or "v"
+					CollapseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+					CollapseButton.TextScaled = true
+					CollapseButton.TextTransparency = 0.35
+					addTextLimit(CollapseButton, 8, 11)
+					CollapseButton.Visible = cardCfg.Collapsible == true
+					CollapseButton.ZIndex = 23
+					CollapseButton.LayoutOrder = 5
+
+					Content.Name = "Content"
+					Content.Parent = Body
+					Content.BackgroundTransparency = 1
+					Content.BorderSizePixel = 0
+					Content.Position = UDim2.fromOffset(0, 0)
+					Content.AutomaticSize = Enum.AutomaticSize.Y
+					Content.Size = UDim2.new(1, 0, 0, 0)
+					Content.LayoutOrder = 2
+					Content.Visible = not Collapsed
+					Content.ZIndex = 20
+
+					ContentLayout.Parent = Content
+					ContentLayout.FillDirection = Enum.FillDirection.Vertical
+					ContentLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+					ContentLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+					ContentLayout.SortOrder = Enum.SortOrder.LayoutOrder
+					ContentLayout.Padding = UDim.new(0, 4)
+
+					Footer.Name = "Footer"
+					Footer.Parent = Body
+					Footer.BackgroundTransparency = 1
+					Footer.Font = Enum.Font.GothamBold
+					Footer.Size = UDim2.new(1, 0, 0, 0)
+					Footer.AutomaticSize = Enum.AutomaticSize.Y
+					Footer.Text = tostring(cardCfg.Footer or "")
+					Footer.TextColor3 = Color3.fromRGB(255, 255, 255)
+					Footer.TextScaled = false
+				Footer.TextSize = 8
 				Footer.TextTransparency = 0.58
 				Footer.TextXAlignment = Enum.TextXAlignment.Left
-				Footer.TextYAlignment = Enum.TextYAlignment.Top
-				Footer.TextWrapped = true
-				addTextLimit(Footer, 7, 9)
-				Footer.Visible = Footer.Text ~= ""
-				Footer.ZIndex = 21
+					Footer.TextYAlignment = Enum.TextYAlignment.Top
+					Footer.TextWrapped = true
+					addTextLimit(Footer, 7, 8)
+					Footer.Visible = Footer.Text ~= ""
+					Footer.LayoutOrder = 3
+					Footer.ZIndex = 21
 
 				DisabledOverlay.Name = "DisabledOverlay"
 				DisabledOverlay.Parent = Card
@@ -7807,60 +7861,42 @@ function Library.new(config)
 
 				local function updateHeaderWidths()
 					local width = math.max(220, Card.AbsoluteSize.X)
-					local left = (cardCfg.Icon ~= nil and cardCfg.Icon ~= "") and 38 or 12
-					local metaWidth = (StatusChip.Visible and (StatusWidth + 6) or 0)
-						+ (Badge.Visible and (BadgeWidth + 6) or 0)
-						+ (ValueText.Visible and 62 or 0)
-						+ (ActionButton.Visible and 24 or 0)
-						+ (CollapseButton.Visible and 18 or 0)
-					local compact = width < 330 or metaWidth > width * 0.42
-					local descriptionText = tostring(cardCfg.Description or "")
-					Description.Visible = descriptionText ~= ""
-					Title.Position = UDim2.fromOffset(left, 7)
-
-					if compact then
-						StatusChip.AnchorPoint = Vector2.new(0, 0)
-						Badge.AnchorPoint = Vector2.new(0, 0)
-						local textWidth = math.max(90, width - left - 34)
-						local titleHeight = measureLabelHeight(Title.Text, 12, Title.Font, textWidth, 15, 64)
-						local descHeight = Description.Visible and measureLabelHeight(Description.Text, 9, Description.Font, math.max(90, width - left - 18), 12, 72) or 0
-						Title.Size = UDim2.fromOffset(textWidth, titleHeight)
-						Description.Position = UDim2.fromOffset(left, 8 + titleHeight + 3)
-						Description.Size = UDim2.new(1, -(left + 18), 0, descHeight)
-						local textBottom = Description.Visible and (Description.Position.Y.Offset + descHeight) or (Title.Position.Y.Offset + titleHeight)
-						local rowY = math.max(43, textBottom + 7)
-						StatusChip.Position = UDim2.fromOffset(left, rowY)
-						Badge.Position = UDim2.fromOffset(left + (StatusChip.Visible and (StatusWidth + 6) or 0), rowY)
-						local rightInset = 10 + (ActionButton.Visible and 24 or 0) + (CollapseButton.Visible and 18 or 0)
-						ValueText.Position = UDim2.new(1, -rightInset, 0, rowY + 1)
-						ValueText.Size = UDim2.fromOffset(54, 13)
-						ActionButton.Position = UDim2.new(1, -10, 0, 8)
-						CollapseButton.Position = UDim2.new(1, ActionButton.Visible and -32 or -10, 0, 9)
-						HeaderHeight = math.max((StatusChip.Visible or Badge.Visible or ValueText.Visible) and (rowY + 24) or 52, textBottom + 10)
-					else
-						StatusChip.AnchorPoint = Vector2.new(1, 0)
-						Badge.AnchorPoint = Vector2.new(1, 0)
-						local rightPad = 24 + metaWidth
-						local textWidth = math.max(96, width - left - rightPad)
-						local titleHeight = measureLabelHeight(Title.Text, 12, Title.Font, textWidth, 16, 56)
-						local descHeight = Description.Visible and measureLabelHeight(Description.Text, 9, Description.Font, textWidth, 13, 72) or 0
-						Title.Size = UDim2.fromOffset(textWidth, titleHeight)
-						Description.Position = UDim2.fromOffset(left, 8 + titleHeight + 3)
-						Description.Size = UDim2.fromOffset(textWidth, descHeight)
-						StatusChip.Position = UDim2.new(1, -12, 0, 8)
-						Badge.Position = UDim2.new(1, -(StatusChip.Visible and (StatusWidth + 20) or 12), 0, 8)
-						local valueRight = 12 + (ActionButton.Visible and 24 or 0) + (CollapseButton.Visible and 18 or 0)
-						ValueText.Position = UDim2.new(1, -valueRight, 0, 29)
-						ValueText.Size = UDim2.fromOffset(math.max(62, 120 - valueRight), 13)
-						ActionButton.Position = UDim2.new(1, -12, 0, 28)
-						CollapseButton.Position = UDim2.new(1, ActionButton.Visible and -34 or -12, 0, 29)
-						local textBottom = Description.Visible and (Description.Position.Y.Offset + descHeight) or (Title.Position.Y.Offset + titleHeight)
-						HeaderHeight = math.max(54, textBottom + 10)
+					local metaWidth = 0
+					if StatusChip.Visible then
+						metaWidth = metaWidth + StatusWidth + 4
+					end
+					if Badge.Visible then
+						metaWidth = metaWidth + BadgeWidth + 4
+					end
+					if ValueText.Visible then
+						metaWidth = metaWidth + math.max(62, ValueText.Size.X.Offset > 0 and ValueText.Size.X.Offset or 120) + 4
+					end
+					if ActionButton.Visible then
+						metaWidth = metaWidth + 18 + 4
+					end
+					if CollapseButton.Visible then
+						metaWidth = metaWidth + 16 + 4
 					end
 
-					Icon.Position = UDim2.fromOffset(12, math.max(12, math.floor((HeaderHeight - 18) * 0.5)))
-					Header.Size = UDim2.new(1, 0, 0, HeaderHeight)
-					Content.Position = UDim2.fromOffset(0, HeaderHeight + 2)
+					local compact = width < 360 or metaWidth > width * 0.48
+					local descriptionText = tostring(cardCfg.Description or "")
+					Description.Visible = descriptionText ~= ""
+
+					if compact then
+						HeaderTopLayout.FillDirection = Enum.FillDirection.Vertical
+						HeaderTextStack.Size = UDim2.new(1, 0, 0, 0)
+						HeaderMetaRow.Size = UDim2.new(1, 0, 0, 0)
+					else
+						HeaderTopLayout.FillDirection = Enum.FillDirection.Horizontal
+						local iconSpace = (Icon.Visible and 18 or 0) + (Icon.Visible and 8 or 0)
+						local textWidth = math.max(96, width - 24 - iconSpace - metaWidth)
+						HeaderTextStack.Size = UDim2.new(0, textWidth, 0, 0)
+						HeaderMetaRow.Size = UDim2.new(0, math.max(0, metaWidth), 0, 0)
+					end
+
+					Title.Size = UDim2.new(1, 0, 0, 0)
+					Description.Size = UDim2.new(1, 0, 0, 0)
+					Header.Size = UDim2.new(1, 0, 0, 0)
 				end
 
 				local function updateChrome()
@@ -7883,27 +7919,10 @@ function Library.new(config)
 					updateHeaderWidths()
 				end
 
-				local function updateSize(animated)
-					local contentHeight = Collapsed and 0 or ContentLayout.AbsoluteContentSize.Y
-					local footerHeight = 6
-					if Footer.Visible then
-						local footerWidth = math.max(90, Card.AbsoluteSize.X - 24)
-						local bounds = TextServ:GetTextSize(Footer.Text, 9, Footer.Font, Vector2.new(footerWidth, math.huge))
-						footerHeight = math.clamp(math.ceil(bounds.Y) + 5, 16, 90)
-						Footer.Size = UDim2.new(1, -24, 0, footerHeight)
+					local function updateSize(animated)
+						Content.Visible = not Collapsed
+						Footer.Visible = Footer.Text ~= ""
 					end
-					local targetHeight = HeaderHeight + 8 + contentHeight + footerHeight
-					Content.Visible = not Collapsed
-					Content.Position = UDim2.fromOffset(0, HeaderHeight + 2)
-					Content.Size = UDim2.new(1, 0, 0, math.max(1, contentHeight))
-					Footer.Position = UDim2.fromOffset(12, HeaderHeight + contentHeight + 4)
-					local target = UDim2.new(0.95, 0, 0, math.max(HeaderHeight + 8, targetHeight))
-					if animated then
-						Twen:Create(Card, TweenInfo.new(0.16, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Size = target }):Play()
-					else
-						Card.Size = target
-					end
-				end
 
 				local function cardSearchPrefix()
 					return table.concat({
