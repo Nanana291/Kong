@@ -7225,6 +7225,7 @@ function Library.new(config)
 					DefaultCollapsed = false,
 				})
 
+				-- ControlCard API: miniature themed container; child controls are still the native Section controls.
 				local CardObject = nil
 				local Children = {}
 				local ChildText = {}
@@ -7265,7 +7266,7 @@ function Library.new(config)
 				Card.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
 				Card.BackgroundTransparency = 1
 				Card.BorderSizePixel = 0
-				Card.ClipsDescendants = true
+				Card.ClipsDescendants = false
 				Card.Size = UDim2.new(0.95, 0, 0, 72)
 				Card.ZIndex = 17
 				Twen:Create(Card, TweenInfo1, { BackgroundTransparency = 0.28 }):Play()
