@@ -4,20 +4,292 @@
 local Twen = game:GetService('TweenService');
 local Input = game:GetService('UserInputService');
 local TextServ = game:GetService('TextService');
-local LocalPlayer = game:GetService('Players').LocalPlayer;
-local CoreGui = (gethui and gethui()) or game:FindFirstChild('CoreGui') or LocalPlayer.PlayerGui;
+local Players = game:GetService('Players');
+local LocalPlayer = Players.LocalPlayer;
+local HttpService = game:GetService('HttpService');
+
+local Compatibility = {}
+Compatibility.Debug = false
+
+local function SafeType(value)
+	local ok, result = pcall(function()
+		return typeof(value)
+	end)
+	return ok and result or type(value)
+end
+
+local function GetGlobal(name)
+	local env = _G
+	if type(getfenv) == 'function' then
+		local ok, result = pcall(getfenv, 0)
+		if ok and type(result) == 'table' then
+			env = result
+		end
+	end
+
+	if type(env) == 'table' then
+		local value = rawget(env, name)
+		if value ~= nil then return value end
+	end
+
+	local getGenv = type(env) == 'table' and rawget(env, 'getgenv') or nil
+	if type(getGenv) == 'function' then
+		local ok, genv = pcall(getGenv)
+		if ok and type(genv) == 'table' then
+			return rawget(genv, name)
+		end
+	end
+
+	return nil
+end
+
+local function GetField(object, key)
+	local ok, value = pcall(function()
+		return object and object[key]
+	end)
+	return ok and value or nil
+end
+
+local function PickFunction(...)
+	for i = 1, select('#', ...) do
+		local fn = select(i, ...)
+		if SafeType(fn) == 'function' then
+			return fn
+		end
+	end
+	return nil
+end
+
+local function SafeCall(fn, ...)
+	if SafeType(fn) ~= 'function' then
+		return false, nil
+	end
+	return pcall(fn, ...)
+end
+
+local function CompatLog(...)
+	if Compatibility.Debug then
+		print('[Nothing UI][Compat]', ...)
+	end
+end
+
+Compatibility.Environment = {}
+Compatibility.Environment.GetGlobal = GetGlobal
+Compatibility.Environment.GetGenv = function()
+	local fn = PickFunction(GetGlobal('getgenv'))
+	local ok, result = SafeCall(fn)
+	return ok and result or nil
+end
+Compatibility.Environment.GetRenv = function()
+	local fn = PickFunction(GetGlobal('getrenv'))
+	local ok, result = SafeCall(fn)
+	return ok and result or nil
+end
+Compatibility.Environment.GetSenv = function(scriptObject)
+	local fn = PickFunction(GetGlobal('getsenv'))
+	local ok, result = SafeCall(fn, scriptObject)
+	return ok and result or nil
+end
+Compatibility.Environment.ExecutorName = 'Unknown'
+do
+	local detect = PickFunction(GetGlobal('identifyexecutor'), GetGlobal('getexecutorname'))
+	local ok, result = SafeCall(detect)
+	if ok and result then
+		Compatibility.Environment.ExecutorName = tostring(result)
+	end
+end
+
+Compatibility.Utilities = {}
+Compatibility.Utilities.CloneRef = function(object)
+	local cloneRef = PickFunction(GetGlobal('cloneref'))
+	local ok, result = SafeCall(cloneRef, object)
+	return (ok and result) or object
+end
+Compatibility.Utilities.CloneFunction = function(fn)
+	local cloneFunction = PickFunction(GetGlobal('clonefunction'))
+	local ok, result = SafeCall(cloneFunction, fn)
+	return (ok and result) or fn
+end
+Compatibility.Utilities.SetClipboard = function(text)
+	local clipboard = PickFunction(GetGlobal('setclipboard'), GetGlobal('toclipboard'), GetGlobal('set_clipboard'))
+	local ok = SafeCall(clipboard, tostring(text or ''))
+	if ok then return true end
+	print(tostring(text or ''))
+	return false
+end
+Compatibility.Utilities.IsRobloxActive = function()
+	local fn = PickFunction(GetGlobal('isrbxactive'), GetGlobal('isgameactive'))
+	local ok, result = SafeCall(fn)
+	return ok and result == true
+end
+Compatibility.Utilities.QueueOnTeleport = function(source)
+	local syn = GetGlobal('syn')
+	local fluxus = GetGlobal('fluxus')
+	local fn = PickFunction(GetGlobal('queue_on_teleport'), GetField(syn, 'queue_on_teleport'), GetField(fluxus, 'queue_on_teleport'))
+	local ok = SafeCall(fn, source)
+	return ok == true
+end
+Compatibility.Utilities.HookFunction = function(target, replacement)
+	local fn = PickFunction(GetGlobal('hookfunction'))
+	return SafeCall(fn, target, replacement)
+end
+Compatibility.Utilities.HookMetamethod = function(target, method, replacement)
+	local fn = PickFunction(GetGlobal('hookmetamethod'))
+	return SafeCall(fn, target, method, replacement)
+end
+
+Compatibility.Filesystem = {}
+Compatibility.Filesystem.Read = function(path)
+	local fn = PickFunction(GetGlobal('readfile'))
+	local ok, data = SafeCall(fn, path)
+	return ok and data or nil
+end
+Compatibility.Filesystem.Write = function(path, data)
+	local fn = PickFunction(GetGlobal('writefile'))
+	return SafeCall(fn, path, data) == true
+end
+Compatibility.Filesystem.Append = function(path, data)
+	local fn = PickFunction(GetGlobal('appendfile'))
+	return SafeCall(fn, path, data) == true
+end
+Compatibility.Filesystem.Delete = function(path)
+	local fn = PickFunction(GetGlobal('delfile'), GetGlobal('deletefile'))
+	return SafeCall(fn, path) == true
+end
+Compatibility.Filesystem.Exists = function(path)
+	local isFile = PickFunction(GetGlobal('isfile'))
+	local ok, result = SafeCall(isFile, path)
+	if ok then return result == true end
+	return Compatibility.Filesystem.Read(path) ~= nil
+end
+Compatibility.Filesystem.FolderExists = function(path)
+	local isFolder = PickFunction(GetGlobal('isfolder'))
+	local ok, result = SafeCall(isFolder, path)
+	return ok and result == true
+end
+Compatibility.Filesystem.CreateFolder = function(path)
+	local makeFolder = PickFunction(GetGlobal('makefolder'))
+	if not makeFolder then return false end
+	if Compatibility.Filesystem.FolderExists(path) then return true end
+	return SafeCall(makeFolder, path) == true
+end
+Compatibility.Filesystem.List = function(path)
+	local fn = PickFunction(GetGlobal('listfiles'))
+	local ok, result = SafeCall(fn, path)
+	return (ok and type(result) == 'table') and result or {}
+end
+
+Compatibility.HTTP = {}
+Compatibility.HTTP.Request = function(options)
+	local syn = GetGlobal('syn')
+	local http = GetGlobal('http')
+	local fluxus = GetGlobal('fluxus')
+	local fn = PickFunction(GetGlobal('request'), GetGlobal('http_request'), GetField(syn, 'request'), GetField(http, 'request'), GetField(fluxus, 'request'))
+	local ok, response = SafeCall(fn, options)
+	if ok and type(response) == 'table' then
+		local statusCode = tonumber(response.StatusCode or response.Status or response.statusCode or response.status) or 0
+		local body = response.Body or response.body or response.Response or response.response
+		local success = response.Success
+		if success == nil then success = response.success end
+		if success == nil and statusCode > 0 then success = statusCode >= 200 and statusCode < 400 end
+		return {
+			Success = success == true,
+			StatusCode = statusCode,
+			Body = body,
+			Headers = response.Headers or response.headers,
+			Raw = response,
+		}
+	end
+	return { Success = false, StatusCode = 0, Body = nil, Error = ok and 'empty_result' or (response or 'unsupported') }
+end
+Compatibility.HTTP.Get = function(url)
+	local requestResponse = Compatibility.HTTP.Request({ Url = url, Method = 'GET' })
+	if requestResponse and (requestResponse.Body or requestResponse.body) then
+		return requestResponse.Body or requestResponse.body
+	end
+	local ok, body = pcall(function()
+		if game.HttpGetAsync then
+			return game:HttpGetAsync(url)
+		end
+		return game:HttpGet(url, true)
+	end)
+	return ok and body or nil
+end
+Compatibility.HTTP.JSONGet = function(url)
+	local body = Compatibility.HTTP.Get(url)
+	if type(body) ~= 'string' then return nil end
+	local ok, decoded = pcall(function()
+		return HttpService:JSONDecode(body)
+	end)
+	return ok and decoded or nil
+end
+
+Compatibility.GUI = {}
+Compatibility.GUI.GetParent = function()
+	local candidates = {}
+	local function AddCandidate(candidate)
+		if SafeType(candidate) == 'Instance' then
+			candidates[#candidates + 1] = candidate
+		end
+	end
+
+	local getHui = PickFunction(GetGlobal('gethui'))
+	local getHiddenGui = PickFunction(GetGlobal('get_hidden_gui'), GetGlobal('gethui'))
+	local ok, result = SafeCall(getHui)
+	if ok then AddCandidate(result) end
+	ok, result = SafeCall(getHiddenGui)
+	if ok then AddCandidate(result) end
+	AddCandidate(Compatibility.Utilities.CloneRef(game:FindFirstChild('CoreGui')))
+	AddCandidate(LocalPlayer and LocalPlayer:FindFirstChildOfClass('PlayerGui'))
+
+	for i = 1, #candidates do
+		local candidate = candidates[i]
+		if candidate then
+			if Compatibility.Debug then
+				local nameOk, name = pcall(function()
+					return candidate:GetFullName()
+				end)
+				CompatLog('GUI parent selected:', nameOk and name or tostring(candidate))
+			end
+			return candidate
+		end
+	end
+	return game
+end
+Compatibility.GUI.Protect = function(gui)
+	local syn = GetGlobal('syn')
+	local protectGui = PickFunction(GetGlobal('protect_gui'), GetField(syn, 'protect_gui'))
+	SafeCall(protectGui, gui)
+	return gui
+end
+Compatibility.GUI.Parent = function(gui)
+	if not gui then return false end
+	local parent = Compatibility.GUI.GetParent()
+	Compatibility.GUI.Protect(gui)
+	local ok = pcall(function()
+		gui.Parent = parent
+	end)
+	if ok then return true end
+	local playerGui = LocalPlayer and LocalPlayer:FindFirstChildOfClass('PlayerGui')
+	if playerGui then
+		return pcall(function()
+			gui.Parent = playerGui
+		end)
+	end
+	return false
+end
+
+Compatibility.LogCapabilities = function()
+	CompatLog('Executor:', Compatibility.Environment.ExecutorName)
+	CompatLog('Filesystem:', PickFunction(GetGlobal('readfile')) ~= nil)
+	CompatLog('HTTP request:', PickFunction(GetGlobal('request'), GetGlobal('http_request'), GetField(GetGlobal('syn'), 'request')) ~= nil)
+	CompatLog('Clipboard:', PickFunction(GetGlobal('setclipboard'), GetGlobal('toclipboard'), GetGlobal('set_clipboard')) ~= nil)
+end
+
+local CoreGui = Compatibility.GUI.GetParent();
 local Icons = (function()
-	local p,c = pcall(function()
-		local Http = game:HttpGetAsync('https://raw.githubusercontent.com/evoincorp/lucideblox/master/src/modules/util/icons.json');
-
-		local Decode = game:GetService('HttpService'):JSONDecode(Http);
-
-		return Decode['icon'];
-	end);
-
-	if p then return c end;
-
-	return nil;
+	local Decode = Compatibility.HTTP.JSONGet('https://raw.githubusercontent.com/evoincorp/lucideblox/master/src/modules/util/icons.json')
+	return Decode and (Decode['icon'] or Decode['icons']) or nil
 end)() or {};
 
 local LucideIconCache = nil
@@ -28,7 +300,8 @@ local function LoadLucideIcons()
 	end
 
 	local ok, result = pcall(function()
-		return loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/StyearX/Icons/refs/heads/main/lucide/dist/Icons.lua"))()
+		local source = Compatibility.HTTP.Get("https://raw.githubusercontent.com/StyearX/Icons/refs/heads/main/lucide/dist/Icons.lua")
+		return source and loadstring(source)() or nil
 	end)
 
 	if ok and type(result) == "table" then
@@ -257,6 +530,8 @@ local Config = function(data, default)
 end;
 
 local Library = {};
+Library.Compatibility = Compatibility
+Compatibility.LogCapabilities()
 local LibraryState = {
 	Defaults = {
 		Folder = "NothingUI",
@@ -479,7 +754,8 @@ Library['.'] = '1';
 Library['FetchIcon'] = "https://raw.githubusercontent.com/evoincorp/lucideblox/master/src/modules/util/icons.json";
 
 pcall(function()
-	Library['Icons'] = game:GetService('HttpService'):JSONDecode(game:HttpGetAsync(Library.FetchIcon))['icons'];
+	local iconPayload = Compatibility.HTTP.JSONGet(Library.FetchIcon)
+	Library['Icons'] = iconPayload and (iconPayload['icons'] or iconPayload['icon']) or Library['Icons'];
 end)
 
 local function NormalizePath(path)
@@ -509,67 +785,32 @@ local function EnsureFolderTree(path)
 		return true
 	end
 
-	if typeof(isfolder) ~= "function" or typeof(makefolder) ~= "function" then
-		return false
-	end
-
 	local current = ""
+	local created = true
 	for segment in path:gmatch("[^/]+") do
 		current = current == "" and segment or (current .. "/" .. segment)
-		if not isfolder(current) then
-			pcall(makefolder, current)
+		if not Compatibility.Filesystem.FolderExists(current) then
+			created = Compatibility.Filesystem.CreateFolder(current) and created
 		end
 	end
 
-	return true
+	return created
 end
 
 local function SafeReadFile(path)
-	if typeof(readfile) ~= "function" then
-		return nil
-	end
-
-	local ok, data = pcall(readfile, path)
-	if ok then
-		return data
-	end
-
-	return nil
+	return Compatibility.Filesystem.Read(path)
 end
 
 local function SafeWriteFile(path, data)
-	if typeof(writefile) ~= "function" then
-		return false
-	end
-
-	local ok = pcall(writefile, path, data)
-	return ok
+	return Compatibility.Filesystem.Write(path, data)
 end
 
 local function SafeIsFile(path)
-	if typeof(isfile) ~= "function" then
-		return nil
-	end
-
-	local ok, exists = pcall(isfile, path)
-	if ok then
-		return exists == true
-	end
-
-	return false
+	return Compatibility.Filesystem.Exists(path)
 end
 
 local function SafeListFiles(path)
-	if typeof(listfiles) ~= "function" then
-		return {}
-	end
-
-	local ok, files = pcall(listfiles, path)
-	if ok and type(files) == "table" then
-		return files
-	end
-
-	return {}
+	return Compatibility.Filesystem.List(path)
 end
 
 local ConfigNilValue = setmetatable({}, {
@@ -1073,7 +1314,7 @@ function Library.new(config)
 		end
 	end)
 
-	ScreenGui.Parent = CoreGui;
+	Compatibility.GUI.Parent(ScreenGui);
 	ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global;
 	ScreenGui.ResetOnSpawn = false;
 	ScreenGui.IgnoreGuiInset = true;
@@ -8567,7 +8808,7 @@ Library.NewAuth = function(conf)
 	local UIGradient_2 = Instance.new("UIGradient")
 	local UICorner_6 = Instance.new("UICorner")
 
-	ScreenGui.Parent = CoreGui
+	Compatibility.GUI.Parent(ScreenGui)
 	ScreenGui.IgnoreGuiInset = true
 	ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
 	ScreenGui.Name = game:GetService('HttpService'):GenerateGUID(false)..tostring(tick())
@@ -8788,9 +9029,7 @@ Library.NewAuth = function(conf)
 
 		if str then
 			if typeof(str) == 'string' then
-				local clip = getfenv()['toclipboard'] or getfenv()['setclipboard'] or getfenv()['print'];
-
-				clip(str);
+				Compatibility.Utilities.SetClipboard(str);
 			end;
 		end;
 	end);
@@ -8857,7 +9096,7 @@ Library.Notification = function()
 	local UIListLayout = Instance.new("UIListLayout")
 
 	Notification.Name = "Notification"
-	Notification.Parent = CoreGui
+	Compatibility.GUI.Parent(Notification)
 	Notification.ResetOnSpawn = false
 	Notification.ZIndexBehavior = Enum.ZIndexBehavior.Global
 	Notification.Name = game:GetService('HttpService'):GenerateGUID(false)
@@ -9078,7 +9317,7 @@ function Library:Console()
 	local Frame_2 = Instance.new("Frame")
 
 	Terminal.Name = "RobloxDevGui"
-	Terminal.Parent = CoreGui
+	Compatibility.GUI.Parent(Terminal)
 	Terminal.ResetOnSpawn = false
 	Terminal.ZIndexBehavior = Enum.ZIndexBehavior.Global;
 
