@@ -55,6 +55,7 @@ local State = {
     WasDragged = false,
     LoadingTick = 0,
     ValidationToken = 0,
+    ModalCopyUrl = DISCORD_CONTACT_URL,
     DiscordModalOpen = false,
     DiscordModalClosing = false,
     Drag = {
@@ -74,6 +75,7 @@ local UI = {}
 local BASE_SIZE = Vector2.new(980, 582)
 local SAFE_PAD = 18
 local DISCORD_CONTACT_URL = "dsc.gg/kronoshub"
+local PURCHASE_ACCESS_URL = "https://kronoshub.mysellauth.com/"
 
 local function connect(signal, callback)
     local connection = signal:Connect(callback)
@@ -1149,10 +1151,10 @@ local function copyDiscordLink()
     local copied = false
     pcall(function()
         if typeof(setclipboard) == "function" then
-            setclipboard(DISCORD_CONTACT_URL)
+            setclipboard(State.ModalCopyUrl or DISCORD_CONTACT_URL)
             copied = true
         elseif typeof(toclipboard) == "function" then
-            toclipboard(DISCORD_CONTACT_URL)
+            toclipboard(State.ModalCopyUrl or DISCORD_CONTACT_URL)
             copied = true
         end
     end)
@@ -1161,16 +1163,16 @@ local function copyDiscordLink()
         Loader:Toast({
             Type = "success",
             Icon = "shield-check",
-            Title = "Discord Link Copied",
-            Subtitle = DISCORD_CONTACT_URL,
+            Title = "Link Copied",
+            Subtitle = State.ModalCopyUrl or DISCORD_CONTACT_URL,
             Duration = 3,
         })
     else
         Loader:Toast({
             Type = "warning",
             Icon = "info",
-            Title = "Discord Link",
-            Subtitle = DISCORD_CONTACT_URL,
+            Title = "Copy Link",
+            Subtitle = State.ModalCopyUrl or DISCORD_CONTACT_URL,
             Duration = 5,
         })
     end
@@ -1522,7 +1524,7 @@ local function createDiscordModal(parent)
 
     local shadow = new("Frame", {
         Name = "ModalShadow",
-        Size = UDim2.fromOffset(452, 274),
+        Size = UDim2.fromOffset(452, 318),
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.515),
         BackgroundColor3 = Color3.fromRGB(0, 0, 0),
@@ -1545,7 +1547,7 @@ local function createDiscordModal(parent)
 
     local card = new("CanvasGroup", {
         Name = "DiscordModalCard",
-        Size = UDim2.fromOffset(420, 246),
+        Size = UDim2.fromOffset(420, 286),
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.49),
         BackgroundColor3 = Theme.Panel,
@@ -1576,10 +1578,133 @@ local function createDiscordModal(parent)
         Parent = card,
     })
 
+    local description = new("TextLabel", {
+        Name = "ModalDescription",
+        Size = UDim2.fromOffset(352, 38),
+        Position = UDim2.fromOffset(34, 60),
+        BackgroundTransparency = 1,
+        Text = "Join Kronos support, updates, and announcements.",
+        TextColor3 = Theme.TextDim,
+        TextTransparency = 0.16,
+        Font = Enum.Font.Gotham,
+        TextSize = 13,
+        TextWrapped = true,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Top,
+        ZIndex = 236,
+        Parent = card,
+    })
+
+    local badge = new("TextLabel", {
+        Name = "OfficialStoreBadge",
+        Size = UDim2.fromOffset(108, 24),
+        Position = UDim2.fromOffset(278, 32),
+        BackgroundColor3 = Color3.fromRGB(84, 101, 190),
+        BackgroundTransparency = 0.74,
+        BorderSizePixel = 0,
+        Text = "Official Store",
+        TextColor3 = Color3.fromRGB(224, 230, 255),
+        TextTransparency = 0.06,
+        Font = Enum.Font.GothamMedium,
+        TextSize = 11,
+        Visible = false,
+        ZIndex = 238,
+        Parent = card,
+    })
+    corner(badge, 999)
+    stroke(badge, Color3.fromRGB(156, 174, 255), 1, 0.66)
+
+    local pricingCards = {}
+    local function createPlanCard(name, x, plan, price, detail)
+        local planCard = new("Frame", {
+            Name = name,
+            Size = UDim2.fromOffset(169, 72),
+            Position = UDim2.fromOffset(x, 112),
+            BackgroundColor3 = Color3.fromRGB(8, 11, 18),
+            BackgroundTransparency = 0.34,
+            BorderSizePixel = 0,
+            Visible = false,
+            ZIndex = 237,
+            Parent = card,
+        })
+        corner(planCard, 16)
+        stroke(planCard, Color3.fromRGB(112, 126, 188), 1, 0.58)
+        gradient(
+            planCard,
+            ColorSequence.new(Color3.fromRGB(28, 33, 54), Color3.fromRGB(6, 8, 14)),
+            90,
+            NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0.12),
+                NumberSequenceKeypoint.new(1, 0.28),
+            })
+        )
+        new("TextLabel", {
+            Name = "Plan",
+            Size = UDim2.fromOffset(130, 20),
+            Position = UDim2.fromOffset(14, 10),
+            BackgroundTransparency = 1,
+            Text = plan,
+            TextColor3 = Theme.Text,
+            TextTransparency = 0.04,
+            Font = Enum.Font.GothamMedium,
+            TextSize = 13,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            ZIndex = 239,
+            Parent = planCard,
+        })
+        new("TextLabel", {
+            Name = "Price",
+            Size = UDim2.fromOffset(130, 22),
+            Position = UDim2.fromOffset(14, 29),
+            BackgroundTransparency = 1,
+            Text = price,
+            TextColor3 = Color3.fromRGB(225, 231, 255),
+            TextTransparency = 0.02,
+            Font = Enum.Font.GothamSemibold,
+            TextSize = 17,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            ZIndex = 239,
+            Parent = planCard,
+        })
+        new("TextLabel", {
+            Name = "Detail",
+            Size = UDim2.fromOffset(140, 16),
+            Position = UDim2.fromOffset(14, 52),
+            BackgroundTransparency = 1,
+            Text = detail,
+            TextColor3 = Theme.TextDim,
+            TextTransparency = 0.16,
+            Font = Enum.Font.Gotham,
+            TextSize = 11,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            ZIndex = 239,
+            Parent = planCard,
+        })
+        pricingCards[#pricingCards + 1] = planCard
+    end
+    createPlanCard("MonthlyPlan", 34, "Monthly", "$5 USD", "Flexible access")
+    createPlanCard("LifetimePlan", 217, "Lifetime", "$10 USD", "One-time unlock")
+
+    local trustText = new("TextLabel", {
+        Name = "PurchaseTrustText",
+        Size = UDim2.fromOffset(352, 18),
+        Position = UDim2.fromOffset(34, 270),
+        BackgroundTransparency = 1,
+        Text = "Secure checkout through the official Kronos storefront.",
+        TextColor3 = Theme.TextDim,
+        TextTransparency = 0.22,
+        Font = Enum.Font.Gotham,
+        TextSize = 11,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Visible = false,
+        ZIndex = 238,
+        Parent = card,
+    })
+
     local field = new("Frame", {
         Name = "DiscordLinkField",
         Size = UDim2.fromOffset(352, 58),
-        Position = UDim2.fromOffset(34, 86),
+        Position = UDim2.fromOffset(34, 112),
         BackgroundColor3 = Color3.fromRGB(8, 11, 18),
         BackgroundTransparency = 0.34,
         BorderSizePixel = 0,
@@ -1607,7 +1732,7 @@ local function createDiscordModal(parent)
         Name = "FieldBlueGlow",
         Size = UDim2.fromOffset(376, 76),
         AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromOffset(210, 115),
+        Position = UDim2.fromOffset(210, 141),
         BackgroundColor3 = Color3.fromRGB(100, 130, 255),
         BackgroundTransparency = 0.92,
         BorderSizePixel = 0,
@@ -1653,7 +1778,7 @@ local function createDiscordModal(parent)
         Size = UDim2.new(1, -82, 1, 0),
         Position = UDim2.fromOffset(20, 0),
         BackgroundTransparency = 1,
-        Text = DISCORD_CONTACT_URL,
+        Text = State.ModalCopyUrl or DISCORD_CONTACT_URL,
         TextColor3 = Color3.fromRGB(217, 224, 250),
         TextTransparency = 0.08,
         Font = Enum.Font.GothamMedium,
@@ -1704,15 +1829,28 @@ local function createDiscordModal(parent)
     end)
     connect(copyButton.MouseButton1Click, copyDiscordFromModal)
 
-    createModalButton(card, "CopyButton", "Copy", UDim2.fromOffset(34, 172), true, copyDiscordFromModal)
-    createModalButton(card, "CloseButton", "Close", UDim2.fromOffset(220, 172), false, closeDiscordModal)
+    local copyAction, copyActionLabel =
+        createModalButton(card, "CopyButton", "Copy", UDim2.fromOffset(34, 210), true, copyDiscordFromModal)
+    local closeAction =
+        createModalButton(card, "CloseButton", "Close", UDim2.fromOffset(220, 210), false, closeDiscordModal)
 
     connect(outside.MouseButton1Click, closeDiscordModal)
 
     UI.DiscordModalBackdrop = backdrop
+    UI.DiscordModalShadow = shadow
     UI.DiscordModalCard = card
+    UI.DiscordModalField = field
     UI.DiscordModalFieldStroke = fieldStroke
     UI.DiscordModalFieldGlow = fieldGlow
+    UI.DiscordModalTitle = title
+    UI.DiscordModalDescription = description
+    UI.DiscordModalBadge = badge
+    UI.DiscordModalPricingCards = pricingCards
+    UI.DiscordModalTrustText = trustText
+    UI.DiscordModalCopyAction = copyAction
+    UI.DiscordModalCopyActionLabel = copyActionLabel
+    UI.DiscordModalCloseAction = closeAction
+    UI.DiscordModalLinkText = linkText
     UI.DiscordModalCopyIcon = {
         Button = copyButton,
         Scale = copyScale,
@@ -1723,7 +1861,7 @@ local function createDiscordModal(parent)
     return backdrop, card, cardBorder, title, linkText
 end
 
-local function openDiscordModal()
+local function openLinkModal(title, url, description, purchaseMode)
     if State.Destroyed or State.DiscordModalClosing then
         return
     end
@@ -1732,6 +1870,52 @@ local function openDiscordModal()
             return
         end
         createDiscordModal(UI.Window)
+    end
+    State.ModalCopyUrl = tostring(url or DISCORD_CONTACT_URL)
+    local isPurchase = purchaseMode == true
+    if UI.DiscordModalTitle then
+        UI.DiscordModalTitle.Text = tostring(title or "Link")
+    end
+    if UI.DiscordModalDescription then
+        UI.DiscordModalDescription.Text = tostring(description or "Copy this Kronos link when you need it.")
+    end
+    if UI.DiscordModalLinkText then
+        UI.DiscordModalLinkText.Text = State.ModalCopyUrl
+    end
+    if UI.DiscordModalBadge then
+        UI.DiscordModalBadge.Visible = isPurchase
+    end
+    if UI.DiscordModalTrustText then
+        UI.DiscordModalTrustText.Visible = isPurchase
+    end
+    if UI.DiscordModalPricingCards then
+        for _, planCard in ipairs(UI.DiscordModalPricingCards) do
+            planCard.Visible = isPurchase
+        end
+    end
+    if UI.DiscordModalShadow then
+        UI.DiscordModalShadow.Size = isPurchase and UDim2.fromOffset(452, 388) or UDim2.fromOffset(452, 318)
+    end
+    if UI.DiscordModalCard then
+        UI.DiscordModalCard.Size = isPurchase and UDim2.fromOffset(420, 356) or UDim2.fromOffset(420, 286)
+    end
+    if UI.DiscordModalDescription then
+        UI.DiscordModalDescription.Size = isPurchase and UDim2.fromOffset(240, 44) or UDim2.fromOffset(352, 38)
+    end
+    if UI.DiscordModalField then
+        UI.DiscordModalField.Position = isPurchase and UDim2.fromOffset(34, 204) or UDim2.fromOffset(34, 112)
+    end
+    if UI.DiscordModalFieldGlow then
+        UI.DiscordModalFieldGlow.Position = isPurchase and UDim2.fromOffset(210, 233) or UDim2.fromOffset(210, 141)
+    end
+    if UI.DiscordModalCopyAction then
+        UI.DiscordModalCopyAction.Position = isPurchase and UDim2.fromOffset(34, 292) or UDim2.fromOffset(34, 210)
+    end
+    if UI.DiscordModalCopyActionLabel then
+        UI.DiscordModalCopyActionLabel.Text = isPurchase and "Copy Store Link" or "Copy"
+    end
+    if UI.DiscordModalCloseAction then
+        UI.DiscordModalCloseAction.Position = isPurchase and UDim2.fromOffset(220, 292) or UDim2.fromOffset(220, 210)
     end
     if State.DiscordModalOpen then
         return
@@ -1757,6 +1941,14 @@ local function openDiscordModal()
     tween(UI.DiscordModalScale, TweenInfo.new(0.38, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
         Scale = 1,
     })
+end
+
+local function openDiscordModal()
+    openLinkModal("Discord", DISCORD_CONTACT_URL, "Join Kronos support, updates, and announcements.")
+end
+
+local function openPurchaseModal()
+    openLinkModal("Purchase Access", PURCHASE_ACCESS_URL, "Unlock Kronos with a plan that fits your grind.", true)
 end
 
 local function createContactSection(parent)
@@ -2246,9 +2438,71 @@ local function createContactSection(parent)
         tween(edgeArc, TweenInfoSet.Fast, { BackgroundTransparency = 0.18 })
         tween(iconBloom, TweenInfoSet.Fast, { BackgroundTransparency = 0.82 })
     end)
+    local purchaseButton = button:Clone()
+    purchaseButton.Name = "PurchaseAccessButton"
+    purchaseButton.Position = UDim2.fromOffset(56, 0)
+    purchaseButton.Parent = row
+    local purchaseGlyph = purchaseButton:FindFirstChild("DiscordGlyph", true)
+    if purchaseGlyph then
+        purchaseGlyph:Destroy()
+    end
+    local keyGlyph = new("Frame", {
+        Name = "KeyGlyph",
+        Size = UDim2.fromOffset(26, 22),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        BackgroundTransparency = 1,
+        Rotation = -18,
+        ZIndex = 84,
+        Parent = purchaseButton,
+    })
+    local keyRing = new("Frame", {
+        Name = "KeyRing",
+        Size = UDim2.fromOffset(11, 11),
+        Position = UDim2.fromOffset(2, 5),
+        BackgroundTransparency = 1,
+        ZIndex = 84,
+        Parent = keyGlyph,
+    })
+    corner(keyRing, 999)
+    stroke(keyRing, iconBase, 2, 0.08)
+    corner(
+        new("Frame", {
+            Name = "KeyStem",
+            Size = UDim2.fromOffset(14, 3),
+            Position = UDim2.fromOffset(12, 9),
+            BackgroundColor3 = iconBase,
+            BackgroundTransparency = 0.08,
+            BorderSizePixel = 0,
+            ZIndex = 84,
+            Parent = keyGlyph,
+        }),
+        3
+    )
+    new("Frame", {
+        Name = "KeyToothA",
+        Size = UDim2.fromOffset(3, 7),
+        Position = UDim2.fromOffset(21, 10),
+        BackgroundColor3 = iconBase,
+        BackgroundTransparency = 0.08,
+        BorderSizePixel = 0,
+        ZIndex = 84,
+        Parent = keyGlyph,
+    })
+    connect(purchaseButton.MouseEnter, function()
+        tween(purchaseButton, TweenInfoSet.Fast, { Position = UDim2.fromOffset(56, -2) })
+    end)
+    connect(purchaseButton.MouseLeave, function()
+        tween(purchaseButton, TweenInfoSet.Fast, { Position = UDim2.fromOffset(56, 0) })
+    end)
+    connect(purchaseButton.MouseButton1Down, function()
+        tween(purchaseButton, TweenInfoSet.Fast, { Position = UDim2.fromOffset(56, -1) })
+    end)
+    connect(purchaseButton.MouseButton1Click, openPurchaseModal)
+
     connect(button.MouseButton1Click, openDiscordModal)
 
-    return title, row, button
+    return title, row, button, purchaseButton
 end
 
 local function openKeyLink()
@@ -2264,35 +2518,8 @@ local function openKeyLink()
         return
     end
 
-    local opened = false
-    pcall(function()
-        GuiService:OpenBrowserWindow(url)
-        opened = true
-    end)
-    if not opened then
-        pcall(function()
-            if typeof(setclipboard) == "function" then
-                setclipboard(url)
-                opened = true
-            elseif typeof(toclipboard) == "function" then
-                toclipboard(url)
-                opened = true
-            end
-        end)
-    end
-
-    if opened then
-        setStatus("success", "Key link opened")
-        Loader:Toast({
-            Type = "success",
-            Title = "Key Link Ready",
-            Subtitle = "Browser opened or link copied",
-            Duration = 2.5,
-        })
-    else
-        setStatus("warning", url)
-        Loader:Toast({ Type = "warning", Title = "Copy Key Link", Subtitle = url, Duration = 5 })
-    end
+    setStatus("success", "Key link ready to copy")
+    openLinkModal("Get Key", url, "Copy your personal access link and complete the checkpoint in your browser.")
 end
 
 local function showStatusText(kind, message)
@@ -2455,6 +2682,7 @@ local function beginDrag(input)
         or pointInObject(UI.ValidateButton, point)
         or pointInObject(UI.GetKeyButton, point)
         or pointInObject(UI.ContactDiscordButton, point)
+        or pointInObject(UI.PurchaseAccessButton, point)
     then
         return
     end
@@ -2997,7 +3225,8 @@ local function buildInterface()
         false,
         openKeyLink
     )
-    UI.ContactTitle, UI.ContactRow, UI.ContactDiscordButton = createContactSection(UI.FormGroup)
+    UI.ContactTitle, UI.ContactRow, UI.ContactDiscordButton, UI.PurchaseAccessButton =
+        createContactSection(UI.FormGroup)
 
     createValidationOverlay(UI.Window)
 
