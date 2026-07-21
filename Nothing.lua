@@ -639,6 +639,7 @@ local ThemeManager = {
         },
     },
     Bindings = setmetatable({}, { __mode = "k" }),
+    GradientBindings = setmetatable({}, { __mode = "k" }),
     AccentPulseEnabled = false,
     AccentPulsePhase = false,
 }
@@ -729,6 +730,35 @@ function ThemeManager:_ApplyBinding(instance, binding)
     return pcall(function()
         instance[binding.Property] = self:GetColor(binding.Token)
     end)
+end
+
+function ThemeManager:_ApplyGradientBinding(instance, binding)
+    if not instance or not binding then
+        return false
+    end
+
+    return pcall(function()
+        local fromColor = self:GetColor(binding.From)
+        local toColor = self:GetColor(binding.To)
+        instance.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, fromColor:Lerp(Color3.fromRGB(255, 255, 255), 0.08)),
+            ColorSequenceKeypoint.new(1, toColor:Lerp(Color3.fromRGB(0, 0, 0), 0.18)),
+        })
+    end)
+end
+
+function ThemeManager:BindGradient(instance, fromToken, toToken)
+    if not instance then
+        return false
+    end
+
+    local binding = {
+        From = fromToken or "Accent",
+        To = toToken or fromToken or "Accent",
+    }
+    self.GradientBindings[instance] = binding
+    self:_ApplyGradientBinding(instance, binding)
+    return true
 end
 
 function ThemeManager:Bind(instance, property, token)
@@ -828,6 +858,10 @@ function ThemeManager:ApplyTheme(themeName)
                 self:_ApplyBinding(instance, bucket[i])
             end
         end
+    end
+
+    for instance, binding in pairs(self.GradientBindings) do
+        self:_ApplyGradientBinding(instance, binding)
     end
 end
 
@@ -3644,148 +3678,161 @@ function Library.new(config)
             root.Name = "CloseUIAction"
             root.Parent = SystemSection.Root
             root.BackgroundColor3 = ThemeManager:GetColor("CardSurface")
-            root.BackgroundTransparency = 0.04
+            root.BackgroundTransparency = 0.02
             root.BorderSizePixel = 0
-            root.Size = UDim2.new(0.95, 0, 0, 132)
-            BindResponsiveHeight(root, 132, 146, 230)
+            root.ClipsDescendants = true
+            root.Size = UDim2.new(0.95, 0, 0, 158)
+            BindResponsiveHeight(root, 158, 172, 230)
             root.ZIndex = 17
-            Instance.new("UICorner", root).CornerRadius = UDim.new(0, 10)
+            Instance.new("UICorner", root).CornerRadius = UDim.new(0, 13)
             local scale = Instance.new("UIScale")
             scale.Parent = root
             local st = Instance.new("UIStroke")
-            st.Transparency = 0.82
+            st.Transparency = 0.72
             st.Parent = root
             ThemeManager:Bind(root, "BackgroundColor3", "CardSurface")
             ThemeManager:BindAccentStroke(st)
 
-            local wash = Instance.new("Frame")
-            wash.Parent = root
-            wash.BackgroundColor3 = ThemeManager:GetColor("Danger")
-            wash.BackgroundTransparency = 0.92
-            wash.BorderSizePixel = 0
-            wash.Position = UDim2.fromOffset(1, 1)
-            wash.Size = UDim2.new(1, -2, 1, -2)
-            wash.ZIndex = 18
-            Instance.new("UICorner", wash).CornerRadius = UDim.new(0, 10)
-            ThemeManager:Bind(wash, "BackgroundColor3", "Danger")
+            local aura = Instance.new("Frame")
+            aura.Parent = root
+            aura.BackgroundColor3 = ThemeManager:GetColor("Danger")
+            aura.BackgroundTransparency = 0.86
+            aura.BorderSizePixel = 0
+            aura.Position = UDim2.new(0, -24, 0, -32)
+            aura.Size = UDim2.fromOffset(160, 96)
+            aura.Rotation = -12
+            aura.ZIndex = 18
+            Instance.new("UICorner", aura).CornerRadius = UDim.new(1, 0)
+            ThemeManager:Bind(aura, "BackgroundColor3", "Danger")
 
-            local bar = Instance.new("Frame")
-            bar.Parent = root
-            bar.BackgroundColor3 = ThemeManager:GetColor("Danger")
-            bar.BorderSizePixel = 0
-            bar.Position = UDim2.fromOffset(10, 14)
-            bar.Size = UDim2.fromOffset(3, 34)
-            bar.ZIndex = 20
-            Instance.new("UICorner", bar).CornerRadius = UDim.new(1, 0)
-            ThemeManager:Bind(bar, "BackgroundColor3", "Danger")
+            local glass = Instance.new("Frame")
+            glass.Parent = root
+            glass.BackgroundColor3 = ThemeManager:GetColor("WindowBackground")
+            glass.BackgroundTransparency = 0.42
+            glass.BorderSizePixel = 0
+            glass.Position = UDim2.fromOffset(9, 9)
+            glass.Size = UDim2.new(1, -18, 0, 64)
+            glass.ZIndex = 19
+            Instance.new("UICorner", glass).CornerRadius = UDim.new(0, 11)
+            ThemeManager:Bind(glass, "BackgroundColor3", "WindowBackground")
 
             local icon = Instance.new("TextLabel")
             icon.Parent = root
             icon.BackgroundColor3 = ThemeManager:GetColor("Danger")
-            icon.BackgroundTransparency = 0.18
-            icon.Position = UDim2.fromOffset(22, 15)
-            icon.Size = UDim2.fromOffset(30, 30)
+            icon.BackgroundTransparency = 0.08
+            icon.Position = UDim2.fromOffset(19, 19)
+            icon.Size = UDim2.fromOffset(38, 38)
             icon.Text = "×"
             icon.TextColor3 = Color3.fromRGB(255, 255, 255)
-            icon.TextSize = 18
+            icon.TextSize = 22
             icon.Font = Enum.Font.GothamBold
-            icon.ZIndex = 20
-            Instance.new("UICorner", icon).CornerRadius = UDim.new(0, 9)
+            icon.ZIndex = 21
+            Instance.new("UICorner", icon).CornerRadius = UDim.new(0, 12)
             ThemeManager:Bind(icon, "BackgroundColor3", "Danger")
+
+            local iconGrad = Instance.new("UIGradient")
+            iconGrad.Rotation = 45
+            iconGrad.Parent = icon
+            ThemeManager:BindGradient(iconGrad, "Danger", "Accent")
 
             local title = Instance.new("TextLabel")
             title.Parent = root
             title.BackgroundTransparency = 1
-            title.Position = UDim2.fromOffset(62, 14)
-            title.Size = UDim2.new(1, -76, 0, 18)
+            title.Position = UDim2.fromOffset(68, 17)
+            title.Size = UDim2.new(1, -84, 0, 20)
             title.Font = Enum.Font.GothamBold
             title.Text = "End UI Session"
             title.TextColor3 = Color3.fromRGB(255, 255, 255)
-            title.TextSize = 13
-            title.TextTransparency = 0.03
+            title.TextSize = 14
+            title.TextTransparency = 0.02
             title.TextTruncate = Enum.TextTruncate.AtEnd
             title.TextXAlignment = Enum.TextXAlignment.Left
-            title.ZIndex = 20
+            title.ZIndex = 21
 
             local desc = Instance.new("TextLabel")
             desc.Parent = root
             desc.BackgroundTransparency = 1
-            desc.Position = UDim2.fromOffset(62, 34)
-            desc.Size = UDim2.new(1, -76, 0, 30)
+            desc.Position = UDim2.fromOffset(68, 39)
+            desc.Size = UDim2.new(1, -84, 0, 28)
             desc.Font = Enum.Font.Gotham
-            desc.Text = "Cleanly fades out and destroys only this UI session. Configs stay saved."
-            desc.TextColor3 = Color3.fromRGB(190, 195, 215)
+            desc.Text = "Fade out safely without touching saved configs."
+            desc.TextColor3 = Color3.fromRGB(190, 196, 220)
             desc.TextSize = 10
-            desc.TextTransparency = 0.18
+            desc.TextTransparency = 0.14
             desc.TextWrapped = true
             desc.TextXAlignment = Enum.TextXAlignment.Left
             desc.TextYAlignment = Enum.TextYAlignment.Top
-            desc.ZIndex = 20
-
-            local divider = Instance.new("Frame")
-            divider.Parent = root
-            divider.BackgroundColor3 = ThemeManager:GetColor("AccentStroke")
-            divider.BackgroundTransparency = 0.88
-            divider.BorderSizePixel = 0
-            divider.Position = UDim2.fromOffset(14, 74)
-            divider.Size = UDim2.new(1, -28, 0, 1)
-            divider.ZIndex = 20
-            ThemeManager:Bind(divider, "BackgroundColor3", "AccentStroke")
+            desc.ZIndex = 21
 
             local status = Instance.new("TextLabel")
             status.Parent = root
             status.BackgroundTransparency = 1
-            status.Position = UDim2.fromOffset(14, 86)
-            status.Size = UDim2.new(1, -132, 0, 28)
-            status.Font = Enum.Font.Gotham
-            status.Text = "Two-step close prevents accidental taps."
-            status.TextColor3 = Color3.fromRGB(170, 176, 200)
+            status.Position = UDim2.fromOffset(15, 86)
+            status.Size = UDim2.new(1, -30, 0, 18)
+            status.Font = Enum.Font.GothamMedium
+            status.Text = "Two-step confirmation prevents accidental taps."
+            status.TextColor3 = Color3.fromRGB(168, 176, 202)
             status.TextSize = 9
-            status.TextTransparency = 0.16
-            status.TextWrapped = true
+            status.TextTransparency = 0.1
+            status.TextTruncate = Enum.TextTruncate.AtEnd
             status.TextXAlignment = Enum.TextXAlignment.Left
-            status.TextYAlignment = Enum.TextYAlignment.Center
-            status.ZIndex = 20
+            status.ZIndex = 21
 
             local close = Instance.new("TextButton")
             close.Parent = root
-            close.AnchorPoint = Vector2.new(1, 1)
-            close.Position = UDim2.new(1, -14, 1, -14)
-            close.Size = UDim2.fromOffset(106, 30)
+            close.Position = UDim2.fromOffset(15, 115)
+            close.Size = UDim2.new(1, -30, 0, 30)
             close.BackgroundColor3 = ThemeManager:GetColor("Danger")
-            close.BackgroundTransparency = 0.16
+            close.BackgroundTransparency = 0.04
             close.BorderSizePixel = 0
-            close.Text = "Close UI"
+            close.Text = "Close Interface"
             close.TextColor3 = Color3.fromRGB(255, 255, 255)
             close.Font = Enum.Font.GothamBold
             close.TextSize = 11
-            close.ZIndex = 20
-            Instance.new("UICorner", close).CornerRadius = UDim.new(0, 8)
+            close.ZIndex = 21
+            Instance.new("UICorner", close).CornerRadius = UDim.new(0, 9)
             ThemeManager:Bind(close, "BackgroundColor3", "Danger")
+
+            local closeGrad = Instance.new("UIGradient")
+            closeGrad.Rotation = 25
+            closeGrad.Parent = close
+            ThemeManager:BindGradient(closeGrad, "Danger", "Accent")
+
+            local shine = Instance.new("Frame")
+            shine.Parent = close
+            shine.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            shine.BackgroundTransparency = 0.9
+            shine.BorderSizePixel = 0
+            shine.Size = UDim2.new(0.3, 0, 1, 0)
+            shine.Position = UDim2.new(-0.35, 0, 0, 0)
+            shine.Rotation = 12
+            shine.ZIndex = 22
             local buttonScale = Instance.new("UIScale")
             buttonScale.Parent = close
 
             local armed = false
             root.MouseEnter:Connect(function()
-                Twen:Create(root, TweenInfo.new(0.18, Enum.EasingStyle.Quint), { BackgroundTransparency = 0.02 }):Play()
-                Twen:Create(st, TweenInfo.new(0.18, Enum.EasingStyle.Quint), { Transparency = 0.58 }):Play()
+                Twen:Create(root, TweenInfo.new(0.18, Enum.EasingStyle.Quint), { BackgroundTransparency = 0 }):Play()
+                Twen:Create(st, TweenInfo.new(0.18, Enum.EasingStyle.Quint), { Transparency = 0.48 }):Play()
                 Twen:Create(scale, TweenInfo.new(0.18, Enum.EasingStyle.Quint), { Scale = 1.006 }):Play()
             end)
             root.MouseLeave:Connect(function()
-                Twen:Create(root, TweenInfo.new(0.18, Enum.EasingStyle.Quint), { BackgroundTransparency = 0.04 }):Play()
-                Twen:Create(st, TweenInfo.new(0.18, Enum.EasingStyle.Quint), { Transparency = 0.82 }):Play()
+                Twen:Create(root, TweenInfo.new(0.18, Enum.EasingStyle.Quint), { BackgroundTransparency = 0.02 }):Play()
+                Twen:Create(st, TweenInfo.new(0.18, Enum.EasingStyle.Quint), { Transparency = 0.72 }):Play()
                 Twen:Create(scale, TweenInfo.new(0.18, Enum.EasingStyle.Quint), { Scale = 1 }):Play()
             end)
             close.MouseEnter:Connect(function()
-                Twen:Create(close, TweenInfo.new(0.14, Enum.EasingStyle.Quint), { BackgroundTransparency = 0.04 })
+                Twen:Create(close, TweenInfo.new(0.14, Enum.EasingStyle.Quint), { BackgroundTransparency = 0 }):Play()
+                Twen:Create(shine, TweenInfo.new(0.35, Enum.EasingStyle.Quint), { Position = UDim2.new(1.05, 0, 0, 0) })
                     :Play()
             end)
             close.MouseLeave:Connect(function()
-                Twen:Create(close, TweenInfo.new(0.14, Enum.EasingStyle.Quint), { BackgroundTransparency = 0.16 })
+                shine.Position = UDim2.new(-0.35, 0, 0, 0)
+                Twen:Create(close, TweenInfo.new(0.14, Enum.EasingStyle.Quint), { BackgroundTransparency = 0.04 })
                     :Play()
             end)
             close.MouseButton1Down:Connect(function()
-                Twen:Create(buttonScale, TweenInfo.new(0.08, Enum.EasingStyle.Quint), { Scale = 0.96 }):Play()
+                Twen:Create(buttonScale, TweenInfo.new(0.08, Enum.EasingStyle.Quint), { Scale = 0.97 }):Play()
             end)
             close.MouseButton1Up:Connect(function()
                 Twen:Create(buttonScale, TweenInfo.new(0.12, Enum.EasingStyle.Quint), { Scale = 1 }):Play()
@@ -3793,20 +3840,20 @@ function Library.new(config)
             close.MouseButton1Click:Connect(function()
                 if not armed then
                     armed = true
-                    close.Text = "Confirm"
-                    status.Text = "Tap confirm to destroy the UI."
-                    Twen:Create(wash, TweenInfo.new(0.2, Enum.EasingStyle.Quint), { BackgroundTransparency = 0.82 })
+                    close.Text = "Confirm Close"
+                    status.Text = "Tap once more to destroy this UI session."
+                    Twen:Create(aura, TweenInfo.new(0.2, Enum.EasingStyle.Quint), { BackgroundTransparency = 0.76 })
                         :Play()
                     task.delay(2.6, function()
                         if armed and root.Parent then
                             armed = false
-                            close.Text = "Close UI"
-                            status.Text = "Two-step close prevents accidental taps."
+                            close.Text = "Close Interface"
+                            status.Text = "Two-step confirmation prevents accidental taps."
                             Twen
                                 :Create(
-                                    wash,
+                                    aura,
                                     TweenInfo.new(0.2, Enum.EasingStyle.Quint),
-                                    { BackgroundTransparency = 0.92 }
+                                    { BackgroundTransparency = 0.86 }
                                 )
                                 :Play()
                         end
@@ -3814,9 +3861,8 @@ function Library.new(config)
                     return
                 end
 
-                close.Text = "Closing"
+                close.Text = "Closing..."
                 status.Text = "Destroying UI session..."
-                Twen:Create(root, TweenInfo.new(0.18, Enum.EasingStyle.Quint), { BackgroundTransparency = 0.2 }):Play()
                 WindowTable.WindowToggle = false
                 Update()
                 task.delay(0.72, function()
@@ -3833,42 +3879,60 @@ function Library.new(config)
             root.Name = "DiscordInviteCard"
             root.Parent = CommunitySection.Root
             root.BackgroundColor3 = ThemeManager:GetColor("CardSurface")
-            root.BackgroundTransparency = 0.04
+            root.BackgroundTransparency = 0.02
             root.BorderSizePixel = 0
-            root.Size = UDim2.new(0.95, 0, 0, 136)
-            BindResponsiveHeight(root, 136, 150, 230)
+            root.ClipsDescendants = true
+            root.Size = UDim2.new(0.95, 0, 0, 166)
+            BindResponsiveHeight(root, 166, 178, 230)
             root.ZIndex = 17
-            Instance.new("UICorner", root).CornerRadius = UDim.new(0, 10)
+            Instance.new("UICorner", root).CornerRadius = UDim.new(0, 13)
             local st = Instance.new("UIStroke")
-            st.Transparency = 0.78
+            st.Transparency = 0.72
             st.Parent = root
             ThemeManager:Bind(root, "BackgroundColor3", "CardSurface")
             ThemeManager:BindAccentStroke(st)
 
-            local glow = Instance.new("Frame")
-            glow.Parent = root
-            glow.BackgroundColor3 = ThemeManager:GetColor("Success")
-            glow.BackgroundTransparency = 0.93
-            glow.BorderSizePixel = 0
-            glow.Position = UDim2.fromOffset(1, 1)
-            glow.Size = UDim2.new(1, -2, 0, 50)
-            glow.ZIndex = 18
-            Instance.new("UICorner", glow).CornerRadius = UDim.new(0, 10)
-            ThemeManager:Bind(glow, "BackgroundColor3", "Success")
+            local aura = Instance.new("Frame")
+            aura.Parent = root
+            aura.BackgroundColor3 = ThemeManager:GetColor("Success")
+            aura.BackgroundTransparency = 0.88
+            aura.BorderSizePixel = 0
+            aura.Position = UDim2.new(1, -128, 0, -42)
+            aura.Size = UDim2.fromOffset(170, 110)
+            aura.Rotation = 10
+            aura.ZIndex = 18
+            Instance.new("UICorner", aura).CornerRadius = UDim.new(1, 0)
+            ThemeManager:Bind(aura, "BackgroundColor3", "Success")
+
+            local header = Instance.new("Frame")
+            header.Parent = root
+            header.BackgroundColor3 = ThemeManager:GetColor("WindowBackground")
+            header.BackgroundTransparency = 0.4
+            header.BorderSizePixel = 0
+            header.Position = UDim2.fromOffset(9, 9)
+            header.Size = UDim2.new(1, -18, 0, 58)
+            header.ZIndex = 19
+            Instance.new("UICorner", header).CornerRadius = UDim.new(0, 11)
+            ThemeManager:Bind(header, "BackgroundColor3", "WindowBackground")
 
             local icon = Instance.new("TextLabel")
             icon.Parent = root
             icon.BackgroundColor3 = ThemeManager:GetColor("Success")
-            icon.BackgroundTransparency = 0.12
-            icon.Position = UDim2.fromOffset(12, 12)
-            icon.Size = UDim2.fromOffset(34, 34)
+            icon.BackgroundTransparency = 0.08
+            icon.Position = UDim2.fromOffset(18, 18)
+            icon.Size = UDim2.fromOffset(40, 40)
             icon.Text = "K"
             icon.TextColor3 = Color3.fromRGB(255, 255, 255)
-            icon.TextSize = 17
+            icon.TextSize = 18
             icon.Font = Enum.Font.GothamBold
-            icon.ZIndex = 20
-            Instance.new("UICorner", icon).CornerRadius = UDim.new(0, 10)
+            icon.ZIndex = 21
+            Instance.new("UICorner", icon).CornerRadius = UDim.new(0, 13)
             ThemeManager:Bind(icon, "BackgroundColor3", "Success")
+
+            local iconGrad = Instance.new("UIGradient")
+            iconGrad.Rotation = 45
+            iconGrad.Parent = icon
+            ThemeManager:BindGradient(iconGrad, "Success", "Accent")
 
             local iconImage = Instance.new("ImageLabel")
             iconImage.Parent = icon
@@ -3876,56 +3940,61 @@ function Library.new(config)
             iconImage.Size = UDim2.fromScale(1, 1)
             iconImage.ImageTransparency = 1
             iconImage.ScaleType = Enum.ScaleType.Crop
-            iconImage.ZIndex = 21
-            Instance.new("UICorner", iconImage).CornerRadius = UDim.new(0, 10)
+            iconImage.ZIndex = 22
+            Instance.new("UICorner", iconImage).CornerRadius = UDim.new(0, 13)
 
             local title = Instance.new("TextLabel")
             title.Parent = root
             title.BackgroundTransparency = 1
-            title.Position = UDim2.fromOffset(56, 12)
-            title.Size = UDim2.new(1, -122, 0, 18)
+            title.Position = UDim2.fromOffset(69, 17)
+            title.Size = UDim2.new(1, -130, 0, 20)
             title.Font = Enum.Font.GothamBold
             title.Text = "Kronos"
             title.TextColor3 = Color3.fromRGB(255, 255, 255)
-            title.TextSize = 14
+            title.TextSize = 15
             title.TextTruncate = Enum.TextTruncate.AtEnd
             title.TextXAlignment = Enum.TextXAlignment.Left
-            title.ZIndex = 20
+            title.ZIndex = 21
 
             local pill = Instance.new("TextLabel")
             pill.Parent = root
             pill.AnchorPoint = Vector2.new(1, 0)
             pill.BackgroundColor3 = ThemeManager:GetColor("Success")
-            pill.BackgroundTransparency = 0.18
-            pill.Position = UDim2.new(1, -12, 0, 13)
-            pill.Size = UDim2.fromOffset(46, 18)
+            pill.BackgroundTransparency = 0.1
+            pill.Position = UDim2.new(1, -18, 0, 20)
+            pill.Size = UDim2.fromOffset(48, 20)
             pill.Text = "LIVE"
             pill.TextColor3 = Color3.fromRGB(255, 255, 255)
             pill.TextSize = 9
             pill.Font = Enum.Font.GothamBold
-            pill.ZIndex = 20
+            pill.ZIndex = 21
             Instance.new("UICorner", pill).CornerRadius = UDim.new(1, 0)
             ThemeManager:Bind(pill, "BackgroundColor3", "Success")
+
+            local pillGrad = Instance.new("UIGradient")
+            pillGrad.Rotation = 25
+            pillGrad.Parent = pill
+            ThemeManager:BindGradient(pillGrad, "Success", "Accent")
 
             local subtitle = Instance.new("TextLabel")
             subtitle.Parent = root
             subtitle.BackgroundTransparency = 1
-            subtitle.Position = UDim2.fromOffset(56, 31)
-            subtitle.Size = UDim2.new(1, -70, 0, 16)
+            subtitle.Position = UDim2.fromOffset(69, 39)
+            subtitle.Size = UDim2.new(1, -88, 0, 15)
             subtitle.Font = Enum.Font.Gotham
             subtitle.Text = "Fetching live community stats..."
-            subtitle.TextColor3 = Color3.fromRGB(178, 184, 205)
-            subtitle.TextTransparency = 0.12
+            subtitle.TextColor3 = Color3.fromRGB(182, 188, 210)
+            subtitle.TextTransparency = 0.1
             subtitle.TextSize = 10
             subtitle.TextTruncate = Enum.TextTruncate.AtEnd
             subtitle.TextXAlignment = Enum.TextXAlignment.Left
-            subtitle.ZIndex = 20
+            subtitle.ZIndex = 21
 
             local stats = Instance.new("Frame")
             stats.Parent = root
             stats.BackgroundTransparency = 1
-            stats.Position = UDim2.fromOffset(12, 58)
-            stats.Size = UDim2.new(1, -24, 0, 32)
+            stats.Position = UDim2.fromOffset(12, 80)
+            stats.Size = UDim2.new(1, -24, 0, 36)
             stats.ZIndex = 19
             local statsLayout = Instance.new("UIListLayout")
             statsLayout.Parent = stats
@@ -3936,22 +4005,32 @@ function Library.new(config)
                 local box = Instance.new("Frame")
                 box.Parent = stats
                 box.BackgroundColor3 = ThemeManager:GetColor("WindowBackground")
-                box.BackgroundTransparency = 0.18
+                box.BackgroundTransparency = 0.16
                 box.BorderSizePixel = 0
                 box.Size = UDim2.new(0.5, -4, 1, 0)
                 box.ZIndex = 19
-                Instance.new("UICorner", box).CornerRadius = UDim.new(0, 8)
+                Instance.new("UICorner", box).CornerRadius = UDim.new(0, 10)
                 local boxStroke = Instance.new("UIStroke")
-                boxStroke.Transparency = 0.9
+                boxStroke.Transparency = 0.88
                 boxStroke.Parent = box
                 ThemeManager:Bind(box, "BackgroundColor3", "WindowBackground")
                 ThemeManager:Bind(boxStroke, "Color", "AccentStroke")
 
+                local dot = Instance.new("Frame")
+                dot.Parent = box
+                dot.BackgroundColor3 = ThemeManager:GetColor("Success")
+                dot.BorderSizePixel = 0
+                dot.Position = UDim2.fromOffset(9, 9)
+                dot.Size = UDim2.fromOffset(5, 5)
+                dot.ZIndex = 21
+                Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
+                ThemeManager:Bind(dot, "BackgroundColor3", "Success")
+
                 local value = Instance.new("TextLabel")
                 value.Parent = box
                 value.BackgroundTransparency = 1
-                value.Position = UDim2.fromOffset(9, 4)
-                value.Size = UDim2.new(1, -18, 0, 13)
+                value.Position = UDim2.fromOffset(20, 4)
+                value.Size = UDim2.new(1, -28, 0, 15)
                 value.Font = Enum.Font.GothamBold
                 value.Text = "--"
                 value.TextColor3 = ThemeManager:GetColor("Success")
@@ -3964,12 +4043,12 @@ function Library.new(config)
                 local name = Instance.new("TextLabel")
                 name.Parent = box
                 name.BackgroundTransparency = 1
-                name.Position = UDim2.fromOffset(9, 18)
-                name.Size = UDim2.new(1, -18, 0, 10)
+                name.Position = UDim2.fromOffset(9, 20)
+                name.Size = UDim2.new(1, -18, 0, 11)
                 name.Font = Enum.Font.Gotham
                 name.Text = label
-                name.TextColor3 = Color3.fromRGB(170, 176, 198)
-                name.TextTransparency = 0.2
+                name.TextColor3 = Color3.fromRGB(168, 176, 200)
+                name.TextTransparency = 0.18
                 name.TextSize = 8
                 name.TextTruncate = Enum.TextTruncate.AtEnd
                 name.TextXAlignment = Enum.TextXAlignment.Left
@@ -3982,23 +4061,42 @@ function Library.new(config)
 
             local copy = Instance.new("TextButton")
             copy.Parent = root
-            copy.Position = UDim2.fromOffset(12, 100)
-            copy.Size = UDim2.new(1, -24, 0, 26)
+            copy.Position = UDim2.fromOffset(12, 128)
+            copy.Size = UDim2.new(1, -24, 0, 28)
             copy.BackgroundColor3 = ThemeManager:GetColor("Success")
-            copy.BackgroundTransparency = 0.14
+            copy.BackgroundTransparency = 0.04
             copy.BorderSizePixel = 0
             copy.Text = "Join Community"
             copy.TextColor3 = Color3.fromRGB(255, 255, 255)
             copy.Font = Enum.Font.GothamBold
             copy.TextSize = 11
-            copy.ZIndex = 20
-            Instance.new("UICorner", copy).CornerRadius = UDim.new(0, 8)
+            copy.ZIndex = 21
+            Instance.new("UICorner", copy).CornerRadius = UDim.new(0, 9)
             ThemeManager:Bind(copy, "BackgroundColor3", "Success")
+
+            local copyGrad = Instance.new("UIGradient")
+            copyGrad.Rotation = 25
+            copyGrad.Parent = copy
+            ThemeManager:BindGradient(copyGrad, "Success", "Accent")
+
+            local shine = Instance.new("Frame")
+            shine.Parent = copy
+            shine.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            shine.BackgroundTransparency = 0.9
+            shine.BorderSizePixel = 0
+            shine.Size = UDim2.new(0.3, 0, 1, 0)
+            shine.Position = UDim2.new(-0.35, 0, 0, 0)
+            shine.Rotation = 12
+            shine.ZIndex = 22
+
             copy.MouseEnter:Connect(function()
-                Twen:Create(copy, TweenInfo.new(0.14, Enum.EasingStyle.Quint), { BackgroundTransparency = 0.04 }):Play()
+                Twen:Create(copy, TweenInfo.new(0.14, Enum.EasingStyle.Quint), { BackgroundTransparency = 0 }):Play()
+                Twen:Create(shine, TweenInfo.new(0.35, Enum.EasingStyle.Quint), { Position = UDim2.new(1.05, 0, 0, 0) })
+                    :Play()
             end)
             copy.MouseLeave:Connect(function()
-                Twen:Create(copy, TweenInfo.new(0.14, Enum.EasingStyle.Quint), { BackgroundTransparency = 0.14 }):Play()
+                shine.Position = UDim2.new(-0.35, 0, 0, 0)
+                Twen:Create(copy, TweenInfo.new(0.14, Enum.EasingStyle.Quint), { BackgroundTransparency = 0.04 }):Play()
             end)
             copy.MouseButton1Click:Connect(function()
                 Compatibility.Utilities.SetClipboard(invite)
