@@ -639,6 +639,8 @@ local ThemeManager = {
         },
     },
     Bindings = setmetatable({}, { __mode = "k" }),
+    AccentPulseEnabled = false,
+    AccentPulsePhase = false,
 }
 
 function ThemeManager:NormalizeTheme(name)
@@ -738,6 +740,65 @@ end
 
 function ThemeManager:BindAccentStroke(instance)
     return self:Bind(instance, "Color", "AccentStroke")
+end
+
+function ThemeManager:_PulseColor(token)
+    local base = self:GetColor(token)
+    if not self.AccentPulsePhase then
+        return base
+    end
+    return base:Lerp(Color3.fromRGB(255, 255, 255), token == "AccentStroke" and 0.12 or 0.18)
+end
+
+function ThemeManager:_ApplyAccentPulse()
+    for instance, bucket in pairs(self.Bindings) do
+        if bucket and instance then
+            for i = 1, #bucket do
+                local binding = bucket[i]
+                if binding.Token == "Accent" or binding.Token == "AccentStroke" then
+                    pcall(function()
+                        Twen
+                            :Create(
+                                instance,
+                                TweenInfo.new(0.7, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+                                { [binding.Property] = self:_PulseColor(binding.Token) }
+                            )
+                            :Play()
+                    end)
+                end
+            end
+        end
+    end
+end
+
+function ThemeManager:SetAccentPulse(enabled)
+    enabled = enabled == true
+    if self.AccentPulseEnabled == enabled then
+        return false
+    end
+
+    self.AccentPulseEnabled = enabled
+    if not enabled then
+        self.AccentPulsePhase = false
+        self:ApplyTheme(self.ActiveTheme)
+        if self.ConfigManager and self.ConfigManager.PersistAutoload then
+            self.ConfigManager:PersistAutoload()
+        end
+        return true
+    end
+
+    task.spawn(function()
+        while self.AccentPulseEnabled do
+            self.AccentPulsePhase = not self.AccentPulsePhase
+            self:_ApplyAccentPulse()
+            task.wait(0.9)
+        end
+    end)
+
+    if self.ConfigManager and self.ConfigManager.PersistAutoload then
+        self.ConfigManager:PersistAutoload()
+    end
+    return true
 end
 
 function ThemeManager:ApplyTheme(themeName)
@@ -2108,8 +2169,17 @@ function Library.new(config)
                 local selectedName = self.SelectedConfig ~= "" and self.SelectedConfig or "None"
                 local autoloadState = self.AutoloadEnabled and "Autoload On" or "Autoload Off"
                 local savedCount = #configs
+                local isDirty, dirtyText = self:IsDirty()
                 ui.ConfigFooter.Text =
                     string.format("%s  •  Selected: %s  •  %d saved", autoloadState, selectedName, savedCount)
+                if ui.ConfigDirtyPill then
+                    local hasBaseline = dirtyText ~= "No baseline"
+                    ui.ConfigDirtyPill.Text = dirtyText
+                    ui.ConfigDirtyPill.BackgroundColor3 = isDirty and Color3.fromRGB(255, 176, 72)
+                        or (hasBaseline and Color3.fromRGB(67, 181, 129) or Color3.fromRGB(110, 116, 138))
+                    ui.ConfigDirtyPill.TextColor3 = isDirty and Color3.fromRGB(50, 32, 10)
+                        or Color3.fromRGB(245, 248, 255)
+                end
             end
 
             local selectedTheme = ThemeManager:GetThemeName(ThemeManager.ActiveTheme)
@@ -2147,6 +2217,7 @@ function Library.new(config)
             Enabled = self.AutoloadEnabled and true or false,
             Config = self.SelectedConfig ~= "" and self.SelectedConfig or nil,
             Theme = ThemeManager:GetThemeName(ThemeManager.ActiveTheme),
+            AccentPulse = ThemeManager.AccentPulseEnabled == true,
         })
     end
 
@@ -2321,12 +2392,30 @@ function Library.new(config)
         return true
     end
 
+    function ConfigManager:IsDirty()
+        if self.SelectedConfig == "" or type(self.LoadedData) ~= "table" then
+            return false, "No baseline"
+        end
+
+        self:SerializeValues()
+        local dirty = not DeepEqual(self.Values, self.LoadedData)
+            or self.Theme ~= ThemeManager:GetThemeName(ThemeManager.ActiveTheme)
+        return dirty, dirty and "Unsaved" or "Saved"
+    end
+
     function ConfigManager:Update(flag, value)
         if flag == nil then
             return
         end
 
         self.Values[tostring(flag)] = value ~= nil and value or ConfigNilValue
+        if self.SettingsUI and not self.LoadingConfig and not self._DirtySyncQueued then
+            self._DirtySyncQueued = true
+            task.defer(function()
+                self._DirtySyncQueued = false
+                self:SyncSettingsUI()
+            end)
+        end
     end
 
     function ConfigManager:ApplyValueToObject(flag, object, rawValue, silent)
@@ -2484,6 +2573,7 @@ function Library.new(config)
         self.AutoloadEnabled = data.Enabled == true
         self.Theme = ThemeManager:GetThemeName(data.Theme or self.Theme)
         ThemeManager:SetTheme(self.Theme, true)
+        ThemeManager:SetAccentPulse(data.AccentPulse == true)
 
         if IsValidConfigName(data.Config) then
             self.SelectedConfig = NormalizeConfigName(data.Config, true)
@@ -2564,6 +2654,7 @@ function Library.new(config)
         local AutoloadToggle = nil
         local ThemePreview = nil
         local ConfigFooter = nil
+        local ConfigDirtyPill = nil
 
         local function CreateThemePreview(sectionObject)
             local sectionRoot = sectionObject and sectionObject.Root
@@ -3454,7 +3545,7 @@ function Library.new(config)
             ConfigFooter.Parent = root
             ConfigFooter.BackgroundTransparency = 1
             ConfigFooter.Position = UDim2.fromOffset(0, 25)
-            ConfigFooter.Size = UDim2.new(1, 0, 0, 14)
+            ConfigFooter.Size = UDim2.new(1, -82, 0, 14)
             ConfigFooter.Font = Enum.Font.Gotham
             ConfigFooter.Text = "Autoload Off  •  Selected: None  •  0 saved"
             ConfigFooter.TextColor3 = Color3.fromRGB(185, 190, 210)
@@ -3463,6 +3554,21 @@ function Library.new(config)
             ConfigFooter.TextTruncate = Enum.TextTruncate.AtEnd
             ConfigFooter.TextXAlignment = Enum.TextXAlignment.Left
             ConfigFooter.ZIndex = 20
+
+            ConfigDirtyPill = Instance.new("TextLabel")
+            ConfigDirtyPill.Parent = root
+            ConfigDirtyPill.AnchorPoint = Vector2.new(1, 0)
+            ConfigDirtyPill.BackgroundColor3 = Color3.fromRGB(67, 181, 129)
+            ConfigDirtyPill.BackgroundTransparency = 0.08
+            ConfigDirtyPill.BorderSizePixel = 0
+            ConfigDirtyPill.Position = UDim2.new(1, 0, 0, 9)
+            ConfigDirtyPill.Size = UDim2.fromOffset(78, 18)
+            ConfigDirtyPill.Font = Enum.Font.GothamBold
+            ConfigDirtyPill.Text = "Saved"
+            ConfigDirtyPill.TextColor3 = Color3.fromRGB(245, 255, 248)
+            ConfigDirtyPill.TextSize = 9
+            ConfigDirtyPill.ZIndex = 20
+            Instance.new("UICorner", ConfigDirtyPill).CornerRadius = UDim.new(1, 0)
         end
 
         SystemSection:NewToggle({
@@ -3495,117 +3601,128 @@ function Library.new(config)
             end,
         })
 
+        SystemSection:NewToggle({
+            Title = "Accent Pulse",
+            Default = ThemeManager.AccentPulseEnabled,
+            Callback = function(value)
+                ThemeManager:SetAccentPulse(value == true)
+            end,
+        })
+
         do
             local root = Instance.new("Frame")
             root.Name = "CloseUIAction"
             root.Parent = SystemSection.Root
             root.BackgroundColor3 = ThemeManager:GetColor("CardSurface")
-            root.BackgroundTransparency = 0.1
+            root.BackgroundTransparency = 0.04
             root.BorderSizePixel = 0
-            root.Size = UDim2.new(0.95, 0, 0, 118)
+            root.Size = UDim2.new(0.95, 0, 0, 132)
             root.ZIndex = 17
             Instance.new("UICorner", root).CornerRadius = UDim.new(0, 10)
             local scale = Instance.new("UIScale")
             scale.Parent = root
             local st = Instance.new("UIStroke")
-            st.Transparency = 0.72
+            st.Transparency = 0.82
             st.Parent = root
             ThemeManager:Bind(root, "BackgroundColor3", "CardSurface")
             ThemeManager:BindAccentStroke(st)
 
             local wash = Instance.new("Frame")
             wash.Parent = root
-            wash.BackgroundColor3 = Color3.fromRGB(255, 76, 96)
-            wash.BackgroundTransparency = 0.9
+            wash.BackgroundColor3 = ThemeManager:GetColor("Accent")
+            wash.BackgroundTransparency = 0.92
             wash.BorderSizePixel = 0
-            wash.Size = UDim2.new(1, 0, 0, 42)
+            wash.Position = UDim2.fromOffset(1, 1)
+            wash.Size = UDim2.new(1, -2, 1, -2)
             wash.ZIndex = 18
             Instance.new("UICorner", wash).CornerRadius = UDim.new(0, 10)
+            ThemeManager:BindAccent(wash, "BackgroundColor3")
 
             local bar = Instance.new("Frame")
             bar.Parent = root
-            bar.BackgroundColor3 = Color3.fromRGB(255, 76, 96)
+            bar.BackgroundColor3 = ThemeManager:GetColor("Accent")
             bar.BorderSizePixel = 0
-            bar.Position = UDim2.fromOffset(0, 13)
-            bar.Size = UDim2.fromOffset(3, 28)
+            bar.Position = UDim2.fromOffset(10, 14)
+            bar.Size = UDim2.fromOffset(3, 34)
             bar.ZIndex = 20
             Instance.new("UICorner", bar).CornerRadius = UDim.new(1, 0)
+            ThemeManager:BindAccent(bar, "BackgroundColor3")
 
             local icon = Instance.new("TextLabel")
             icon.Parent = root
-            icon.BackgroundColor3 = Color3.fromRGB(255, 76, 96)
-            icon.BackgroundTransparency = 0.16
-            icon.Position = UDim2.fromOffset(14, 15)
-            icon.Size = UDim2.fromOffset(32, 32)
+            icon.BackgroundColor3 = ThemeManager:GetColor("Accent")
+            icon.BackgroundTransparency = 0.18
+            icon.Position = UDim2.fromOffset(22, 15)
+            icon.Size = UDim2.fromOffset(30, 30)
             icon.Text = "×"
             icon.TextColor3 = Color3.fromRGB(255, 255, 255)
-            icon.TextSize = 20
+            icon.TextSize = 18
             icon.Font = Enum.Font.GothamBold
             icon.ZIndex = 20
-            Instance.new("UICorner", icon).CornerRadius = UDim.new(0, 10)
+            Instance.new("UICorner", icon).CornerRadius = UDim.new(0, 9)
+            ThemeManager:BindAccent(icon, "BackgroundColor3")
 
             local title = Instance.new("TextLabel")
             title.Parent = root
             title.BackgroundTransparency = 1
-            title.Position = UDim2.fromOffset(58, 14)
-            title.Size = UDim2.new(1, -142, 0, 18)
+            title.Position = UDim2.fromOffset(62, 14)
+            title.Size = UDim2.new(1, -76, 0, 18)
             title.Font = Enum.Font.GothamBold
             title.Text = "End UI Session"
             title.TextColor3 = Color3.fromRGB(255, 255, 255)
             title.TextSize = 13
-            title.TextTransparency = 0.04
+            title.TextTransparency = 0.03
+            title.TextTruncate = Enum.TextTruncate.AtEnd
             title.TextXAlignment = Enum.TextXAlignment.Left
             title.ZIndex = 20
-
-            local pill = Instance.new("TextLabel")
-            pill.Parent = root
-            pill.AnchorPoint = Vector2.new(1, 0)
-            pill.BackgroundColor3 = Color3.fromRGB(255, 76, 96)
-            pill.BackgroundTransparency = 0.84
-            pill.Position = UDim2.new(1, -12, 0, 14)
-            pill.Size = UDim2.fromOffset(70, 18)
-            pill.Font = Enum.Font.GothamBold
-            pill.Text = "SESSION"
-            pill.TextColor3 = Color3.fromRGB(255, 180, 190)
-            pill.TextSize = 9
-            pill.ZIndex = 20
-            Instance.new("UICorner", pill).CornerRadius = UDim.new(1, 0)
 
             local desc = Instance.new("TextLabel")
             desc.Parent = root
             desc.BackgroundTransparency = 1
-            desc.Position = UDim2.fromOffset(58, 36)
-            desc.Size = UDim2.new(1, -72, 0, 28)
+            desc.Position = UDim2.fromOffset(62, 34)
+            desc.Size = UDim2.new(1, -76, 0, 30)
             desc.Font = Enum.Font.Gotham
-            desc.Text = "Closes the interface with a clean fade. Saved configs stay untouched."
-            desc.TextColor3 = Color3.fromRGB(205, 210, 230)
+            desc.Text = "Cleanly fades out and destroys only this UI session. Configs stay saved."
+            desc.TextColor3 = Color3.fromRGB(190, 195, 215)
             desc.TextSize = 10
-            desc.TextTransparency = 0.22
+            desc.TextTransparency = 0.18
             desc.TextWrapped = true
             desc.TextXAlignment = Enum.TextXAlignment.Left
+            desc.TextYAlignment = Enum.TextYAlignment.Top
             desc.ZIndex = 20
+
+            local divider = Instance.new("Frame")
+            divider.Parent = root
+            divider.BackgroundColor3 = ThemeManager:GetColor("AccentStroke")
+            divider.BackgroundTransparency = 0.88
+            divider.BorderSizePixel = 0
+            divider.Position = UDim2.fromOffset(14, 74)
+            divider.Size = UDim2.new(1, -28, 0, 1)
+            divider.ZIndex = 20
+            ThemeManager:Bind(divider, "BackgroundColor3", "AccentStroke")
 
             local status = Instance.new("TextLabel")
             status.Parent = root
             status.BackgroundTransparency = 1
-            status.Position = UDim2.fromOffset(14, 78)
-            status.Size = UDim2.new(1, -126, 0, 24)
+            status.Position = UDim2.fromOffset(14, 86)
+            status.Size = UDim2.new(1, -132, 0, 28)
             status.Font = Enum.Font.Gotham
-            status.Text = "Requires confirmation to prevent accidental closes."
-            status.TextColor3 = Color3.fromRGB(175, 180, 205)
+            status.Text = "Two-step close prevents accidental taps."
+            status.TextColor3 = Color3.fromRGB(170, 176, 200)
             status.TextSize = 9
-            status.TextTransparency = 0.22
+            status.TextTransparency = 0.16
             status.TextWrapped = true
             status.TextXAlignment = Enum.TextXAlignment.Left
+            status.TextYAlignment = Enum.TextYAlignment.Center
             status.ZIndex = 20
 
             local close = Instance.new("TextButton")
             close.Parent = root
             close.AnchorPoint = Vector2.new(1, 1)
-            close.Position = UDim2.new(1, -12, 1, -12)
-            close.Size = UDim2.fromOffset(96, 28)
-            close.BackgroundColor3 = Color3.fromRGB(255, 76, 96)
-            close.BackgroundTransparency = 0.12
+            close.Position = UDim2.new(1, -14, 1, -14)
+            close.Size = UDim2.fromOffset(106, 30)
+            close.BackgroundColor3 = ThemeManager:GetColor("Accent")
+            close.BackgroundTransparency = 0.16
             close.BorderSizePixel = 0
             close.Text = "Close UI"
             close.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -3613,26 +3730,27 @@ function Library.new(config)
             close.TextSize = 11
             close.ZIndex = 20
             Instance.new("UICorner", close).CornerRadius = UDim.new(0, 8)
+            ThemeManager:BindAccent(close, "BackgroundColor3")
             local buttonScale = Instance.new("UIScale")
             buttonScale.Parent = close
 
             local armed = false
             root.MouseEnter:Connect(function()
-                Twen:Create(root, TweenInfo.new(0.18, Enum.EasingStyle.Quint), { BackgroundTransparency = 0.06 }):Play()
-                Twen:Create(st, TweenInfo.new(0.18, Enum.EasingStyle.Quint), { Transparency = 0.48 }):Play()
-                Twen:Create(scale, TweenInfo.new(0.18, Enum.EasingStyle.Quint), { Scale = 1.012 }):Play()
+                Twen:Create(root, TweenInfo.new(0.18, Enum.EasingStyle.Quint), { BackgroundTransparency = 0.02 }):Play()
+                Twen:Create(st, TweenInfo.new(0.18, Enum.EasingStyle.Quint), { Transparency = 0.58 }):Play()
+                Twen:Create(scale, TweenInfo.new(0.18, Enum.EasingStyle.Quint), { Scale = 1.006 }):Play()
             end)
             root.MouseLeave:Connect(function()
-                Twen:Create(root, TweenInfo.new(0.18, Enum.EasingStyle.Quint), { BackgroundTransparency = 0.1 }):Play()
-                Twen:Create(st, TweenInfo.new(0.18, Enum.EasingStyle.Quint), { Transparency = 0.72 }):Play()
+                Twen:Create(root, TweenInfo.new(0.18, Enum.EasingStyle.Quint), { BackgroundTransparency = 0.04 }):Play()
+                Twen:Create(st, TweenInfo.new(0.18, Enum.EasingStyle.Quint), { Transparency = 0.82 }):Play()
                 Twen:Create(scale, TweenInfo.new(0.18, Enum.EasingStyle.Quint), { Scale = 1 }):Play()
             end)
             close.MouseEnter:Connect(function()
-                Twen:Create(close, TweenInfo.new(0.14, Enum.EasingStyle.Quint), { BackgroundTransparency = 0.02 })
+                Twen:Create(close, TweenInfo.new(0.14, Enum.EasingStyle.Quint), { BackgroundTransparency = 0.04 })
                     :Play()
             end)
             close.MouseLeave:Connect(function()
-                Twen:Create(close, TweenInfo.new(0.14, Enum.EasingStyle.Quint), { BackgroundTransparency = 0.12 })
+                Twen:Create(close, TweenInfo.new(0.14, Enum.EasingStyle.Quint), { BackgroundTransparency = 0.16 })
                     :Play()
             end)
             close.MouseButton1Down:Connect(function()
@@ -3645,19 +3763,19 @@ function Library.new(config)
                 if not armed then
                     armed = true
                     close.Text = "Confirm"
-                    status.Text = "Click again to destroy this UI session."
-                    Twen:Create(wash, TweenInfo.new(0.2, Enum.EasingStyle.Quint), { BackgroundTransparency = 0.78 })
+                    status.Text = "Tap confirm to destroy the UI."
+                    Twen:Create(wash, TweenInfo.new(0.2, Enum.EasingStyle.Quint), { BackgroundTransparency = 0.82 })
                         :Play()
                     task.delay(2.6, function()
                         if armed and root.Parent then
                             armed = false
                             close.Text = "Close UI"
-                            status.Text = "Requires confirmation to prevent accidental closes."
+                            status.Text = "Two-step close prevents accidental taps."
                             Twen
                                 :Create(
                                     wash,
                                     TweenInfo.new(0.2, Enum.EasingStyle.Quint),
-                                    { BackgroundTransparency = 0.9 }
+                                    { BackgroundTransparency = 0.92 }
                                 )
                                 :Play()
                         end
@@ -3665,9 +3783,9 @@ function Library.new(config)
                     return
                 end
 
-                close.Text = "Closing..."
+                close.Text = "Closing"
                 status.Text = "Destroying UI session..."
-                Twen:Create(root, TweenInfo.new(0.18, Enum.EasingStyle.Quint), { BackgroundTransparency = 0.22 }):Play()
+                Twen:Create(root, TweenInfo.new(0.18, Enum.EasingStyle.Quint), { BackgroundTransparency = 0.2 }):Play()
                 WindowTable.WindowToggle = false
                 Update()
                 task.delay(0.72, function()
@@ -3684,38 +3802,41 @@ function Library.new(config)
             root.Name = "DiscordInviteCard"
             root.Parent = CommunitySection.Root
             root.BackgroundColor3 = ThemeManager:GetColor("CardSurface")
-            root.BackgroundTransparency = 0.1
+            root.BackgroundTransparency = 0.04
             root.BorderSizePixel = 0
-            root.Size = UDim2.new(0.95, 0, 0, 144)
+            root.Size = UDim2.new(0.95, 0, 0, 136)
             root.ZIndex = 17
             Instance.new("UICorner", root).CornerRadius = UDim.new(0, 10)
             local st = Instance.new("UIStroke")
-            st.Transparency = 0.68
+            st.Transparency = 0.78
             st.Parent = root
             ThemeManager:Bind(root, "BackgroundColor3", "CardSurface")
             ThemeManager:BindAccentStroke(st)
 
             local glow = Instance.new("Frame")
             glow.Parent = root
-            glow.BackgroundColor3 = Color3.fromRGB(67, 181, 129)
-            glow.BackgroundTransparency = 0.86
+            glow.BackgroundColor3 = ThemeManager:GetColor("Accent")
+            glow.BackgroundTransparency = 0.93
             glow.BorderSizePixel = 0
-            glow.Size = UDim2.new(1, 0, 0, 46)
+            glow.Position = UDim2.fromOffset(1, 1)
+            glow.Size = UDim2.new(1, -2, 0, 50)
             glow.ZIndex = 18
             Instance.new("UICorner", glow).CornerRadius = UDim.new(0, 10)
+            ThemeManager:BindAccent(glow, "BackgroundColor3")
 
             local icon = Instance.new("TextLabel")
             icon.Parent = root
-            icon.BackgroundColor3 = Color3.fromRGB(67, 181, 129)
-            icon.BackgroundTransparency = 0.08
+            icon.BackgroundColor3 = ThemeManager:GetColor("Accent")
+            icon.BackgroundTransparency = 0.12
             icon.Position = UDim2.fromOffset(12, 12)
-            icon.Size = UDim2.fromOffset(38, 38)
+            icon.Size = UDim2.fromOffset(34, 34)
             icon.Text = "K"
             icon.TextColor3 = Color3.fromRGB(255, 255, 255)
-            icon.TextSize = 18
+            icon.TextSize = 17
             icon.Font = Enum.Font.GothamBold
             icon.ZIndex = 20
-            Instance.new("UICorner", icon).CornerRadius = UDim.new(0, 11)
+            Instance.new("UICorner", icon).CornerRadius = UDim.new(0, 10)
+            ThemeManager:BindAccent(icon, "BackgroundColor3")
 
             local iconImage = Instance.new("ImageLabel")
             iconImage.Parent = icon
@@ -3724,112 +3845,129 @@ function Library.new(config)
             iconImage.ImageTransparency = 1
             iconImage.ScaleType = Enum.ScaleType.Crop
             iconImage.ZIndex = 21
-            Instance.new("UICorner", iconImage).CornerRadius = UDim.new(0, 11)
+            Instance.new("UICorner", iconImage).CornerRadius = UDim.new(0, 10)
 
             local title = Instance.new("TextLabel")
             title.Parent = root
             title.BackgroundTransparency = 1
-            title.Position = UDim2.fromOffset(60, 12)
-            title.Size = UDim2.new(1, -120, 0, 18)
+            title.Position = UDim2.fromOffset(56, 12)
+            title.Size = UDim2.new(1, -122, 0, 18)
             title.Font = Enum.Font.GothamBold
             title.Text = "Kronos"
             title.TextColor3 = Color3.fromRGB(255, 255, 255)
             title.TextSize = 14
+            title.TextTruncate = Enum.TextTruncate.AtEnd
             title.TextXAlignment = Enum.TextXAlignment.Left
             title.ZIndex = 20
 
             local pill = Instance.new("TextLabel")
             pill.Parent = root
             pill.AnchorPoint = Vector2.new(1, 0)
-            pill.BackgroundColor3 = Color3.fromRGB(67, 181, 129)
-            pill.BackgroundTransparency = 0.14
+            pill.BackgroundColor3 = ThemeManager:GetColor("Accent")
+            pill.BackgroundTransparency = 0.18
             pill.Position = UDim2.new(1, -12, 0, 13)
-            pill.Size = UDim2.fromOffset(48, 18)
+            pill.Size = UDim2.fromOffset(46, 18)
             pill.Text = "LIVE"
             pill.TextColor3 = Color3.fromRGB(255, 255, 255)
             pill.TextSize = 9
             pill.Font = Enum.Font.GothamBold
             pill.ZIndex = 20
             Instance.new("UICorner", pill).CornerRadius = UDim.new(1, 0)
+            ThemeManager:BindAccent(pill, "BackgroundColor3")
 
             local subtitle = Instance.new("TextLabel")
             subtitle.Parent = root
             subtitle.BackgroundTransparency = 1
-            subtitle.Position = UDim2.fromOffset(60, 31)
-            subtitle.Size = UDim2.new(1, -72, 0, 18)
+            subtitle.Position = UDim2.fromOffset(56, 31)
+            subtitle.Size = UDim2.new(1, -70, 0, 16)
             subtitle.Font = Enum.Font.Gotham
             subtitle.Text = "Fetching live community stats..."
-            subtitle.TextColor3 = Color3.fromRGB(185, 190, 210)
+            subtitle.TextColor3 = Color3.fromRGB(178, 184, 205)
             subtitle.TextTransparency = 0.12
-            subtitle.TextSize = 11
+            subtitle.TextSize = 10
+            subtitle.TextTruncate = Enum.TextTruncate.AtEnd
             subtitle.TextXAlignment = Enum.TextXAlignment.Left
             subtitle.ZIndex = 20
 
             local stats = Instance.new("Frame")
             stats.Parent = root
             stats.BackgroundTransparency = 1
-            stats.Position = UDim2.fromOffset(12, 62)
-            stats.Size = UDim2.new(1, -24, 0, 38)
+            stats.Position = UDim2.fromOffset(12, 58)
+            stats.Size = UDim2.new(1, -24, 0, 32)
             stats.ZIndex = 19
             local statsLayout = Instance.new("UIListLayout")
             statsLayout.Parent = stats
             statsLayout.FillDirection = Enum.FillDirection.Horizontal
             statsLayout.Padding = UDim.new(0, 8)
 
-            local function metric(label, color)
+            local function metric(label)
                 local box = Instance.new("Frame")
                 box.Parent = stats
                 box.BackgroundColor3 = ThemeManager:GetColor("WindowBackground")
-                box.BackgroundTransparency = 0.44
+                box.BackgroundTransparency = 0.18
                 box.BorderSizePixel = 0
                 box.Size = UDim2.new(0.5, -4, 1, 0)
                 box.ZIndex = 19
                 Instance.new("UICorner", box).CornerRadius = UDim.new(0, 8)
+                local boxStroke = Instance.new("UIStroke")
+                boxStroke.Transparency = 0.9
+                boxStroke.Parent = box
                 ThemeManager:Bind(box, "BackgroundColor3", "WindowBackground")
+                ThemeManager:Bind(boxStroke, "Color", "AccentStroke")
 
                 local value = Instance.new("TextLabel")
                 value.Parent = box
                 value.BackgroundTransparency = 1
-                value.Position = UDim2.fromOffset(10, 5)
-                value.Size = UDim2.new(1, -20, 0, 14)
+                value.Position = UDim2.fromOffset(9, 4)
+                value.Size = UDim2.new(1, -18, 0, 13)
                 value.Font = Enum.Font.GothamBold
                 value.Text = "--"
-                value.TextColor3 = color
-                value.TextSize = 13
+                value.TextColor3 = ThemeManager:GetColor("Accent")
+                value.TextSize = 12
+                value.TextTruncate = Enum.TextTruncate.AtEnd
                 value.TextXAlignment = Enum.TextXAlignment.Left
                 value.ZIndex = 20
+                ThemeManager:BindAccent(value, "TextColor3")
 
                 local name = Instance.new("TextLabel")
                 name.Parent = box
                 name.BackgroundTransparency = 1
-                name.Position = UDim2.fromOffset(10, 20)
-                name.Size = UDim2.new(1, -20, 0, 12)
+                name.Position = UDim2.fromOffset(9, 18)
+                name.Size = UDim2.new(1, -18, 0, 10)
                 name.Font = Enum.Font.Gotham
                 name.Text = label
-                name.TextColor3 = Color3.fromRGB(190, 195, 215)
+                name.TextColor3 = Color3.fromRGB(170, 176, 198)
                 name.TextTransparency = 0.2
-                name.TextSize = 9
+                name.TextSize = 8
+                name.TextTruncate = Enum.TextTruncate.AtEnd
                 name.TextXAlignment = Enum.TextXAlignment.Left
                 name.ZIndex = 20
                 return value
             end
 
-            local online = metric("active now", Color3.fromRGB(120, 230, 165))
-            local members = metric("total members", Color3.fromRGB(235, 238, 255))
+            local online = metric("active now")
+            local members = metric("total members")
 
             local copy = Instance.new("TextButton")
             copy.Parent = root
-            copy.Position = UDim2.fromOffset(12, 110)
-            copy.Size = UDim2.new(1, -24, 0, 24)
-            copy.BackgroundColor3 = Color3.fromRGB(67, 181, 129)
-            copy.BackgroundTransparency = 0.04
+            copy.Position = UDim2.fromOffset(12, 100)
+            copy.Size = UDim2.new(1, -24, 0, 26)
+            copy.BackgroundColor3 = ThemeManager:GetColor("Accent")
+            copy.BackgroundTransparency = 0.14
             copy.BorderSizePixel = 0
             copy.Text = "Join Community"
             copy.TextColor3 = Color3.fromRGB(255, 255, 255)
             copy.Font = Enum.Font.GothamBold
-            copy.TextSize = 12
+            copy.TextSize = 11
             copy.ZIndex = 20
-            Instance.new("UICorner", copy).CornerRadius = UDim.new(0, 7)
+            Instance.new("UICorner", copy).CornerRadius = UDim.new(0, 8)
+            ThemeManager:BindAccent(copy, "BackgroundColor3")
+            copy.MouseEnter:Connect(function()
+                Twen:Create(copy, TweenInfo.new(0.14, Enum.EasingStyle.Quint), { BackgroundTransparency = 0.04 }):Play()
+            end)
+            copy.MouseLeave:Connect(function()
+                Twen:Create(copy, TweenInfo.new(0.14, Enum.EasingStyle.Quint), { BackgroundTransparency = 0.14 }):Play()
+            end)
             copy.MouseButton1Click:Connect(function()
                 Compatibility.Utilities.SetClipboard(invite)
                 ConfigManager:Notify("Discord Invite", "Invite copied to clipboard.", "check")
@@ -3868,9 +4006,9 @@ function Library.new(config)
                     end
                     setMetric(members, data.approximate_member_count)
                     setMetric(online, data.approximate_presence_count)
-                    subtitle.Text = "Official server · builds, keys, and updates."
+                    subtitle.Text = "Official server · builds, keys, updates"
                 elseif root.Parent then
-                    subtitle.Text = "Copy the invite to join the Kronos community."
+                    subtitle.Text = "Copy the invite to join Kronos"
                 end
             end)
         end
@@ -3882,6 +4020,7 @@ function Library.new(config)
             AutoloadToggle = AutoloadToggle,
             ThemePreview = ThemePreview,
             ConfigFooter = ConfigFooter,
+            ConfigDirtyPill = ConfigDirtyPill,
         }
         ConfigManager:SyncSettingsUI()
 
