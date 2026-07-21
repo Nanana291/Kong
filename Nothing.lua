@@ -659,8 +659,25 @@ function ThemeManager:GetTheme(name)
     return self.Themes[self:NormalizeTheme(name or self.ActiveTheme)] or self.Themes.Default
 end
 
+function ThemeManager:GetSemanticColor(role, themeName)
+    local theme = self:GetTheme(themeName)
+    local accent = theme.Accent or Color3.fromRGB(255, 255, 255)
+    role = tostring(role or "Accent")
+    if role == "Success" then
+        return accent:Lerp(Color3.fromRGB(67, 181, 129), 0.38)
+    elseif role == "Warning" then
+        return accent:Lerp(Color3.fromRGB(255, 176, 72), 0.42)
+    elseif role == "Danger" then
+        return accent:Lerp(Color3.fromRGB(255, 76, 96), 0.46)
+    end
+    return accent
+end
+
 function ThemeManager:GetColor(token, themeName)
     local theme = self:GetTheme(themeName)
+    if token == "Success" or token == "Warning" or token == "Danger" then
+        return self:GetSemanticColor(token, themeName)
+    end
     local color = theme[token] or theme.Accent or Color3.fromRGB(255, 255, 255)
     return color
 end
@@ -2175,8 +2192,8 @@ function Library.new(config)
                 if ui.ConfigDirtyPill then
                     local hasBaseline = dirtyText ~= "No baseline"
                     ui.ConfigDirtyPill.Text = dirtyText
-                    ui.ConfigDirtyPill.BackgroundColor3 = isDirty and Color3.fromRGB(255, 176, 72)
-                        or (hasBaseline and Color3.fromRGB(67, 181, 129) or Color3.fromRGB(110, 116, 138))
+                    ui.ConfigDirtyPill.BackgroundColor3 = isDirty and ThemeManager:GetColor("Warning")
+                        or (hasBaseline and ThemeManager:GetColor("Success") or Color3.fromRGB(110, 116, 138))
                     ui.ConfigDirtyPill.TextColor3 = isDirty and Color3.fromRGB(50, 32, 10)
                         or Color3.fromRGB(245, 248, 255)
                 end
@@ -2655,6 +2672,18 @@ function Library.new(config)
         local ThemePreview = nil
         local ConfigFooter = nil
         local ConfigDirtyPill = nil
+
+        local function BindResponsiveHeight(root, normalHeight, compactHeight, breakpoint)
+            local function refresh()
+                if not root.Parent then
+                    return
+                end
+                root.Size =
+                    UDim2.new(0.95, 0, 0, root.AbsoluteSize.X < (breakpoint or 230) and compactHeight or normalHeight)
+            end
+            root:GetPropertyChangedSignal("AbsoluteSize"):Connect(refresh)
+            task.defer(refresh)
+        end
 
         local function CreateThemePreview(sectionObject)
             local sectionRoot = sectionObject and sectionObject.Root
@@ -3558,7 +3587,7 @@ function Library.new(config)
             ConfigDirtyPill = Instance.new("TextLabel")
             ConfigDirtyPill.Parent = root
             ConfigDirtyPill.AnchorPoint = Vector2.new(1, 0)
-            ConfigDirtyPill.BackgroundColor3 = Color3.fromRGB(67, 181, 129)
+            ConfigDirtyPill.BackgroundColor3 = ThemeManager:GetColor("Success")
             ConfigDirtyPill.BackgroundTransparency = 0.08
             ConfigDirtyPill.BorderSizePixel = 0
             ConfigDirtyPill.Position = UDim2.new(1, 0, 0, 9)
@@ -3569,6 +3598,7 @@ function Library.new(config)
             ConfigDirtyPill.TextSize = 9
             ConfigDirtyPill.ZIndex = 20
             Instance.new("UICorner", ConfigDirtyPill).CornerRadius = UDim.new(1, 0)
+            ThemeManager:Bind(ConfigDirtyPill, "BackgroundColor3", "Success")
         end
 
         SystemSection:NewToggle({
@@ -3617,6 +3647,7 @@ function Library.new(config)
             root.BackgroundTransparency = 0.04
             root.BorderSizePixel = 0
             root.Size = UDim2.new(0.95, 0, 0, 132)
+            BindResponsiveHeight(root, 132, 146, 230)
             root.ZIndex = 17
             Instance.new("UICorner", root).CornerRadius = UDim.new(0, 10)
             local scale = Instance.new("UIScale")
@@ -3629,28 +3660,28 @@ function Library.new(config)
 
             local wash = Instance.new("Frame")
             wash.Parent = root
-            wash.BackgroundColor3 = ThemeManager:GetColor("Accent")
+            wash.BackgroundColor3 = ThemeManager:GetColor("Danger")
             wash.BackgroundTransparency = 0.92
             wash.BorderSizePixel = 0
             wash.Position = UDim2.fromOffset(1, 1)
             wash.Size = UDim2.new(1, -2, 1, -2)
             wash.ZIndex = 18
             Instance.new("UICorner", wash).CornerRadius = UDim.new(0, 10)
-            ThemeManager:BindAccent(wash, "BackgroundColor3")
+            ThemeManager:Bind(wash, "BackgroundColor3", "Danger")
 
             local bar = Instance.new("Frame")
             bar.Parent = root
-            bar.BackgroundColor3 = ThemeManager:GetColor("Accent")
+            bar.BackgroundColor3 = ThemeManager:GetColor("Danger")
             bar.BorderSizePixel = 0
             bar.Position = UDim2.fromOffset(10, 14)
             bar.Size = UDim2.fromOffset(3, 34)
             bar.ZIndex = 20
             Instance.new("UICorner", bar).CornerRadius = UDim.new(1, 0)
-            ThemeManager:BindAccent(bar, "BackgroundColor3")
+            ThemeManager:Bind(bar, "BackgroundColor3", "Danger")
 
             local icon = Instance.new("TextLabel")
             icon.Parent = root
-            icon.BackgroundColor3 = ThemeManager:GetColor("Accent")
+            icon.BackgroundColor3 = ThemeManager:GetColor("Danger")
             icon.BackgroundTransparency = 0.18
             icon.Position = UDim2.fromOffset(22, 15)
             icon.Size = UDim2.fromOffset(30, 30)
@@ -3660,7 +3691,7 @@ function Library.new(config)
             icon.Font = Enum.Font.GothamBold
             icon.ZIndex = 20
             Instance.new("UICorner", icon).CornerRadius = UDim.new(0, 9)
-            ThemeManager:BindAccent(icon, "BackgroundColor3")
+            ThemeManager:Bind(icon, "BackgroundColor3", "Danger")
 
             local title = Instance.new("TextLabel")
             title.Parent = root
@@ -3721,7 +3752,7 @@ function Library.new(config)
             close.AnchorPoint = Vector2.new(1, 1)
             close.Position = UDim2.new(1, -14, 1, -14)
             close.Size = UDim2.fromOffset(106, 30)
-            close.BackgroundColor3 = ThemeManager:GetColor("Accent")
+            close.BackgroundColor3 = ThemeManager:GetColor("Danger")
             close.BackgroundTransparency = 0.16
             close.BorderSizePixel = 0
             close.Text = "Close UI"
@@ -3730,7 +3761,7 @@ function Library.new(config)
             close.TextSize = 11
             close.ZIndex = 20
             Instance.new("UICorner", close).CornerRadius = UDim.new(0, 8)
-            ThemeManager:BindAccent(close, "BackgroundColor3")
+            ThemeManager:Bind(close, "BackgroundColor3", "Danger")
             local buttonScale = Instance.new("UIScale")
             buttonScale.Parent = close
 
@@ -3805,6 +3836,7 @@ function Library.new(config)
             root.BackgroundTransparency = 0.04
             root.BorderSizePixel = 0
             root.Size = UDim2.new(0.95, 0, 0, 136)
+            BindResponsiveHeight(root, 136, 150, 230)
             root.ZIndex = 17
             Instance.new("UICorner", root).CornerRadius = UDim.new(0, 10)
             local st = Instance.new("UIStroke")
@@ -3815,18 +3847,18 @@ function Library.new(config)
 
             local glow = Instance.new("Frame")
             glow.Parent = root
-            glow.BackgroundColor3 = ThemeManager:GetColor("Accent")
+            glow.BackgroundColor3 = ThemeManager:GetColor("Success")
             glow.BackgroundTransparency = 0.93
             glow.BorderSizePixel = 0
             glow.Position = UDim2.fromOffset(1, 1)
             glow.Size = UDim2.new(1, -2, 0, 50)
             glow.ZIndex = 18
             Instance.new("UICorner", glow).CornerRadius = UDim.new(0, 10)
-            ThemeManager:BindAccent(glow, "BackgroundColor3")
+            ThemeManager:Bind(glow, "BackgroundColor3", "Success")
 
             local icon = Instance.new("TextLabel")
             icon.Parent = root
-            icon.BackgroundColor3 = ThemeManager:GetColor("Accent")
+            icon.BackgroundColor3 = ThemeManager:GetColor("Success")
             icon.BackgroundTransparency = 0.12
             icon.Position = UDim2.fromOffset(12, 12)
             icon.Size = UDim2.fromOffset(34, 34)
@@ -3836,7 +3868,7 @@ function Library.new(config)
             icon.Font = Enum.Font.GothamBold
             icon.ZIndex = 20
             Instance.new("UICorner", icon).CornerRadius = UDim.new(0, 10)
-            ThemeManager:BindAccent(icon, "BackgroundColor3")
+            ThemeManager:Bind(icon, "BackgroundColor3", "Success")
 
             local iconImage = Instance.new("ImageLabel")
             iconImage.Parent = icon
@@ -3863,7 +3895,7 @@ function Library.new(config)
             local pill = Instance.new("TextLabel")
             pill.Parent = root
             pill.AnchorPoint = Vector2.new(1, 0)
-            pill.BackgroundColor3 = ThemeManager:GetColor("Accent")
+            pill.BackgroundColor3 = ThemeManager:GetColor("Success")
             pill.BackgroundTransparency = 0.18
             pill.Position = UDim2.new(1, -12, 0, 13)
             pill.Size = UDim2.fromOffset(46, 18)
@@ -3873,7 +3905,7 @@ function Library.new(config)
             pill.Font = Enum.Font.GothamBold
             pill.ZIndex = 20
             Instance.new("UICorner", pill).CornerRadius = UDim.new(1, 0)
-            ThemeManager:BindAccent(pill, "BackgroundColor3")
+            ThemeManager:Bind(pill, "BackgroundColor3", "Success")
 
             local subtitle = Instance.new("TextLabel")
             subtitle.Parent = root
@@ -3922,12 +3954,12 @@ function Library.new(config)
                 value.Size = UDim2.new(1, -18, 0, 13)
                 value.Font = Enum.Font.GothamBold
                 value.Text = "--"
-                value.TextColor3 = ThemeManager:GetColor("Accent")
+                value.TextColor3 = ThemeManager:GetColor("Success")
                 value.TextSize = 12
                 value.TextTruncate = Enum.TextTruncate.AtEnd
                 value.TextXAlignment = Enum.TextXAlignment.Left
                 value.ZIndex = 20
-                ThemeManager:BindAccent(value, "TextColor3")
+                ThemeManager:Bind(value, "TextColor3", "Success")
 
                 local name = Instance.new("TextLabel")
                 name.Parent = box
@@ -3952,7 +3984,7 @@ function Library.new(config)
             copy.Parent = root
             copy.Position = UDim2.fromOffset(12, 100)
             copy.Size = UDim2.new(1, -24, 0, 26)
-            copy.BackgroundColor3 = ThemeManager:GetColor("Accent")
+            copy.BackgroundColor3 = ThemeManager:GetColor("Success")
             copy.BackgroundTransparency = 0.14
             copy.BorderSizePixel = 0
             copy.Text = "Join Community"
@@ -3961,7 +3993,7 @@ function Library.new(config)
             copy.TextSize = 11
             copy.ZIndex = 20
             Instance.new("UICorner", copy).CornerRadius = UDim.new(0, 8)
-            ThemeManager:BindAccent(copy, "BackgroundColor3")
+            ThemeManager:Bind(copy, "BackgroundColor3", "Success")
             copy.MouseEnter:Connect(function()
                 Twen:Create(copy, TweenInfo.new(0.14, Enum.EasingStyle.Quint), { BackgroundTransparency = 0.04 }):Play()
             end)
