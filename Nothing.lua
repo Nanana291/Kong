@@ -789,6 +789,7 @@ function ThemeManager:SetTheme(themeName, silent)
 end
 
 Library.Theme = ThemeManager
+Library.NotificationPosition = Library.NotificationPosition or "Left Center"
 
 Library["."] = "1"
 Library["FetchIcon"] = "https://raw.githubusercontent.com/evoincorp/lucideblox/master/src/modules/util/icons.json"
@@ -1165,6 +1166,8 @@ function Library.new(config)
     WindowTable.Tabs = {}
     WindowTable.Dropdown = {}
     WindowTable.WindowToggle = true
+    WindowTable.BlurEnabled = config.Blur ~= false
+    WindowTable.UITransparency = tonumber(config.Transparency) or 0.4
     WindowTable.Keybind = config.Keybind
     WindowTable.SearchBar = config.SearchBar
     WindowTable.ToggleButton = nil
@@ -1258,14 +1261,14 @@ function Library.new(config)
             Twen:Create(
                 MainFrame,
                 TweenInfo.new(1.5, Enum.EasingStyle.Quint),
-                { BackgroundTransparency = 0.4, Size = config.Size }
+                { BackgroundTransparency = WindowTable.UITransparency, Size = config.Size }
             ):Play()
             Twen:Create(MainDropShadow, TweenInfo1, { ImageTransparency = 0.6 }):Play()
             Twen:Create(Headers, TweenInfo1, { BackgroundTransparency = 0.5 }):Play()
             TweenLogoVisible(true)
             Twen:Create(MainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quint), { Position = UDim2.fromScale(0.5, 0.5) })
                 :Play()
-            WindowTable.ElBlurUI.Enabled = true
+            WindowTable.ElBlurUI.Enabled = WindowTable.BlurEnabled
 
             Twen:Create(BlockFrame1, TweenInfo1, { BackgroundTransparency = 0.8 }):Play()
             Twen:Create(BlockFrame2, TweenInfo1, { BackgroundTransparency = 0.8 }):Play()
@@ -1352,6 +1355,17 @@ function Library.new(config)
         Update()
     end
 
+    local function ApplyVisualSettings()
+        if WindowTable.WindowToggle then
+            Twen:Create(MainFrame, TweenInfo.new(0.18, Enum.EasingStyle.Quint), {
+                BackgroundTransparency = WindowTable.UITransparency,
+            }):Play()
+            if WindowTable.ElBlurUI then
+                WindowTable.ElBlurUI.Enabled = WindowTable.BlurEnabled
+            end
+        end
+    end
+
     Twen:Create(ImageButton, TweenInfo1, {
         ImageTransparency = 0.5,
     }):Play()
@@ -1388,7 +1402,8 @@ function Library.new(config)
         Library.GradientImage(MainFrame, color)
     end
 
-    Twen:Create(MainFrame, TweenInfo1, { BackgroundTransparency = 0.4, Size = config.Size }):Play()
+    Twen:Create(MainFrame, TweenInfo1, { BackgroundTransparency = WindowTable.UITransparency, Size = config.Size })
+        :Play()
 
     WindowTable.ElBlurUI = ElBlurSource.new(MainFrame)
 
@@ -2530,6 +2545,12 @@ function Library.new(config)
             Icon = "power",
         })
 
+        local CommunitySection = SettingsTab:NewSection({
+            Position = "Right",
+            Title = "Community",
+            Icon = "message-circle",
+        })
+
         local ConfigDropdown = nil
         local ConfigTextbox = nil
         local AutoloadToggle = nil
@@ -3389,14 +3410,44 @@ function Library.new(config)
             end,
         })
 
+        SystemSection:NewToggle({
+            Title = "Visual Blur",
+            Default = WindowTable.BlurEnabled,
+            Callback = function(value)
+                WindowTable.BlurEnabled = value == true
+                ApplyVisualSettings()
+            end,
+        })
+
+        SystemSection:NewSlider({
+            Title = "UI Transparency",
+            Min = 20,
+            Max = 75,
+            Default = math.floor((WindowTable.UITransparency or 0.4) * 100),
+            Callback = function(value)
+                WindowTable.UITransparency = math.clamp(tonumber(value) or 40, 20, 75) / 100
+                ApplyVisualSettings()
+            end,
+        })
+
+        SystemSection:NewDropdown({
+            Title = "Notification Position",
+            Data = { "Left Center", "Top Right", "Top Left", "Bottom Right", "Bottom Left" },
+            Default = Library.NotificationPosition,
+            Callback = function(value)
+                Library.NotificationPosition = tostring(value or "Left Center")
+                ConfigManager:Notify("Notification Position", Library.NotificationPosition, "bell")
+            end,
+        })
+
         do
             local root = Instance.new("Frame")
             root.Name = "CloseUIAction"
             root.Parent = SystemSection.Root
             root.BackgroundColor3 = ThemeManager:GetColor("CardSurface")
-            root.BackgroundTransparency = 0.18
+            root.BackgroundTransparency = 0.12
             root.BorderSizePixel = 0
-            root.Size = UDim2.new(0.95, 0, 0, 76)
+            root.Size = UDim2.new(0.95, 0, 0, 92)
             root.ZIndex = 17
             Instance.new("UICorner", root).CornerRadius = UDim.new(0, 8)
             local st = Instance.new("UIStroke")
@@ -3408,8 +3459,8 @@ function Library.new(config)
             local title = Instance.new("TextLabel")
             title.Parent = root
             title.BackgroundTransparency = 1
-            title.Position = UDim2.fromOffset(14, 11)
-            title.Size = UDim2.new(1, -106, 0, 18)
+            title.Position = UDim2.fromOffset(48, 13)
+            title.Size = UDim2.new(1, -140, 0, 18)
             title.Font = Enum.Font.GothamBold
             title.Text = "Close UI"
             title.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -3421,10 +3472,10 @@ function Library.new(config)
             local desc = Instance.new("TextLabel")
             desc.Parent = root
             desc.BackgroundTransparency = 1
-            desc.Position = UDim2.fromOffset(14, 33)
-            desc.Size = UDim2.new(1, -106, 0, 30)
+            desc.Position = UDim2.fromOffset(48, 36)
+            desc.Size = UDim2.new(1, -140, 0, 34)
             desc.Font = Enum.Font.Gotham
-            desc.Text = "Safely dismisses the Kronos interface."
+            desc.Text = "Fades out the interface cleanly and clears the current UI session."
             desc.TextColor3 = Color3.fromRGB(255, 255, 255)
             desc.TextSize = 10
             desc.TextTransparency = 0.48
@@ -3432,15 +3483,29 @@ function Library.new(config)
             desc.TextXAlignment = Enum.TextXAlignment.Left
             desc.ZIndex = 20
 
+            local icon = Instance.new("TextLabel")
+            icon.Parent = root
+            icon.BackgroundColor3 = ThemeManager:GetColor("Accent")
+            icon.BackgroundTransparency = 0.2
+            icon.Position = UDim2.fromOffset(12, 18)
+            icon.Size = UDim2.fromOffset(26, 26)
+            icon.Text = "×"
+            icon.TextColor3 = Color3.fromRGB(255, 255, 255)
+            icon.TextSize = 18
+            icon.Font = Enum.Font.GothamBold
+            icon.ZIndex = 20
+            Instance.new("UICorner", icon).CornerRadius = UDim.new(0, 8)
+            ThemeManager:BindAccent(icon, "BackgroundColor3")
+
             local close = Instance.new("TextButton")
             close.Parent = root
             close.AnchorPoint = Vector2.new(1, 0.5)
             close.Position = UDim2.new(1, -12, 0.5, 0)
-            close.Size = UDim2.fromOffset(78, 38)
+            close.Size = UDim2.fromOffset(86, 42)
             close.BackgroundColor3 = ThemeManager:GetColor("Accent")
             close.BackgroundTransparency = 0.08
             close.BorderSizePixel = 0
-            close.Text = "Close"
+            close.Text = "Close UI"
             close.TextColor3 = Color3.fromRGB(255, 255, 255)
             close.Font = Enum.Font.GothamBold
             close.TextSize = 12
@@ -3455,6 +3520,118 @@ function Library.new(config)
                         ScreenGui:Destroy()
                     end
                 end)
+            end)
+        end
+
+        do
+            local invite = "https://discord.gg/9FT8yAf8MG"
+            local root = Instance.new("Frame")
+            root.Name = "DiscordInviteCard"
+            root.Parent = CommunitySection.Root
+            root.BackgroundColor3 = ThemeManager:GetColor("CardSurface")
+            root.BackgroundTransparency = 0.14
+            root.BorderSizePixel = 0
+            root.Size = UDim2.new(0.95, 0, 0, 118)
+            root.ZIndex = 17
+            Instance.new("UICorner", root).CornerRadius = UDim.new(0, 9)
+            local st = Instance.new("UIStroke")
+            st.Transparency = 0.76
+            st.Parent = root
+            ThemeManager:Bind(root, "BackgroundColor3", "CardSurface")
+            ThemeManager:BindAccentStroke(st)
+
+            local icon = Instance.new("TextLabel")
+            icon.Parent = root
+            icon.BackgroundColor3 = Color3.fromRGB(67, 181, 129)
+            icon.BackgroundTransparency = 0.12
+            icon.Position = UDim2.fromOffset(12, 13)
+            icon.Size = UDim2.fromOffset(36, 36)
+            icon.Text = "K"
+            icon.TextColor3 = Color3.fromRGB(255, 255, 255)
+            icon.TextSize = 18
+            icon.Font = Enum.Font.GothamBold
+            icon.ZIndex = 20
+            Instance.new("UICorner", icon).CornerRadius = UDim.new(0, 10)
+
+            local title = Instance.new("TextLabel")
+            title.Parent = root
+            title.BackgroundTransparency = 1
+            title.Position = UDim2.fromOffset(58, 11)
+            title.Size = UDim2.new(1, -72, 0, 20)
+            title.Font = Enum.Font.GothamBold
+            title.Text = "Kronos"
+            title.TextColor3 = Color3.fromRGB(255, 255, 255)
+            title.TextSize = 14
+            title.TextXAlignment = Enum.TextXAlignment.Left
+            title.ZIndex = 20
+
+            local subtitle = Instance.new("TextLabel")
+            subtitle.Parent = root
+            subtitle.BackgroundTransparency = 1
+            subtitle.Position = UDim2.fromOffset(58, 33)
+            subtitle.Size = UDim2.new(1, -72, 0, 18)
+            subtitle.Font = Enum.Font.Gotham
+            subtitle.Text = "Loading server activity..."
+            subtitle.TextColor3 = Color3.fromRGB(180, 185, 205)
+            subtitle.TextTransparency = 0.14
+            subtitle.TextSize = 11
+            subtitle.TextXAlignment = Enum.TextXAlignment.Left
+            subtitle.ZIndex = 20
+
+            local online = Instance.new("TextLabel")
+            online.Parent = root
+            online.BackgroundTransparency = 1
+            online.Position = UDim2.fromOffset(14, 62)
+            online.Size = UDim2.new(0.48, -16, 0, 18)
+            online.Font = Enum.Font.GothamBold
+            online.Text = "Online: --"
+            online.TextColor3 = Color3.fromRGB(120, 230, 165)
+            online.TextSize = 11
+            online.TextXAlignment = Enum.TextXAlignment.Left
+            online.ZIndex = 20
+
+            local members = Instance.new("TextLabel")
+            members.Parent = root
+            members.BackgroundTransparency = 1
+            members.Position = UDim2.new(0.48, 8, 0, 62)
+            members.Size = UDim2.new(0.52, -22, 0, 18)
+            members.Font = Enum.Font.GothamBold
+            members.Text = "Members: --"
+            members.TextColor3 = Color3.fromRGB(225, 230, 255)
+            members.TextSize = 11
+            members.TextXAlignment = Enum.TextXAlignment.Right
+            members.ZIndex = 20
+
+            local copy = Instance.new("TextButton")
+            copy.Parent = root
+            copy.Position = UDim2.fromOffset(12, 86)
+            copy.Size = UDim2.new(1, -24, 0, 24)
+            copy.BackgroundColor3 = Color3.fromRGB(67, 181, 129)
+            copy.BackgroundTransparency = 0.08
+            copy.BorderSizePixel = 0
+            copy.Text = "Copy Invite"
+            copy.TextColor3 = Color3.fromRGB(255, 255, 255)
+            copy.Font = Enum.Font.GothamBold
+            copy.TextSize = 12
+            copy.ZIndex = 20
+            Instance.new("UICorner", copy).CornerRadius = UDim.new(0, 7)
+            copy.MouseButton1Click:Connect(function()
+                Compatibility.Utilities.SetClipboard(invite)
+                ConfigManager:Notify("Discord Invite", "Invite copied to clipboard.", "check")
+            end)
+
+            task.spawn(function()
+                local data =
+                    Compatibility.HTTP.JSONGet("https://discord.com/api/v9/invites/9FT8yAf8MG?with_counts=true")
+                if type(data) == "table" and root.Parent then
+                    local count = tonumber(data.approximate_member_count) or 0
+                    local active = tonumber(data.approximate_presence_count) or 0
+                    online.Text = "Online: " .. tostring(active)
+                    members.Text = "Members: " .. tostring(count)
+                    subtitle.Text = "Official Kronos community server."
+                elseif root.Parent then
+                    subtitle.Text = "Copy the invite to join the Kronos community."
+                end
             end)
         end
 
@@ -9816,18 +9993,47 @@ Library.Notification = function()
     Notification.IgnoreGuiInset = true
 
     Frame.Parent = Notification
-    Frame.AnchorPoint = Vector2.new(0.5, 0.5)
+    local positions = {
+        ["Left Center"] = {
+            Anchor = Vector2.new(0.5, 0.5),
+            Position = UDim2.new(0.151568726, 0, 0.5, 0),
+            Align = Enum.VerticalAlignment.Bottom,
+        },
+        ["Top Right"] = {
+            Anchor = Vector2.new(1, 0),
+            Position = UDim2.new(1, -18, 0, 18),
+            Align = Enum.VerticalAlignment.Top,
+        },
+        ["Top Left"] = {
+            Anchor = Vector2.new(0, 0),
+            Position = UDim2.new(0, 18, 0, 18),
+            Align = Enum.VerticalAlignment.Top,
+        },
+        ["Bottom Right"] = {
+            Anchor = Vector2.new(1, 1),
+            Position = UDim2.new(1, -18, 1, -18),
+            Align = Enum.VerticalAlignment.Bottom,
+        },
+        ["Bottom Left"] = {
+            Anchor = Vector2.new(0, 1),
+            Position = UDim2.new(0, 18, 1, -18),
+            Align = Enum.VerticalAlignment.Bottom,
+        },
+    }
+    local placement = positions[Library.NotificationPosition] or positions["Left Center"]
+
+    Frame.AnchorPoint = placement.Anchor
     Frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     Frame.BackgroundTransparency = 1.000
     Frame.BorderColor3 = Color3.fromRGB(0, 0, 0)
     Frame.BorderSizePixel = 0
-    Frame.Position = UDim2.new(0.151568726, 0, 0.5, 0)
+    Frame.Position = placement.Position
     Frame.Size = UDim2.new(0.400000006, 0, 0.400000006, 0)
     Frame.SizeConstraint = Enum.SizeConstraint.RelativeYY
 
     UIListLayout.Parent = Frame
     UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    UIListLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+    UIListLayout.VerticalAlignment = placement.Align
     UIListLayout.Padding = UDim.new(0, 2)
 
     return {
