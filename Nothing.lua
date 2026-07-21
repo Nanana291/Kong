@@ -2524,6 +2524,12 @@ function Library.new(config)
             Icon = "palette",
         })
 
+        local SystemSection = SettingsTab:NewSection({
+            Position = "Left",
+            Title = "System",
+            Icon = "power",
+        })
+
         local ConfigDropdown = nil
         local ConfigTextbox = nil
         local AutoloadToggle = nil
@@ -2596,6 +2602,7 @@ function Library.new(config)
             local connections = {}
             local themeCardData = {}
             local previewParts = {}
+            local previewHolders = {}
             local paletteParts = {}
             local infoCards = {}
             local statCards = {}
@@ -2952,6 +2959,7 @@ function Library.new(config)
             local function buildMiniUI(parent, themeName, order)
                 local holder = frame(parent, "MiniUI", nil, UDim2.new(0.3, 0, 1, 0), Color3.fromRGB(0, 0, 0), 1, 20)
                 holder.LayoutOrder = order or 1
+                previewHolders[#previewHolders + 1] = { Instance = holder, Theme = themeName }
                 miniPart(holder, "Background", UDim2.new(0.02, 0, 0.08, 0), UDim2.new(0.96, 0, 0.84, 0), themeName)
                 miniPart(holder, "Surface", UDim2.new(0.04, 0, 0.12, 0), UDim2.new(0.92, 0, 0.14, 0), themeName)
                 miniPart(holder, "Accent", UDim2.new(0.07, 0, 0.17, 0), UDim2.new(0.18, 0, 0.04, 0), themeName)
@@ -3126,6 +3134,13 @@ function Library.new(config)
 
             local function updatePreview(themeName)
                 local pal, theme = palette(themeName)
+                for _, holder in ipairs(previewHolders) do
+                    local visible = compareEnabled == (holder.Theme ~= nil)
+                    holder.Instance.Visible = visible
+                    holder.Instance.Size = visible
+                            and (compareEnabled and UDim2.new(0.3, 0, 1, 0) or UDim2.new(1, 0, 1, 0))
+                        or UDim2.new(0, 0, 1, 0)
+                end
                 for _, part in ipairs(previewParts) do
                     local partTheme = part.Theme or themeName
                     local partPalette = palette(partTheme)
@@ -3373,6 +3388,75 @@ function Library.new(config)
                 ConfigManager:SetAutoloadEnabled(value)
             end,
         })
+
+        do
+            local root = Instance.new("Frame")
+            root.Name = "CloseUIAction"
+            root.Parent = SystemSection.Root
+            root.BackgroundColor3 = ThemeManager:GetColor("CardSurface")
+            root.BackgroundTransparency = 0.18
+            root.BorderSizePixel = 0
+            root.Size = UDim2.new(0.95, 0, 0, 76)
+            root.ZIndex = 17
+            Instance.new("UICorner", root).CornerRadius = UDim.new(0, 8)
+            local st = Instance.new("UIStroke")
+            st.Transparency = 0.78
+            st.Parent = root
+            ThemeManager:Bind(root, "BackgroundColor3", "CardSurface")
+            ThemeManager:BindAccentStroke(st)
+
+            local title = Instance.new("TextLabel")
+            title.Parent = root
+            title.BackgroundTransparency = 1
+            title.Position = UDim2.fromOffset(14, 11)
+            title.Size = UDim2.new(1, -106, 0, 18)
+            title.Font = Enum.Font.GothamBold
+            title.Text = "Close UI"
+            title.TextColor3 = Color3.fromRGB(255, 255, 255)
+            title.TextSize = 13
+            title.TextTransparency = 0.06
+            title.TextXAlignment = Enum.TextXAlignment.Left
+            title.ZIndex = 20
+
+            local desc = Instance.new("TextLabel")
+            desc.Parent = root
+            desc.BackgroundTransparency = 1
+            desc.Position = UDim2.fromOffset(14, 33)
+            desc.Size = UDim2.new(1, -106, 0, 30)
+            desc.Font = Enum.Font.Gotham
+            desc.Text = "Safely dismisses the Kronos interface."
+            desc.TextColor3 = Color3.fromRGB(255, 255, 255)
+            desc.TextSize = 10
+            desc.TextTransparency = 0.48
+            desc.TextWrapped = true
+            desc.TextXAlignment = Enum.TextXAlignment.Left
+            desc.ZIndex = 20
+
+            local close = Instance.new("TextButton")
+            close.Parent = root
+            close.AnchorPoint = Vector2.new(1, 0.5)
+            close.Position = UDim2.new(1, -12, 0.5, 0)
+            close.Size = UDim2.fromOffset(78, 38)
+            close.BackgroundColor3 = ThemeManager:GetColor("Accent")
+            close.BackgroundTransparency = 0.08
+            close.BorderSizePixel = 0
+            close.Text = "Close"
+            close.TextColor3 = Color3.fromRGB(255, 255, 255)
+            close.Font = Enum.Font.GothamBold
+            close.TextSize = 12
+            close.ZIndex = 20
+            Instance.new("UICorner", close).CornerRadius = UDim.new(0, 8)
+            ThemeManager:BindAccent(close, "BackgroundColor3")
+            close.MouseButton1Click:Connect(function()
+                WindowTable.WindowToggle = false
+                Update()
+                task.delay(0.72, function()
+                    if ScreenGui and ScreenGui.Parent then
+                        ScreenGui:Destroy()
+                    end
+                end)
+            end)
+        end
 
         ThemePreview = CreateThemePreview(CustomizeSection)
 
