@@ -148,24 +148,27 @@ end
 
 Compatibility.Filesystem = {}
 Compatibility.Filesystem.Read = function(path)
-    local fn = PickFunction(GetGlobal("readfile"))
+    local fn = PickFunction(GetGlobal("readfile"), GetGlobal("read_file"))
     local ok, data = SafeCall(fn, path)
     return ok and data or nil
 end
 Compatibility.Filesystem.Write = function(path, data)
     local fn = PickFunction(GetGlobal("writefile"), GetGlobal("write_file"))
-    return SafeCall(fn, path, data) == true
+    local ok = SafeCall(fn, path, data)
+    return ok == true
 end
 Compatibility.Filesystem.Append = function(path, data)
-    local fn = PickFunction(GetGlobal("appendfile"))
-    return SafeCall(fn, path, data) == true
+    local fn = PickFunction(GetGlobal("appendfile"), GetGlobal("append_file"))
+    local ok = SafeCall(fn, path, data)
+    return ok == true
 end
 Compatibility.Filesystem.Delete = function(path)
-    local fn = PickFunction(GetGlobal("delfile"), GetGlobal("deletefile"))
-    return SafeCall(fn, path) == true
+    local fn = PickFunction(GetGlobal("delfile"), GetGlobal("deletefile"), GetGlobal("delete_file"))
+    local ok = SafeCall(fn, path)
+    return ok == true
 end
 Compatibility.Filesystem.Exists = function(path)
-    local isFile = PickFunction(GetGlobal("isfile"))
+    local isFile = PickFunction(GetGlobal("isfile"), GetGlobal("is_file"))
     local ok, result = SafeCall(isFile, path)
     if ok then
         return result == true
@@ -185,10 +188,11 @@ Compatibility.Filesystem.CreateFolder = function(path)
     if Compatibility.Filesystem.FolderExists(path) then
         return true
     end
-    return SafeCall(makeFolder, path) == true
+    local ok = SafeCall(makeFolder, path)
+    return ok == true or Compatibility.Filesystem.FolderExists(path)
 end
 Compatibility.Filesystem.List = function(path)
-    local fn = PickFunction(GetGlobal("listfiles"))
+    local fn = PickFunction(GetGlobal("listfiles"), GetGlobal("list_files"))
     local ok, result = SafeCall(fn, path)
     return (ok and type(result) == "table") and result or {}
 end
@@ -2066,8 +2070,12 @@ function Library.new(config)
         return PathJoin(self:GetRootPath(), "autoload.json")
     end
 
+    function ConfigManager:GetConfigIndexPath()
+        return PathJoin(self:GetConfigFolder(), "index.json")
+    end
+
     function ConfigManager:EnsureFolders()
-        EnsureFolderTree(self:GetConfigFolder())
+        return EnsureFolderTree(self:GetConfigFolder())
     end
 
     function ConfigManager:ReadJson(path)
@@ -2096,7 +2104,21 @@ function Library.new(config)
             return false
         end
 
+        self:EnsureFolders()
         return SafeWriteFile(path, encoded)
+    end
+
+    function ConfigManager:WriteConfigIndex(name)
+        local list = self:RefreshList()
+        local seen = {}
+        for _, entry in ipairs(list) do
+            seen[entry] = true
+        end
+        if name and IsValidConfigName(name) and not seen[name] then
+            list[#list + 1] = name
+            table.sort(list)
+        end
+        return self:WriteJson(self:GetConfigIndexPath(), list)
     end
 
     function ConfigManager:RefreshList()
@@ -2104,12 +2126,24 @@ function Library.new(config)
 
         local configs = {}
         local seen = {}
-        for _, file in ipairs(SafeListFiles(self:GetConfigFolder())) do
-            local name = DecodeFileName(file)
+        local function add(name)
             name = name and NormalizeConfigName(name, true) or nil
-            if name and IsValidConfigName(name) and name ~= "autoload" and not seen[name] then
+            if name and IsValidConfigName(name) and name ~= "autoload" and name ~= "index" and not seen[name] then
                 seen[name] = true
                 configs[#configs + 1] = name
+            end
+        end
+
+        for _, file in ipairs(SafeListFiles(self:GetConfigFolder())) do
+            add(DecodeFileName(file))
+        end
+
+        local index = self:ReadJson(self:GetConfigIndexPath())
+        if type(index) == "table" then
+            for _, name in ipairs(index) do
+                if SafeIsFile(self:GetConfigPath(name)) then
+                    add(name)
+                end
             end
         end
 
@@ -2600,6 +2634,7 @@ function Library.new(config)
         self.LoadedData = CloneConfigValues(payload)
         self.SelectedConfig = name
         self.Theme = ThemeManager:GetThemeName(ThemeManager.ActiveTheme)
+        self:WriteConfigIndex(name)
         self:PersistAutoload()
         self:SyncSettingsUI(name)
         if not silent then
