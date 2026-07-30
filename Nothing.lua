@@ -2066,6 +2066,28 @@ function Library.new(config)
         return PathJoin(self:GetConfigFolder(), NormalizeConfigName(name) .. ".json")
     end
 
+    function ConfigManager:GetConfigPathCandidates(name)
+        local safeName = NormalizeConfigName(name)
+        local root = NormalizePath(self:GetRootPath()):gsub("/", "_")
+        local folder = NormalizePath(self.Folder):gsub("/", "_")
+        return {
+            self:GetConfigPath(safeName),
+            PathJoin(self:GetRootPath(), safeName .. ".json"),
+            (root ~= "" and (root .. "_" .. safeName .. ".json") or nil),
+            (folder ~= "" and (folder .. "_" .. safeName .. ".json") or nil),
+            safeName .. ".json",
+        }
+    end
+
+    function ConfigManager:GetFirstReadableConfigPath(name)
+        for _, path in ipairs(self:GetConfigPathCandidates(name)) do
+            if path and SafeIsFile(path) then
+                return path
+            end
+        end
+        return self:GetConfigPath(name)
+    end
+
     function ConfigManager:GetAutoloadPath()
         return PathJoin(self:GetRootPath(), "autoload.json")
     end
@@ -2118,7 +2140,7 @@ function Library.new(config)
             list[#list + 1] = name
             table.sort(list)
         end
-        return self:WriteJson(self:GetConfigIndexPath(), list)
+        return self:WriteJson(self:GetConfigIndexPath(), list) or self:WriteJson("NothingUI_configs_index.json", list)
     end
 
     function ConfigManager:RefreshList()
@@ -2138,11 +2160,14 @@ function Library.new(config)
             add(DecodeFileName(file))
         end
 
-        local index = self:ReadJson(self:GetConfigIndexPath())
+        local index = self:ReadJson(self:GetConfigIndexPath()) or self:ReadJson("NothingUI_configs_index.json")
         if type(index) == "table" then
             for _, name in ipairs(index) do
-                if SafeIsFile(self:GetConfigPath(name)) then
-                    add(name)
+                for _, path in ipairs(self:GetConfigPathCandidates(name)) do
+                    if path and SafeIsFile(path) then
+                        add(name)
+                        break
+                    end
                 end
             end
         end
@@ -2160,6 +2185,12 @@ function Library.new(config)
 
         for _, entry in ipairs(self:RefreshList()) do
             if entry == name then
+                return true
+            end
+        end
+
+        for _, path in ipairs(self:GetConfigPathCandidates(name)) do
+            if path and SafeIsFile(path) then
                 return true
             end
         end
@@ -2581,7 +2612,7 @@ function Library.new(config)
         end
 
         self:EnsureFolders()
-        local data = self:ReadJson(self:GetConfigPath(name))
+        local data = self:ReadJson(self:GetFirstReadableConfigPath(name))
         if type(data) ~= "table" then
             self.LoadedData = nil
             if not silent then
@@ -2622,11 +2653,16 @@ function Library.new(config)
 
         self:EnsureFolders()
         local payload = self:SerializeValues()
-        local configPath = self:GetConfigPath(name)
-        local ok = self:WriteJson(configPath, payload)
+        local ok = false
+        for _, configPath in ipairs(self:GetConfigPathCandidates(name)) do
+            if configPath and self:WriteJson(configPath, payload) then
+                ok = true
+                break
+            end
+        end
         if not ok then
             if not silent then
-                self:Notify("Save Failed", ("Could not write config '%s'."):format(name), "x")
+                self:Notify("Save Failed", "Your executor blocked file writing for configs.", "x")
             end
             return false
         end
