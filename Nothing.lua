@@ -153,7 +153,7 @@ Compatibility.Filesystem.Read = function(path)
     return ok and data or nil
 end
 Compatibility.Filesystem.Write = function(path, data)
-    local fn = PickFunction(GetGlobal("writefile"))
+    local fn = PickFunction(GetGlobal("writefile"), GetGlobal("write_file"))
     return SafeCall(fn, path, data) == true
 end
 Compatibility.Filesystem.Append = function(path, data)
@@ -173,12 +173,12 @@ Compatibility.Filesystem.Exists = function(path)
     return Compatibility.Filesystem.Read(path) ~= nil
 end
 Compatibility.Filesystem.FolderExists = function(path)
-    local isFolder = PickFunction(GetGlobal("isfolder"))
+    local isFolder = PickFunction(GetGlobal("isfolder"), GetGlobal("is_folder"))
     local ok, result = SafeCall(isFolder, path)
     return ok and result == true
 end
 Compatibility.Filesystem.CreateFolder = function(path)
-    local makeFolder = PickFunction(GetGlobal("makefolder"))
+    local makeFolder = PickFunction(GetGlobal("makefolder"), GetGlobal("make_folder"))
     if not makeFolder then
         return false
     end
@@ -2590,8 +2590,7 @@ function Library.new(config)
         local payload = self:SerializeValues()
         local configPath = self:GetConfigPath(name)
         local ok = self:WriteJson(configPath, payload)
-        local exists = SafeIsFile(configPath)
-        if not ok or exists == false then
+        if not ok then
             if not silent then
                 self:Notify("Save Failed", ("Could not write config '%s'."):format(name), "x")
             end
