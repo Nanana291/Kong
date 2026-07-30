@@ -19,26 +19,48 @@ local function SafeType(value)
 end
 
 local function GetGlobal(name)
-    local env = _G
-    if type(getfenv) == "function" then
-        local ok, result = pcall(getfenv, 0)
-        if ok and type(result) == "table" then
-            env = result
+    local function fromEnv(env)
+        if type(env) == "table" then
+            local value = rawget(env, name)
+            if value ~= nil then
+                return value
+            end
         end
+        return nil
     end
 
-    if type(env) == "table" then
-        local value = rawget(env, name)
+    local value = fromEnv(_G)
+    if value ~= nil then
+        return value
+    end
+
+    if type(getfenv) == "function" then
+        local ok, env = pcall(getfenv, 0)
+        value = ok and fromEnv(env) or nil
         if value ~= nil then
             return value
         end
     end
 
-    local getGenv = type(env) == "table" and rawget(env, "getgenv") or nil
-    if type(getGenv) == "function" then
+    local okGenv, getGenv = pcall(function()
+        return getgenv
+    end)
+    if okGenv and type(getGenv) == "function" then
         local ok, genv = pcall(getGenv)
-        if ok and type(genv) == "table" then
-            return rawget(genv, name)
+        value = ok and fromEnv(genv) or nil
+        if value ~= nil then
+            return value
+        end
+    end
+
+    local okRenv, getRenv = pcall(function()
+        return getrenv
+    end)
+    if okRenv and type(getRenv) == "function" then
+        local ok, renv = pcall(getRenv)
+        value = ok and fromEnv(renv) or nil
+        if value ~= nil then
+            return value
         end
     end
 
@@ -148,27 +170,68 @@ end
 
 Compatibility.Filesystem = {}
 Compatibility.Filesystem.Read = function(path)
-    local fn = PickFunction(GetGlobal("readfile"), GetGlobal("read_file"))
+    local syn = GetGlobal("syn")
+    local fs = GetGlobal("filesystem") or GetGlobal("fs")
+    local fn = PickFunction(
+        GetGlobal("readfile"),
+        GetGlobal("read_file"),
+        GetField(syn, "readfile"),
+        GetField(fs, "readfile"),
+        GetField(fs, "read_file")
+    )
     local ok, data = SafeCall(fn, path)
     return ok and data or nil
 end
 Compatibility.Filesystem.Write = function(path, data)
-    local fn = PickFunction(GetGlobal("writefile"), GetGlobal("write_file"))
+    local syn = GetGlobal("syn")
+    local fs = GetGlobal("filesystem") or GetGlobal("fs")
+    local fn = PickFunction(
+        GetGlobal("writefile"),
+        GetGlobal("write_file"),
+        GetField(syn, "writefile"),
+        GetField(fs, "writefile"),
+        GetField(fs, "write_file")
+    )
     local ok = SafeCall(fn, path, data)
     return ok == true
 end
 Compatibility.Filesystem.Append = function(path, data)
-    local fn = PickFunction(GetGlobal("appendfile"), GetGlobal("append_file"))
+    local syn = GetGlobal("syn")
+    local fs = GetGlobal("filesystem") or GetGlobal("fs")
+    local fn = PickFunction(
+        GetGlobal("appendfile"),
+        GetGlobal("append_file"),
+        GetField(syn, "appendfile"),
+        GetField(fs, "appendfile"),
+        GetField(fs, "append_file")
+    )
     local ok = SafeCall(fn, path, data)
     return ok == true
 end
 Compatibility.Filesystem.Delete = function(path)
-    local fn = PickFunction(GetGlobal("delfile"), GetGlobal("deletefile"), GetGlobal("delete_file"))
+    local syn = GetGlobal("syn")
+    local fs = GetGlobal("filesystem") or GetGlobal("fs")
+    local fn = PickFunction(
+        GetGlobal("delfile"),
+        GetGlobal("deletefile"),
+        GetGlobal("delete_file"),
+        GetField(syn, "delfile"),
+        GetField(fs, "delfile"),
+        GetField(fs, "deletefile")
+    )
     local ok = SafeCall(fn, path)
     return ok == true
 end
 Compatibility.Filesystem.Exists = function(path)
-    local isFile = PickFunction(GetGlobal("isfile"), GetGlobal("is_file"))
+    local syn = GetGlobal("syn")
+    local fs = GetGlobal("filesystem") or GetGlobal("fs")
+    local isFile = PickFunction(
+        GetGlobal("isfile"),
+        GetGlobal("is_file"),
+        GetField(syn, "isfile"),
+        GetField(fs, "isfile"),
+        GetField(fs, "is_file")
+    )
     local ok, result = SafeCall(isFile, path)
     if ok then
         return result == true
@@ -176,12 +239,28 @@ Compatibility.Filesystem.Exists = function(path)
     return Compatibility.Filesystem.Read(path) ~= nil
 end
 Compatibility.Filesystem.FolderExists = function(path)
-    local isFolder = PickFunction(GetGlobal("isfolder"), GetGlobal("is_folder"))
+    local syn = GetGlobal("syn")
+    local fs = GetGlobal("filesystem") or GetGlobal("fs")
+    local isFolder = PickFunction(
+        GetGlobal("isfolder"),
+        GetGlobal("is_folder"),
+        GetField(syn, "isfolder"),
+        GetField(fs, "isfolder"),
+        GetField(fs, "is_folder")
+    )
     local ok, result = SafeCall(isFolder, path)
     return ok and result == true
 end
 Compatibility.Filesystem.CreateFolder = function(path)
-    local makeFolder = PickFunction(GetGlobal("makefolder"), GetGlobal("make_folder"))
+    local syn = GetGlobal("syn")
+    local fs = GetGlobal("filesystem") or GetGlobal("fs")
+    local makeFolder = PickFunction(
+        GetGlobal("makefolder"),
+        GetGlobal("make_folder"),
+        GetField(syn, "makefolder"),
+        GetField(fs, "makefolder"),
+        GetField(fs, "make_folder")
+    )
     if not makeFolder then
         return false
     end
@@ -192,7 +271,15 @@ Compatibility.Filesystem.CreateFolder = function(path)
     return ok == true or Compatibility.Filesystem.FolderExists(path)
 end
 Compatibility.Filesystem.List = function(path)
-    local fn = PickFunction(GetGlobal("listfiles"), GetGlobal("list_files"))
+    local syn = GetGlobal("syn")
+    local fs = GetGlobal("filesystem") or GetGlobal("fs")
+    local fn = PickFunction(
+        GetGlobal("listfiles"),
+        GetGlobal("list_files"),
+        GetField(syn, "listfiles"),
+        GetField(fs, "listfiles"),
+        GetField(fs, "list_files")
+    )
     local ok, result = SafeCall(fn, path)
     return (ok and type(result) == "table") and result or {}
 end
