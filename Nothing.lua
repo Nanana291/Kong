@@ -2575,11 +2575,13 @@ function Library.new(config)
     end
 
     function ConfigManager:SaveConfig(name, silent)
-        name = name and tostring(name) or ""
-        name = name:gsub("^%s+", ""):gsub("%s+$", "")
+        name = NormalizeConfigName(name, true)
+        if name == "" and self.SelectedConfig ~= "" then
+            name = self.SelectedConfig
+        end
         if not IsValidConfigName(name) then
             if not silent then
-                self:Notify("Invalid Config", "The config name is empty or contains invalid characters.", "x")
+                self:Notify("Invalid Config", "Enter a config name before saving.", "x")
             end
             return false
         end
@@ -3544,6 +3546,10 @@ function Library.new(config)
                 end
                 if type(name) ~= "string" then
                     name = tostring(name or "")
+                end
+                name = NormalizeConfigName(name, true)
+                if name == "" then
+                    name = ConfigManager.SelectedConfig
                 end
                 ConfigManager:SaveConfig(name)
             end,
