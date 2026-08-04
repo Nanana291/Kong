@@ -1,7 +1,7 @@
 --!strict
 --[[
-    RosaUI.lua
-    Production Roblox UI library inspired by the supplied dark coral desktop panel.
+    RosaUI v1.1
+    Production Roblox UI library rebuilt around the supplied dark coral desktop panel.
 
     Install as a ModuleScript and require it from a LocalScript.
 
@@ -25,7 +25,7 @@ local GuiService = game:GetService("GuiService")
 type AnyObject = { [any]: any }
 
 local Library = {}
-Library.Version = "1.0.0"
+Library.Version = "1.1.0"
 
 local WindowMethods = {}
 WindowMethods.__index = WindowMethods
@@ -92,22 +92,24 @@ function Maid:Destroy()
 end
 
 local THEME = table.freeze({
-    Canvas = Color3.fromRGB(8, 8, 11),
-    Shell = Color3.fromRGB(17, 16, 21),
-    ShellRaised = Color3.fromRGB(21, 20, 26),
-    Rail = Color3.fromRGB(15, 14, 19),
-    Surface = Color3.fromRGB(23, 22, 29),
-    SurfaceRaised = Color3.fromRGB(28, 27, 35),
-    SurfaceHover = Color3.fromRGB(32, 31, 40),
-    SurfacePressed = Color3.fromRGB(37, 35, 44),
-    Control = Color3.fromRGB(35, 34, 44),
-    ControlDark = Color3.fromRGB(27, 26, 34),
-    Border = Color3.fromRGB(62, 59, 72),
-    BorderStrong = Color3.fromRGB(82, 78, 92),
-    Text = Color3.fromRGB(241, 239, 246),
-    TextSecondary = Color3.fromRGB(177, 172, 190),
-    TextMuted = Color3.fromRGB(111, 107, 122),
-    TextDisabled = Color3.fromRGB(79, 76, 88),
+    -- Warm near-black ladder sampled and optically matched to the reference.
+    Canvas = Color3.fromRGB(6, 6, 8),
+    Shell = Color3.fromRGB(14, 13, 18),
+    ShellRaised = Color3.fromRGB(19, 18, 24),
+    Rail = Color3.fromRGB(12, 11, 16),
+    Surface = Color3.fromRGB(24, 23, 30),
+    SurfaceRaised = Color3.fromRGB(31, 29, 38),
+    SurfaceHover = Color3.fromRGB(38, 36, 46),
+    SurfacePressed = Color3.fromRGB(45, 42, 53),
+    Control = Color3.fromRGB(36, 34, 43),
+    ControlDark = Color3.fromRGB(22, 21, 28),
+    Border = Color3.fromRGB(67, 62, 77),
+    BorderStrong = Color3.fromRGB(96, 88, 108),
+    Highlight = Color3.fromRGB(255, 255, 255),
+    Text = Color3.fromRGB(248, 246, 250),
+    TextSecondary = Color3.fromRGB(199, 193, 207),
+    TextMuted = Color3.fromRGB(139, 132, 149),
+    TextDisabled = Color3.fromRGB(85, 81, 93),
     White = Color3.fromRGB(255, 255, 255),
     Shadow = Color3.fromRGB(0, 0, 0),
     Success = Color3.fromRGB(71, 201, 139),
@@ -115,11 +117,15 @@ local THEME = table.freeze({
     Error = Color3.fromRGB(242, 86, 99),
 })
 
-local BASE_WIDTH = 860
-local BASE_HEIGHT = 520
-local HEADER_HEIGHT = 70
-local SIDEBAR_WIDTH = 64
-local COLUMN_GAP = 14
+-- The reference is a tall 1.52:1 desktop utility. UIScale preserves this
+-- silhouette instead of squeezing fixed pixel offsets on short viewports.
+local BASE_WIDTH = 930
+local BASE_HEIGHT = 610
+local HEADER_HEIGHT = 92
+local SIDEBAR_WIDTH = 92
+local COLUMN_GAP = 16
+local WINDOW_MARGIN = 24
+local MIN_WINDOW_SCALE = 0.30
 
 local FAST = TweenInfo.new(0.14, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 local NORMAL = TweenInfo.new(0.20, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
@@ -227,6 +233,36 @@ local function mix(a: Color3, b: Color3, amount: number): Color3
         a.G + (b.G - a.G) * t,
         a.B + (b.B - a.B) * t
     )
+end
+
+local function surfaceGradient(
+    parent: Instance,
+    topColor: Color3,
+    bottomColor: Color3,
+    rotation: number?
+): UIGradient
+    return new("UIGradient", {
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, topColor),
+            ColorSequenceKeypoint.new(1, bottomColor),
+        }),
+        Rotation = rotation or 90,
+        Parent = parent,
+    }) :: UIGradient
+end
+
+local function innerHighlight(parent: Instance, transparency: number?, inset: number?): Frame
+    local amount = inset or 12
+    return new("Frame", {
+        Name = "InnerHighlight",
+        BackgroundColor3 = Color3.new(1, 1, 1),
+        BackgroundTransparency = transparency or 0.94,
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, -(amount * 2), 0, 1),
+        Position = UDim2.fromOffset(amount, 1),
+        ZIndex = math.max(1, (parent :: any).ZIndex + 1),
+        Parent = parent,
+    }) :: Frame
 end
 
 local function contrastText(color: Color3): Color3
@@ -539,34 +575,43 @@ local function settingRow(
         BackgroundTransparency = 0,
         Size = UDim2.new(1, 0, 0, height),
         LayoutOrder = #section._rows + 1,
+        ClipsDescendants = true,
         ZIndex = 20,
     })
-    corner(row, 13)
-    local edge = stroke(row, window._theme.Border, 0.72, 1)
-    local titleLabel = text(row, titleValue, 13, window._theme.Text, Enum.Font.GothamMedium, {
-        Size = UDim2.new(0.5, -30, 0, 22),
-        Position = UDim2.fromOffset(14, 11),
+    corner(row, 15)
+    local edge = stroke(row, window._theme.Border, 0.54, 1)
+    surfaceGradient(
+        row,
+        mix(window._theme.SurfaceRaised, window._theme.White, 0.015),
+        mix(window._theme.Surface, window._theme.Canvas, 0.10),
+        90
+    )
+    innerHighlight(row, 0.945, 14)
+
+    local titleLabel = text(row, titleValue, 14, window._theme.Text, Enum.Font.GothamMedium, {
+        Size = UDim2.new(0.59, -28, 0, 22),
+        Position = UDim2.fromOffset(16, 13),
         TextTruncate = Enum.TextTruncate.AtEnd,
-        ZIndex = 22,
+        ZIndex = 23,
     })
-    local descriptionLabel = text(row, descriptionValue, 10, window._theme.TextMuted, Enum.Font.Gotham, {
-        Size = UDim2.new(0.5, -30, 0, 30),
-        Position = UDim2.fromOffset(14, 31),
+    local descriptionLabel = text(row, descriptionValue, 11, window._theme.TextMuted, Enum.Font.Gotham, {
+        Size = UDim2.new(0.59, -28, 0, math.max(26, height - 42)),
+        Position = UDim2.fromOffset(16, 36),
         TextWrapped = true,
         TextYAlignment = Enum.TextYAlignment.Top,
-        ZIndex = 22,
+        ZIndex = 23,
     })
 
     local hover, press = false, false
     local function render()
         if row.Parent == nil then return end
-        local color, transparency = window._theme.Surface, 0.72
+        local color, transparency = window._theme.Surface, 0.54
         if press then
-            color, transparency = window._theme.SurfacePressed, 0.42
+            color, transparency = window._theme.SurfacePressed, 0.16
         elseif hover then
-            color, transparency = window._theme.SurfaceHover, 0.54
+            color, transparency = window._theme.SurfaceHover, 0.28
         elseif GuiService.SelectedObject == row then
-            color, transparency = window._theme.SurfaceRaised, 0.34
+            color, transparency = window._theme.SurfaceRaised, 0.18
         end
         tween(row, FAST, { BackgroundColor3 = color })
         tween(edge, FAST, { Transparency = transparency })
@@ -606,10 +651,18 @@ local function controlBed(parent: Instance, window: AnyObject, width: number, he
         BackgroundColor3 = window._theme.ControlDark,
         BorderSizePixel = 0,
         Size = UDim2.fromOffset(width, height),
+        ClipsDescendants = true,
         Parent = parent,
     }) :: Frame
-    corner(frame, 9)
-    stroke(frame, window._theme.Border, 0.72, 1)
+    corner(frame, 10)
+    stroke(frame, window._theme.Border, 0.52, 1)
+    surfaceGradient(
+        frame,
+        mix(window._theme.Control, window._theme.White, 0.02),
+        mix(window._theme.ControlDark, window._theme.Canvas, 0.08),
+        90
+    )
+    innerHighlight(frame, 0.955, 9)
     return frame
 end
 
@@ -654,16 +707,53 @@ function WindowMethods:_closePopup()
     end
 end
 
+local function usableViewport(screen: ScreenGui): Vector2
+    local camera = workspace.CurrentCamera
+    local viewport = camera and camera.ViewportSize or Vector2.new(1280, 720)
+
+    if screen.IgnoreGuiInset then
+        return viewport
+    end
+
+    local ok, topLeft, bottomRight = pcall(function()
+        return GuiService:GetGuiInset()
+    end)
+    if ok and typeof(topLeft) == "Vector2" and typeof(bottomRight) == "Vector2" then
+        return Vector2.new(
+            math.max(1, viewport.X - topLeft.X - bottomRight.X),
+            math.max(1, viewport.Y - topLeft.Y - bottomRight.Y)
+        )
+    end
+
+    return viewport
+end
+
+local function guiOrigin(screen: ScreenGui): Vector2
+    if screen.IgnoreGuiInset then
+        return Vector2.zero
+    end
+
+    local ok, topLeft = pcall(function()
+        return GuiService:GetGuiInset()
+    end)
+    if ok and typeof(topLeft) == "Vector2" then
+        return topLeft
+    end
+
+    return Vector2.zero
+end
+
 function WindowMethods:_positionPopover(frame: GuiObject, anchor: GuiObject, width: number)
     if frame.Parent == nil or anchor.Parent == nil then
         return
     end
 
-    local camera = workspace.CurrentCamera
-    local viewport = camera and camera.ViewportSize or Vector2.new(1280, 720)
-    local anchorPosition, anchorSize = anchor.AbsolutePosition, anchor.AbsoluteSize
+    local viewport = usableViewport(self._screen)
+    local anchorPosition = anchor.AbsolutePosition - guiOrigin(self._screen)
+    local anchorSize = anchor.AbsoluteSize
     local frameSize = frame.AbsoluteSize
-    local x = anchorPosition.X + anchorSize.X - width
+    local renderedWidth = if frameSize.X > 0 then frameSize.X else width
+    local x = anchorPosition.X + anchorSize.X - renderedWidth
     local y = anchorPosition.Y + anchorSize.Y + 8
 
     if y + frameSize.Y > viewport.Y - 10 then
@@ -673,6 +763,48 @@ function WindowMethods:_positionPopover(frame: GuiObject, anchor: GuiObject, wid
     x = math.clamp(x, 10, math.max(10, viewport.X - frameSize.X - 10))
     y = math.clamp(y, 10, math.max(10, viewport.Y - frameSize.Y - 10))
     frame.Position = UDim2.fromOffset(x, y)
+end
+
+function WindowMethods:_positionColorPicker(frame: GuiObject, anchor: GuiObject)
+    if frame.Parent == nil or anchor.Parent == nil then
+        return
+    end
+
+    local viewport = usableViewport(self._screen)
+    local popupSize = frame.AbsoluteSize
+    if popupSize.X <= 0 or popupSize.Y <= 0 then
+        popupSize = Vector2.new(244, 360) * self._scale.Scale
+    end
+
+    local shellPosition = self._shell.Position
+    local shellSize = self._displaySize or Vector2.new(
+        BASE_WIDTH * self._scale.Scale,
+        BASE_HEIGHT * self._scale.Scale
+    )
+    local gap = math.max(10, math.floor(14 * self._scale.Scale))
+    local rightX = shellPosition.X.Offset + shellSize.X + gap
+    local leftX = shellPosition.X.Offset - popupSize.X - gap
+    local anchorCenterY = anchor.AbsolutePosition.Y
+        - guiOrigin(self._screen).Y
+        + anchor.AbsoluteSize.Y * 0.5
+    local y = anchorCenterY - popupSize.Y * 0.56
+
+    local x: number?
+    if rightX + popupSize.X <= viewport.X - 10 then
+        x = rightX
+    elseif leftX >= 10 then
+        x = leftX
+    end
+
+    if x == nil then
+        self:_positionPopover(frame, anchor, 244)
+        return
+    end
+
+    frame.Position = UDim2.fromOffset(
+        math.floor(x + 0.5),
+        math.floor(math.clamp(y, 10, math.max(10, viewport.Y - popupSize.Y - 10)) + 0.5)
+    )
 end
 
 function WindowMethods:_openDropdown(control: AnyObject)
@@ -691,8 +823,18 @@ function WindowMethods:_openDropdown(control: AnyObject)
         ZIndex = 300,
         Parent = self._overlay,
     }) :: CanvasGroup
-    corner(popup, 14)
-    stroke(popup, self._theme.BorderStrong, 0.34, 1)
+    corner(popup, 16)
+    stroke(popup, self._theme.BorderStrong, 0.24, 1)
+    surfaceGradient(
+        popup,
+        mix(self._theme.ShellRaised, self._theme.White, 0.025),
+        mix(self._theme.Shell, self._theme.Canvas, 0.10),
+        90
+    )
+    new("UIScale", {
+        Scale = self._scale.Scale,
+        Parent = popup,
+    })
     popupMaid:Add(popup)
 
     local shadow = new("Frame", {
@@ -828,13 +970,23 @@ function WindowMethods:_openColorPicker(control: AnyObject)
         Name = "ColorPickerPopover",
         BackgroundColor3 = self._theme.ShellRaised,
         BorderSizePixel = 0,
-        Size = UDim2.fromOffset(244, 294),
+        Size = UDim2.fromOffset(244, 360),
         GroupTransparency = 1,
         ZIndex = 320,
         Parent = self._overlay,
     }) :: CanvasGroup
-    corner(popup, 18)
-    stroke(popup, self._theme.BorderStrong, 0.25, 1)
+    corner(popup, 20)
+    stroke(popup, self._theme.BorderStrong, 0.18, 1)
+    surfaceGradient(
+        popup,
+        mix(self._theme.ShellRaised, self._theme.White, 0.025),
+        mix(self._theme.Shell, self._theme.Canvas, 0.12),
+        90
+    )
+    new("UIScale", {
+        Scale = self._scale.Scale,
+        Parent = popup,
+    })
     popupMaid:Add(popup)
 
     local shadow = new("Frame", {
@@ -857,7 +1009,7 @@ function WindowMethods:_openColorPicker(control: AnyObject)
     local sv = new("Frame", {
         BackgroundColor3 = Color3.fromHSV(hue, 1, 1),
         BorderSizePixel = 0,
-        Size = UDim2.fromOffset(212, 156),
+        Size = UDim2.fromOffset(212, 184),
         Position = UDim2.fromOffset(16, 16),
         Active = true,
         ZIndex = 324,
@@ -917,7 +1069,7 @@ function WindowMethods:_openColorPicker(control: AnyObject)
         BackgroundColor3 = Color3.new(1, 1, 1),
         BorderSizePixel = 0,
         Size = UDim2.fromOffset(212, 12),
-        Position = UDim2.fromOffset(16, 184),
+        Position = UDim2.fromOffset(16, 212),
         Active = true,
         ZIndex = 324,
         Parent = popup,
@@ -952,7 +1104,7 @@ function WindowMethods:_openColorPicker(control: AnyObject)
         BackgroundColor3 = self._theme.ControlDark,
         BorderSizePixel = 0,
         Size = UDim2.fromOffset(212, 12),
-        Position = UDim2.fromOffset(16, 205),
+        Position = UDim2.fromOffset(16, 235),
         Active = true,
         ClipsDescendants = true,
         ZIndex = 324,
@@ -1014,7 +1166,7 @@ function WindowMethods:_openColorPicker(control: AnyObject)
         Font = Enum.Font.GothamMedium,
         TextXAlignment = Enum.TextXAlignment.Center,
         Size = UDim2.fromOffset(98, 34),
-        Position = UDim2.fromOffset(16, 229),
+        Position = UDim2.fromOffset(16, 263),
         ZIndex = 325,
         Parent = popup,
     }) :: TextBox
@@ -1027,7 +1179,7 @@ function WindowMethods:_openColorPicker(control: AnyObject)
             BackgroundColor3 = self._theme.ControlDark,
             BackgroundTransparency = 0,
             Size = UDim2.fromOffset(58, 34),
-            Position = UDim2.fromOffset(120, 229),
+            Position = UDim2.fromOffset(120, 263),
             TextXAlignment = Enum.TextXAlignment.Center,
             ZIndex = 325,
         })
@@ -1038,7 +1190,7 @@ function WindowMethods:_openColorPicker(control: AnyObject)
         BackgroundColor3 = self._theme.ControlDark,
         BackgroundTransparency = 0,
         Size = UDim2.fromOffset(34, 34),
-        Position = UDim2.fromOffset(194, 229),
+        Position = UDim2.fromOffset(194, 263),
         ZIndex = 326,
     })
     corner(close, 17)
@@ -1052,7 +1204,7 @@ function WindowMethods:_openColorPicker(control: AnyObject)
     local swatchHost = new("Frame", {
         BackgroundTransparency = 1,
         Size = UDim2.fromOffset(212, 22),
-        Position = UDim2.fromOffset(16, 268),
+        Position = UDim2.fromOffset(16, 316),
         ZIndex = 324,
         Parent = popup,
     }) :: Frame
@@ -1182,7 +1334,7 @@ function WindowMethods:_openColorPicker(control: AnyObject)
         control._root.AbsolutePosition.X,
         control._root.AbsolutePosition.Y + control._root.AbsoluteSize.Y + 8
     )
-    self:_positionPopover(popup, control._root, 244)
+    self:_positionColorPicker(popup, control._root)
     tween(popup, NORMAL, {
         GroupTransparency = 0,
         Position = popup.Position + UDim2.fromOffset(0, 2),
@@ -1207,13 +1359,18 @@ function WindowMethods:_clampWindowPosition()
     if not self._shell or self._shell.Parent == nil then
         return
     end
-    local camera = workspace.CurrentCamera
-    local viewport = camera and camera.ViewportSize or Vector2.new(1280, 720)
-    local size = self._shell.AbsoluteSize
+
+    local viewport = usableViewport(self._screen)
+    local size = self._displaySize or Vector2.new(
+        BASE_WIDTH * self._scale.Scale,
+        BASE_HEIGHT * self._scale.Scale
+    )
     local position = self._shell.Position
+    local margin = math.max(8, math.floor(WINDOW_MARGIN * 0.45))
+
     self._shell.Position = UDim2.fromOffset(
-        math.clamp(position.X.Offset, 8, math.max(8, viewport.X - size.X - 8)),
-        math.clamp(position.Y.Offset, 8, math.max(8, viewport.Y - size.Y - 8))
+        math.clamp(position.X.Offset, margin, math.max(margin, viewport.X - size.X - margin)),
+        math.clamp(position.Y.Offset, margin, math.max(margin, viewport.Y - size.Y - margin))
     )
     self._basePosition = self._shell.Position
 end
@@ -1224,13 +1381,28 @@ function WindowMethods:_updateResponsive(forceCenter: boolean?)
         return
     end
 
-    local viewport = camera.ViewportSize
-    local width = math.max(280, math.min(BASE_WIDTH, viewport.X - 18))
-    local height = math.max(280, math.min(BASE_HEIGHT, viewport.Y - 18))
+    local viewport = usableViewport(self._screen)
+    local configuredMargin = tonumber(self._config.WindowMargin)
+    local adaptiveMargin = math.clamp(math.floor(viewport.Y * 0.02 + 0.5), 8, WINDOW_MARGIN)
+    local margin = math.clamp(configuredMargin or adaptiveMargin, 8, 80)
+    local maxScale = math.clamp(tonumber(self._config.Scale) or 1, MIN_WINDOW_SCALE, 1.25)
+    local availableWidth = math.max(1, viewport.X - margin * 2)
+    local availableHeight = math.max(1, viewport.Y - margin * 2)
+    local fitScale = math.min(
+        availableWidth / BASE_WIDTH,
+        availableHeight / BASE_HEIGHT,
+        maxScale
+    )
+    local scale = math.max(MIN_WINDOW_SCALE, fitScale)
+    local width = BASE_WIDTH * scale
+    local height = BASE_HEIGHT * scale
 
-    self._scale.Scale = 1
-    self._shell.Size = UDim2.fromOffset(width, height)
-    self:_setCompact(width < 710)
+    self._scale.Scale = scale
+    self._shell.Size = UDim2.fromOffset(BASE_WIDTH, BASE_HEIGHT)
+    self._displaySize = Vector2.new(width, height)
+
+    local compact = width < 690 or viewport.X < 760 or viewport.Y > viewport.X
+    self:_setCompact(compact)
 
     if forceCenter or not self._positionInitialized then
         self._shell.Position = UDim2.fromOffset(
@@ -1312,21 +1484,38 @@ function WindowMethods:AddPage(config: AnyObject?): AnyObject
         Name = "Nav_" .. string.gsub(name, "%W+", "_"),
         BackgroundColor3 = self._theme.SurfaceRaised,
         BackgroundTransparency = 1,
-        Size = UDim2.fromOffset(44, 44),
+        Size = UDim2.fromOffset(52, 52),
         LayoutOrder = #self._pages + 1,
         ZIndex = 25,
     })
-    corner(navButton, 12)
+    corner(navButton, 15)
+    surfaceGradient(
+        navButton,
+        mix(self._theme.SurfaceRaised, self._theme.White, 0.018),
+        mix(self._theme.Surface, self._theme.Canvas, 0.10),
+        90
+    )
     pageMaid:Add(navButton)
 
     local navIcon = icon(navButton, config.Icon or "•", self._theme.TextMuted,
-        UDim2.fromOffset(22, 22), UDim2.new(0.5, -11, 0.5, -11), 27)
+        UDim2.fromOffset(24, 24), UDim2.new(0.5, -12, 0.5, -12), 27)
+    local activeGlow = new("Frame", {
+        BackgroundColor3 = self._accent,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Size = UDim2.fromOffset(12, 34),
+        Position = UDim2.new(0, -16, 0.5, -17),
+        ZIndex = 27,
+        Parent = navButton,
+    }) :: Frame
+    corner(activeGlow, 6)
+
     local activeMarker = new("Frame", {
         BackgroundColor3 = self._accent,
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        Size = UDim2.fromOffset(4, 18),
-        Position = UDim2.new(0, -9, 0.5, -9),
+        Size = UDim2.fromOffset(4, 22),
+        Position = UDim2.new(0, -12, 0.5, -11),
         ZIndex = 28,
         Parent = navButton,
     }) :: Frame
@@ -1346,15 +1535,15 @@ function WindowMethods:AddPage(config: AnyObject?): AnyObject
     local tabsArea = new("Frame", {
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 54),
+        Size = UDim2.new(1, 0, 0, 64),
         ZIndex = 18,
         Parent = pageFrame,
     }) :: Frame
     local tabsScroll = new("ScrollingFrame", {
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        Position = UDim2.fromOffset(18, 8),
-        Size = UDim2.new(1, -76, 0, 38),
+        Position = UDim2.fromOffset(20, 11),
+        Size = UDim2.new(1, -84, 0, 42),
         CanvasSize = UDim2.fromOffset(0, 0),
         AutomaticCanvasSize = Enum.AutomaticSize.X,
         ScrollBarThickness = 0,
@@ -1368,13 +1557,13 @@ function WindowMethods:AddPage(config: AnyObject?): AnyObject
     local searchButton = button(tabsArea, {
         BackgroundColor3 = self._theme.Surface,
         BackgroundTransparency = 0.2,
-        Size = UDim2.fromOffset(36, 36),
-        Position = UDim2.new(1, -49, 0, 9),
+        Size = UDim2.fromOffset(40, 40),
+        Position = UDim2.new(1, -54, 0, 11),
         ZIndex = 24,
     })
-    corner(searchButton, 12)
+    corner(searchButton, 13)
     stroke(searchButton, self._theme.Border, 0.74, 1)
-    text(searchButton, "⌕", 20, self._theme.TextSecondary, Enum.Font.GothamMedium, {
+    text(searchButton, "⌕", 21, self._theme.TextSecondary, Enum.Font.GothamMedium, {
         Size = UDim2.fromScale(1, 1),
         TextXAlignment = Enum.TextXAlignment.Center,
         ZIndex = 26,
@@ -1383,17 +1572,23 @@ function WindowMethods:AddPage(config: AnyObject?): AnyObject
     local searchFrame = new("Frame", {
         BackgroundColor3 = self._theme.SurfaceRaised,
         BorderSizePixel = 0,
-        Position = UDim2.fromOffset(18, 8),
-        Size = UDim2.new(1, -67, 0, 38),
+        Position = UDim2.fromOffset(20, 10),
+        Size = UDim2.new(1, -74, 0, 42),
         Visible = false,
         ZIndex = 30,
         Parent = tabsArea,
     }) :: Frame
-    corner(searchFrame, 12)
-    stroke(searchFrame, self._theme.BorderStrong, 0.5, 1)
+    corner(searchFrame, 13)
+    local searchStroke = stroke(searchFrame, self._theme.BorderStrong, 0.42, 1)
+    surfaceGradient(
+        searchFrame,
+        mix(self._theme.SurfaceRaised, self._theme.White, 0.018),
+        mix(self._theme.Surface, self._theme.Canvas, 0.08),
+        90
+    )
     text(searchFrame, "⌕", 18, self._theme.TextMuted, Enum.Font.GothamMedium, {
-        Size = UDim2.fromOffset(32, 38),
-        Position = UDim2.fromOffset(4, 0),
+        Size = UDim2.fromOffset(34, 42),
+        Position = UDim2.fromOffset(5, 0),
         TextXAlignment = Enum.TextXAlignment.Center,
         ZIndex = 32,
     })
@@ -1405,17 +1600,17 @@ function WindowMethods:AddPage(config: AnyObject?): AnyObject
         PlaceholderColor3 = self._theme.TextMuted,
         Text = "",
         TextColor3 = self._theme.Text,
-        TextSize = 12,
+        TextSize = 13,
         Font = Enum.Font.Gotham,
         TextXAlignment = Enum.TextXAlignment.Left,
-        Size = UDim2.new(1, -78, 1, 0),
-        Position = UDim2.fromOffset(38, 0),
+        Size = UDim2.new(1, -82, 1, 0),
+        Position = UDim2.fromOffset(41, 0),
         ZIndex = 32,
         Parent = searchFrame,
     }) :: TextBox
     local closeSearch = button(searchFrame, {
-        Size = UDim2.fromOffset(32, 32),
-        Position = UDim2.new(1, -35, 0.5, -16),
+        Size = UDim2.fromOffset(34, 34),
+        Position = UDim2.new(1, -38, 0.5, -17),
         ZIndex = 33,
     })
     text(closeSearch, "×", 16, self._theme.TextSecondary, Enum.Font.GothamMedium, {
@@ -1427,8 +1622,8 @@ function WindowMethods:AddPage(config: AnyObject?): AnyObject
     local tabHost = new("Frame", {
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        Position = UDim2.fromOffset(0, 54),
-        Size = UDim2.new(1, 0, 1, -54),
+        Position = UDim2.fromOffset(0, 64),
+        Size = UDim2.new(1, 0, 1, -64),
         ClipsDescendants = true,
         ZIndex = 16,
         Parent = pageFrame,
@@ -1441,6 +1636,7 @@ function WindowMethods:AddPage(config: AnyObject?): AnyObject
         _navButton = navButton,
         _navIcon = navIcon,
         _activeMarker = activeMarker,
+        _activeGlow = activeGlow,
         _frame = pageFrame,
         _tabsScroll = tabsScroll,
         _tabsLayout = tabsLayout,
@@ -1464,6 +1660,7 @@ function WindowMethods:AddPage(config: AnyObject?): AnyObject
             BackgroundColor3 = selected and self._theme.SurfaceRaised or self._theme.Surface,
         })
         tween(activeMarker, NORMAL, { BackgroundTransparency = selected and 0 or 1 })
+        tween(activeGlow, NORMAL, { BackgroundTransparency = selected and 0.84 or 1 })
         if navIcon:IsA("ImageLabel") then
             tween(navIcon, NORMAL, {
                 ImageColor3 = selected and self._theme.Text or self._theme.TextMuted,
@@ -1513,6 +1710,18 @@ function WindowMethods:AddPage(config: AnyObject?): AnyObject
             page._activeTab:_applySearch(searchBox.Text)
         end
     end))
+    pageMaid:Add(searchBox.Focused:Connect(function()
+        tween(searchStroke, FAST, {
+            Color = self._accent,
+            Transparency = 0.15,
+        })
+    end))
+    pageMaid:Add(searchBox.FocusLost:Connect(function()
+        tween(searchStroke, FAST, {
+            Color = self._theme.BorderStrong,
+            Transparency = 0.42,
+        })
+    end))
     pageMaid:Add(searchBox.InputBegan:Connect(function(inputObject)
         if inputObject.KeyCode == Enum.KeyCode.Escape then
             closeSearchField()
@@ -1520,6 +1729,10 @@ function WindowMethods:AddPage(config: AnyObject?): AnyObject
     end))
     self:_bindAccent(pageMaid, function(accent)
         activeMarker.BackgroundColor3 = accent
+        activeGlow.BackgroundColor3 = accent
+        if searchBox:IsFocused() then
+            searchStroke.Color = accent
+        end
         renderNav()
     end)
     renderNav()
@@ -1553,6 +1766,7 @@ function WindowMethods:SelectPage(pageOrName: any)
         page._navButton.BackgroundTransparency = selected and 0 or 1
         page._navButton.BackgroundColor3 = selected and self._theme.SurfaceRaised or self._theme.Surface
         page._activeMarker.BackgroundTransparency = selected and 0 or 1
+        page._activeGlow.BackgroundTransparency = selected and 0.84 or 1
         if page._navIcon:IsA("ImageLabel") then
             page._navIcon.ImageColor3 = selected and self._theme.Text or self._theme.TextMuted
         else
@@ -1568,22 +1782,28 @@ function PageMethods:AddTab(config: AnyObject?): AnyObject
     local tabMaid = Maid.new()
     self._maid:Add(tabMaid)
 
-    local width = math.clamp(math.floor(textWidth(name, 11, Enum.Font.GothamMedium) + 46), 82, 150)
+    local width = math.clamp(math.floor(textWidth(name, 12, Enum.Font.GothamMedium) + 50), 94, 170)
     local tabButton = button(self._tabsScroll, {
         Name = "Tab_" .. string.gsub(name, "%W+", "_"),
         BackgroundColor3 = self._window._theme.SurfaceRaised,
         BackgroundTransparency = 1,
-        Size = UDim2.fromOffset(width, 36),
+        Size = UDim2.fromOffset(width, 40),
         LayoutOrder = #self._tabs + 1,
         ZIndex = 22,
     })
-    corner(tabButton, 11)
+    corner(tabButton, 13)
     local tabStroke = stroke(tabButton, self._window._theme.Border, 1, 1)
+    surfaceGradient(
+        tabButton,
+        mix(self._window._theme.SurfaceRaised, self._window._theme.White, 0.02),
+        mix(self._window._theme.Surface, self._window._theme.Canvas, 0.08),
+        90
+    )
     local tabIcon = icon(tabButton, config.Icon or "◉", self._window._theme.TextMuted,
-        UDim2.fromOffset(18, 18), UDim2.fromOffset(12, 9), 24)
-    local label = text(tabButton, name, 11, self._window._theme.TextMuted, Enum.Font.GothamMedium, {
-        Size = UDim2.new(1, -38, 1, 0),
-        Position = UDim2.fromOffset(34, 0),
+        UDim2.fromOffset(20, 20), UDim2.fromOffset(13, 10), 24)
+    local label = text(tabButton, name, 12, self._window._theme.TextMuted, Enum.Font.GothamMedium, {
+        Size = UDim2.new(1, -42, 1, 0),
+        Position = UDim2.fromOffset(37, 0),
         TextTruncate = Enum.TextTruncate.AtEnd,
         ZIndex = 24,
     })
@@ -1601,8 +1821,8 @@ function PageMethods:AddTab(config: AnyObject?): AnyObject
     local scroll = new("ScrollingFrame", {
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        Position = UDim2.fromOffset(16, 4),
-        Size = UDim2.new(1, -25, 1, -10),
+        Position = UDim2.fromOffset(20, 6),
+        Size = UDim2.new(1, -32, 1, -14),
         CanvasSize = UDim2.fromOffset(0, 0),
         ScrollBarThickness = 4,
         ScrollBarImageColor3 = self._window._theme.BorderStrong,
@@ -1629,7 +1849,7 @@ function PageMethods:AddTab(config: AnyObject?): AnyObject
         ZIndex = 18,
         Parent = content,
     }) :: Frame
-    local leftLayout = list(left, Enum.FillDirection.Vertical, 16,
+    local leftLayout = list(left, Enum.FillDirection.Vertical, 18,
         Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Top)
 
     local right = new("Frame", {
@@ -1641,7 +1861,7 @@ function PageMethods:AddTab(config: AnyObject?): AnyObject
         ZIndex = 18,
         Parent = content,
     }) :: Frame
-    local rightLayout = list(right, Enum.FillDirection.Vertical, 16,
+    local rightLayout = list(right, Enum.FillDirection.Vertical, 18,
         Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Top)
 
     local single = new("Frame", {
@@ -1653,7 +1873,7 @@ function PageMethods:AddTab(config: AnyObject?): AnyObject
         ZIndex = 18,
         Parent = content,
     }) :: Frame
-    local singleLayout = list(single, Enum.FillDirection.Vertical, 16,
+    local singleLayout = list(single, Enum.FillDirection.Vertical, 18,
         Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Top)
 
     local tab: AnyObject = setmetatable({
@@ -1866,10 +2086,10 @@ function TabMethods:AddSection(config: AnyObject?): AnyObject
         Parent = parent,
     }) :: Frame
     sectionMaid:Add(root)
-    local rootLayout = list(root, Enum.FillDirection.Vertical, 8,
+    local rootLayout = list(root, Enum.FillDirection.Vertical, 9,
         Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Top)
 
-    local headerHeight = if descriptionValue ~= "" then 40 else 28
+    local headerHeight = if descriptionValue ~= "" then 46 else 32
     local header = new("Frame", {
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
@@ -1878,16 +2098,16 @@ function TabMethods:AddSection(config: AnyObject?): AnyObject
         ZIndex = 20,
         Parent = root,
     }) :: Frame
-    text(header, titleValue, 11, self._window._theme.TextSecondary, Enum.Font.GothamMedium, {
-        Size = UDim2.new(1, -12, 0, 20),
-        Position = UDim2.fromOffset(3, 0),
+    text(header, titleValue, 12, self._window._theme.TextSecondary, Enum.Font.GothamMedium, {
+        Size = UDim2.new(1, -16, 0, 22),
+        Position = UDim2.fromOffset(4, 1),
         TextTruncate = Enum.TextTruncate.AtEnd,
         ZIndex = 21,
     })
     if descriptionValue ~= "" then
-        text(header, descriptionValue, 9, self._window._theme.TextMuted, Enum.Font.Gotham, {
-            Size = UDim2.new(1, -12, 0, 18),
-            Position = UDim2.fromOffset(3, 19),
+        text(header, descriptionValue, 10, self._window._theme.TextMuted, Enum.Font.Gotham, {
+            Size = UDim2.new(1, -16, 0, 19),
+            Position = UDim2.fromOffset(4, 23),
             TextTruncate = Enum.TextTruncate.AtEnd,
             ZIndex = 21,
         })
@@ -1902,7 +2122,7 @@ function TabMethods:AddSection(config: AnyObject?): AnyObject
         ZIndex = 20,
         Parent = root,
     }) :: Frame
-    local contentLayout = list(content, Enum.FillDirection.Vertical, 8,
+    local contentLayout = list(content, Enum.FillDirection.Vertical, 10,
         Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Top)
 
     local section: AnyObject = setmetatable({
@@ -1959,7 +2179,7 @@ function SectionMethods:AddToggle(config: AnyObject?): AnyObject
     config = config or {}
     local titleValue = tostring(config.Title or "Toggle")
     local descriptionValue = tostring(config.Description or "")
-    local row, titleLabel, descriptionLabel = settingRow(self, titleValue, descriptionValue, 68)
+    local row, titleLabel, descriptionLabel = settingRow(self, titleValue, descriptionValue, 76)
     local control = component(row, self)
     control._value = config.Default == true
     control._callback = config.Callback
@@ -1967,22 +2187,28 @@ function SectionMethods:AddToggle(config: AnyObject?): AnyObject
     local track = new("Frame", {
         BackgroundColor3 = self._window._theme.Control,
         BorderSizePixel = 0,
-        Size = UDim2.fromOffset(36, 20),
-        Position = UDim2.new(1, -50, 0, 14),
+        Size = UDim2.fromOffset(42, 24),
+        Position = UDim2.new(1, -58, 0, 26),
         ZIndex = 24,
         Parent = row,
     }) :: Frame
-    corner(track, 10)
-    local trackStroke = stroke(track, self._window._theme.Border, 0.6, 1)
+    corner(track, 12)
+    local trackStroke = stroke(track, self._window._theme.Border, 0.48, 1)
+    local trackGradient = surfaceGradient(
+        track,
+        mix(self._window._theme.Control, self._window._theme.White, 0.025),
+        mix(self._window._theme.Control, self._window._theme.Canvas, 0.14),
+        90
+    )
     local thumb = new("Frame", {
         BackgroundColor3 = self._window._theme.TextSecondary,
         BorderSizePixel = 0,
-        Size = UDim2.fromOffset(14, 14),
+        Size = UDim2.fromOffset(18, 18),
         Position = UDim2.fromOffset(3, 3),
         ZIndex = 25,
         Parent = track,
     }) :: Frame
-    corner(thumb, 7)
+    corner(thumb, 9)
 
     function control:_render(animate: boolean?)
         local enabled = self._value == true
@@ -2005,12 +2231,21 @@ function SectionMethods:AddToggle(config: AnyObject?): AnyObject
             Transparency = if enabled then 0.46 else 0.6,
         })
         tween(thumb, info, {
-            Position = if enabled then UDim2.fromOffset(19, 3) else UDim2.fromOffset(3, 3),
+            Position = if enabled then UDim2.fromOffset(21, 3) else UDim2.fromOffset(3, 3),
             BackgroundColor3 = if enabled
                 then contrastText(self._window._accent)
                 else self._window._theme.TextSecondary,
             BackgroundTransparency = if disabled then 0.38 else 0,
         })
+        trackGradient.Color = if enabled
+            then ColorSequence.new({
+                ColorSequenceKeypoint.new(0, mix(self._window._accent, Color3.new(1, 1, 1), 0.12)),
+                ColorSequenceKeypoint.new(1, mix(self._window._accent, Color3.new(0, 0, 0), 0.18)),
+            })
+            else ColorSequence.new({
+                ColorSequenceKeypoint.new(0, mix(self._window._theme.Control, Color3.new(1, 1, 1), 0.025)),
+                ColorSequenceKeypoint.new(1, mix(self._window._theme.Control, self._window._theme.Canvas, 0.14)),
+            })
     end
 
     function control:SetValue(value: boolean, silent: boolean?)
@@ -2047,23 +2282,23 @@ function SectionMethods:AddSlider(config: AnyObject?): AnyObject
     local defaultValue = tonumber(config.Default) or minimum
     local suffix = tostring(config.Suffix or "")
 
-    local row, titleLabel, descriptionLabel = settingRow(self, titleValue, descriptionValue, 78)
+    local row, titleLabel, descriptionLabel = settingRow(self, titleValue, descriptionValue, 86)
     local control = component(row, self)
     control._min, control._max, control._step = minimum, maximum, step
     control._suffix, control._callback = suffix, config.Callback
     control._value = math.clamp(roundStep(defaultValue, step), minimum, maximum)
 
-    local valueLabel = text(row, "", 10, self._window._theme.TextSecondary, Enum.Font.GothamMedium, {
-        Size = UDim2.fromOffset(58, 20),
-        Position = UDim2.new(1, -72, 0, 10),
+    local valueLabel = text(row, "", 11, self._window._theme.TextSecondary, Enum.Font.GothamMedium, {
+        Size = UDim2.fromOffset(64, 22),
+        Position = UDim2.new(1, -80, 0, 13),
         TextXAlignment = Enum.TextXAlignment.Right,
         ZIndex = 25,
     })
     local track = new("Frame", {
         BackgroundColor3 = self._window._theme.Control,
         BorderSizePixel = 0,
-        Size = UDim2.new(0.46, -18, 0, 8),
-        Position = UDim2.new(0.52, 0, 0, 49),
+        Size = UDim2.new(0.38, -18, 0, 8),
+        Position = UDim2.new(0.60, 0, 0, 57),
         ZIndex = 24,
         Parent = row,
     }) :: Frame
@@ -2076,6 +2311,12 @@ function SectionMethods:AddSlider(config: AnyObject?): AnyObject
         Parent = track,
     }) :: Frame
     corner(fill, 4)
+    local fillGradient = surfaceGradient(
+        fill,
+        mix(self._window._accent, Color3.new(1, 1, 1), 0.16),
+        mix(self._window._accent, Color3.new(0, 0, 0), 0.18),
+        0
+    )
     local thumb = new("Frame", {
         BackgroundColor3 = self._window._theme.Text,
         BorderSizePixel = 0,
@@ -2090,8 +2331,8 @@ function SectionMethods:AddSlider(config: AnyObject?): AnyObject
     local hitbox = button(row, {
         Name = "SliderHitbox",
         BackgroundTransparency = 1,
-        Size = UDim2.new(0.5, 0, 0, 30),
-        Position = UDim2.new(0.5, 0, 0, 38),
+        Size = UDim2.new(0.42, 0, 0, 34),
+        Position = UDim2.new(0.58, 0, 0, 44),
         ZIndex = 29,
     })
 
@@ -2123,6 +2364,10 @@ function SectionMethods:AddSlider(config: AnyObject?): AnyObject
         tween(thumb, info, {
             Position = UDim2.fromScale(alpha, 0.5),
             BackgroundTransparency = if disabled then 0.45 else 0,
+        })
+        fillGradient.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, mix(self._window._accent, Color3.new(1, 1, 1), 0.16)),
+            ColorSequenceKeypoint.new(1, mix(self._window._accent, Color3.new(0, 0, 0), 0.18)),
         })
     end
 
@@ -2198,7 +2443,7 @@ function SectionMethods:AddDropdown(config: AnyObject?): AnyObject
     config = config or {}
     local titleValue = tostring(config.Title or "Dropdown")
     local descriptionValue = tostring(config.Description or "")
-    local row, titleLabel, descriptionLabel = settingRow(self, titleValue, descriptionValue, 68)
+    local row, titleLabel, descriptionLabel = settingRow(self, titleValue, descriptionValue, 76)
     local control = component(row, self)
     control._options, control._multi, control._callback = {}, config.Multi == true, config.Callback
     for _, option in ipairs(config.Options or {}) do table.insert(control._options, option) end
@@ -2217,18 +2462,18 @@ function SectionMethods:AddDropdown(config: AnyObject?): AnyObject
         end
     end
 
-    local bed = controlBed(row, self._window, 142, 32)
-    bed.Position = UDim2.new(1, -156, 0, 18)
+    local bed = controlBed(row, self._window, 156, 36)
+    bed.Position = UDim2.new(1, -172, 0, 20)
     bed.ZIndex = 24
-    local valueLabel = text(bed, "", 10, self._window._theme.TextSecondary, Enum.Font.GothamMedium, {
+    local valueLabel = text(bed, "", 11, self._window._theme.TextSecondary, Enum.Font.GothamMedium, {
         Size = UDim2.new(1, -30, 1, 0),
         Position = UDim2.fromOffset(10, 0),
         TextTruncate = Enum.TextTruncate.AtEnd,
         ZIndex = 26,
     })
     text(bed, "⌄", 13, self._window._theme.TextMuted, Enum.Font.GothamMedium, {
-        Size = UDim2.fromOffset(24, 32),
-        Position = UDim2.new(1, -27, 0, 0),
+        Size = UDim2.fromOffset(28, 36),
+        Position = UDim2.new(1, -31, 0, 0),
         TextXAlignment = Enum.TextXAlignment.Center,
         ZIndex = 26,
     })
@@ -2317,7 +2562,7 @@ function SectionMethods:AddButton(config: AnyObject?): AnyObject
     config = config or {}
     local titleValue = tostring(config.Title or "Action")
     local descriptionValue = tostring(config.Description or "")
-    local row, titleLabel, descriptionLabel = settingRow(self, titleValue, descriptionValue, 68)
+    local row, titleLabel, descriptionLabel = settingRow(self, titleValue, descriptionValue, 76)
     local control = component(row, self)
     control._callback = config.Callback
     control._value = false
@@ -2326,14 +2571,21 @@ function SectionMethods:AddButton(config: AnyObject?): AnyObject
     local action = button(row, {
         BackgroundColor3 = self._window._accent,
         BackgroundTransparency = 0,
-        Size = UDim2.fromOffset(112, 32),
-        Position = UDim2.new(1, -126, 0, 18),
+        Size = UDim2.fromOffset(124, 36),
+        Position = UDim2.new(1, -140, 0, 20),
         ZIndex = 25,
     })
-    corner(action, 9)
-    local actionStroke = stroke(action, mix(self._window._accent, Color3.new(1, 1, 1), 0.25), 0.45, 1)
+    corner(action, 10)
+    local actionStroke = stroke(action, mix(self._window._accent, Color3.new(1, 1, 1), 0.25), 0.35, 1)
+    local actionGradient = surfaceGradient(
+        action,
+        mix(self._window._accent, Color3.new(1, 1, 1), 0.12),
+        mix(self._window._accent, Color3.new(0, 0, 0), 0.18),
+        90
+    )
+    innerHighlight(action, 0.90, 10)
     local actionLabel = text(action, tostring(config.Text or config.ButtonText or "Run"),
-        11, contrastText(self._window._accent), Enum.Font.GothamBold, {
+        12, contrastText(self._window._accent), Enum.Font.GothamBold, {
             Size = UDim2.fromScale(1, 1),
             TextXAlignment = Enum.TextXAlignment.Center,
             ZIndex = 27,
@@ -2351,6 +2603,10 @@ function SectionMethods:AddButton(config: AnyObject?): AnyObject
         actionLabel.TextColor3 = if disabled then self._window._theme.TextDisabled
             else contrastText(self._window._accent)
         actionStroke.Color = mix(self._window._accent, Color3.new(1, 1, 1), 0.25)
+        actionGradient.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, mix(self._window._accent, Color3.new(1, 1, 1), 0.12)),
+            ColorSequenceKeypoint.new(1, mix(self._window._accent, Color3.new(0, 0, 0), 0.18)),
+        })
     end
     function control:Fire()
         if not self._disabled then invoke(self._callback) end
@@ -2366,9 +2622,9 @@ function SectionMethods:AddButton(config: AnyObject?): AnyObject
     control._maid:Add(action.MouseLeave:Connect(function() control:_render() end))
     control._maid:Add(action.Activated:Connect(function()
         if control._disabled then return end
-        tween(action, FAST, { Size = UDim2.fromOffset(108, 30) })
+        tween(action, FAST, { Size = UDim2.fromOffset(120, 34) })
         task.delay(0.08, function()
-            if action.Parent then tween(action, FAST, { Size = UDim2.fromOffset(112, 32) }) end
+            if action.Parent then tween(action, FAST, { Size = UDim2.fromOffset(124, 36) }) end
         end)
         control:Fire()
     end))
@@ -2381,7 +2637,7 @@ function SectionMethods:AddInput(config: AnyObject?): AnyObject
     config = config or {}
     local titleValue = tostring(config.Title or "Input")
     local descriptionValue = tostring(config.Description or "")
-    local row, titleLabel, descriptionLabel = settingRow(self, titleValue, descriptionValue, 68)
+    local row, titleLabel, descriptionLabel = settingRow(self, titleValue, descriptionValue, 76)
     local control = component(row, self)
     control._value = tostring(config.Default or "")
     control._callback = config.Callback
@@ -2396,16 +2652,23 @@ function SectionMethods:AddInput(config: AnyObject?): AnyObject
         PlaceholderColor3 = self._window._theme.TextMuted,
         Text = control._value,
         TextColor3 = self._window._theme.TextSecondary,
-        TextSize = 10,
+        TextSize = 11,
         Font = Enum.Font.GothamMedium,
         TextXAlignment = Enum.TextXAlignment.Left,
-        Size = UDim2.fromOffset(142, 32),
-        Position = UDim2.new(1, -156, 0, 18),
+        Size = UDim2.fromOffset(156, 36),
+        Position = UDim2.new(1, -172, 0, 20),
         ZIndex = 25,
         Parent = row,
     }) :: TextBox
-    corner(box, 9)
-    local boxStroke = stroke(box, self._window._theme.Border, 0.58, 1)
+    corner(box, 10)
+    local boxStroke = stroke(box, self._window._theme.Border, 0.48, 1)
+    surfaceGradient(
+        box,
+        mix(self._window._theme.Control, self._window._theme.White, 0.018),
+        mix(self._window._theme.ControlDark, self._window._theme.Canvas, 0.08),
+        90
+    )
+    innerHighlight(box, 0.96, 10)
     padding(box, 10, 10, 0, 0)
 
     function control:_render()
@@ -2465,7 +2728,7 @@ function SectionMethods:AddKeybind(config: AnyObject?): AnyObject
     config = config or {}
     local titleValue = tostring(config.Title or "Keybind")
     local descriptionValue = tostring(config.Description or "")
-    local row, titleLabel, descriptionLabel = settingRow(self, titleValue, descriptionValue, 68)
+    local row, titleLabel, descriptionLabel = settingRow(self, titleValue, descriptionValue, 76)
     local control = component(row, self)
     local defaultKey = config.Default
     if typeof(defaultKey) ~= "EnumItem" or defaultKey.EnumType ~= Enum.KeyCode then
@@ -2477,13 +2740,20 @@ function SectionMethods:AddKeybind(config: AnyObject?): AnyObject
     local keyButton = button(row, {
         BackgroundColor3 = self._window._theme.ControlDark,
         BackgroundTransparency = 0,
-        Size = UDim2.fromOffset(112, 32),
-        Position = UDim2.new(1, -126, 0, 18),
+        Size = UDim2.fromOffset(124, 36),
+        Position = UDim2.new(1, -140, 0, 20),
         ZIndex = 25,
     })
-    corner(keyButton, 9)
-    local keyStroke = stroke(keyButton, self._window._theme.Border, 0.58, 1)
-    local keyLabel = text(keyButton, "", 10, self._window._theme.TextSecondary,
+    corner(keyButton, 10)
+    local keyStroke = stroke(keyButton, self._window._theme.Border, 0.48, 1)
+    surfaceGradient(
+        keyButton,
+        mix(self._window._theme.Control, self._window._theme.White, 0.018),
+        mix(self._window._theme.ControlDark, self._window._theme.Canvas, 0.08),
+        90
+    )
+    innerHighlight(keyButton, 0.96, 10)
+    local keyLabel = text(keyButton, "", 11, self._window._theme.TextSecondary,
         Enum.Font.GothamMedium, {
             Size = UDim2.fromScale(1, 1),
             TextXAlignment = Enum.TextXAlignment.Center,
@@ -2541,7 +2811,7 @@ function SectionMethods:AddColorPicker(config: AnyObject?): AnyObject
     config = config or {}
     local titleValue = tostring(config.Title or "Color")
     local descriptionValue = tostring(config.Description or "")
-    local row, titleLabel, descriptionLabel = settingRow(self, titleValue, descriptionValue, 68)
+    local row, titleLabel, descriptionLabel = settingRow(self, titleValue, descriptionValue, 76)
     local control = component(row, self)
     local defaultColor = config.Default
     if typeof(defaultColor) ~= "Color3" then defaultColor = self._window._accent end
@@ -2549,24 +2819,24 @@ function SectionMethods:AddColorPicker(config: AnyObject?): AnyObject
     control._transparency = math.clamp(tonumber(config.Transparency) or 0, 0, 1)
     control._callback, control._swatches = config.Callback, config.Swatches
 
-    local bed = controlBed(row, self._window, 142, 32)
-    bed.Position = UDim2.new(1, -156, 0, 18)
+    local bed = controlBed(row, self._window, 156, 36)
+    bed.Position = UDim2.new(1, -172, 0, 20)
     bed.ZIndex = 24
     local swatch = new("Frame", {
         BackgroundColor3 = defaultColor,
         BackgroundTransparency = control._transparency,
         BorderSizePixel = 0,
-        Size = UDim2.fromOffset(20, 20),
-        Position = UDim2.fromOffset(7, 6),
+        Size = UDim2.fromOffset(22, 22),
+        Position = UDim2.fromOffset(8, 7),
         ZIndex = 26,
         Parent = bed,
     }) :: Frame
-    corner(swatch, 10)
+    corner(swatch, 11)
     stroke(swatch, self._window._theme.White, 0.3, 1)
-    local hexLabel = text(bed, rgbToHex(defaultColor), 10, self._window._theme.TextSecondary,
+    local hexLabel = text(bed, rgbToHex(defaultColor), 11, self._window._theme.TextSecondary,
         Enum.Font.GothamMedium, {
             Size = UDim2.new(1, -42, 1, 0),
-            Position = UDim2.fromOffset(35, 0),
+            Position = UDim2.fromOffset(39, 0),
             ZIndex = 26,
         })
 
@@ -2613,13 +2883,13 @@ function SectionMethods:AddParagraph(config: AnyObject?): AnyObject
     config = config or {}
     local titleValue = tostring(config.Title or "Information")
     local bodyValue = tostring(config.Content or config.Description or "")
-    local height = math.clamp(62 + math.floor(#bodyValue / 54) * 12, 76, 126)
+    local height = math.clamp(70 + math.floor(#bodyValue / 52) * 13, 84, 142)
     local row, titleLabel, descriptionLabel = settingRow(self, titleValue, bodyValue, height)
     local control = component(row, self)
     control._value = bodyValue
     row.Active, row.Selectable = false, false
     titleLabel.Size = UDim2.new(1, -28, 0, 22)
-    descriptionLabel.Size = UDim2.new(1, -28, 1, -44)
+    descriptionLabel.Size = UDim2.new(1, -32, 1, -48)
     descriptionLabel.TextWrapped = true
     function control:SetValue(value: any)
         self._value = tostring(value or "")
@@ -2693,7 +2963,7 @@ function WindowMethods:Notify(config: AnyObject?): AnyObject
     local wrapper = new("Frame", {
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        Size = UDim2.fromOffset(316, 80),
+        Size = UDim2.fromOffset(340, 92),
         LayoutOrder = self._toastSerial,
         ZIndex = 410,
         Parent = self._toastHost,
@@ -2704,39 +2974,46 @@ function WindowMethods:Notify(config: AnyObject?): AnyObject
     local card = new("CanvasGroup", {
         BackgroundColor3 = self._theme.ShellRaised,
         BorderSizePixel = 0,
-        Size = UDim2.fromOffset(306, 72),
-        Position = UDim2.fromOffset(22, 4),
+        Size = UDim2.fromOffset(326, 82),
+        Position = UDim2.fromOffset(24, 5),
         GroupTransparency = 1,
         ZIndex = 412,
         Parent = wrapper,
     }) :: CanvasGroup
-    corner(card, 14)
-    stroke(card, self._theme.BorderStrong, 0.38, 1)
+    corner(card, 17)
+    stroke(card, self._theme.BorderStrong, 0.24, 1)
+    surfaceGradient(
+        card,
+        mix(self._theme.ShellRaised, self._theme.White, 0.025),
+        mix(self._theme.Shell, self._theme.Canvas, 0.08),
+        90
+    )
+    innerHighlight(card, 0.94, 16)
     local toneBar = new("Frame", {
         BackgroundColor3 = tone,
         BorderSizePixel = 0,
-        Size = UDim2.fromOffset(4, 38),
-        Position = UDim2.fromOffset(10, 16),
+        Size = UDim2.fromOffset(4, 44),
+        Position = UDim2.fromOffset(11, 18),
         ZIndex = 414,
         Parent = card,
     }) :: Frame
     corner(toneBar, 2)
-    text(card, titleValue, 12, self._theme.Text, Enum.Font.GothamBold, {
-        Size = UDim2.new(1, -64, 0, 20),
-        Position = UDim2.fromOffset(24, 12),
+    text(card, titleValue, 13, self._theme.Text, Enum.Font.GothamBold, {
+        Size = UDim2.new(1, -68, 0, 22),
+        Position = UDim2.fromOffset(26, 13),
         TextTruncate = Enum.TextTruncate.AtEnd,
         ZIndex = 414,
     })
-    text(card, descriptionValue, 10, self._theme.TextMuted, Enum.Font.Gotham, {
-        Size = UDim2.new(1, -62, 0, 28),
-        Position = UDim2.fromOffset(24, 32),
+    text(card, descriptionValue, 11, self._theme.TextMuted, Enum.Font.Gotham, {
+        Size = UDim2.new(1, -66, 0, 34),
+        Position = UDim2.fromOffset(26, 36),
         TextWrapped = true,
         TextYAlignment = Enum.TextYAlignment.Top,
         ZIndex = 414,
     })
     local close = button(card, {
         Size = UDim2.fromOffset(28, 28),
-        Position = UDim2.new(1, -34, 0, 8),
+        Position = UDim2.new(1, -36, 0, 9),
         ZIndex = 416,
     })
     text(close, "×", 15, self._theme.TextMuted, Enum.Font.GothamMedium, {
@@ -2749,7 +3026,7 @@ function WindowMethods:Notify(config: AnyObject?): AnyObject
         BorderSizePixel = 0,
         AnchorPoint = Vector2.new(0, 1),
         Size = UDim2.new(1, -20, 0, 2),
-        Position = UDim2.new(0, 10, 1, -5),
+        Position = UDim2.new(0, 11, 1, -6),
         ZIndex = 416,
         Parent = card,
     }) :: Frame
@@ -2766,7 +3043,7 @@ function WindowMethods:Notify(config: AnyObject?): AnyObject
         removeValue(self._toasts, notification)
         local closing = tween(card, NORMAL, {
             GroupTransparency = 1,
-            Position = UDim2.fromOffset(22, -4),
+            Position = UDim2.fromOffset(24, -4),
         })
         if closing then
             toastMaid:Add(closing.Completed:Connect(function() toastMaid:Destroy() end))
@@ -2843,90 +3120,126 @@ local function createChrome(window: AnyObject, config: AnyObject)
     window._shell = shell
     window._scale = new("UIScale", { Scale = 1, Parent = shell }) :: UIScale
 
-    for index = 4, 1, -1 do
+    -- Broad, low-opacity layers emulate the soft black drop shadow in the
+    -- reference without requiring a project-specific nine-slice asset.
+    for index = 7, 1, -1 do
         local spread = index * 3
         local shadowFrame = new("Frame", {
             BackgroundColor3 = theme.Shadow,
-            BackgroundTransparency = 0.78 + index * 0.035,
+            BackgroundTransparency = 0.80 + index * 0.022,
             BorderSizePixel = 0,
             Size = UDim2.new(1, spread * 2, 1, spread * 2),
-            Position = UDim2.fromOffset(-spread, 4 + spread),
+            Position = UDim2.fromOffset(-spread, 8 + spread),
             ZIndex = 10,
             Parent = shell,
         }) :: Frame
-        corner(shadowFrame, 24 + spread)
+        corner(shadowFrame, 31 + spread)
     end
+
+    local rim = new("Frame", {
+        Name = "OuterRim",
+        BackgroundColor3 = mix(theme.Canvas, theme.Shadow, 0.55),
+        BorderSizePixel = 0,
+        Size = UDim2.fromScale(1, 1),
+        ZIndex = 12,
+        Parent = shell,
+    }) :: Frame
+    corner(rim, 31)
+    stroke(rim, mix(theme.BorderStrong, theme.White, 0.05), 0.20, 1)
 
     local body = new("Frame", {
         Name = "Body",
         BackgroundColor3 = theme.Shell,
         BorderSizePixel = 0,
-        Size = UDim2.fromScale(1, 1),
+        Size = UDim2.new(1, -8, 1, -8),
+        Position = UDim2.fromOffset(4, 4),
         ClipsDescendants = true,
         ZIndex = 14,
         Parent = shell,
     }) :: Frame
-    corner(body, 24)
-    stroke(body, theme.BorderStrong, 0.42, 1)
-    new("Frame", {
-        BackgroundColor3 = Color3.new(1, 1, 1),
-        BackgroundTransparency = 0.96,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, -30, 0, 1),
-        Position = UDim2.fromOffset(15, 1),
-        ZIndex = 18,
-        Parent = body,
-    })
+    corner(body, 27)
+    stroke(body, theme.BorderStrong, 0.34, 1)
+    surfaceGradient(
+        body,
+        mix(theme.ShellRaised, theme.White, 0.012),
+        mix(theme.Shell, theme.Canvas, 0.10),
+        90
+    )
+    innerHighlight(body, 0.935, 18)
 
     local header = new("Frame", {
         Name = "Header",
         BackgroundColor3 = theme.ShellRaised,
-        BackgroundTransparency = 0.58,
+        BackgroundTransparency = 0.08,
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, HEADER_HEIGHT),
+        ClipsDescendants = true,
         ZIndex = 17,
         Parent = body,
     }) :: Frame
     window._header = header
+    surfaceGradient(
+        header,
+        mix(theme.ShellRaised, theme.White, 0.018),
+        mix(theme.Shell, theme.Canvas, 0.04),
+        90
+    )
     new("Frame", {
         BackgroundColor3 = theme.Border,
-        BackgroundTransparency = 0.66,
+        BackgroundTransparency = 0.53,
         BorderSizePixel = 0,
-        Size = UDim2.new(1, -24, 0, 1),
-        Position = UDim2.new(0, 12, 1, -1),
+        Size = UDim2.new(1, -30, 0, 1),
+        Position = UDim2.new(0, 15, 1, -1),
         ZIndex = 19,
         Parent = header,
     })
 
+    local brandGlow = new("Frame", {
+        BackgroundColor3 = window._accent,
+        BackgroundTransparency = 0.90,
+        BorderSizePixel = 0,
+        Size = UDim2.fromOffset(54, 54),
+        Position = UDim2.fromOffset(14, 19),
+        ZIndex = 20,
+        Parent = header,
+    }) :: Frame
+    corner(brandGlow, 18)
+
     local brand = new("Frame", {
         BackgroundColor3 = window._accent,
-        BackgroundTransparency = 0.88,
+        BackgroundTransparency = 0.84,
         BorderSizePixel = 0,
-        Size = UDim2.fromOffset(34, 34),
-        Position = UDim2.fromOffset(18, 18),
+        Size = UDim2.fromOffset(40, 40),
+        Position = UDim2.fromOffset(21, 26),
         ZIndex = 21,
         Parent = header,
     }) :: Frame
-    corner(brand, 10)
-    local brandStroke = stroke(brand, window._accent, 0.35, 1)
-    local brandLetter = text(brand, tostring(config.BrandLetter or "R"), 18,
+    corner(brand, 12)
+    local brandStroke = stroke(brand, window._accent, 0.25, 1)
+    local brandGradient = surfaceGradient(
+        brand,
+        mix(window._accent, theme.White, 0.15),
+        mix(window._accent, theme.Canvas, 0.35),
+        90
+    )
+    local brandLetter = text(brand, tostring(config.BrandLetter or "R"), 20,
         window._accent, Enum.Font.GothamBlack, {
             Size = UDim2.fromScale(1, 1),
             TextXAlignment = Enum.TextXAlignment.Center,
             ZIndex = 23,
         })
 
-    window._title = text(header, tostring(config.Title or "Brand name"), 11,
+    window._title = text(header, tostring(config.Title or "Brand name"), 14,
         theme.Text, Enum.Font.GothamBold, {
-            Size = UDim2.fromOffset(250, 18),
-            Position = UDim2.fromOffset(62, 18),
+            Size = UDim2.fromOffset(310, 22),
+            Position = UDim2.fromOffset(76, 25),
             TextTruncate = Enum.TextTruncate.AtEnd,
             ZIndex = 22,
         })
     window._subtitle = text(header, tostring(config.Subtitle or "The slogan, if there is one."),
-        9, theme.TextMuted, Enum.Font.Gotham, {
-            Size = UDim2.fromOffset(270, 18),
-            Position = UDim2.fromOffset(62, 35),
+        10, theme.TextMuted, Enum.Font.Gotham, {
+            Size = UDim2.fromOffset(330, 20),
+            Position = UDim2.fromOffset(76, 46),
             TextTruncate = Enum.TextTruncate.AtEnd,
             ZIndex = 22,
         })
@@ -2934,35 +3247,48 @@ local function createChrome(window: AnyObject, config: AnyObject)
     local status = new("Frame", {
         Name = "Status",
         BackgroundTransparency = 1,
-        Size = UDim2.fromOffset(220, 48),
-        Position = UDim2.new(1, -236, 0, 11),
+        Size = UDim2.fromOffset(248, 54),
+        Position = UDim2.new(1, -270, 0, 19),
         ZIndex = 22,
         Parent = header,
     }) :: Frame
     window._statusGroup = status
-    text(status, tostring(config.StatusTitle or "Past 0w1"), 11,
+    text(status, tostring(config.StatusTitle or "Past Owl"), 13,
         theme.TextSecondary, Enum.Font.GothamMedium, {
-            Size = UDim2.new(1, -52, 0, 18),
+            Size = UDim2.new(1, -62, 0, 20),
             TextXAlignment = Enum.TextXAlignment.Right,
             ZIndex = 23,
         })
-    text(status, tostring(config.StatusText or "Tue, 3 Mar 2026"), 9,
+    text(status, tostring(config.StatusText or "Til: 1 mar 2026"), 10,
         theme.TextMuted, Enum.Font.Gotham, {
-            Size = UDim2.new(1, -52, 0, 18),
-            Position = UDim2.fromOffset(0, 18),
+            Size = UDim2.new(1, -62, 0, 18),
+            Position = UDim2.fromOffset(0, 21),
             TextXAlignment = Enum.TextXAlignment.Right,
             ZIndex = 23,
         })
+
+    local orbShadow = new("Frame", {
+        BackgroundColor3 = theme.Shadow,
+        BackgroundTransparency = 0.48,
+        BorderSizePixel = 0,
+        Size = UDim2.fromOffset(48, 48),
+        Position = UDim2.new(1, -48, 0, 5),
+        ZIndex = 23,
+        Parent = status,
+    }) :: Frame
+    corner(orbShadow, 24)
+
     local orb = new("Frame", {
         BackgroundColor3 = theme.Text,
         BorderSizePixel = 0,
-        Size = UDim2.fromOffset(40, 40),
-        Position = UDim2.new(1, -42, 0, 1),
+        Size = UDim2.fromOffset(46, 46),
+        Position = UDim2.new(1, -50, 0, 1),
         ZIndex = 24,
         Parent = status,
     }) :: Frame
-    corner(orb, 20)
-    text(orb, tostring(config.StatusIcon or "➤"), 18, theme.Shell, Enum.Font.GothamBold, {
+    corner(orb, 23)
+    surfaceGradient(orb, theme.White, mix(theme.Text, theme.TextMuted, 0.18), 90)
+    text(orb, tostring(config.StatusIcon or "➤"), 19, theme.Shell, Enum.Font.GothamBold, {
         Size = UDim2.fromScale(1, 1),
         Rotation = -35,
         TextXAlignment = Enum.TextXAlignment.Center,
@@ -2972,7 +3298,7 @@ local function createChrome(window: AnyObject, config: AnyObject)
     local rail = new("Frame", {
         Name = "Sidebar",
         BackgroundColor3 = theme.Rail,
-        BackgroundTransparency = 0.18,
+        BackgroundTransparency = 0.03,
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(0, HEADER_HEIGHT),
         Size = UDim2.new(0, SIDEBAR_WIDTH, 1, -HEADER_HEIGHT),
@@ -2980,12 +3306,18 @@ local function createChrome(window: AnyObject, config: AnyObject)
         Parent = body,
     }) :: Frame
     window._rail = rail
+    surfaceGradient(
+        rail,
+        mix(theme.Rail, theme.White, 0.018),
+        mix(theme.Rail, theme.Canvas, 0.16),
+        0
+    )
     new("Frame", {
         BackgroundColor3 = theme.Border,
-        BackgroundTransparency = 0.72,
+        BackgroundTransparency = 0.55,
         BorderSizePixel = 0,
-        Size = UDim2.new(0, 1, 1, -22),
-        Position = UDim2.new(1, -1, 0, 11),
+        Size = UDim2.new(0, 1, 1, -26),
+        Position = UDim2.new(1, -1, 0, 13),
         ZIndex = 18,
         Parent = rail,
     })
@@ -2994,32 +3326,32 @@ local function createChrome(window: AnyObject, config: AnyObject)
         Name = "Navigation",
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        Size = UDim2.new(1, -20, 1, -82),
-        Position = UDim2.fromOffset(10, 14),
+        Size = UDim2.new(1, -24, 1, -96),
+        Position = UDim2.fromOffset(12, 18),
         ZIndex = 20,
         Parent = rail,
     }) :: Frame
-    list(navList, Enum.FillDirection.Vertical, 8,
+    list(navList, Enum.FillDirection.Vertical, 10,
         Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Top)
     window._navList = navList
 
     local utility = new("Frame", {
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        Size = UDim2.new(1, -20, 0, 54),
-        Position = UDim2.new(0, 10, 1, -62),
+        Size = UDim2.new(1, -24, 0, 62),
+        Position = UDim2.new(0, 12, 1, -74),
         ZIndex = 20,
         Parent = rail,
     }) :: Frame
     local settings = button(utility, {
         BackgroundColor3 = theme.SurfaceRaised,
         BackgroundTransparency = 1,
-        Size = UDim2.fromOffset(44, 44),
-        Position = UDim2.new(0.5, -22, 0.5, -22),
+        Size = UDim2.fromOffset(50, 50),
+        Position = UDim2.new(0.5, -25, 0.5, -25),
         ZIndex = 22,
     })
-    corner(settings, 12)
-    text(settings, "⚙", 17, theme.TextMuted, Enum.Font.GothamMedium, {
+    corner(settings, 14)
+    text(settings, "⚙", 19, theme.TextMuted, Enum.Font.GothamMedium, {
         Size = UDim2.fromScale(1, 1),
         TextXAlignment = Enum.TextXAlignment.Center,
         ZIndex = 24,
@@ -3042,7 +3374,7 @@ local function createChrome(window: AnyObject, config: AnyObject)
         BorderSizePixel = 0,
         AnchorPoint = Vector2.new(1, 0),
         Position = UDim2.new(1, -14, 0, 14),
-        Size = UDim2.fromOffset(320, 440),
+        Size = UDim2.fromOffset(344, 500),
         ZIndex = 400,
         Parent = overlay,
     }) :: Frame
@@ -3051,9 +3383,14 @@ local function createChrome(window: AnyObject, config: AnyObject)
     window._toastHost = toastHost
 
     window:_bindAccent(window._maid, function(accent)
+        brandGlow.BackgroundColor3 = accent
         brand.BackgroundColor3 = accent
         brandStroke.Color = accent
         brandLetter.TextColor3 = accent
+        brandGradient.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, mix(accent, theme.White, 0.15)),
+            ColorSequenceKeypoint.new(1, mix(accent, theme.Canvas, 0.35)),
+        })
     end)
     window._maid:Add(settings.MouseEnter:Connect(function()
         tween(settings, FAST, {
@@ -3075,7 +3412,7 @@ local function createChrome(window: AnyObject, config: AnyObject)
     local dragHandle = button(header, {
         Name = "DragHandle",
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, -250, 1, 0),
+        Size = UDim2.new(1, -286, 1, 0),
         ZIndex = 20,
         Selectable = false,
     })
@@ -3137,7 +3474,9 @@ function Library.CreateWindow(config: AnyObject?): AnyObject
     local maid = Maid.new()
     local screen = new("ScreenGui", {
         Name = name,
-        IgnoreGuiInset = true,
+        -- Defaulting to the Roblox inset prevents the system top bar from
+        -- covering the brand/header, which was visible in the supplied recording.
+        IgnoreGuiInset = config.IgnoreGuiInset == true,
         ResetOnSpawn = config.ResetOnSpawn == true,
         DisplayOrder = tonumber(config.DisplayOrder) or 50,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
@@ -3145,6 +3484,15 @@ function Library.CreateWindow(config: AnyObject?): AnyObject
         Parent = parent,
     }) :: ScreenGui
     maid:Add(screen)
+
+    -- Newer Roblox clients expose safe-area properties. The pcall keeps the
+    -- library compatible with older runtimes without inventing a fallback API.
+    pcall(function()
+        if config.IgnoreGuiInset ~= true then
+            screen.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
+            screen.ClipToDeviceSafeArea = true
+        end
+    end)
 
     local shutdownEvent = new("BindableEvent", {
         Name = "_RosaShutdown",
@@ -3166,6 +3514,7 @@ function Library.CreateWindow(config: AnyObject?): AnyObject
 
     local window: AnyObject = setmetatable({
         _maid = maid,
+        _config = config,
         _screen = screen,
         _theme = theme,
         _accent = accent,
@@ -3262,8 +3611,8 @@ function Library.CreateReferenceDemo(parent: Instance?): AnyObject
         Title = "Brand name",
         Subtitle = "The slogan, if there is one.",
         BrandLetter = "R",
-        StatusTitle = "Past 0w1",
-        StatusText = "Tue, 3 Mar 2026",
+        StatusTitle = "Past Owl",
+        StatusText = "Til: 1 mar 2026",
         StatusIcon = "➤",
         Accent = Color3.fromRGB(255, 87, 90),
         Keybind = Enum.KeyCode.RightShift,
