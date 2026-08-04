@@ -50,6 +50,13 @@ type WindowConfig = {
     KeepFullyVisible: boolean?,
     DragMargin: number?,
     MinimumVisiblePixels: number?,
+    Transparency: number?,
+    Acrylic: boolean?,
+    AcrylicIntensity: number?,
+    BorderIntensity: number?,
+    ReducedMotion: boolean?,
+    AnimationIntensity: number?,
+    DimStrength: number?,
 }
 
 local Kronos: AnyTable = {}
@@ -62,9 +69,21 @@ Kronos.NotificationHandles = {} :: { AnyTable }
 Kronos.Flags = {} :: AnyTable
 Kronos.ThemeBindings = {} :: { AnyTable }
 Kronos.ActiveTweens = setmetatable({}, { __mode = "k" }) :: AnyTable
+Kronos.ActiveTweenTargets = setmetatable({}, { __mode = "k" }) :: AnyTable
 Kronos.Destroyed = false
 Kronos.Keybinds = {} :: { AnyTable }
 Kronos.Widgets = {} :: { AnyTable }
+Kronos.SurfaceBindings = setmetatable({}, { __mode = "k" }) :: AnyTable
+Kronos.BorderBindings = setmetatable({}, { __mode = "k" }) :: AnyTable
+Kronos.AcrylicBindings = setmetatable({}, { __mode = "k" }) :: AnyTable
+Kronos.Scrollbars = setmetatable({}, { __mode = "k" }) :: AnyTable
+Kronos.SurfaceTransparency = 0.04
+Kronos.AcrylicEnabled = true
+Kronos.AcrylicIntensity = 0.52
+Kronos.BorderIntensity = 1
+Kronos.ReducedMotion = false
+Kronos.AnimationIntensity = 1
+Kronos.DimStrength = 0.64
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -130,6 +149,9 @@ local Theme: ThemeMap = {
     Error = Color3.fromRGB(220, 91, 108),
     Shadow = Color3.fromRGB(0, 0, 0),
     Overlay = Color3.fromRGB(4, 4, 6),
+    InnerHighlight = Color3.fromRGB(83, 79, 101),
+    ScrollTrack = Color3.fromRGB(45, 42, 57),
+    AcrylicTint = Color3.fromRGB(24, 21, 32),
 }
 
 local Motion = {
@@ -151,13 +173,16 @@ local Motion = {
     Tooltip = 0.14,
     Health = 0.18,
     KeybindRow = 0.16,
+    Scrollbar = 0.12,
 }
 
 local Metrics = {
-    Window = Vector2.new(800, 470),
-    Header = 50,
-    Sidebar = 190,
-    CompactSidebar = 48,
+    Window = Vector2.new(900, 540),
+    MinimumWindow = Vector2.new(720, 430),
+    MaximumWindow = Vector2.new(1120, 650),
+    Header = 48,
+    Sidebar = 188,
+    CompactSidebar = 50,
     Row = 32,
     DescriptionRow = 40,
     SectionGap = 8,
@@ -1951,8 +1976,16 @@ local IconController: AnyTable = {
     InvalidWarned = {} :: { [string]: boolean },
 }
 local AnimationController = {}
-local InputController = {}
+local InputController: AnyTable = {
+    KeyboardHandlers = setmetatable({}, { __mode = "k" }),
+}
 local DragController = {}
+local AppearanceController: AnyTable = { Records = Kronos.SurfaceBindings }
+local BorderController: AnyTable = { Records = Kronos.BorderBindings }
+local BorderRoleStrength = { Quiet = 0.7, Shell = 1.14, Floating = 1.08, Focus = 1.2 }
+local AcrylicController: AnyTable = { Records = Kronos.AcrylicBindings }
+local ScrollbarController: AnyTable = { Entries = Kronos.Scrollbars }
+local SubtabController: AnyTable = {}
 local PopupController = {}
 local NotificationController = {}
 local FloatingWidgetController = {}
@@ -1974,6 +2007,10 @@ function ThemeController:Refresh()
         if not instance or instance.Parent == nil then
             table.remove(Kronos.ThemeBindings, index)
         else
+            local active = Kronos.ActiveTweens[instance]
+            if active and active[binding.Property] then
+                AnimationController:Cancel(instance, true)
+            end
             pcall(function()
                 (instance :: any)[binding.Property] = Theme[binding.Token]
             end)
@@ -1991,13 +2028,150 @@ function ThemeController:UnbindTree(root: Instance?)
             table.remove(Kronos.ThemeBindings, index)
         end
     end
+    for instance in pairs(AppearanceController.Records) do
+        if not instance.Parent or instance == root or instance:IsDescendantOf(root) then
+            AppearanceController.Records[instance] = nil
+        end
+    end
+    for instance in pairs(BorderController.Records) do
+        if not instance.Parent or instance == root or instance:IsDescendantOf(root) then
+            BorderController.Records[instance] = nil
+        end
+    end
+    for instance in pairs(AcrylicController.Records) do
+        if not instance.Parent or instance == root or instance:IsDescendantOf(root) then
+            AcrylicController.Records[instance] = nil
+        end
+    end
 end
 
-function AnimationController:Cancel(instance: Instance)
+function AppearanceController:IsSurfaceColor(color: any): boolean
+    return color == Theme.Background
+        or color == Theme.BackgroundSoft
+        or color == Theme.Surface
+        or color == Theme.Surface2
+        or color == Theme.Surface3
+        or color == Theme.ElevatedSurface
+        or color == Theme.SurfaceHover
+        or color == Theme.HoverSurface
+        or color == Theme.PressedSurface
+        or color == Theme.AcrylicTint
+end
+
+function AppearanceController:Resolve(baseTransparency: number): number
+    local base = math.clamp(tonumber(baseTransparency) or 0, 0, 1)
+    local amount = math.clamp(tonumber(Kronos.SurfaceTransparency) or 0, 0, 1)
+    return 1 - (1 - base) * (1 - amount)
+end
+
+function AppearanceController:Register(instance: Instance, baseTransparency: number?): boolean
+    if not instance:IsA("GuiObject") then
+        return false
+    end
+    local guiObject = instance :: GuiObject
+    if not self:IsSurfaceColor(guiObject.BackgroundColor3) then
+        return false
+    end
+    local record = self.Records[instance]
+    if not record then
+        record = {}
+        self.Records[instance] = record
+    end
+    record.BaseTransparency = math.clamp(
+        tonumber(baseTransparency) or tonumber(record.BaseTransparency) or guiObject.BackgroundTransparency,
+        0,
+        1
+    )
+    guiObject.BackgroundTransparency = self:Resolve(record.BaseTransparency)
+    return true
+end
+
+function AppearanceController:SetBase(instance: Instance, baseTransparency: number): number
+    local record = self.Records[instance]
+    if not record then
+        return baseTransparency
+    end
+    record.BaseTransparency = math.clamp(tonumber(baseTransparency) or 0, 0, 1)
+    return self:Resolve(record.BaseTransparency)
+end
+
+function AppearanceController:Refresh()
+    for instance, record in pairs(self.Records) do
+        if not instance.Parent then
+            self.Records[instance] = nil
+        elseif instance:IsA("GuiObject") then
+            local guiObject = instance :: GuiObject
+            local active = Kronos.ActiveTweens[guiObject]
+            if active and active.BackgroundTransparency then
+                AnimationController:Cancel(guiObject, true)
+            end
+            guiObject.BackgroundTransparency = self:Resolve(record.BaseTransparency)
+        end
+    end
+end
+
+function BorderController:Resolve(baseTransparency: number, role: string?): number
+    local base = math.clamp(tonumber(baseTransparency) or 0, 0, 1)
+    local intensity = math.clamp(tonumber(Kronos.BorderIntensity) or 1, 0, 1.5)
+    local roleStrength = BorderRoleStrength[role or ""] or 1
+    return 1 - math.clamp((1 - base) * intensity * roleStrength, 0, 1)
+end
+
+function BorderController:Register(
+    strokeObject: UIStroke,
+    baseTransparency: number?,
+    baseThickness: number?,
+    role: string?
+): UIStroke
+    self.Records[strokeObject] = {
+        BaseTransparency = math.clamp(tonumber(baseTransparency) or strokeObject.Transparency, 0, 1),
+        BaseThickness = math.max(tonumber(baseThickness) or strokeObject.Thickness, 0.5),
+        Role = role or "Control",
+    }
+    local record = self.Records[strokeObject]
+    strokeObject:SetAttribute("KronosBorderRole", record.Role)
+    strokeObject.Transparency = self:Resolve(record.BaseTransparency, record.Role)
+    return strokeObject
+end
+
+function BorderController:SetBase(strokeObject: UIStroke, baseTransparency: number): number
+    local record = self.Records[strokeObject]
+    if not record then
+        return baseTransparency
+    end
+    record.BaseTransparency = math.clamp(tonumber(baseTransparency) or 0, 0, 1)
+    return self:Resolve(record.BaseTransparency, record.Role)
+end
+
+function BorderController:Refresh()
+    local intensity = math.clamp(tonumber(Kronos.BorderIntensity) or 1, 0, 1.5)
+    for strokeObject, record in pairs(self.Records) do
+        if not strokeObject.Parent then
+            self.Records[strokeObject] = nil
+        else
+            local active = Kronos.ActiveTweens[strokeObject]
+            if active and active.Transparency then
+                AnimationController:Cancel(strokeObject, true)
+            end
+            strokeObject.Transparency = self:Resolve(record.BaseTransparency, record.Role)
+            strokeObject.Thickness = math.max(record.BaseThickness * (0.8 + 0.2 * math.min(intensity, 1)), 0.5)
+        end
+    end
+end
+
+function AnimationController:Duration(duration: number?): number
+    if Kronos.ReducedMotion then
+        return 0
+    end
+    return math.max((duration or Motion.Hover) * math.clamp(Kronos.AnimationIntensity, 0, 2), 0)
+end
+
+function AnimationController:Cancel(instance: Instance, resolveTargets: boolean?)
     local activeByProperty = Kronos.ActiveTweens[instance]
     if not activeByProperty then
         return
     end
+    local targetsByProperty = Kronos.ActiveTweenTargets[instance]
     local cancelled = {}
     for _, tweenObject in pairs(activeByProperty) do
         if not cancelled[tweenObject] then
@@ -2005,7 +2179,15 @@ function AnimationController:Cancel(instance: Instance)
             pcall(tweenObject.Cancel, tweenObject)
         end
     end
+    if resolveTargets and targetsByProperty then
+        for property, value in pairs(targetsByProperty) do
+            pcall(function()
+                (instance :: any)[property] = value
+            end)
+        end
+    end
     Kronos.ActiveTweens[instance] = nil
+    Kronos.ActiveTweenTargets[instance] = nil
 end
 
 function AnimationController:Tween(
@@ -2018,10 +2200,41 @@ function AnimationController:Tween(
     if Kronos.Destroyed or instance.Parent == nil then
         return nil
     end
+    if properties.BackgroundTransparency ~= nil then
+        local resolved = AppearanceController:SetBase(instance, properties.BackgroundTransparency)
+        if resolved ~= properties.BackgroundTransparency then
+            local transformed = table.clone(properties)
+            transformed.BackgroundTransparency = resolved
+            properties = transformed
+        end
+    end
+    if instance:IsA("UIStroke") and properties.Transparency ~= nil then
+        local resolved = BorderController:SetBase(instance :: UIStroke, properties.Transparency)
+        if resolved ~= properties.Transparency then
+            local transformed = table.clone(properties)
+            transformed.Transparency = resolved
+            properties = transformed
+        end
+    end
+    local resolvedDuration = self:Duration(duration)
+    if resolvedDuration <= 0 then
+        self:Cancel(instance)
+        for property, value in pairs(properties) do
+            pcall(function()
+                (instance :: any)[property] = value
+            end)
+        end
+        return nil
+    end
     local activeByProperty = Kronos.ActiveTweens[instance]
     if not activeByProperty then
         activeByProperty = {}
         Kronos.ActiveTweens[instance] = activeByProperty
+    end
+    local targetsByProperty = Kronos.ActiveTweenTargets[instance]
+    if not targetsByProperty then
+        targetsByProperty = {}
+        Kronos.ActiveTweenTargets[instance] = targetsByProperty
     end
     local conflicting = {}
     for property in pairs(properties) do
@@ -2035,17 +2248,14 @@ function AnimationController:Tween(
         for property, tweenObject in pairs(activeByProperty) do
             if tweenObject == active then
                 activeByProperty[property] = nil
+                targetsByProperty[property] = nil
             end
         end
     end
     local ok, result = pcall(function()
         return TweenService:Create(
             instance,
-            TweenInfo.new(
-                duration or Motion.Hover,
-                style or Enum.EasingStyle.Quint,
-                direction or Enum.EasingDirection.Out
-            ),
+            TweenInfo.new(resolvedDuration, style or Enum.EasingStyle.Quint, direction or Enum.EasingDirection.Out),
             properties
         )
     end)
@@ -2057,12 +2267,14 @@ function AnimationController:Tween(
         end
         if next(activeByProperty) == nil then
             Kronos.ActiveTweens[instance] = nil
+            Kronos.ActiveTweenTargets[instance] = nil
         end
         return nil
     end
     local tweenObject = result :: Tween
     for property in pairs(properties) do
         activeByProperty[property] = tweenObject
+        targetsByProperty[property] = properties[property]
     end
     tweenObject.Completed:Once(function()
         local current = Kronos.ActiveTweens[instance]
@@ -2072,10 +2284,15 @@ function AnimationController:Tween(
         for property, active in pairs(current) do
             if active == tweenObject then
                 current[property] = nil
+                local currentTargets = Kronos.ActiveTweenTargets[instance]
+                if currentTargets then
+                    currentTargets[property] = nil
+                end
             end
         end
         if next(current) == nil then
             Kronos.ActiveTweens[instance] = nil
+            Kronos.ActiveTweenTargets[instance] = nil
         end
     end)
     tweenObject:Play()
@@ -2170,6 +2387,156 @@ local function disconnectAll(owner: AnyTable?)
     owner.Connections = {}
 end
 
+local function pointInside(guiObject: GuiObject?, position: Vector3): boolean
+    if not guiObject or not guiObject.Parent then
+        return false
+    end
+    local absolutePosition = guiObject.AbsolutePosition
+    local absoluteSize = guiObject.AbsoluteSize
+    return position.X >= absolutePosition.X
+        and position.X <= absolutePosition.X + absoluteSize.X
+        and position.Y >= absolutePosition.Y
+        and position.Y <= absolutePosition.Y + absoluteSize.Y
+end
+
+function InputController:_dispatch(stage: string, callback: any, ...: any): boolean
+    if type(callback) ~= "function" then
+        return true
+    end
+    local arguments = table.pack(...)
+    local ok, err = xpcall(function()
+        callback(table.unpack(arguments, 1, arguments.n))
+    end, debug.traceback)
+    if not ok then
+        warn("[Kronos][InputController][" .. stage .. "] " .. tostring(err))
+    end
+    return ok
+end
+
+function InputController:Initialize()
+    if self.Initialized then
+        return
+    end
+    self.Initialized = true
+    addConnection(
+        Kronos,
+        UserInputService.InputBegan:Connect(function(input, processed)
+            if Kronos.Destroyed then
+                return
+            end
+            for _, window in ipairs(table.clone(Kronos.Windows)) do
+                if not window.Destroyed and type(window._handleInputBegan) == "function" then
+                    self:_dispatch("InputBegan", window._handleInputBegan, window, input, processed)
+                end
+            end
+            if not processed then
+                local selected = GuiService.SelectedObject
+                local handler = selected and self.KeyboardHandlers[selected]
+                if handler then
+                    self:_dispatch("Keyboard", handler, input)
+                end
+            end
+            if
+                input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.Touch
+            then
+                local popupWindow = Kronos.ActivePopupWindow
+                local activePopup = popupWindow and popupWindow.ActivePopup
+                if
+                    activePopup
+                    and not pointInside(activePopup.Frame, input.Position)
+                    and not pointInside(activePopup.Anchor, input.Position)
+                then
+                    PopupController:Close(popupWindow)
+                end
+            end
+        end)
+    )
+    addConnection(
+        Kronos,
+        UserInputService.InputChanged:Connect(function(input)
+            local active = self.ActivePointer
+            if not active then
+                return
+            end
+            local touch = active.Input.UserInputType == Enum.UserInputType.Touch
+            if
+                (touch and input ~= active.Input)
+                or (not touch and input.UserInputType ~= Enum.UserInputType.MouseMovement)
+            then
+                return
+            end
+            if not self:_dispatch("PointerChanged", active.Changed, input) and self.ActivePointer == active then
+                self:CancelPointer(active.Owner)
+            end
+        end)
+    )
+    addConnection(
+        Kronos,
+        UserInputService.InputEnded:Connect(function(input)
+            local active = self.ActivePointer
+            if active then
+                local finished = (active.Input.UserInputType == Enum.UserInputType.Touch and input == active.Input)
+                    or (
+                        active.Input.UserInputType ~= Enum.UserInputType.Touch
+                        and input.UserInputType == Enum.UserInputType.MouseButton1
+                    )
+                if finished then
+                    self.ActivePointer = nil
+                    self:_dispatch("PointerEnded", active.Ended, input, false)
+                end
+            end
+            for _, window in ipairs(table.clone(Kronos.Windows)) do
+                if not window.Destroyed and type(window._handleInputEnded) == "function" then
+                    self:_dispatch("InputEnded", window._handleInputEnded, window, input)
+                end
+            end
+        end)
+    )
+end
+
+function InputController:BeginPointer(
+    owner: any,
+    input: InputObject,
+    changed: (InputObject) -> (),
+    ended: ((InputObject?, boolean?) -> ())?
+): boolean
+    self:Initialize()
+    if
+        self.ActivePointer
+        or (input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch)
+    then
+        return false
+    end
+    self.ActivePointer = {
+        Owner = owner,
+        Input = input,
+        Changed = changed,
+        Ended = ended or function() end,
+    }
+    return true
+end
+
+function InputController:CancelPointer(owner: any?): boolean
+    local active = self.ActivePointer
+    if not active or (owner ~= nil and active.Owner ~= owner) then
+        return false
+    end
+    self.ActivePointer = nil
+    self:_dispatch("PointerCancelled", active.Ended, nil, true)
+    return true
+end
+
+function InputController:BindKeyboard(target: GuiObject, callback: (InputObject) -> ())
+    self.KeyboardHandlers[target] = callback
+end
+
+function InputController:UnbindKeyboard(target: GuiObject?)
+    if target then
+        self.KeyboardHandlers[target] = nil
+    end
+end
+
 local function create(className: string, props: AnyTable?, children: { Instance }?): any
     local instance = Instance.new(className)
     props = props or {}
@@ -2187,6 +2554,18 @@ local function create(className: string, props: AnyTable?, children: { Instance 
     if requestedParent then
         instance.Parent = requestedParent
     end
+    if instance:IsA("GuiObject") and instance.BackgroundTransparency < 1 then
+        AppearanceController:Register(instance, instance.BackgroundTransparency)
+    end
+    if instance:IsA("ScrollingFrame") then
+        instance:SetAttribute("KronosCustomScrollbar", true)
+        instance.ScrollBarThickness = 0
+        task.defer(function()
+            if instance.Parent and type(ScrollbarController.Attach) == "function" then
+                ScrollbarController:Attach(instance)
+            end
+        end)
+    end
     return instance
 end
 
@@ -2194,14 +2573,15 @@ local function corner(parent, radius)
     return create("UICorner", { CornerRadius = UDim.new(0, radius or 12), Parent = parent })
 end
 
-local function stroke(parent, color, transparency, thickness)
-    return create("UIStroke", {
+local function stroke(parent, color, transparency, thickness, role)
+    local strokeObject = create("UIStroke", {
         Color = color or Theme.Stroke,
         Transparency = transparency or 0.55,
         Thickness = thickness or 1,
         ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
         Parent = parent,
     })
+    return BorderController:Register(strokeObject, transparency or 0.55, thickness or 1, role)
 end
 
 local function padding(parent, left, top, right, bottom)
@@ -2278,6 +2658,87 @@ local function makeText(parent, text, size, color, weight)
         TextTruncate = Enum.TextTruncate.AtEnd,
         Parent = parent,
     })
+end
+
+function AcrylicController:Register(root: GuiObject, role: string?): AnyTable
+    local existing = self.Records[root]
+    if existing then
+        return existing
+    end
+    local tint = create("Frame", {
+        Name = "AcrylicTint",
+        BackgroundColor3 = Theme.AcrylicTint,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Active = false,
+        Size = UDim2.fromScale(1, 1),
+        ZIndex = root.ZIndex,
+        Parent = root,
+    }) :: Frame
+    tint:SetAttribute("KronosNoDensity", true)
+    local rootCorner = root:FindFirstChildOfClass("UICorner")
+    if rootCorner then
+        create("UICorner", { CornerRadius = rootCorner.CornerRadius, Parent = tint })
+    end
+    local tintGradient = create("UIGradient", {
+        Rotation = 24,
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Theme.AcrylicTint:Lerp(Theme.Accent, 0.08)),
+            ColorSequenceKeypoint.new(0.55, Theme.AcrylicTint),
+            ColorSequenceKeypoint.new(1, Theme.Background),
+        }),
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.08),
+            NumberSequenceKeypoint.new(0.55, 0.28),
+            NumberSequenceKeypoint.new(1, 0.52),
+        }),
+        Parent = tint,
+    }) :: UIGradient
+    local sheen = create("Frame", {
+        Name = "AcrylicSheen",
+        BackgroundColor3 = Theme.InnerHighlight,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Active = false,
+        Position = UDim2.fromOffset(1, 1),
+        Size = UDim2.new(1, -2, 0, 1),
+        ZIndex = root.ZIndex + 1,
+        Parent = root,
+    }) :: Frame
+    sheen:SetAttribute("KronosNoDensity", true)
+    ThemeController:Bind(tint, "BackgroundColor3", "AcrylicTint")
+    ThemeController:Bind(sheen, "BackgroundColor3", "InnerHighlight")
+    local record = { Root = root, Tint = tint, Sheen = sheen, Gradient = tintGradient, Role = role or "Surface" }
+    self.Records[root] = record
+    self:RefreshRecord(record)
+    return record
+end
+
+function AcrylicController:RefreshRecord(record: AnyTable)
+    local root = record.Root
+    if not root or not root.Parent then
+        if root then
+            self.Records[root] = nil
+        end
+        return
+    end
+    local enabled = Kronos.AcrylicEnabled == true
+    local intensity = math.clamp(tonumber(Kronos.AcrylicIntensity) or 0.55, 0, 1)
+    record.Tint.Visible = enabled
+    record.Sheen.Visible = enabled
+    record.Tint.BackgroundTransparency = enabled and (0.94 - 0.26 * intensity) or 1
+    record.Sheen.BackgroundTransparency = enabled and (0.96 - 0.28 * intensity) or 1
+    record.Gradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Theme.AcrylicTint:Lerp(Theme.Accent, 0.06 + 0.08 * intensity)),
+        ColorSequenceKeypoint.new(0.55, Theme.AcrylicTint),
+        ColorSequenceKeypoint.new(1, Theme.Background),
+    })
+end
+
+function AcrylicController:Refresh()
+    for _, record in pairs(self.Records) do
+        self:RefreshRecord(record)
+    end
 end
 
 function IconController:Normalize(name: any): string?
@@ -2395,6 +2856,74 @@ function ResponsiveController:GetDensity(viewport: Vector2?): number
     return 1
 end
 
+function ResponsiveController:GetLayoutMode(viewport: Vector2, safeWidth: number, safeHeight: number): string
+    if viewport.X < viewport.Y or safeWidth < safeHeight * 0.86 or safeWidth <= 560 then
+        return "Portrait"
+    end
+    if UserInputService.TouchEnabled and safeWidth > safeHeight and safeHeight <= 650 then
+        return "MobileLandscape"
+    end
+    if safeWidth < 1100 or safeHeight < 620 then
+        return "Compact"
+    end
+    if safeWidth < 1700 or safeHeight < 850 then
+        return "Medium"
+    end
+    return "Wide"
+end
+
+function ResponsiveController:CalculateWindowSize(
+    window: AnyTable,
+    viewport: Vector2,
+    safeWidth: number,
+    safeHeight: number
+): (number, number, string)
+    local mode = self:GetLayoutMode(viewport, safeWidth, safeHeight)
+    local width: number
+    local height: number
+    if window.HasExplicitWidth then
+        width = window.BaseWidth
+    elseif mode == "Portrait" then
+        width = safeWidth * 0.95
+    elseif mode == "MobileLandscape" then
+        width = safeWidth * 0.88
+    elseif mode == "Compact" then
+        width = safeWidth * 0.84
+    elseif mode == "Medium" then
+        width = math.clamp(safeWidth * 0.56, Metrics.MinimumWindow.X, 1020)
+    else
+        width = math.clamp(safeWidth * 0.49, Metrics.MinimumWindow.X, Metrics.MaximumWindow.X)
+    end
+
+    if window.HasExplicitHeight then
+        height = window.BaseHeight
+    elseif mode == "Portrait" then
+        height = safeHeight * 0.82
+    elseif mode == "MobileLandscape" then
+        local floatingHeight = 0
+        for _, widget in ipairs(window.Widgets or {}) do
+            if
+                widget ~= window.ReopenButton
+                and widget.Visible ~= false
+                and not widget.UserMoved
+                and not widget.CustomPosition
+            then
+                floatingHeight = math.max(floatingHeight, self:Scale(window, finiteNumber(widget.DesignHeight, 0)))
+            end
+        end
+        local floatingBand = floatingHeight > 0 and floatingHeight + self:Scale(window, 8) or 0
+        height = math.min(safeHeight * 0.93, safeHeight - floatingBand)
+    elseif mode == "Compact" then
+        height = math.min(safeHeight * 0.88, width / 1.55)
+    else
+        height = math.clamp(math.min(safeHeight * 0.61, width / 1.72), Metrics.MinimumWindow.Y, Metrics.MaximumWindow.Y)
+    end
+
+    width = math.clamp(width, math.min(280, safeWidth), safeWidth)
+    height = math.clamp(height, math.min(300, safeHeight), safeHeight)
+    return math.floor(width + 0.5), math.floor(height + 0.5), mode
+end
+
 function ResponsiveController:Scale(window: AnyTable?, value: number): number
     return math.floor(value * ((window and window.Density) or self:GetDensity()) + 0.5)
 end
@@ -2411,7 +2940,8 @@ function ResponsiveController:_capture(window: AnyTable, instance: Instance)
             record.TextSize = instance.TextSize
         end
         if instance:IsA("ScrollingFrame") then
-            record.ScrollBarThickness = instance.ScrollBarThickness
+            record.ScrollBarThickness = instance:GetAttribute("KronosCustomScrollbar") and 0
+                or instance.ScrollBarThickness
         end
     elseif instance:IsA("UICorner") then
         record.CornerRadius = instance.CornerRadius
@@ -2452,10 +2982,11 @@ function ResponsiveController:_applyRecord(instance: Instance, record: AnyTable,
         end
         if record.ScrollBarThickness then
             local scrollingFrame = instance :: ScrollingFrame
-            scrollingFrame.ScrollBarThickness = math.max(
-                math.floor(record.ScrollBarThickness * density + 0.5),
-                record.ScrollBarThickness > 0 and 1 or 0
-            )
+            scrollingFrame.ScrollBarThickness = scrollingFrame:GetAttribute("KronosCustomScrollbar") and 0
+                or math.max(
+                    math.floor(record.ScrollBarThickness * density + 0.5),
+                    record.ScrollBarThickness > 0 and 1 or 0
+                )
         end
         record.AppliedDensity = density
     elseif record.CornerRadius then
@@ -2542,15 +3073,6 @@ local function makeHitbox(parent)
         Size = UDim2.fromScale(1, 1),
         Parent = parent,
     })
-end
-
-local function pointInside(guiObject, position)
-    if not guiObject or not guiObject.Parent then
-        return false
-    end
-    local abs = guiObject.AbsolutePosition
-    local size = guiObject.AbsoluteSize
-    return position.X >= abs.X and position.X <= abs.X + size.X and position.Y >= abs.Y and position.Y <= abs.Y + size.Y
 end
 
 local function guiInsets(): (Vector2, Vector2)
@@ -2651,63 +3173,48 @@ function DragController:Initialize()
     end
     self.Initialized = true
     self.Bindings = setmetatable({}, { __mode = "k" })
-    addConnection(
-        Kronos,
-        UserInputService.InputChanged:Connect(function(input)
-            local active = self.Active
-            if not active then
-                return
-            end
-            local isTouch = active.Input.UserInputType == Enum.UserInputType.Touch
-            if
-                (isTouch and input ~= active.Input)
-                or (not isTouch and input.UserInputType ~= Enum.UserInputType.MouseMovement)
-            then
-                return
-            end
-            if not active.Target.Parent then
-                self.Active = nil
-                return
-            end
-            local pointer = Vector2.new(input.Position.X, input.Position.Y)
-            active.LastPointer = pointer
-            local delta = pointer - active.StartPointer
-            if not active.Moved and delta.Magnitude < active.Threshold then
-                return
-            end
-            active.Moved = true
-            local topLeft = clampAbsoluteTopLeft(active.Target, active.StartTopLeft + delta, active.Options)
-            local position = setAbsoluteTopLeft(active.Target, topLeft)
-            if active.MovedCallback then
-                active.MovedCallback(position)
-            end
-        end)
-    )
-    addConnection(
-        Kronos,
-        UserInputService.InputEnded:Connect(function(input)
-            local active = self.Active
-            if not active then
-                return
-            end
-            local finished = (active.Input.UserInputType == Enum.UserInputType.Touch and input == active.Input)
-                or (
-                    active.Input.UserInputType ~= Enum.UserInputType.Touch
-                    and input.UserInputType == Enum.UserInputType.MouseButton1
-                )
-            if finished then
-                self.Active = nil
-                if active.EndedCallback then
-                    active.EndedCallback(active.Moved == true)
-                end
-            end
-        end)
-    )
+    InputController:Initialize()
+end
+
+function DragController:_update(input: InputObject)
+    local active = self.Active
+    if not active then
+        return
+    end
+    if not active.Target.Parent then
+        self:Cancel(active.Target)
+        return
+    end
+    local pointer = Vector2.new(input.Position.X, input.Position.Y)
+    active.LastPointer = pointer
+    local delta = pointer - active.StartPointer
+    if not active.Moved and delta.Magnitude < active.Threshold then
+        return
+    end
+    active.Moved = true
+    local topLeft = clampAbsoluteTopLeft(active.Target, active.StartTopLeft + delta, active.Options)
+    local position = setAbsoluteTopLeft(active.Target, topLeft)
+    if active.MovedCallback then
+        active.MovedCallback(position)
+    end
+end
+
+function DragController:_finish()
+    local active = self.Active
+    if not active then
+        return
+    end
+    self.Active = nil
+    if active.EndedCallback then
+        active.EndedCallback(active.Moved == true)
+    end
 end
 
 function DragController:Cancel(target: GuiObject?)
     if self.Active and (target == nil or self.Active.Target == target) then
-        self.Active = nil
+        if not InputController:CancelPointer(self) then
+            self:_finish()
+        end
     end
 end
 
@@ -2751,7 +3258,13 @@ function DragController:Bind(
     addConnection(
         owner,
         handle.InputBegan:Connect(function(input)
-            if Kronos.Destroyed or self.Active or not target.Parent or not target.Visible then
+            if
+                Kronos.Destroyed
+                or self.Active
+                or InputController.ActivePointer
+                or not target.Parent
+                or not target.Visible
+            then
                 return
             end
             if
@@ -2760,10 +3273,20 @@ function DragController:Bind(
             then
                 return
             end
+            if type(options.CanStart) == "function" then
+                local ok, allowed = pcall(options.CanStart)
+                if not ok or allowed == false then
+                    return
+                end
+            end
             for _, ignored in ipairs(options.Ignore or {}) do
                 if pointInside(ignored, input.Position) then
                     return
                 end
+            end
+            local window = owner.Window or (owner.Kronos and owner)
+            if window and window.ActivePopup then
+                PopupController:Close(window)
             end
             local activeTweens = Kronos.ActiveTweens[target]
             if activeTweens and (activeTweens.Position or activeTweens.Size) then
@@ -2778,7 +3301,7 @@ function DragController:Bind(
                 end
             end
             local pointer = Vector2.new(input.Position.X, input.Position.Y)
-            self.Active = {
+            local active = {
                 Input = input,
                 Target = target,
                 StartPointer = pointer,
@@ -2790,6 +3313,16 @@ function DragController:Bind(
                 EndedCallback = options.Ended,
                 Moved = false,
             }
+            self.Active = active
+            if
+                not InputController:BeginPointer(self, input, function(changedInput)
+                    self:_update(changedInput)
+                end, function()
+                    self:_finish()
+                end)
+            then
+                self.Active = nil
+            end
         end)
     )
     addConnection(
@@ -2806,6 +3339,319 @@ function DragController:Bind(
     return binding
 end
 
+function ScrollbarController:Initialize()
+    if self.Initialized then
+        return
+    end
+    self.Initialized = true
+    InputController:Initialize()
+end
+
+function ScrollbarController:_updatePointer(input: InputObject)
+    local active = self.Active
+    if not active then
+        return
+    end
+    if not active.Scroller.Parent then
+        self:Cancel()
+        return
+    end
+    local pointer = active.Horizontal and input.Position.X or input.Position.Y
+    active.LastPointer = pointer
+    local travel = math.max(active.TrackLength - active.ThumbLength, 1)
+    local canvas = active.StartCanvas + (pointer - active.StartPointer) / travel * active.MaximumCanvas
+    self:SetCanvas(active, canvas)
+    self:Wake(active, true)
+end
+
+function ScrollbarController:_finishPointer()
+    local active = self.Active
+    if not active then
+        return
+    end
+    self.Active = nil
+    active.Dragging = false
+    if active.Scroller and active.Scroller.Parent then
+        self:Update(active)
+        self:Wake(active, false)
+    end
+end
+
+function ScrollbarController:GetLengths(entry: AnyTable): (number, number, number, number)
+    local scroller = entry.Scroller :: ScrollingFrame
+    local view = entry.Horizontal and scroller.AbsoluteSize.X or scroller.AbsoluteSize.Y
+    local content = entry.Horizontal and scroller.AbsoluteCanvasSize.X or scroller.AbsoluteCanvasSize.Y
+    content = math.max(content, view)
+    local trackLength = math.max(view - entry.Margin * 2, 1)
+    local maximumCanvas = math.max(content - view, 0)
+    local thumbLength = maximumCanvas > 0
+            and math.clamp(trackLength * view / math.max(content, 1), entry.MinimumThumb, trackLength)
+        or trackLength
+    return view, trackLength, maximumCanvas, thumbLength
+end
+
+function ScrollbarController:SetCanvas(entry: AnyTable, value: number)
+    local scroller = entry.Scroller :: ScrollingFrame
+    local _, _, maximumCanvas = self:GetLengths(entry)
+    local nextValue = math.clamp(value, 0, maximumCanvas)
+    if entry.Horizontal then
+        scroller.CanvasPosition = Vector2.new(nextValue, scroller.CanvasPosition.Y)
+    else
+        scroller.CanvasPosition = Vector2.new(scroller.CanvasPosition.X, nextValue)
+    end
+end
+
+function ScrollbarController:Update(entry: AnyTable)
+    local scroller = entry.Scroller :: ScrollingFrame
+    if not scroller.Parent or not entry.Track.Parent then
+        self:Detach(scroller)
+        return
+    end
+    scroller.ScrollBarThickness = 0
+    entry.Track.ZIndex = scroller.ZIndex + 40
+    entry.Thumb.ZIndex = entry.Track.ZIndex + 1
+    local view, trackLength, maximumCanvas, thumbLength = self:GetLengths(entry)
+    entry.TrackLength = trackLength
+    entry.MaximumCanvas = maximumCanvas
+    entry.ThumbLength = thumbLength
+    local current = entry.Horizontal and scroller.CanvasPosition.X or scroller.CanvasPosition.Y
+    if self.Active == entry and entry.Dragging and entry.LastPointer then
+        entry.StartPointer = entry.LastPointer
+        entry.StartCanvas = current
+    end
+    local ratio = maximumCanvas > 0 and math.clamp(current / maximumCanvas, 0, 1) or 0
+    local thumbOffset = (trackLength - thumbLength) * ratio
+    local active = entry.Hovered or entry.Dragging or self.Active == entry
+    local width = active and entry.ActiveWidth or entry.IdleWidth
+    local canvas = scroller.CanvasPosition
+    local targetSize: UDim2
+    if entry.Horizontal then
+        entry.Track.AnchorPoint = Vector2.new(0, 1)
+        entry.Track.Position = UDim2.fromOffset(canvas.X + entry.Margin, canvas.Y + view - entry.Margin)
+        targetSize = UDim2.fromOffset(trackLength, width)
+        entry.Thumb.Position = UDim2.fromOffset(thumbOffset, 0)
+        entry.Thumb.Size = UDim2.fromOffset(thumbLength, width)
+    else
+        entry.Track.AnchorPoint = Vector2.new(1, 0)
+        entry.Track.Position =
+            UDim2.fromOffset(canvas.X + scroller.AbsoluteSize.X - entry.Margin, canvas.Y + entry.Margin)
+        targetSize = UDim2.fromOffset(width, trackLength)
+        entry.Thumb.Position = UDim2.fromOffset(0, thumbOffset)
+        entry.Thumb.Size = UDim2.fromOffset(width, thumbLength)
+    end
+    if entry.LastWidth and entry.LastWidth ~= width then
+        tween(entry.Track, { Size = targetSize }, Motion.Scrollbar)
+    else
+        entry.Track.Size = targetSize
+    end
+    entry.LastWidth = width
+    entry.Track.Visible = maximumCanvas > 0.5 and scroller.Visible
+end
+
+function ScrollbarController:Wake(entry: AnyTable, hold: boolean?)
+    if not entry.Track.Parent then
+        return
+    end
+    entry.IdleGeneration = (entry.IdleGeneration or 0) + 1
+    local generation = entry.IdleGeneration
+    tween(entry.Track, { BackgroundTransparency = 0.72 }, Motion.Scrollbar)
+    tween(entry.Thumb, { BackgroundTransparency = 0.08 }, Motion.Scrollbar)
+    if hold then
+        return
+    end
+    task.delay(1.05, function()
+        if entry.IdleGeneration == generation and not entry.Hovered and not entry.Dragging and entry.Track.Parent then
+            tween(entry.Track, { BackgroundTransparency = 0.96 }, Motion.Scrollbar)
+            tween(entry.Thumb, { BackgroundTransparency = 0.52 }, Motion.Scrollbar)
+        end
+    end)
+end
+
+function ScrollbarController:Detach(scroller: ScrollingFrame)
+    local entry = self.Entries[scroller]
+    if not entry then
+        return
+    end
+    if self.Active == entry then
+        self:Cancel()
+    end
+    self.Entries[scroller] = nil
+    disconnectAll(entry)
+    if entry.Track and entry.Track.Parent then
+        ThemeController:UnbindTree(entry.Track)
+        entry.Track:Destroy()
+    end
+end
+
+function ScrollbarController:Cancel()
+    local active = self.Active
+    if not active then
+        return
+    end
+    if not InputController:CancelPointer(self) then
+        self:_finishPointer()
+    end
+end
+
+function ScrollbarController:Attach(scroller: ScrollingFrame): AnyTable?
+    if self.Entries[scroller] or not scroller.Parent then
+        return self.Entries[scroller]
+    end
+    self:Initialize()
+    scroller:SetAttribute("KronosCustomScrollbar", true)
+    scroller.ScrollBarThickness = 0
+    local horizontal = scroller.ScrollingDirection == Enum.ScrollingDirection.X
+    local entry: AnyTable = {
+        Scroller = scroller,
+        Connections = {},
+        Horizontal = horizontal,
+        Margin = 3,
+        IdleWidth = 3,
+        ActiveWidth = 5,
+        MinimumThumb = horizontal and 24 or 28,
+        Hovered = false,
+        Dragging = false,
+    }
+    local track = create("Frame", {
+        Name = "KronosScrollTrack",
+        BackgroundColor3 = Theme.ScrollTrack,
+        BackgroundTransparency = 0.96,
+        BorderSizePixel = 0,
+        Active = true,
+        ClipsDescendants = true,
+        ZIndex = scroller.ZIndex + 40,
+        Parent = scroller,
+    }) :: Frame
+    track:SetAttribute("KronosNoDensity", true)
+    local thumb = create("Frame", {
+        Name = "KronosScrollThumb",
+        BackgroundColor3 = Theme.Accent,
+        BackgroundTransparency = 0.52,
+        BorderSizePixel = 0,
+        Active = false,
+        ZIndex = track.ZIndex + 1,
+        Parent = track,
+    }) :: Frame
+    thumb:SetAttribute("KronosNoDensity", true)
+    corner(track, 3)
+    corner(thumb, 3)
+    ThemeController:Bind(track, "BackgroundColor3", "ScrollTrack")
+    ThemeController:Bind(thumb, "BackgroundColor3", "Accent")
+    entry.Track = track
+    entry.Thumb = thumb
+    self.Entries[scroller] = entry
+
+    local function refresh()
+        self:Update(entry)
+    end
+    for _, property in ipairs({
+        "AbsoluteSize",
+        "AbsoluteCanvasSize",
+        "CanvasPosition",
+        "Visible",
+        "ZIndex",
+        "ScrollingDirection",
+    }) do
+        local propertyName = property
+        addConnection(
+            entry,
+            scroller:GetPropertyChangedSignal(propertyName):Connect(function()
+                if propertyName == "ScrollingDirection" then
+                    entry.Horizontal = scroller.ScrollingDirection == Enum.ScrollingDirection.X
+                    entry.MinimumThumb = entry.Horizontal and 24 or 28
+                end
+                refresh()
+                if propertyName == "CanvasPosition" then
+                    self:Wake(entry, false)
+                end
+            end)
+        )
+    end
+    addConnection(
+        entry,
+        track.MouseEnter:Connect(function()
+            entry.Hovered = true
+            refresh()
+            self:Wake(entry, true)
+        end)
+    )
+    addConnection(
+        entry,
+        track.MouseLeave:Connect(function()
+            entry.Hovered = false
+            refresh()
+            self:Wake(entry, false)
+        end)
+    )
+    addConnection(
+        entry,
+        track.InputBegan:Connect(function(input)
+            if
+                input.UserInputType ~= Enum.UserInputType.MouseButton1
+                and input.UserInputType ~= Enum.UserInputType.Touch
+            then
+                return
+            end
+            if
+                not InputController:BeginPointer(self, input, function(changedInput)
+                    self:_updatePointer(changedInput)
+                end, function()
+                    self:_finishPointer()
+                end)
+            then
+                return
+            end
+            self:Update(entry)
+            local pointer = entry.Horizontal and input.Position.X or input.Position.Y
+            if not pointInside(thumb, input.Position) then
+                local trackStart = entry.Horizontal and track.AbsolutePosition.X or track.AbsolutePosition.Y
+                local travel = math.max(entry.TrackLength - entry.ThumbLength, 1)
+                local offset = math.clamp(pointer - trackStart - entry.ThumbLength * 0.5, 0, travel)
+                self:SetCanvas(entry, offset / travel * entry.MaximumCanvas)
+                self:Update(entry)
+            end
+            entry.Dragging = true
+            entry.StartPointer = pointer
+            entry.LastPointer = pointer
+            entry.StartCanvas = entry.Horizontal and scroller.CanvasPosition.X or scroller.CanvasPosition.Y
+            self.Active = entry
+            self:Wake(entry, true)
+            self:Update(entry)
+        end)
+    )
+    addConnection(
+        entry,
+        scroller.InputChanged:Connect(function(input)
+            if entry.Horizontal and input.UserInputType == Enum.UserInputType.MouseWheel then
+                local _, _, maximumCanvas = self:GetLengths(entry)
+                self:SetCanvas(entry, scroller.CanvasPosition.X - input.Position.Z * math.min(42, maximumCanvas))
+                self:Wake(entry, false)
+            end
+        end)
+    )
+    addConnection(
+        entry,
+        scroller.AncestryChanged:Connect(function(_, parent)
+            if parent == nil then
+                self:Detach(scroller)
+            end
+        end)
+    )
+    self:Update(entry)
+    return entry
+end
+
+function ScrollbarController:DestroyAll()
+    self:Cancel()
+    local scrollers = {}
+    for scroller in pairs(self.Entries) do
+        table.insert(scrollers, scroller)
+    end
+    for _, scroller in ipairs(scrollers) do
+        self:Detach(scroller)
+    end
+end
+
 function PopupController:Close(window: AnyTable)
     local active = window.ActivePopup
     if not active then
@@ -2814,6 +3660,7 @@ function PopupController:Close(window: AnyTable)
         end
         return
     end
+    ScrollbarController:Cancel()
     window.ActivePopup = nil
     if Kronos.ActivePopupWindow == window then
         Kronos.ActivePopupWindow = nil
@@ -2830,7 +3677,7 @@ function PopupController:Close(window: AnyTable)
                 GroupTransparency = 1,
                 Position = frame.Position + UDim2.fromOffset(0, -3),
             }, Motion.PopupClose, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
-            task.delay(Motion.PopupClose, function()
+            task.delay(AnimationController:Duration(Motion.PopupClose), function()
                 if frame.Parent then
                     frame:Destroy()
                 end
@@ -2887,6 +3734,9 @@ function PopupController:Open(
     gap: number?,
     placement: string?
 ): AnyTable
+    InputController:CancelPointer()
+    DragController:Cancel()
+    ScrollbarController:Cancel()
     if Kronos.ActivePopupWindow and Kronos.ActivePopupWindow ~= window then
         self:Close(Kronos.ActivePopupWindow)
     end
@@ -2895,6 +3745,7 @@ function PopupController:Open(
     window.ActivePopup = { Frame = popup, Maid = maid, Anchor = anchor, Gap = gap, Placement = placement }
     Kronos.ActivePopupWindow = window
     popup.Parent = window.PopupLayer or window.Overlay
+    AcrylicController:Register(popup, "Popup")
     ResponsiveController:RegisterTree(window, popup)
     popup.Visible = true
     maid:Give(popup.DescendantAdded:Connect(function(descendant)
@@ -2909,17 +3760,6 @@ function PopupController:Open(
             self:Position(window, popup, anchor, gap, placement)
         end
     end)
-    maid:Give(UserInputService.InputBegan:Connect(function(input)
-        if
-            input.UserInputType ~= Enum.UserInputType.MouseButton1
-            and input.UserInputType ~= Enum.UserInputType.Touch
-        then
-            return
-        end
-        if not pointInside(popup, input.Position) and not pointInside(anchor, input.Position) then
-            self:Close(window)
-        end
-    end))
     maid:Give(popup.AncestryChanged:Connect(function(_, parent)
         if parent == nil and window.ActivePopup and window.ActivePopup.Frame == popup then
             window.ActivePopup = nil
@@ -2971,7 +3811,7 @@ local function layoutToastHolder(holder: Frame)
     local topLeftInset, bottomRightInset = guiInsets()
     local top = topLeftInset.Y + d(50)
     holder.Position = UDim2.new(1, -(bottomRightInset.X + d(8)), 0, top)
-    holder.Size = UDim2.fromOffset(d(246), math.max(viewportSize().Y - top - bottomRightInset.Y - d(8), d(80)))
+    holder.Size = UDim2.fromOffset(d(220), math.max(viewportSize().Y - top - bottomRightInset.Y - d(8), d(80)))
     local layout = holder:FindFirstChildOfClass("UIListLayout")
     if layout then
         layout.Padding = UDim.new(0, d(5))
@@ -2984,7 +3824,7 @@ local function makeToastHolder(parent: Instance): Frame
         BackgroundTransparency = 1,
         AnchorPoint = Vector2.new(1, 0),
         Position = UDim2.new(1, -8, 0, 50),
-        Size = UDim2.fromOffset(246, 460),
+        Size = UDim2.fromOffset(220, 460),
         Parent = parent,
         ZIndex = LayerZ.Notification,
     }) :: Frame
@@ -3039,6 +3879,9 @@ function Kronos:GetIcon(name: any): (string?, string?, boolean)
 end
 
 function Kronos:IsIconValid(name: any): (boolean, string?)
+    if not IconController:Normalize(name) then
+        return false, nil
+    end
     local _, canonical, valid = IconController:Resolve(name)
     return valid, canonical
 end
@@ -3057,8 +3900,8 @@ function Kronos:Notify(config: NotificationOptions?): AnyTable
 
     local duration = math.max(finiteNumber(config.Duration, 4), 0.5)
     local message = tostring(config.Content or config.Message or config.Subtitle or "")
-    local height = message ~= "" and 62 or 46
-    local width = 246
+    local height = message ~= "" and 58 or 42
+    local width = 220
     local kind = string.lower(tostring(config.Type or "info"))
     local accent = Theme.Accent
     local accentToken = "Accent"
@@ -3095,7 +3938,8 @@ function Kronos:Notify(config: NotificationOptions?): AnyTable
     }) :: CanvasGroup
     ThemeController:Bind(toast, "BackgroundColor3", "ElevatedSurface")
     corner(toast, Metrics.PopupRadius)
-    stroke(toast, Theme.Border, 0.42, 1)
+    stroke(toast, Theme.Border, 0.42, 1, "Floating")
+    AcrylicController:Register(toast, "Notification")
 
     local accentBar = create("Frame", {
         BackgroundColor3 = accent,
@@ -3176,7 +4020,7 @@ function Kronos:Notify(config: NotificationOptions?): AnyTable
                     Enum.EasingStyle.Quart,
                     Enum.EasingDirection.In
                 )
-                task.delay(Motion.Notification, function()
+                task.delay(AnimationController:Duration(Motion.Notification), function()
                     if slot.Parent then
                         slot:Destroy()
                     end
@@ -3241,6 +4085,7 @@ local BaseControl = {}
 BaseControl.__index = BaseControl
 
 function BaseControl:_closeTransient()
+    InputController:CancelPointer(self)
     if self.Instance then
         dismissTooltip(self.Window, self.Instance)
     end
@@ -3298,6 +4143,8 @@ end
 
 function BaseControl:Destroy()
     self:_closeTransient()
+    InputController:UnbindKeyboard(self.KeyboardTarget)
+    self.KeyboardTarget = nil
     disconnectAll(self)
     if self.Window and self.Window.Keybinds then
         local windowIndex = table.find(self.Window.Keybinds, self)
@@ -3594,7 +4441,7 @@ function Section:CreateToggle(id: any, config: ComponentOptions?): AnyTable
                         tween(descendant, { TextTransparency = 1 }, Motion.Toggle)
                     end
                 end
-                task.delay(Motion.Toggle, function()
+                task.delay(AnimationController:Duration(Motion.Toggle), function()
                     if dependency.Generation == generation then
                         control:SetVisible(false)
                     end
@@ -3702,7 +4549,6 @@ function Section:CreateSlider(id: any, config: ComponentOptions?): AnyTable
     corner(knob, 5)
 
     local dragging = false
-    local dragTouch: InputObject? = nil
     local function normalized(value: number): number
         if maximum == minimum then
             return 0
@@ -3750,6 +4596,14 @@ function Section:CreateSlider(id: any, config: ComponentOptions?): AnyTable
         local ratio = math.clamp((input.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
         slider:SetValue(minimum + (maximum - minimum) * ratio)
     end
+    local function finishDrag()
+        if not dragging then
+            return
+        end
+        dragging = false
+        local size = ResponsiveController:Scale(self.Window, 9)
+        tween(knob, { Size = UDim2.fromOffset(size, size) }, Motion.Press)
+    end
     addConnection(
         slider,
         hit.InputBegan:Connect(function(input)
@@ -3757,58 +4611,31 @@ function Section:CreateSlider(id: any, config: ComponentOptions?): AnyTable
                 input.UserInputType == Enum.UserInputType.MouseButton1
                 or input.UserInputType == Enum.UserInputType.Touch
             then
+                if
+                    not InputController:BeginPointer(slider, input, update, function()
+                        finishDrag()
+                    end)
+                then
+                    return
+                end
                 dragging = true
-                dragTouch = input.UserInputType == Enum.UserInputType.Touch and input or nil
                 update(input)
                 local size = ResponsiveController:Scale(self.Window, 12)
                 tween(knob, { Size = UDim2.fromOffset(size, size) }, Motion.Press)
             end
         end)
     )
-    addConnection(
-        slider,
-        UserInputService.InputChanged:Connect(function(input)
-            if
-                dragging
-                and (
-                    (dragTouch and input == dragTouch)
-                    or (not dragTouch and input.UserInputType == Enum.UserInputType.MouseMovement)
-                )
-            then
-                update(input)
-            end
-        end)
-    )
-    addConnection(
-        slider,
-        UserInputService.InputEnded:Connect(function(input)
-            if
-                dragging
-                and (
-                    (dragTouch and input == dragTouch)
-                    or (not dragTouch and input.UserInputType == Enum.UserInputType.MouseButton1)
-                )
-            then
-                dragging = false
-                dragTouch = nil
-                local size = ResponsiveController:Scale(self.Window, 9)
-                tween(knob, { Size = UDim2.fromOffset(size, size) }, Motion.Press)
-            end
-        end)
-    )
-    addConnection(
-        slider,
-        UserInputService.InputBegan:Connect(function(input, processed)
-            if processed or slider.Disabled or GuiService.SelectedObject ~= hit then
-                return
-            end
-            if input.KeyCode == Enum.KeyCode.Left or input.KeyCode == Enum.KeyCode.Down then
-                slider:SetValue(slider.Value - step)
-            elseif input.KeyCode == Enum.KeyCode.Right or input.KeyCode == Enum.KeyCode.Up then
-                slider:SetValue(slider.Value + step)
-            end
-        end)
-    )
+    slider.KeyboardTarget = hit
+    InputController:BindKeyboard(hit, function(input)
+        if slider.Disabled or GuiService.SelectedObject ~= hit then
+            return
+        end
+        if input.KeyCode == Enum.KeyCode.Left or input.KeyCode == Enum.KeyCode.Down then
+            slider:SetValue(slider.Value - step)
+        elseif input.KeyCode == Enum.KeyCode.Right or input.KeyCode == Enum.KeyCode.Up then
+            slider:SetValue(slider.Value + step)
+        end
+    end)
 
     slider.Value = quantize(default)
     render(slider.Value, true)
@@ -4038,7 +4865,8 @@ local function attachTooltip(window: AnyTable, target: GuiObject, value: any, ow
                     Parent = window.PopupLayer,
                 }) :: TextLabel
                 corner(tip, Metrics.PopupRadius)
-                stroke(tip, Theme.Border, 0.38, 1)
+                stroke(tip, Theme.Border, 0.38, 1, "Floating")
+                AcrylicController:Register(tip, "Tooltip")
                 padding(tip, 9, 5, 9, 5)
                 ResponsiveController:RegisterTree(window, tip)
                 local mouse = UserInputService:GetMouseLocation()
@@ -4223,7 +5051,7 @@ function Section:CreateDropdown(id: any, config: ComponentOptions?): AnyTable
             ZIndex = 700,
         }) :: CanvasGroup
         corner(popup, Metrics.PopupRadius)
-        stroke(popup, Theme.Border, 0.28, 1)
+        stroke(popup, Theme.Border, 0.28, 1, "Floating")
         padding(popup, 7, 7, 7, 7)
         local popupMaid = PopupController:Open(self.Window, popup, button, 5)
         popupMaid:Give(function()
@@ -4743,7 +5571,9 @@ function Section:CreateDivider(id: any, config: (ComponentOptions | string)?): A
     local dividerTitle = config.Name or config.Title
     if dividerTitle then
         local measured = TextService:GetTextSize(tostring(dividerTitle), 9, Enum.Font.GothamBold, Vector2.new(1000, 16))
-        local iconWidth = config.Icon and math.clamp(finiteNumber(config.IconSize, 11), 8, 32) + 5 or 0
+        local iconWidth = IconController:Normalize(config.Icon)
+                and math.clamp(finiteNumber(config.IconSize, 11), 8, 32) + 5
+            or 0
         local titleHolder = create("Frame", {
             BackgroundColor3 = Theme.Surface,
             BorderSizePixel = 0,
@@ -4956,7 +5786,7 @@ function Section:CreateKeybind(id: any, config: ComponentOptions?): AnyTable
                 ZIndex = 720,
             }) :: CanvasGroup
             corner(popup, Metrics.PopupRadius)
-            stroke(popup, Theme.Border, 0.28, 1)
+            stroke(popup, Theme.Border, 0.28, 1, "Floating")
             padding(popup, 8, 8, 8, 8)
             local popupMaid = PopupController:Open(self.Window, popup, modeButton, 5)
             local bindingHeader = create("Frame", {
@@ -5170,7 +6000,7 @@ function Section:CreateColorpicker(id: any, config: ComponentOptions?): AnyTable
             ZIndex = 740,
         }) :: CanvasGroup
         corner(popup, Metrics.PopupRadius)
-        stroke(popup, Theme.Border, 0.24, 1)
+        stroke(popup, Theme.Border, 0.24, 1, "Floating")
         padding(popup, 9, 9, 9, 9)
         local popupMaid = PopupController:Open(self.Window, popup, preview, 5)
         local hueValue, saturation, brightness = picker.Value:ToHSV()
@@ -5424,7 +6254,6 @@ function Section:CreateColorpicker(id: any, config: ComponentOptions?): AnyTable
         end
 
         local activeDrag: string? = nil
-        local dragTouch: InputObject? = nil
         local function updateSaturation(position: Vector3)
             saturation =
                 math.clamp((position.X - saturationFrame.AbsolutePosition.X) / saturationFrame.AbsoluteSize.X, 0, 1)
@@ -5443,14 +6272,36 @@ function Section:CreateColorpicker(id: any, config: ComponentOptions?): AnyTable
                 updateFields(true)
             end
         end
+        local function updateActive(input: InputObject)
+            if activeDrag == "Saturation" then
+                updateSaturation(input.Position)
+            elseif activeDrag == "Hue" then
+                updateHue(input.Position)
+            elseif activeDrag == "Alpha" then
+                updateAlpha(input.Position)
+            end
+        end
+        local function beginDrag(kind: string, input: InputObject)
+            if
+                not InputController:BeginPointer(picker, input, updateActive, function()
+                    activeDrag = nil
+                end)
+            then
+                return
+            end
+            activeDrag = kind
+            updateActive(input)
+        end
+        popupMaid:Give(function()
+            InputController:CancelPointer(picker)
+            activeDrag = nil
+        end)
         popupMaid:Give(saturationHit.InputBegan:Connect(function(input)
             if
                 input.UserInputType == Enum.UserInputType.MouseButton1
                 or input.UserInputType == Enum.UserInputType.Touch
             then
-                activeDrag = "Saturation"
-                dragTouch = input.UserInputType == Enum.UserInputType.Touch and input or nil
-                updateSaturation(input.Position)
+                beginDrag("Saturation", input)
             end
         end))
         popupMaid:Give(hueHit.InputBegan:Connect(function(input)
@@ -5458,9 +6309,7 @@ function Section:CreateColorpicker(id: any, config: ComponentOptions?): AnyTable
                 input.UserInputType == Enum.UserInputType.MouseButton1
                 or input.UserInputType == Enum.UserInputType.Touch
             then
-                activeDrag = "Hue"
-                dragTouch = input.UserInputType == Enum.UserInputType.Touch and input or nil
-                updateHue(input.Position)
+                beginDrag("Hue", input)
             end
         end))
         if alphaTrack then
@@ -5469,41 +6318,10 @@ function Section:CreateColorpicker(id: any, config: ComponentOptions?): AnyTable
                     input.UserInputType == Enum.UserInputType.MouseButton1
                     or input.UserInputType == Enum.UserInputType.Touch
                 then
-                    activeDrag = "Alpha"
-                    dragTouch = input.UserInputType == Enum.UserInputType.Touch and input or nil
-                    updateAlpha(input.Position)
+                    beginDrag("Alpha", input)
                 end
             end))
         end
-        popupMaid:Give(UserInputService.InputChanged:Connect(function(input)
-            if
-                activeDrag
-                and (
-                    (dragTouch and input == dragTouch)
-                    or (not dragTouch and input.UserInputType == Enum.UserInputType.MouseMovement)
-                )
-            then
-                if activeDrag == "Saturation" then
-                    updateSaturation(input.Position)
-                elseif activeDrag == "Hue" then
-                    updateHue(input.Position)
-                elseif activeDrag == "Alpha" then
-                    updateAlpha(input.Position)
-                end
-            end
-        end))
-        popupMaid:Give(UserInputService.InputEnded:Connect(function(input)
-            if
-                activeDrag
-                and (
-                    (dragTouch and input == dragTouch)
-                    or (not dragTouch and input.UserInputType == Enum.UserInputType.MouseButton1)
-                )
-            then
-                activeDrag = nil
-                dragTouch = nil
-            end
-        end))
         popupMaid:Give(hexBox.FocusLost:Connect(function()
             local parsed = hexToColor(hexBox.Text)
             if parsed then
@@ -5664,6 +6482,107 @@ local function applySubTabInset(owner: AnyTable, enabled: boolean)
     owner.Scroll.Size = enabled and UDim2.new(1, 0, 1, -inset) or UDim2.fromScale(1, 1)
 end
 
+function SubtabController:Refresh(tab: AnyTable)
+    local bar = tab.SubTabBar
+    local layout = tab.SubTabBarLayout
+    local overflow = tab.SubTabOverflow
+    if not bar or not bar.Parent or not layout or not overflow then
+        return
+    end
+    local contentWidth = math.max(layout.AbsoluteContentSize.X + ResponsiveController:Scale(tab.Window, 2), 0)
+    bar.CanvasSize = UDim2.fromOffset(contentWidth, 0)
+    local maximum = math.max(contentWidth - bar.AbsoluteSize.X, 0)
+    local current = math.clamp(bar.CanvasPosition.X, 0, maximum)
+    if math.abs(current - bar.CanvasPosition.X) > 0.5 then
+        bar.CanvasPosition = Vector2.new(current, 0)
+    end
+    tab.SubTabOverflowing = maximum > 1
+    overflow.Left.Visible = tab.SubTabOverflowing and current > 1 and bar.Visible
+    overflow.Right.Visible = tab.SubTabOverflowing and current < maximum - 1 and bar.Visible
+end
+
+function SubtabController:Reveal(tab: AnyTable, owner: AnyTable)
+    local selector = tab.SubTabSelectors and tab.SubTabSelectors[owner]
+    local bar = tab.SubTabBar
+    if not selector or not selector.Button or not selector.Button.Parent or not bar or not bar.Parent then
+        return
+    end
+    task.defer(function()
+        if not selector.Button.Parent or not bar.Parent then
+            return
+        end
+        self:Refresh(tab)
+        local maximum = math.max(bar.AbsoluteCanvasSize.X - bar.AbsoluteSize.X, 0)
+        if maximum <= 0 then
+            return
+        end
+        local paddingSize = ResponsiveController:Scale(tab.Window, 8)
+        local itemStart = selector.Button.AbsolutePosition.X - bar.AbsolutePosition.X + bar.CanvasPosition.X
+        local itemEnd = itemStart + selector.Button.AbsoluteSize.X
+        local current = bar.CanvasPosition.X
+        local target = current
+        if itemStart < current + paddingSize then
+            target = itemStart - paddingSize
+        elseif itemEnd > current + bar.AbsoluteSize.X - paddingSize then
+            target = itemEnd - bar.AbsoluteSize.X + paddingSize
+        end
+        target = math.clamp(target, 0, maximum)
+        if math.abs(target - current) > 0.5 then
+            tween(bar, { CanvasPosition = Vector2.new(target, 0) }, Motion.SubTab)
+        end
+    end)
+end
+
+function SubtabController:Attach(tab: AnyTable)
+    if tab.SubTabOverflow or not tab.SubTabBar or not tab.Page then
+        return
+    end
+    local page = tab.Page
+    local bar = tab.SubTabBar
+    local function makeFade(name: string, left: boolean): Frame
+        local fade = create("Frame", {
+            Name = name,
+            BackgroundColor3 = Theme.Background,
+            BackgroundTransparency = 0,
+            BorderSizePixel = 0,
+            AnchorPoint = left and Vector2.zero or Vector2.new(1, 0),
+            Position = left and UDim2.fromOffset(7, 4) or UDim2.new(1, -7, 0, 4),
+            Size = UDim2.fromOffset(18, 26),
+            Visible = false,
+            ZIndex = page.ZIndex + 6,
+            Parent = page,
+        }) :: Frame
+        create("UIGradient", {
+            Rotation = 0,
+            Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, left and 0 or 1),
+                NumberSequenceKeypoint.new(1, left and 1 or 0),
+            }),
+            Parent = fade,
+        })
+        ThemeController:Bind(fade, "BackgroundColor3", "Background")
+        return fade
+    end
+    tab.SubTabOverflow = {
+        Left = makeFade("SubTabFadeLeft", true),
+        Right = makeFade("SubTabFadeRight", false),
+    }
+    for _, signal in ipairs({
+        tab.SubTabBarLayout:GetPropertyChangedSignal("AbsoluteContentSize"),
+        bar:GetPropertyChangedSignal("AbsoluteSize"),
+        bar:GetPropertyChangedSignal("CanvasPosition"),
+        bar:GetPropertyChangedSignal("Visible"),
+    }) do
+        addConnection(
+            tab,
+            signal:Connect(function()
+                self:Refresh(tab)
+            end)
+        )
+    end
+    self:Refresh(tab)
+end
+
 function Tab:_setSubTabVisual(owner: AnyTable, active: boolean)
     local selector = self.SubTabSelectors and self.SubTabSelectors[owner]
     if not selector then
@@ -5697,9 +6616,9 @@ function Tab:_createSubTabSelector(owner: AnyTable, config: AnyTable): AnyTable
         return existing
     end
     local titleText = tostring(config.Name or config.Title or "General")
-    local iconSize = config.Icon and math.clamp(finiteNumber(config.IconSize, 12), 8, 32) or 0
+    local iconSize = IconController:Normalize(config.Icon) and math.clamp(finiteNumber(config.IconSize, 12), 8, 32) or 0
     local textSize = TextService:GetTextSize(titleText, 9, Enum.Font.GothamBold, Vector2.new(300, 22))
-    local width = math.clamp(textSize.X + (iconSize > 0 and iconSize + 16 or 18), 52, 150)
+    local width = math.clamp(textSize.X + (iconSize > 0 and iconSize + 16 or 18), 52, 180)
     local button = create("TextButton", {
         Name = "SubTabButton",
         BackgroundColor3 = Theme.Surface2,
@@ -5760,6 +6679,9 @@ function Tab:_createSubTabSelector(owner: AnyTable, config: AnyTable): AnyTable
         end)
     )
     ResponsiveController:RegisterTree(self.Window, button)
+    task.defer(function()
+        SubtabController:Refresh(self)
+    end)
     return selector
 end
 
@@ -5801,6 +6723,7 @@ function Tab:SelectSubTab(owner: AnyTable): AnyTable
             ResponsiveController:Scale(self.Window, 7)
         ),
     }, Motion.SubTab)
+    SubtabController:Reveal(self, owner)
     owner:ApplyColumns(self.Window.TwoColumn)
     return self
 end
@@ -5934,7 +6857,7 @@ function Tab:CreateSection(config: (NavigationOptions | string)?): AnyTable
     }) :: Frame
     frame:SetAttribute("KronosSearch", section.SearchText)
     corner(frame, Metrics.Radius)
-    local frameStroke = stroke(frame, Theme.Border, 0.78, 1)
+    local frameStroke = stroke(frame, Theme.Border, 0.78, 1, "Quiet")
     ThemeController:Bind(frameStroke, "Color", "Border")
     padding(frame, 8, 6, 8, 8)
     local frameLayout = list(frame, Enum.FillDirection.Vertical, 4)
@@ -6048,6 +6971,7 @@ function SubTab:Destroy()
         parentTab.Scroll.Visible = true
         local defaultSelector = parentTab.SubTabSelectors[parentTab]
         if defaultSelector then
+            ThemeController:UnbindTree(defaultSelector.Button)
             defaultSelector.Button:Destroy()
             parentTab.SubTabSelectors[parentTab] = nil
         end
@@ -6059,6 +6983,7 @@ function SubTab:Destroy()
             parentTab:SelectSubTab(parentTab.SubTabs[1])
         end
     end
+    SubtabController:Refresh(parentTab)
 end
 
 function Tab:CreateSubTab(config: (NavigationOptions | string)?): AnyTable
@@ -6143,6 +7068,7 @@ function Tab:CreateSubTab(config: (NavigationOptions | string)?): AnyTable
     )
     table.insert(self.SubTabs, subTab)
     self:_createSubTabSelector(subTab, config)
+    SubtabController:Refresh(self)
     ResponsiveController:RegisterTree(self.Window, scroll)
     subTab:ApplyColumns(self.Window.TwoColumn)
     if not self.ActiveSubTab then
@@ -6225,7 +7151,7 @@ function Window:SelectTab(tab: any)
         local previousTab = self.ActiveTab
         self:_setActiveTabVisual(previousTab, false)
         tween(previousTab.Page, { GroupTransparency = 1, Position = UDim2.fromOffset(-7, 0) }, Motion.TabExit)
-        task.delay(Motion.TabExit, function()
+        task.delay(AnimationController:Duration(Motion.TabExit), function()
             if self.ActiveTab ~= previousTab and previousTab.Page.Parent then
                 previousTab.Page.Visible = false
             end
@@ -6381,12 +7307,7 @@ function Window:CreateTab(config: (NavigationOptions | string)?): AnyTable
     tab.RightColumn = rightColumn
     tab.LeftLayout = leftLayout
     tab.RightLayout = rightLayout
-    addConnection(
-        tab,
-        subTabBarLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-            subTabBar.CanvasSize = UDim2.fromOffset(subTabBarLayout.AbsoluteContentSize.X + 2, 0)
-        end)
-    )
+    SubtabController:Attach(tab)
     addConnection(
         tab,
         leftLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
@@ -6502,35 +7423,33 @@ function Window:_makeHeader(config: WindowConfig)
         Parent = header,
     }) :: Frame
 
+    local hasLogo = IconController:Normalize(config.Icon) ~= nil
     local logo = create("Frame", {
         BackgroundColor3 = Theme.Accent,
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(12, 12),
         Size = UDim2.fromOffset(24, 24),
+        Visible = hasLogo,
         ZIndex = 29,
         Parent = header,
     }) :: Frame
     corner(logo, 5)
     ThemeController:Bind(logo, "BackgroundColor3", "Accent")
-    local logoIcon = makeIcon(logo, config, "White")
+    local logoIcon = hasLogo and makeIcon(logo, config, "White") or nil
     if logoIcon then
         logoIcon.AnchorPoint = Vector2.new(0.5, 0.5)
         logoIcon.Position = UDim2.fromScale(0.5, 0.5)
         logoIcon.ZIndex = 30
-    else
-        local logoText = makeText(logo, "K", 13, Theme.White, "bold")
-        logoText.Size = UDim2.fromScale(1, 1)
-        logoText.TextXAlignment = Enum.TextXAlignment.Center
-        logoText.ZIndex = 30
     end
+    local titleOffset = hasLogo and 44 or 12
     local title = makeText(header, tostring(config.Title or "Kronos"), 12, Theme.Text, "bold")
-    title.Position = UDim2.fromOffset(44, 7)
-    title.Size = UDim2.fromOffset(180, 19)
+    title.Position = UDim2.fromOffset(titleOffset, 7)
+    title.Size = UDim2.fromOffset(hasLogo and 180 or 212, 19)
     title.ZIndex = 29
     local subtitle =
         makeText(header, tostring(config.Subtitle or config.SubTitle or "Interface Library"), 9, Theme.Muted)
-    subtitle.Position = UDim2.fromOffset(44, 25)
-    subtitle.Size = UDim2.fromOffset(250, 15)
+    subtitle.Position = UDim2.fromOffset(titleOffset, 25)
+    subtitle.Size = UDim2.fromOffset(hasLogo and 250 or 282, 15)
     subtitle.ZIndex = 29
 
     local closeButton = makeUtilityButton(header, "x", 1)
@@ -6661,14 +7580,8 @@ function Window:ApplyResponsive()
     local dragMargin = math.clamp(finiteNumber(self.DragOptions and self.DragOptions.DragMargin, 4), 0, 32)
     local safeWidth = math.max(viewport.X - topLeftInset.X - bottomRightInset.X - dragMargin * 2, 1)
     local safeHeight = math.max(viewport.Y - topLeftInset.Y - bottomRightInset.Y - dragMargin * 2, 1)
-    local heightLimit = safeHeight
-    if self.ReserveFloatingBand and UserInputService.TouchEnabled and viewport.X > viewport.Y and viewport.Y <= 650 then
-        heightLimit = math.max(safeHeight - d(190), math.min(safeHeight, d(180)))
-    end
-    local width = math.min(self.BaseWidth * density, safeWidth)
-    local height = math.min(self.BaseHeight * density, heightLimit)
-    width = math.floor(width + 0.5)
-    height = math.floor(height + 0.5)
+    local width, height, layoutMode = ResponsiveController:CalculateWindowSize(self, viewport, safeWidth, safeHeight)
+    self.LayoutMode = layoutMode
     self.Width = width
     self.Height = height
     if self.LastPosition then
@@ -6677,10 +7590,14 @@ function Window:ApplyResponsive()
         self.Root.Position = position
     else
         self.Root.Size = UDim2.fromOffset(width, height)
+        self.Root.Position = UDim2.fromOffset(
+            math.floor((topLeftInset.X + viewport.X - bottomRightInset.X) * 0.5 + 0.5),
+            math.floor((topLeftInset.Y + viewport.Y - bottomRightInset.Y) * 0.5 + 0.5)
+        )
     end
     DragController:Clamp(self.Root, self.DragOptions)
 
-    local expanded = width >= d(690) and self.ForceCompactNavigation ~= true
+    local expanded = layoutMode ~= "Portrait" and width >= d(690) and self.ForceCompactNavigation ~= true
     local sidebarWidth = expanded and d(Metrics.Sidebar) or d(Metrics.CompactSidebar)
     local headerHeight = d(Metrics.Header)
     self.ExpandedNavigation = expanded
@@ -6710,13 +7627,18 @@ function Window:ApplyResponsive()
     if self.SidebarFooterLabel then
         self.SidebarFooterLabel.Visible = expanded
     end
-    self.TwoColumn = width >= d(730) and height >= d(340)
+    local contentWidth = width - sidebarWidth
+    self.TwoColumn = layoutMode ~= "Portrait" and contentWidth >= d(520) and height - headerHeight >= d(300)
     for _, tab in ipairs(self.Tabs) do
         tab:ApplyColumns(self.TwoColumn)
+        SubtabController:Refresh(tab)
+        if tab.ActiveSubTab then
+            SubtabController:Reveal(tab, tab.ActiveSubTab)
+        end
     end
     if self.SidePanel and self.SidePanel.Parent then
         local isPresets = self.SidePanelKind == "Presets"
-        local panelWidth = math.min(d(isPresets and 240 or 280), math.max(width - d(70), d(176)))
+        local panelWidth = math.min(d(isPresets and 220 or 240), math.max(width - d(70), d(176)))
         local openPosition: UDim2
         local closedPosition: UDim2
         if isPresets then
@@ -6739,7 +7661,8 @@ function Window:ApplyResponsive()
             widget:Clamp()
         end
     end
-    local function placeDefault(widget: AnyTable?, topLeft: Vector2?)
+    local defaultWidgetBottom: number? = nil
+    local function placeDefault(widget: AnyTable?, topLeft: Vector2?, reserveSpace: boolean?)
         if
             not widget
             or widget.UserMoved
@@ -6751,7 +7674,11 @@ function Window:ApplyResponsive()
             return
         end
         local root = widget.Root :: GuiObject
-        setAbsoluteTopLeft(root, clampTopLeftForSize(root, topLeft, root.AbsoluteSize, widget.DragOptions))
+        local clamped = clampTopLeftForSize(root, topLeft, root.AbsoluteSize, widget.DragOptions)
+        setAbsoluteTopLeft(root, clamped)
+        if reserveSpace ~= false and widget.Visible ~= false then
+            defaultWidgetBottom = math.max(defaultWidgetBottom or clamped.Y, clamped.Y + root.AbsoluteSize.Y)
+        end
     end
     local status = self.StatusStrip
     local target = self.TargetList
@@ -6790,8 +7717,17 @@ function Window:ApplyResponsive()
         local minimum, maximumEdge = viewportBounds(reopen.Root, reopen.DragOptions)
         placeDefault(
             reopen,
-            Vector2.new(maximumEdge.X - reopen.Root.AbsoluteSize.X, maximumEdge.Y - reopen.Root.AbsoluteSize.Y)
+            Vector2.new(maximumEdge.X - reopen.Root.AbsoluteSize.X, maximumEdge.Y - reopen.Root.AbsoluteSize.Y),
+            false
         )
+    end
+    if not self.LastPosition and defaultWidgetBottom then
+        local minimum, maximumEdge = viewportBounds(self.Root, self.DragOptions)
+        local centeredTop = minimum.Y + math.max(maximumEdge.Y - minimum.Y - self.Root.AbsoluteSize.Y, 0) * 0.5
+        local maximumTop = maximumEdge.Y - self.Root.AbsoluteSize.Y
+        local top = math.clamp(math.max(centeredTop, defaultWidgetBottom + d(8)), minimum.Y, maximumTop)
+        local left = minimum.X + math.max(maximumEdge.X - minimum.X - self.Root.AbsoluteSize.X, 0) * 0.5
+        setAbsoluteTopLeft(self.Root, Vector2.new(left, top))
     end
     local activePopup = self.ActivePopup
     if activePopup and activePopup.Frame.Parent and activePopup.Anchor.Parent then
@@ -6817,12 +7753,14 @@ function Window:SetVisible(visible: boolean): AnyTable
             Size = UDim2.fromOffset(self.Width, self.Height),
         }, Motion.Window, Enum.EasingStyle.Quart)
     else
+        InputController:CancelPointer()
         DragController:Cancel(self.Root)
+        ScrollbarController:Cancel()
         tween(self.Root, {
             GroupTransparency = 1,
             Size = UDim2.fromOffset(self.Width * 0.97, self.Height * 0.97),
         }, Motion.Window, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
-        task.delay(Motion.Window, function()
+        task.delay(AnimationController:Duration(Motion.Window), function()
             if not self.Visible and self.Root and self.Root.Parent then
                 self.Root.Visible = false
             end
@@ -6856,11 +7794,98 @@ function Window:SetAccent(color: Color3): AnyTable
     return self
 end
 
+function Window:SetTransparency(value: number): AnyTable
+    self.Kronos:SetTransparency(value)
+    return self
+end
+
+function Window:GetTransparency(): number
+    return self.Kronos:GetTransparency()
+end
+
+function Window:SetAcrylic(enabled: boolean): AnyTable
+    self.Kronos:SetAcrylic(enabled)
+    return self
+end
+
+function Window:GetAcrylic(): boolean
+    return self.Kronos:GetAcrylic()
+end
+
+function Window:SetAcrylicIntensity(value: number): AnyTable
+    self.Kronos:SetAcrylicIntensity(value)
+    return self
+end
+
+function Window:GetAcrylicIntensity(): number
+    return self.Kronos:GetAcrylicIntensity()
+end
+
+function Window:SetBorderIntensity(value: number): AnyTable
+    self.Kronos:SetBorderIntensity(value)
+    return self
+end
+
+function Window:GetBorderIntensity(): number
+    return self.Kronos:GetBorderIntensity()
+end
+
+function Window:SetReducedMotion(enabled: boolean): AnyTable
+    self.Kronos:SetReducedMotion(enabled)
+    return self
+end
+
+function Window:GetReducedMotion(): boolean
+    return self.Kronos:GetReducedMotion()
+end
+
+function Window:SetAnimationIntensity(value: number): AnyTable
+    self.Kronos:SetAnimationIntensity(value)
+    return self
+end
+
+function Window:GetAnimationIntensity(): number
+    return self.Kronos:GetAnimationIntensity()
+end
+
+function Window:SetDimStrength(value: number): AnyTable
+    self.Kronos:SetDimStrength(value)
+    return self
+end
+
+function Window:GetDimStrength(): number
+    return self.Kronos:GetDimStrength()
+end
+
+function Window:ResetAppearance(): AnyTable
+    self.Kronos:ResetAppearance()
+    return self
+end
+
 function Window:SetCompactNavigation(compact: boolean): AnyTable
     self.ForceCompactNavigation = compact == true
     self:ApplyResponsive()
     return self
 end
+
+function Window:ResetPositions(): AnyTable
+    DragController:Cancel(self.Root)
+    self.LastPosition = nil
+    local viewport = viewportSize()
+    local topLeftInset, bottomRightInset = guiInsets()
+    self.Root.Position = UDim2.fromOffset(
+        math.floor((topLeftInset.X + viewport.X - bottomRightInset.X) * 0.5 + 0.5),
+        math.floor((topLeftInset.Y + viewport.Y - bottomRightInset.Y) * 0.5 + 0.5)
+    )
+    for _, widget in ipairs(self.Widgets) do
+        DragController:Cancel(widget.Root)
+        widget.UserMoved = false
+        widget.CustomPosition = false
+    end
+    self:ApplyResponsive()
+    return self
+end
+
 function Window:_closeSidePanel(immediate: boolean?)
     if not self.SidePanel then
         return
@@ -6899,7 +7924,7 @@ function Window:_closeSidePanel(immediate: boolean?)
     if dim then
         tween(dim, { BackgroundTransparency = 1 }, Motion.Settings)
     end
-    task.delay(Motion.Settings, function()
+    task.delay(AnimationController:Duration(Motion.Settings), function()
         if dim and dim.Parent then
             dim:Destroy()
         end
@@ -6917,6 +7942,15 @@ function Window:_capturePreset(name: string): AnyTable
     return {
         Name = name,
         Accent = Theme.Accent,
+        Appearance = {
+            Transparency = Kronos:GetTransparency(),
+            Acrylic = Kronos:GetAcrylic(),
+            AcrylicIntensity = Kronos:GetAcrylicIntensity(),
+            BorderIntensity = Kronos:GetBorderIntensity(),
+            ReducedMotion = Kronos:GetReducedMotion(),
+            AnimationIntensity = Kronos:GetAnimationIntensity(),
+            DimStrength = Kronos:GetDimStrength(),
+        },
         Flags = flags,
     }
 end
@@ -6924,6 +7958,30 @@ end
 function Window:ApplyPreset(preset: AnyTable)
     if typeof(preset.Accent) == "Color3" then
         self:SetAccent(preset.Accent)
+    end
+    if type(preset.Appearance) == "table" then
+        local appearance = preset.Appearance
+        if appearance.Transparency ~= nil then
+            self:SetTransparency(appearance.Transparency)
+        end
+        if appearance.Acrylic ~= nil then
+            self:SetAcrylic(appearance.Acrylic)
+        end
+        if appearance.AcrylicIntensity ~= nil then
+            self:SetAcrylicIntensity(appearance.AcrylicIntensity)
+        end
+        if appearance.BorderIntensity ~= nil then
+            self:SetBorderIntensity(appearance.BorderIntensity)
+        end
+        if appearance.ReducedMotion ~= nil then
+            self:SetReducedMotion(appearance.ReducedMotion)
+        end
+        if appearance.AnimationIntensity ~= nil then
+            self:SetAnimationIntensity(appearance.AnimationIntensity)
+        end
+        if appearance.DimStrength ~= nil then
+            self:SetDimStrength(appearance.DimStrength)
+        end
     end
     if type(preset.Flags) == "table" then
         for key, value in pairs(preset.Flags) do
@@ -6942,6 +8000,9 @@ function Window:ApplyPreset(preset: AnyTable)
 end
 
 function Window:_openSidePanel(kind: string)
+    InputController:CancelPointer()
+    DragController:Cancel()
+    ScrollbarController:Cancel()
     self:_closeSidePanel(true)
     PopupController:Close(self)
     local sideMaid = Maid.new()
@@ -6960,7 +8021,7 @@ function Window:_openSidePanel(kind: string)
         ZIndex = 170,
         Parent = self.Main,
     }) :: TextButton
-    local panelWidth = math.min(d(kind == "Presets" and 240 or 280), math.max(self.Width - d(70), d(176)))
+    local panelWidth = math.min(d(kind == "Presets" and 220 or 240), math.max(self.Width - d(70), d(176)))
     local headerHeight = d(Metrics.Header)
     local openPosition: UDim2
     local closedPosition: UDim2
@@ -6985,8 +8046,10 @@ function Window:_openSidePanel(kind: string)
         Parent = self.Main,
     }) :: CanvasGroup
     ThemeController:Bind(panel, "BackgroundColor3", "ElevatedSurface")
-    local panelStroke = stroke(panel, Theme.Border, 0.25, 1)
+    corner(panel, 6)
+    local panelStroke = stroke(panel, Theme.Border, 0.25, 1, "Floating")
     ThemeController:Bind(panelStroke, "Color", "Border")
+    AcrylicController:Register(panel, kind .. "Panel")
     self.SidePanel = panel
     self.SideDim = dim
     self.SidePanelKind = kind
@@ -7084,9 +8147,17 @@ function Window:_openSidePanel(kind: string)
         pageMaid:Cleanup()
     end)
     local currentPage = "root"
+    local activeSettingsSlider: AnyTable? = nil
+    local settingsPointerOwner = {}
+    sideMaid:Give(function()
+        InputController:CancelPointer(settingsPointerOwner)
+        activeSettingsSlider = nil
+    end)
 
     local function clearPage()
         self.CapturingToggleKey = nil
+        InputController:CancelPointer(settingsPointerOwner)
+        activeSettingsSlider = nil
         pageMaid:Cleanup()
         pageMaid = Maid.new()
         for _, child in ipairs(page:GetChildren()) do
@@ -7170,6 +8241,156 @@ function Window:_openSidePanel(kind: string)
         pageMaid:Give(row.MouseLeave:Connect(function()
             tween(row, { BackgroundTransparency = 0.38 }, Motion.Hover)
         end))
+        return row
+    end
+
+    local function addToggleRow(
+        titleText: string,
+        subtitleText: string?,
+        getter: () -> boolean,
+        setter: (boolean) -> (),
+        iconName: string?
+    ): TextButton
+        local row = addRow(titleText, subtitleText, nil, iconName)
+        local toggleTrack = create("Frame", {
+            BackgroundColor3 = Theme.Surface3,
+            BorderSizePixel = 0,
+            AnchorPoint = Vector2.new(1, 0.5),
+            Position = UDim2.new(1, -9, 0.5, 0),
+            Size = UDim2.fromOffset(27, 14),
+            ZIndex = 180,
+            Parent = row,
+        }) :: Frame
+        corner(toggleTrack, 7)
+        local toggleKnob = create("Frame", {
+            BackgroundColor3 = Theme.White,
+            BorderSizePixel = 0,
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Size = UDim2.fromOffset(8, 8),
+            ZIndex = 181,
+            Parent = toggleTrack,
+        }) :: Frame
+        corner(toggleKnob, 4)
+        ThemeController:Bind(toggleKnob, "BackgroundColor3", "White")
+        local function refresh(immediate: boolean?)
+            local enabled = getter()
+            local properties = {
+                BackgroundColor3 = enabled and Theme.Accent or Theme.Surface3,
+                BackgroundTransparency = enabled and 0.08 or 0.28,
+            }
+            local knobPosition = enabled and UDim2.new(1, -7, 0.5, 0) or UDim2.new(0, 7, 0.5, 0)
+            if immediate then
+                toggleTrack.BackgroundColor3 = properties.BackgroundColor3
+                toggleTrack.BackgroundTransparency = properties.BackgroundTransparency
+                toggleKnob.Position = knobPosition
+            else
+                tween(toggleTrack, properties, Motion.Toggle)
+                tween(toggleKnob, { Position = knobPosition }, Motion.Toggle)
+            end
+        end
+        pageMaid:Give(row.Activated:Connect(function()
+            setter(not getter())
+            refresh(false)
+        end))
+        refresh(true)
+        return row
+    end
+
+    local function addSliderRow(
+        titleText: string,
+        minimum: number,
+        maximum: number,
+        getter: () -> number,
+        setter: (number) -> (),
+        formatter: ((number) -> string)?,
+        iconName: string?
+    ): TextButton
+        local row = addRow(titleText, nil, nil, iconName)
+        row.Size = UDim2.new(1, 0, 0, 43)
+        local valueLabel = makeText(row, "", 8, Theme.SubText, "bold")
+        valueLabel.AnchorPoint = Vector2.new(1, 0)
+        valueLabel.Position = UDim2.new(1, -9, 0, 0)
+        valueLabel.Size = UDim2.fromOffset(52, 25)
+        valueLabel.TextXAlignment = Enum.TextXAlignment.Right
+        valueLabel.ZIndex = 180
+        local track = create("Frame", {
+            BackgroundColor3 = Theme.Surface3,
+            BackgroundTransparency = 0.2,
+            BorderSizePixel = 0,
+            Position = UDim2.fromOffset(10, 32),
+            Size = UDim2.new(1, -20, 0, 3),
+            ZIndex = 180,
+            Parent = row,
+        }) :: Frame
+        corner(track, 2)
+        local fill = create("Frame", {
+            BackgroundColor3 = Theme.Accent,
+            BorderSizePixel = 0,
+            Size = UDim2.fromScale(0, 1),
+            ZIndex = 181,
+            Parent = track,
+        }) :: Frame
+        corner(fill, 2)
+        ThemeController:Bind(fill, "BackgroundColor3", "Accent")
+        local knob = create("Frame", {
+            BackgroundColor3 = Theme.White,
+            BorderSizePixel = 0,
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.fromScale(0, 0.5),
+            Size = UDim2.fromOffset(7, 7),
+            ZIndex = 182,
+            Parent = track,
+        }) :: Frame
+        corner(knob, 4)
+        ThemeController:Bind(knob, "BackgroundColor3", "White")
+        local hitbox = create("TextButton", {
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            Text = "",
+            AutoButtonColor = false,
+            Position = UDim2.fromOffset(7, 24),
+            Size = UDim2.new(1, -14, 0, 17),
+            ZIndex = 183,
+            Parent = row,
+        }) :: TextButton
+        local range = math.max(maximum - minimum, 0.0001)
+        local function refresh()
+            local value = math.clamp(finiteNumber(getter(), minimum), minimum, maximum)
+            local ratio = (value - minimum) / range
+            fill.Size = UDim2.fromScale(ratio, 1)
+            knob.Position = UDim2.fromScale(ratio, 0.5)
+            valueLabel.Text = formatter and formatter(value) or formatNumber(value, 2)
+        end
+        local function update(pointerX: number)
+            local ratio = math.clamp((pointerX - track.AbsolutePosition.X) / math.max(track.AbsoluteSize.X, 1), 0, 1)
+            setter(minimum + range * ratio)
+            refresh()
+        end
+        pageMaid:Give(hitbox.InputBegan:Connect(function(input)
+            if
+                input.UserInputType ~= Enum.UserInputType.MouseButton1
+                and input.UserInputType ~= Enum.UserInputType.Touch
+            then
+                return
+            end
+            local active = { Update = update }
+            if
+                not InputController:BeginPointer(settingsPointerOwner, input, function(changedInput)
+                    if activeSettingsSlider == active then
+                        active.Update(changedInput.Position.X)
+                    end
+                end, function()
+                    if activeSettingsSlider == active then
+                        activeSettingsSlider = nil
+                    end
+                end)
+            then
+                return
+            end
+            activeSettingsSlider = active
+            update(input.Position.X)
+        end))
+        refresh()
         return row
     end
 
@@ -7291,6 +8512,56 @@ function Window:_openSidePanel(kind: string)
             addRow("Restore reference violet", rgbToHex(Color3.fromRGB(143, 104, 255)), function()
                 self:SetAccent(Color3.fromRGB(143, 104, 255))
             end, "rotate-ccw")
+            addHeading("Material", "Layered transparency, borders, and motion")
+            addSliderRow("Transparency", 0, 0.45, function()
+                return self.Kronos:GetTransparency()
+            end, function(value)
+                self:SetTransparency(value)
+            end, function(value)
+                return tostring(math.floor(value * 100 + 0.5)) .. "%"
+            end, "blend")
+            addToggleRow("Acrylic surfaces", "Subtle layered tint without executor blur", function()
+                return self.Kronos:GetAcrylic()
+            end, function(enabled)
+                self:SetAcrylic(enabled)
+            end, "panels-top-left")
+            addSliderRow("Acrylic intensity", 0, 1, function()
+                return self.Kronos:GetAcrylicIntensity()
+            end, function(value)
+                self:SetAcrylicIntensity(value)
+            end, function(value)
+                return tostring(math.floor(value * 100 + 0.5)) .. "%"
+            end, "sparkles")
+            addSliderRow("Border intensity", 0.35, 1.5, function()
+                return self.Kronos:GetBorderIntensity()
+            end, function(value)
+                self:SetBorderIntensity(value)
+            end, function(value)
+                return formatNumber(value, 2) .. "x"
+            end, "square-dashed")
+            addToggleRow("Reduced motion", "Resolve transitions immediately", function()
+                return self.Kronos:GetReducedMotion()
+            end, function(enabled)
+                self:SetReducedMotion(enabled)
+            end, "accessibility")
+            addSliderRow("Animation speed", 0.35, 1.5, function()
+                return self.Kronos:GetAnimationIntensity()
+            end, function(value)
+                self:SetAnimationIntensity(value)
+            end, function(value)
+                return formatNumber(value, 2) .. "x"
+            end, "gauge")
+            addSliderRow("Panel dimming", 0, 0.85, function()
+                return self.Kronos:GetDimStrength()
+            end, function(value)
+                self:SetDimStrength(value)
+            end, function(value)
+                return tostring(math.floor(value * 100 + 0.5)) .. "%"
+            end, "moon")
+            addRow("Reset appearance", "Restore reference material defaults", function()
+                self:ResetAppearance()
+                showPage("Theme")
+            end, "rotate-ccw")
         elseif kind == "Settings" and pageName == "Hotkeys" then
             addHeading("Window hotkey", "Click the row, then press a keyboard key")
             local row = addRow("Toggle interface", tostring(self.ToggleKey.Name), nil, "keyboard")
@@ -7356,6 +8627,9 @@ function Window:_openSidePanel(kind: string)
                     end))
                 end
             end
+            addRow("Reset positions", "Center the window and restore widget anchors", function()
+                self:ResetPositions()
+            end, "locate-fixed")
         elseif kind == "Presets" then
             addHeading("Configuration presets", "Stored for the current execution")
             local toolbar = create("Frame", {
@@ -7523,7 +8797,7 @@ function Window:_openSidePanel(kind: string)
                     ZIndex = 780,
                 }) :: CanvasGroup
                 corner(createPopup, Metrics.PopupRadius)
-                stroke(createPopup, Theme.Border, 0.25, 1)
+                stroke(createPopup, Theme.Border, 0.25, 1, "Floating")
                 padding(createPopup, 8, 8, 8, 8)
                 local popupMaid = PopupController:Open(self, createPopup, addPreset, 6, "Side")
                 local nameBox = create("TextBox", {
@@ -7610,7 +8884,7 @@ function Window:_openSidePanel(kind: string)
     end))
     showPage("root")
     ResponsiveController:RegisterTree(self, panel, true)
-    tween(dim, { BackgroundTransparency = 0.36 }, Motion.Settings)
+    tween(dim, { BackgroundTransparency = 1 - Kronos.DimStrength }, Motion.Settings)
     tween(panel, { Position = openPosition, GroupTransparency = 0 }, Motion.Settings)
 end
 
@@ -7634,6 +8908,7 @@ function FloatingWidgetController:Create(window: AnyTable, config: FloatingWidge
         Visible = config.Visible ~= false,
         Title = tostring(config.Title or "Widget"),
         Alive = true,
+        Pinned = config.Pinned == true,
         CustomPosition = if config.CustomPosition ~= nil then config.CustomPosition == true else config.Position ~= nil,
         DesignWidth = designWidth,
         DesignHeight = designHeight,
@@ -7663,21 +8938,22 @@ function FloatingWidgetController:Create(window: AnyTable, config: FloatingWidge
     root:SetAttribute("KronosNoDensity", true)
     ThemeController:Bind(root, "BackgroundColor3", "ElevatedSurface")
     corner(root, Metrics.Radius)
-    local rootStroke = stroke(root, Theme.Border, 0.36, 1)
+    local rootStroke = stroke(root, Theme.Border, 0.36, 1, "Floating")
     ThemeController:Bind(rootStroke, "Color", "Border")
+    AcrylicController:Register(root, "FloatingWidget")
     local header = create("Frame", {
         BackgroundColor3 = Theme.Surface2,
         BackgroundTransparency = 0.12,
         BorderSizePixel = 0,
         Active = true,
-        Size = UDim2.new(1, 0, 0, 26),
+        Size = UDim2.new(1, 0, 0, 24),
         ZIndex = root.ZIndex + 1,
         Parent = root,
     }) :: Frame
     local marker = create("Frame", {
         BackgroundColor3 = Theme.Accent,
         BorderSizePixel = 0,
-        Position = UDim2.fromOffset(0, 6),
+        Position = UDim2.fromOffset(0, 5),
         Size = UDim2.fromOffset(2, 14),
         ZIndex = root.ZIndex + 2,
         Parent = header,
@@ -7694,8 +8970,26 @@ function FloatingWidgetController:Create(window: AnyTable, config: FloatingWidge
     end
     local title = makeText(header, widget.Title, 9, Theme.Text, "bold")
     title.Position = UDim2.fromOffset(titleOffset, 0)
-    title.Size = UDim2.new(1, -titleOffset - 28, 1, 0)
+    title.Size = UDim2.new(1, -titleOffset - 50, 1, 0)
     title.ZIndex = root.ZIndex + 2
+    local pin = create("TextButton", {
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Text = "",
+        AutoButtonColor = false,
+        AnchorPoint = Vector2.new(1, 0.5),
+        Position = UDim2.new(1, -25, 0.5, 0),
+        Size = UDim2.fromOffset(20, 20),
+        Visible = config.Pinnable ~= false,
+        ZIndex = root.ZIndex + 3,
+        Parent = header,
+    }) :: TextButton
+    local pinIcon = makeIcon(pin, { Icon = "pin", IconSize = 11 }, widget.Pinned and "Accent" or "Muted")
+    if pinIcon then
+        pinIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+        pinIcon.Position = UDim2.fromScale(0.5, 0.5)
+        pinIcon.ZIndex = root.ZIndex + 4
+    end
     local hide = create("TextButton", {
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
@@ -7703,7 +8997,7 @@ function FloatingWidgetController:Create(window: AnyTable, config: FloatingWidge
         AutoButtonColor = false,
         AnchorPoint = Vector2.new(1, 0.5),
         Position = UDim2.new(1, -5, 0.5, 0),
-        Size = UDim2.fromOffset(22, 22),
+        Size = UDim2.fromOffset(20, 20),
         ZIndex = root.ZIndex + 3,
         Parent = header,
     }) :: TextButton
@@ -7716,14 +9010,24 @@ function FloatingWidgetController:Create(window: AnyTable, config: FloatingWidge
     ThemeController:Bind(header, "BackgroundColor3", "Surface2")
     local body = create("Frame", {
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(0, 26),
-        Size = UDim2.new(1, 0, 1, -26),
+        Position = UDim2.fromOffset(0, 24),
+        Size = UDim2.new(1, 0, 1, -24),
         ZIndex = root.ZIndex + 1,
         Parent = root,
     }) :: Frame
     widget.Root = root
     widget.Header = header
     widget.Body = body
+    function widget:SetPinned(pinned: boolean): AnyTable
+        self.Pinned = pinned == true
+        if self.Pinned then
+            DragController:Cancel(root)
+        end
+        if pinIcon then
+            pinIcon.ImageColor3 = self.Pinned and Theme.Accent or Theme.Muted
+        end
+        return self
+    end
     function widget:SetVisible(visible: boolean): AnyTable
         self.Visible = visible ~= false
         if self.Visible then
@@ -7732,8 +9036,9 @@ function FloatingWidgetController:Create(window: AnyTable, config: FloatingWidge
             tween(root, { GroupTransparency = 0 }, Motion.Widget)
         else
             DragController:Cancel(root)
+            ScrollbarController:Cancel()
             tween(root, { GroupTransparency = 1 }, Motion.Widget)
-            task.delay(Motion.Widget, function()
+            task.delay(AnimationController:Duration(Motion.Widget), function()
                 if not self.Visible and root.Parent then
                     root.Visible = false
                 end
@@ -7766,7 +9071,7 @@ function FloatingWidgetController:Create(window: AnyTable, config: FloatingWidge
         else
             tween(root, { Size = size, Position = position }, Motion.Widget)
         end
-        task.delay(Motion.Widget, function()
+        task.delay(AnimationController:Duration(Motion.Widget), function()
             if self.Alive and self.ResizeGeneration == generation and root.Parent then
                 self:Clamp()
             end
@@ -7796,6 +9101,12 @@ function FloatingWidgetController:Create(window: AnyTable, config: FloatingWidge
     end
     addConnection(
         widget,
+        pin.Activated:Connect(function()
+            widget:SetPinned(not widget.Pinned)
+        end)
+    )
+    addConnection(
+        widget,
         hide.Activated:Connect(function()
             widget:SetVisible(false)
         end)
@@ -7809,7 +9120,10 @@ function FloatingWidgetController:Create(window: AnyTable, config: FloatingWidge
             DragMargin = widget.DragOptions.DragMargin,
             MinimumVisiblePixels = widget.DragOptions.MinimumVisiblePixels,
             DragThreshold = widget.DragOptions.DragThreshold,
-            Ignore = { hide },
+            Ignore = { pin, hide },
+            CanStart = function()
+                return not widget.Pinned
+            end,
         })
     end
     ResponsiveController:RegisterTree(window, root, true)
@@ -7844,7 +9158,7 @@ function Window:CreateTargetList(config: FloatingWidgetOptions?): AnyTable
         IconSize = config.IconSize,
         IconColor = config.IconColor,
         IconTransparency = config.IconTransparency,
-        Size = config.Size or UDim2.fromOffset(380, 100),
+        Size = config.Size or UDim2.fromOffset(344, 88),
         Position = config.Position or UDim2.fromOffset(12, 12),
         CustomPosition = config.Position ~= nil,
         Visible = config.Visible ~= false,
@@ -7853,13 +9167,15 @@ function Window:CreateTargetList(config: FloatingWidgetOptions?): AnyTable
         KeepFullyVisible = config.KeepFullyVisible,
         DragMargin = config.DragMargin,
         MinimumVisiblePixels = config.MinimumVisiblePixels,
+        Pinned = config.Pinned,
+        Pinnable = config.Pinnable,
     })
     local avatar = create("ImageLabel", {
         BackgroundColor3 = Theme.Surface3,
         BorderSizePixel = 0,
         Image = "",
-        Position = UDim2.fromOffset(9, 8),
-        Size = UDim2.fromOffset(38, 38),
+        Position = UDim2.fromOffset(8, 7),
+        Size = UDim2.fromOffset(34, 34),
         ZIndex = 503,
         Parent = widget.Body,
     }) :: ImageLabel
@@ -7869,19 +9185,19 @@ function Window:CreateTargetList(config: FloatingWidgetOptions?): AnyTable
     fallback.TextXAlignment = Enum.TextXAlignment.Center
     fallback.ZIndex = 504
     local nameLabel = makeText(widget.Body, "No target", 9, Theme.Text, "bold")
-    nameLabel.Position = UDim2.fromOffset(56, 7)
-    nameLabel.Size = UDim2.new(1, -65, 0, 17)
+    nameLabel.Position = UDim2.fromOffset(50, 5)
+    nameLabel.Size = UDim2.new(1, -58, 0, 17)
     nameLabel.ZIndex = 503
     local healthLabel = makeText(widget.Body, "Waiting", 8, Theme.Muted)
-    healthLabel.Position = UDim2.fromOffset(56, 24)
-    healthLabel.Size = UDim2.new(1, -65, 0, 16)
+    healthLabel.Position = UDim2.fromOffset(50, 21)
+    healthLabel.Size = UDim2.new(1, -58, 0, 15)
     healthLabel.TextXAlignment = Enum.TextXAlignment.Right
     healthLabel.ZIndex = 503
     local healthTrack = create("Frame", {
         BackgroundColor3 = Theme.Surface3,
         BorderSizePixel = 0,
-        Position = UDim2.fromOffset(56, 47),
-        Size = UDim2.new(1, -65, 0, 4),
+        Position = UDim2.fromOffset(50, 42),
+        Size = UDim2.new(1, -58, 0, 3),
         ZIndex = 503,
         Parent = widget.Body,
     }) :: Frame
@@ -7963,8 +9279,8 @@ function Window:CreateKeybindList(config: FloatingWidgetOptions?): AnyTable
         IconSize = config.IconSize,
         IconColor = config.IconColor,
         IconTransparency = config.IconTransparency,
-        Size = config.Size or UDim2.fromOffset(380, 76),
-        Position = config.Position or UDim2.new(0.54, -190, 0, 12),
+        Size = config.Size or UDim2.fromOffset(300, 70),
+        Position = config.Position or UDim2.new(0.54, -150, 0, 12),
         CustomPosition = config.Position ~= nil,
         Visible = config.Visible ~= false,
         Draggable = config.Draggable,
@@ -7972,6 +9288,8 @@ function Window:CreateKeybindList(config: FloatingWidgetOptions?): AnyTable
         KeepFullyVisible = config.KeepFullyVisible,
         DragMargin = config.DragMargin,
         MinimumVisiblePixels = config.MinimumVisiblePixels,
+        Pinned = config.Pinned,
+        Pinnable = config.Pinnable,
     })
     local columnHeader = create("Frame", {
         BackgroundTransparency = 1,
@@ -7989,7 +9307,7 @@ function Window:CreateKeybindList(config: FloatingWidgetOptions?): AnyTable
     end
     headerLabel("FUNCTION", UDim2.fromOffset(0, 0), UDim2.new(0.5, 0, 1, 0), Enum.TextXAlignment.Left)
     headerLabel("HOTKEY", UDim2.new(0.5, 0, 0, 0), UDim2.new(0.28, 0, 1, 0), Enum.TextXAlignment.Center)
-    headerLabel("STATE", UDim2.new(0.78, 0, 0, 0), UDim2.new(0.22, 0, 1, 0), Enum.TextXAlignment.Right)
+    headerLabel("STATUS", UDim2.new(0.78, 0, 0, 0), UDim2.new(0.22, 0, 1, 0), Enum.TextXAlignment.Right)
     local rows = create("ScrollingFrame", {
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
@@ -8070,7 +9388,7 @@ function Window:CreateKeybindList(config: FloatingWidgetOptions?): AnyTable
                     Theme.Text
                 )
                 valueLabel(
-                    keybind.Active and "ON" or "OFF",
+                    tostring(keybind.Mode or "Toggle"),
                     UDim2.new(0.78, 0, 0, 0),
                     UDim2.new(0.22, -6, 1, 0),
                     Enum.TextXAlignment.Right,
@@ -8080,9 +9398,9 @@ function Window:CreateKeybindList(config: FloatingWidgetOptions?): AnyTable
                 tween(row, { BackgroundTransparency = 0.55 }, Motion.KeybindRow)
             end
         end
-        local bodyHeight = 22 + math.max(count, 1) * 21
-        local finalHeight = math.clamp(bodyHeight + 26, 70, 170)
-        widget:Resize(380, finalHeight)
+        local bodyHeight = 21 + math.max(count, 1) * 21
+        local finalHeight = math.clamp(bodyHeight + 24, 66, 158)
+        widget:Resize(300, finalHeight)
         rows.Visible = true
         columnHeader.Visible = count > 0
         if count == 0 then
@@ -8099,9 +9417,10 @@ end
 
 function Window:CreateStatusStrip(config: FloatingWidgetOptions?): AnyTable
     config = config or {}
+    local configuredFields = type(config.Fields) == "table" and config.Fields or {}
     local density = self.Density or ResponsiveController:GetDensity()
-    local designWidth = math.max(finiteNumber(config.Width, 232), 80)
-    local designHeight = math.max(finiteNumber(config.Height, 30), 24)
+    local designWidth = math.max(finiteNumber(config.Width, 176), 80)
+    local designHeight = math.max(finiteNumber(config.Height, 28), 24)
     local widget: AnyTable = {
         Window = self,
         Connections = {},
@@ -8109,7 +9428,12 @@ function Window:CreateStatusStrip(config: FloatingWidgetOptions?): AnyTable
         Alive = true,
         Title = config.Name or config.Title or "Status Strip",
         CustomPosition = config.Position ~= nil,
-        Fields = { Kronos = true, FPS = true, Ping = true, Time = true },
+        Fields = {
+            Kronos = configuredFields.Kronos ~= false,
+            FPS = configuredFields.FPS ~= false,
+            Ping = configuredFields.Ping == true,
+            Time = configuredFields.Time ~= false,
+        },
         DesignWidth = designWidth,
         DesignHeight = designHeight,
         DesiredWidth = math.floor(designWidth * density + 0.5),
@@ -8138,12 +9462,13 @@ function Window:CreateStatusStrip(config: FloatingWidgetOptions?): AnyTable
     root:SetAttribute("KronosNoDensity", true)
     ThemeController:Bind(root, "BackgroundColor3", "ElevatedSurface")
     corner(root, 5)
-    stroke(root, Theme.Border, 0.36, 1)
+    stroke(root, Theme.Border, 0.36, 1, "Floating")
+    AcrylicController:Register(root, "StatusStrip")
     local marker = create("Frame", {
         BackgroundColor3 = Theme.Accent,
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(0, 7),
-        Size = UDim2.fromOffset(2, 16),
+        Size = UDim2.fromOffset(2, 14),
         ZIndex = 541,
         Parent = root,
     }) :: Frame
@@ -8280,7 +9605,7 @@ function Window:CreateStatusStrip(config: FloatingWidgetOptions?): AnyTable
                 ZIndex = 760,
             }) :: CanvasGroup
             corner(popup, Metrics.PopupRadius)
-            stroke(popup, Theme.Border, 0.26, 1)
+            stroke(popup, Theme.Border, 0.26, 1, "Floating")
             padding(popup, 6, 6, 6, 6)
             local popupLayout = list(popup, Enum.FillDirection.Vertical, 3)
             local popupMaid = PopupController:Open(self, popup, menu, 5)
@@ -8406,8 +9731,9 @@ function Window:CreateReopenButton(config: FloatingWidgetOptions?): AnyTable
     }) :: TextButton
     ThemeController:Bind(button, "BackgroundColor3", "ElevatedSurface")
     corner(button, math.floor(designSize * 0.25 + 0.5))
-    local buttonStroke = stroke(button, Theme.Accent, 0.18, 1)
+    local buttonStroke = stroke(button, Theme.Accent, 0.18, 1, "Floating")
     ThemeController:Bind(buttonStroke, "Color", "Accent")
+    AcrylicController:Register(button, "ReopenButton")
     local reopenIcon = makeIcon(button, {
         Icon = config.Icon or "orbit",
         IconSize = config.IconSize or 15,
@@ -8514,72 +9840,65 @@ function Window:CreateReopenButton(config: FloatingWidgetOptions?): AnyTable
     return widget
 end
 
+function Window:_handleInputBegan(input: InputObject, processed: boolean)
+    if self.CapturingToggleKey then
+        local capture = self.CapturingToggleKey
+        if input.KeyCode == Enum.KeyCode.Escape then
+            if capture.Label and capture.Label.Parent then
+                capture.Label.Text = self.ToggleKey.Name
+            end
+            self.CapturingToggleKey = nil
+        elseif input.KeyCode ~= Enum.KeyCode.Unknown then
+            self.ToggleKey = input.KeyCode
+            if capture.Label and capture.Label.Parent then
+                capture.Label.Text = input.KeyCode.Name
+            end
+            self.CapturingToggleKey = nil
+        end
+        return
+    end
+    if self.ListeningKeybind then
+        self.ListeningKeybind:Capture(input)
+        return
+    end
+    if input.KeyCode == Enum.KeyCode.Escape then
+        if self.ActivePopup then
+            PopupController:Close(self)
+        elseif self.SidePanel then
+            self:_closeSidePanel(false)
+        end
+        return
+    end
+    if not processed and not UserInputService:GetFocusedTextBox() and input.KeyCode == self.ToggleKey then
+        self:Toggle()
+        return
+    end
+    if processed then
+        return
+    end
+    for _, keybind in ipairs(self.Keybinds) do
+        if not keybind.Disabled and keybind.Value ~= "NONE" and InputController.Matches(input, keybind.Value) then
+            if keybind.Mode == "Hold" then
+                keybind:SetActive(true)
+            elseif keybind.Mode == "Toggle" then
+                keybind:SetActive(not keybind.Active)
+            elseif keybind.Mode == "Always" then
+                keybind:SetActive(true)
+            end
+        end
+    end
+end
+
+function Window:_handleInputEnded(input: InputObject)
+    for _, keybind in ipairs(self.Keybinds) do
+        if keybind.Mode == "Hold" and keybind.Active and InputController.Matches(input, keybind.Value) then
+            keybind:SetActive(false)
+        end
+    end
+end
+
 function Window:_bindInput()
-    addConnection(
-        self,
-        UserInputService.InputBegan:Connect(function(input, processed)
-            if self.CapturingToggleKey then
-                local capture = self.CapturingToggleKey
-                if input.KeyCode == Enum.KeyCode.Escape then
-                    if capture.Label and capture.Label.Parent then
-                        capture.Label.Text = self.ToggleKey.Name
-                    end
-                    self.CapturingToggleKey = nil
-                elseif input.KeyCode ~= Enum.KeyCode.Unknown then
-                    self.ToggleKey = input.KeyCode
-                    if capture.Label and capture.Label.Parent then
-                        capture.Label.Text = input.KeyCode.Name
-                    end
-                    self.CapturingToggleKey = nil
-                end
-                return
-            end
-            if self.ListeningKeybind then
-                self.ListeningKeybind:Capture(input)
-                return
-            end
-            if input.KeyCode == Enum.KeyCode.Escape then
-                if self.ActivePopup then
-                    PopupController:Close(self)
-                elseif self.SidePanel then
-                    self:_closeSidePanel(false)
-                end
-                return
-            end
-            if not processed and not UserInputService:GetFocusedTextBox() and input.KeyCode == self.ToggleKey then
-                self:Toggle()
-                return
-            end
-            if processed then
-                return
-            end
-            for _, keybind in ipairs(self.Keybinds) do
-                if
-                    not keybind.Disabled
-                    and keybind.Value ~= "NONE"
-                    and InputController.Matches(input, keybind.Value)
-                then
-                    if keybind.Mode == "Hold" then
-                        keybind:SetActive(true)
-                    elseif keybind.Mode == "Toggle" then
-                        keybind:SetActive(not keybind.Active)
-                    elseif keybind.Mode == "Always" then
-                        keybind:SetActive(true)
-                    end
-                end
-            end
-        end)
-    )
-    addConnection(
-        self,
-        UserInputService.InputEnded:Connect(function(input)
-            for _, keybind in ipairs(self.Keybinds) do
-                if keybind.Mode == "Hold" and keybind.Active and InputController.Matches(input, keybind.Value) then
-                    keybind:SetActive(false)
-                end
-            end
-        end)
-    )
+    InputController:Initialize()
 end
 
 function Window:RefreshTheme()
@@ -8614,6 +9933,9 @@ function Window:RefreshTheme()
     for _, widget in ipairs(self.Widgets) do
         if type(widget.Refresh) == "function" then
             widget:Refresh()
+        end
+        if type(widget.SetPinned) == "function" then
+            widget:SetPinned(widget.Pinned)
         end
     end
 end
@@ -8652,47 +9974,67 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
     if typeof(config.Accent) == "Color3" then
         library:SetAccent(config.Accent)
     end
-    local baseWidth = tonumber(config.Width)
+    if config.Transparency ~= nil then
+        library:SetTransparency(config.Transparency)
+    end
+    if config.Acrylic ~= nil then
+        library:SetAcrylic(config.Acrylic)
+    end
+    if config.AcrylicIntensity ~= nil then
+        library:SetAcrylicIntensity(config.AcrylicIntensity)
+    end
+    if config.BorderIntensity ~= nil then
+        library:SetBorderIntensity(config.BorderIntensity)
+    end
+    if config.ReducedMotion ~= nil then
+        library:SetReducedMotion(config.ReducedMotion)
+    end
+    if config.AnimationIntensity ~= nil then
+        library:SetAnimationIntensity(config.AnimationIntensity)
+    end
+    if config.DimStrength ~= nil then
+        library:SetDimStrength(config.DimStrength)
+    end
+    local configuredWidth = tonumber(config.Width)
         or (config.Size and config.Size.X.Offset > 0 and config.Size.X.Offset)
-        or Metrics.Window.X
-    local baseHeight = tonumber(config.Height)
+    local configuredHeight = tonumber(config.Height)
         or (config.Size and config.Size.Y.Offset > 0 and config.Size.Y.Offset)
-        or Metrics.Window.Y
+    local baseWidth = configuredWidth or Metrics.Window.X
+    local baseHeight = configuredHeight or Metrics.Window.Y
     baseWidth = math.max(finiteNumber(baseWidth, Metrics.Window.X), 280)
     baseHeight = math.max(finiteNumber(baseHeight, Metrics.Window.Y), 300)
     local viewport = viewportSize()
     local density = ResponsiveController:GetDensity(viewport)
     local topLeftInset, bottomRightInset = guiInsets()
     local dragMargin = math.clamp(finiteNumber(config.DragMargin, 4), 0, 32)
-    local reserveFloatingBand = config.FloatingWidgets ~= false
-        and (config.StatusStrip ~= false or config.TargetList ~= false or config.KeybindList ~= false)
+    local initialSafeWidth = math.max(viewport.X - topLeftInset.X - bottomRightInset.X - dragMargin * 2, 1)
     local initialSafeHeight = math.max(viewport.Y - topLeftInset.Y - bottomRightInset.Y - dragMargin * 2, 1)
-    local initialHeightLimit = initialSafeHeight
-    if reserveFloatingBand and UserInputService.TouchEnabled and viewport.X > viewport.Y and viewport.Y <= 650 then
-        initialHeightLimit = math.max(
-            initialSafeHeight - math.floor(190 * density + 0.5),
-            math.min(initialSafeHeight, math.floor(180 * density + 0.5))
-        )
-    end
-    local initialWidth =
-        math.min(baseWidth * density, math.max(viewport.X - topLeftInset.X - bottomRightInset.X - dragMargin * 2, 1))
-    local initialHeight = math.min(baseHeight * density, initialHeightLimit)
+    local sizingState = {
+        BaseWidth = baseWidth,
+        BaseHeight = baseHeight,
+        HasExplicitWidth = configuredWidth ~= nil,
+        HasExplicitHeight = configuredHeight ~= nil,
+    }
+    local initialWidth, initialHeight, layoutMode =
+        ResponsiveController:CalculateWindowSize(sizingState, viewport, initialSafeWidth, initialSafeHeight)
     local window = setmetatable({
         Kronos = library,
         BaseWidth = baseWidth,
         BaseHeight = baseHeight,
+        HasExplicitWidth = configuredWidth ~= nil,
+        HasExplicitHeight = configuredHeight ~= nil,
         Width = initialWidth,
         Height = initialHeight,
         Density = density,
+        LayoutMode = layoutMode,
         Tabs = {},
         Keybinds = {},
         Widgets = {},
         Connections = {},
         Visible = true,
         Destroyed = false,
-        ReserveFloatingBand = reserveFloatingBand,
         ToggleKey = config.ToggleKey or Enum.KeyCode.RightShift,
-        TwoColumn = initialWidth >= 730 * density and initialHeight >= 340 * density,
+        TwoColumn = layoutMode ~= "Portrait" and initialWidth >= 730 * density and initialHeight >= 340 * density,
         Presets = {},
         DragOptions = {
             DragBounds = config.DragBounds or "Viewport",
@@ -8704,15 +10046,6 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
     }, Window)
     local centerX = (topLeftInset.X + viewport.X - bottomRightInset.X) * 0.5
     local centerY = (topLeftInset.Y + viewport.Y - bottomRightInset.Y) * 0.5
-    if reserveFloatingBand then
-        local overlayDesignHeight = viewport.X < viewport.Y and (12 + 30 + 8 + 100 + 8 + 170) or (12 + 170)
-        local minimumCenterY = topLeftInset.Y + overlayDesignHeight * density + 8 * density + initialHeight * 0.5
-        local maximumCenterY = viewport.Y - bottomRightInset.Y - dragMargin - initialHeight * 0.5
-        local lowestCenterY = topLeftInset.Y + initialHeight * 0.5
-        centerY = maximumCenterY >= lowestCenterY
-                and math.clamp(math.max(centerY, minimumCenterY), lowestCenterY, maximumCenterY)
-            or (lowestCenterY + maximumCenterY) * 0.5
-    end
     local root = create("CanvasGroup", {
         Name = "Window",
         BackgroundTransparency = 1,
@@ -8748,8 +10081,11 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
     }) :: Frame
     ThemeController:Bind(main, "BackgroundColor3", "Background")
     corner(main, Metrics.Radius)
-    local mainStroke = stroke(main, Theme.Border, 0.34, 1)
+    local mainStroke = stroke(main, Theme.Border, 0.34, 1, "Shell")
     ThemeController:Bind(mainStroke, "Color", "Border")
+    local innerStroke = stroke(main, Theme.InnerHighlight, 0.78, 1, "Quiet")
+    ThemeController:Bind(innerStroke, "Color", "InnerHighlight")
+    AcrylicController:Register(main, "MainWindow")
     window.Root = root
     window.Main = main
     window.PopupLayer = library.GlobalPopupLayer
@@ -8796,7 +10132,7 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
     }) :: TextBox
     ThemeController:Bind(searchBox, "BackgroundColor3", "Surface2")
     corner(searchBox, 5)
-    local searchStroke = stroke(searchBox, Theme.Border, 0.66, 1)
+    local searchStroke = stroke(searchBox, Theme.Border, 0.66, 1, "Focus")
     padding(searchBox, 27, 0, 8, 0)
     local searchIcon = makeIcon(searchBox, { Icon = "search", IconSize = 12 }, "Muted")
     assert(searchIcon, "Required Lucide search icon is unavailable")
@@ -9034,6 +10370,9 @@ function Kronos:SetTheme(overrides: AnyTable?): AnyTable
         end
     end
     ThemeController:Refresh()
+    AppearanceController:Refresh()
+    BorderController:Refresh()
+    AcrylicController:Refresh()
     for _, window in ipairs(self.Windows) do
         window:RefreshTheme()
     end
@@ -9050,9 +10389,118 @@ function Kronos:SetAccent(color: Color3): AnyTable
     Theme.AccentDark = color:Lerp(Color3.new(0, 0, 0), 0.28)
     Theme.AccentSoft = color:Lerp(Theme.White, 0.2)
     ThemeController:Refresh()
+    AcrylicController:Refresh()
     for _, window in ipairs(self.Windows) do
         window:RefreshTheme()
     end
+    return self
+end
+
+function Kronos:SetTransparency(value: number): AnyTable
+    self.SurfaceTransparency = math.clamp(finiteNumber(value, self.SurfaceTransparency), 0, 0.9)
+    AppearanceController:Refresh()
+    AcrylicController:Refresh()
+    return self
+end
+
+function Kronos:GetTransparency(): number
+    return self.SurfaceTransparency
+end
+
+function Kronos:SetAcrylic(enabled: boolean): AnyTable
+    self.AcrylicEnabled = enabled == true
+    AcrylicController:Refresh()
+    return self
+end
+
+function Kronos:GetAcrylic(): boolean
+    return self.AcrylicEnabled == true
+end
+
+function Kronos:SetAcrylicIntensity(value: number): AnyTable
+    self.AcrylicIntensity = math.clamp(finiteNumber(value, self.AcrylicIntensity), 0, 1)
+    AcrylicController:Refresh()
+    return self
+end
+
+function Kronos:GetAcrylicIntensity(): number
+    return self.AcrylicIntensity
+end
+
+function Kronos:SetBorderIntensity(value: number): AnyTable
+    self.BorderIntensity = math.clamp(finiteNumber(value, self.BorderIntensity), 0, 1.5)
+    BorderController:Refresh()
+    return self
+end
+
+function Kronos:GetBorderIntensity(): number
+    return self.BorderIntensity
+end
+
+function Kronos:SetReducedMotion(enabled: boolean): AnyTable
+    self.ReducedMotion = enabled == true
+    if self.ReducedMotion then
+        local instances = {}
+        for instance in pairs(self.ActiveTweens) do
+            table.insert(instances, instance)
+        end
+        for _, instance in ipairs(instances) do
+            AnimationController:Cancel(instance, true)
+        end
+        for _, window in ipairs(self.Windows) do
+            if window.Root and window.Root.Parent then
+                window.Root.Visible = window.Visible ~= false
+                window.Root.GroupTransparency = window.Visible ~= false and 0 or 1
+            end
+            for _, widget in ipairs(window.Widgets or {}) do
+                if widget.Root and widget.Root.Parent then
+                    widget.Root.Visible = widget.Visible ~= false
+                    widget.Root.GroupTransparency = widget.Visible ~= false and 0 or 1
+                end
+            end
+        end
+    end
+    return self
+end
+
+function Kronos:GetReducedMotion(): boolean
+    return self.ReducedMotion == true
+end
+
+function Kronos:SetAnimationIntensity(value: number): AnyTable
+    self.AnimationIntensity = math.clamp(finiteNumber(value, self.AnimationIntensity), 0, 2)
+    return self
+end
+
+function Kronos:GetAnimationIntensity(): number
+    return self.AnimationIntensity
+end
+
+function Kronos:SetDimStrength(value: number): AnyTable
+    self.DimStrength = math.clamp(finiteNumber(value, self.DimStrength), 0, 0.9)
+    for _, window in ipairs(self.Windows) do
+        if window.SideDim and window.SideDim.Parent then
+            window.SideDim.BackgroundTransparency = 1 - self.DimStrength
+        end
+    end
+    return self
+end
+
+function Kronos:GetDimStrength(): number
+    return self.DimStrength
+end
+
+function Kronos:ResetAppearance(): AnyTable
+    self.SurfaceTransparency = 0.04
+    self.AcrylicEnabled = true
+    self.AcrylicIntensity = 0.52
+    self.BorderIntensity = 1
+    self.ReducedMotion = false
+    self.AnimationIntensity = 1
+    self.DimStrength = 0.64
+    AppearanceController:Refresh()
+    BorderController:Refresh()
+    AcrylicController:Refresh()
     return self
 end
 
@@ -9061,6 +10509,7 @@ function Kronos:Destroy()
         return
     end
     self.Destroyed = true
+    InputController:CancelPointer()
     DragController:Cancel()
     local notificationHandles = copyArray(self.NotificationHandles)
     for _, handle in ipairs(notificationHandles) do
@@ -9069,6 +10518,7 @@ function Kronos:Destroy()
     while #self.Windows > 0 do
         self.Windows[#self.Windows]:Destroy()
     end
+    ScrollbarController:DestroyAll()
     disconnectAll(self)
     local tweenInstances = {}
     for instance in pairs(self.ActiveTweens) do
@@ -9096,6 +10546,13 @@ function Kronos:Destroy()
     table.clear(self.Notifications)
     table.clear(self.NotificationHandles)
     table.clear(self.ThemeBindings)
+    table.clear(self.ActiveTweenTargets)
+    table.clear(self.SurfaceBindings)
+    table.clear(self.BorderBindings)
+    table.clear(self.AcrylicBindings)
+    table.clear(self.Scrollbars)
+    table.clear(InputController.KeyboardHandlers)
+    InputController.Initialized = false
     if Environment.__KRONOS_ACTIVE == self then
         Environment.__KRONOS_ACTIVE = nil
     end
@@ -9110,9 +10567,11 @@ local function buildShowcase(): AnyTable
         Accent = Theme.Accent,
         ToggleKey = Enum.KeyCode.RightShift,
         MobileToggle = true,
-        Width = 800,
-        Height = 470,
         FloatingWidgets = true,
+        Transparency = 0.04,
+        Acrylic = true,
+        AcrylicIntensity = 0.52,
+        BorderIntensity = 1,
     })
 
     local overview = window:AddTab({ Name = "Overview", Icon = "house" })
@@ -9233,6 +10692,8 @@ local function buildShowcase(): AnyTable
     local components = window:AddTab({ Name = "Components", Icon = "component" })
     local inputsSubTab = components:AddSubTab({ Name = "Inputs", Icon = "keyboard" })
     local selectionSubTab = components:AddSubTab({ Name = "Selection", Icon = "list-checks" })
+    local feedbackSubTab = components:AddSubTab({ Name = "Feedback", Icon = "bell-ring" })
+    local typographySubTab = components:AddSubTab({ Name = "Typography", Icon = "type" })
     local inputs = inputsSubTab:AddSection({
         Title = "Inputs",
         Side = "Left",
@@ -9327,6 +10788,37 @@ local function buildShowcase(): AnyTable
         Default = Enum.KeyCode.LeftAlt.Name,
         Mode = "Hold",
     })
+
+    local feedback = feedbackSubTab:AddSection({ Title = "Feedback", Icon = "message-square-more" })
+    feedback:AddButton({
+        Id = "ShowcaseSuccessFeedback",
+        Title = "Success notification",
+        Icon = "circle-check",
+        ButtonText = "Show",
+        Callback = function()
+            window:Notify({
+                Title = "Action completed",
+                Content = "The requested action finished.",
+                Icon = "circle-check",
+                Type = "success",
+            })
+        end,
+    })
+    feedback:AddToggle({
+        Id = "ShowcaseFeedbackToggle",
+        Title = "Interaction feedback",
+        Icon = "mouse-pointer-click",
+        Default = true,
+    })
+
+    local typography = typographySubTab:AddSection({ Title = "Typography", Icon = "type" })
+    typography:AddLabel({ Text = "Compact utility label", Icon = "text-cursor" })
+    typography:AddParagraph({
+        Title = "Reference hierarchy",
+        Content = "Quiet copy, restrained weight, and dense spacing.",
+        Icon = "text-align-start",
+    })
+    typography:AddDivider({ Title = "Secondary" })
 
     local advanced = window:AddTab({ Name = "Advanced", Icon = "settings" })
     local panelsSubTab = advanced:AddSubTab({ Name = "Panels", Icon = "panels-top-left" })
@@ -9488,6 +10980,12 @@ if startupOk then
             "Semantic theme tokens are incomplete"
         )
         assert(Motion.Window and Metrics.Window, "Motion or sizing tokens are incomplete")
+        assert(
+            type(AppearanceController.Refresh) == "function"
+                and type(BorderController.Refresh) == "function"
+                and type(AcrylicController.Refresh) == "function",
+            "Appearance controllers are incomplete"
+        )
     end)
 end
 if startupOk then
@@ -9505,7 +11003,15 @@ if startupOk then
 end
 if startupOk then
     startupOk = startupStage("InputControllerCreation", function()
-        assert(type(InputController.Name) == "function" and type(InputController.Matches) == "function")
+        InputController:Initialize()
+        assert(
+            InputController.Initialized
+                and type(InputController.Name) == "function"
+                and type(InputController.Matches) == "function"
+                and type(InputController.BeginPointer) == "function"
+                and type(InputController.CancelPointer) == "function",
+            "Input controller is incomplete"
+        )
     end)
 end
 if startupOk then
@@ -9518,12 +11024,14 @@ if startupOk then
     startupOk = startupStage("PopupControllerCreation", function()
         assert(type(PopupController.Open) == "function" and type(PopupController.Position) == "function")
         assert(type(NotificationController.Push) == "function")
+        assert(type(ScrollbarController.Attach) == "function" and type(ScrollbarController.DestroyAll) == "function")
     end)
 end
 if startupOk then
     startupOk = startupStage("WindowCreation", function()
         assert(type(WindowController.Create) == "function" and type(NavigationController.Select) == "function")
         assert(type(Tab.CreateSubTab) == "function" and type(SubTab.AddSection) == "function")
+        assert(type(SubtabController.Refresh) == "function" and type(SubtabController.Reveal) == "function")
         assert(
             type(Components.Toggle) == "function"
                 and type(Components.Dropdown) == "function"
