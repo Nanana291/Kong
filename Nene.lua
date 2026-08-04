@@ -119,18 +119,18 @@ Environment.__KRONOS_ACTIVE = nil
 
 local Theme: ThemeMap = {
     Background = Color3.fromRGB(9, 9, 11),
-    BackgroundSoft = Color3.fromRGB(12, 12, 15),
-    Surface = Color3.fromRGB(15, 15, 18),
-    Surface2 = Color3.fromRGB(19, 19, 23),
-    Surface3 = Color3.fromRGB(24, 24, 29),
-    ElevatedSurface = Color3.fromRGB(21, 21, 25),
-    SurfaceHover = Color3.fromRGB(27, 27, 33),
-    HoverSurface = Color3.fromRGB(27, 27, 33),
-    PressedSurface = Color3.fromRGB(31, 29, 38),
-    Stroke = Color3.fromRGB(45, 45, 53),
-    StrokeSoft = Color3.fromRGB(33, 33, 40),
-    Border = Color3.fromRGB(45, 45, 53),
-    Divider = Color3.fromRGB(31, 31, 37),
+    BackgroundSoft = Color3.fromRGB(13, 13, 16),
+    Surface = Color3.fromRGB(17, 17, 21),
+    Surface2 = Color3.fromRGB(22, 22, 27),
+    Surface3 = Color3.fromRGB(27, 27, 33),
+    ElevatedSurface = Color3.fromRGB(26, 26, 31),
+    SurfaceHover = Color3.fromRGB(31, 31, 38),
+    HoverSurface = Color3.fromRGB(31, 31, 38),
+    PressedSurface = Color3.fromRGB(35, 33, 42),
+    Stroke = Color3.fromRGB(55, 55, 66),
+    StrokeSoft = Color3.fromRGB(40, 40, 49),
+    Border = Color3.fromRGB(55, 55, 66),
+    Divider = Color3.fromRGB(38, 38, 46),
     Text = Color3.fromRGB(239, 239, 244),
     PrimaryText = Color3.fromRGB(239, 239, 244),
     SubText = Color3.fromRGB(154, 154, 166),
@@ -149,45 +149,53 @@ local Theme: ThemeMap = {
     Error = Color3.fromRGB(220, 91, 108),
     Shadow = Color3.fromRGB(0, 0, 0),
     Overlay = Color3.fromRGB(4, 4, 6),
-    InnerHighlight = Color3.fromRGB(83, 79, 101),
-    ScrollTrack = Color3.fromRGB(45, 42, 57),
+    InnerHighlight = Color3.fromRGB(92, 87, 112),
+    ScrollTrack = Color3.fromRGB(52, 48, 66),
     AcrylicTint = Color3.fromRGB(24, 21, 32),
 }
 
 local Motion = {
-    Hover = 0.1,
-    Press = 0.08,
+    Hover = 0.09,
+    Press = 0.06,
     Slider = 0.08,
-    Toggle = 0.16,
-    Dropdown = 0.19,
+    Toggle = 0.15,
+    Dropdown = 0.18,
     PopupClose = 0.12,
-    Tab = 0.2,
-    SubTab = 0.17,
-    TabExit = 0.12,
+    Tab = 0.17,
+    SubTab = 0.15,
     Search = 0.14,
-    Settings = 0.23,
-    Widget = 0.2,
-    DragRelease = 0.12,
-    Window = 0.28,
-    Notification = 0.28,
-    Tooltip = 0.14,
+    Settings = 0.22,
+    Widget = 0.18,
+    DragRelease = 0.1,
+    Window = 0.24,
+    Notification = 0.24,
+    Tooltip = 0.12,
     Health = 0.18,
     KeybindRow = 0.16,
-    Scrollbar = 0.12,
+    Scrollbar = 0.1,
+    PageEnter = 0.2,
+    PageExit = 0.12,
 }
 
 local Metrics = {
     Window = Vector2.new(900, 540),
-    MinimumWindow = Vector2.new(720, 430),
-    MaximumWindow = Vector2.new(1120, 650),
-    Header = 48,
-    Sidebar = 188,
+    MinimumWindow = Vector2.new(640, 430),
+    MaximumWindow = Vector2.new(1080, 680),
+    ReferenceAspect = 1.62,
+    HeightRatio = 0.62,
+    MinimumHeight = 430,
+    MaximumHeight = 672,
+    Header = 46,
+    Sidebar = 172,
     CompactSidebar = 50,
-    Row = 32,
-    DescriptionRow = 40,
+    Row = 30,
+    DescriptionRow = 38,
     SectionGap = 8,
     Radius = 6,
     PopupRadius = 6,
+    ColumnMaxWidth = 320,
+    ContentMaxWidth = 660,
+    SingleColumnMaxWidth = 430,
 }
 
 local LayerZ = {
@@ -2881,25 +2889,16 @@ function ResponsiveController:CalculateWindowSize(
     local mode = self:GetLayoutMode(viewport, safeWidth, safeHeight)
     local width: number
     local height: number
-    if window.HasExplicitWidth then
-        width = window.BaseWidth
+    local marginX = math.max(self:Scale(window, 12), 8)
+    if window.HasExplicitWidth and window.HasExplicitHeight then
+        width = math.min(window.BaseWidth, safeWidth)
+        height = math.min(window.BaseHeight, safeHeight)
     elseif mode == "Portrait" then
-        width = safeWidth * 0.95
+        -- Dedicated narrow layout: one column, scrollable; do not preserve desktop aspect.
+        width = math.clamp(safeWidth * 0.94, math.min(300, safeWidth), safeWidth)
+        height = safeHeight * 0.9
     elseif mode == "MobileLandscape" then
-        width = safeWidth * 0.88
-    elseif mode == "Compact" then
-        width = safeWidth * 0.84
-    elseif mode == "Medium" then
-        width = math.clamp(safeWidth * 0.56, Metrics.MinimumWindow.X, 1020)
-    else
-        width = math.clamp(safeWidth * 0.49, Metrics.MinimumWindow.X, Metrics.MaximumWindow.X)
-    end
-
-    if window.HasExplicitHeight then
-        height = window.BaseHeight
-    elseif mode == "Portrait" then
-        height = safeHeight * 0.82
-    elseif mode == "MobileLandscape" then
+        -- Preserve a controlled ratio, never a full-width panoramic stretch.
         local floatingHeight = 0
         for _, widget in ipairs(window.Widgets or {}) do
             if
@@ -2912,11 +2911,29 @@ function ResponsiveController:CalculateWindowSize(
             end
         end
         local floatingBand = floatingHeight > 0 and floatingHeight + self:Scale(window, 8) or 0
-        height = math.min(safeHeight * 0.93, safeHeight - floatingBand)
-    elseif mode == "Compact" then
-        height = math.min(safeHeight * 0.88, width / 1.55)
+        local usableHeight = math.max(safeHeight - floatingBand, 240)
+        local aspect = math.min(Metrics.ReferenceAspect, safeWidth / math.max(usableHeight, 1))
+        height = math.min(usableHeight * 0.94, safeWidth / math.max(aspect, 0.6))
+        width = math.min(safeWidth * 0.9, height * aspect)
+        if width < Metrics.MinimumWindow.X * 0.72 then
+            width = math.min(safeWidth - marginX * 2, Metrics.MinimumWindow.X)
+            height = math.min(usableHeight, width / aspect)
+        end
     else
-        height = math.clamp(math.min(safeHeight * 0.61, width / 1.72), Metrics.MinimumWindow.Y, Metrics.MaximumWindow.Y)
+        -- Reference-ratio-driven sizing: derive the height from the usable viewport,
+        -- then compute width = height * referenceAspect. Never stretch width to fill
+        -- an ultra-wide screen; shrink height only when the width cannot fit.
+        local aspect = Metrics.ReferenceAspect
+        local heightRatio = math.max(Metrics.HeightRatio, math.min(1, safeHeight / 1000))
+        height = math.clamp(safeHeight * heightRatio, Metrics.MinimumHeight, Metrics.MaximumHeight)
+        width = height * aspect
+        local maximumWidth = math.max(safeWidth - marginX * 2, math.min(280, safeWidth))
+        if width > maximumWidth then
+            width = maximumWidth
+            height = width / aspect
+        end
+        height =
+            math.clamp(height, math.min(Metrics.MinimumHeight, safeHeight), math.min(Metrics.MaximumHeight, safeHeight))
     end
 
     width = math.clamp(width, math.min(280, safeWidth), safeWidth)
@@ -3454,15 +3471,15 @@ function ScrollbarController:Wake(entry: AnyTable, hold: boolean?)
     end
     entry.IdleGeneration = (entry.IdleGeneration or 0) + 1
     local generation = entry.IdleGeneration
-    tween(entry.Track, { BackgroundTransparency = 0.72 }, Motion.Scrollbar)
-    tween(entry.Thumb, { BackgroundTransparency = 0.08 }, Motion.Scrollbar)
+    tween(entry.Track, { BackgroundTransparency = 0.76 }, Motion.Scrollbar)
+    tween(entry.Thumb, { BackgroundTransparency = 0.04 }, Motion.Scrollbar)
     if hold then
         return
     end
     task.delay(1.05, function()
         if entry.IdleGeneration == generation and not entry.Hovered and not entry.Dragging and entry.Track.Parent then
-            tween(entry.Track, { BackgroundTransparency = 0.96 }, Motion.Scrollbar)
-            tween(entry.Thumb, { BackgroundTransparency = 0.52 }, Motion.Scrollbar)
+            tween(entry.Track, { BackgroundTransparency = 0.92 }, Motion.Scrollbar)
+            tween(entry.Thumb, { BackgroundTransparency = 0.3 }, Motion.Scrollbar)
         end
     end)
 end
@@ -3505,9 +3522,9 @@ function ScrollbarController:Attach(scroller: ScrollingFrame): AnyTable?
         Scroller = scroller,
         Connections = {},
         Horizontal = horizontal,
-        Margin = 3,
-        IdleWidth = 3,
-        ActiveWidth = 5,
+        Margin = 4,
+        IdleWidth = 4,
+        ActiveWidth = 7,
         MinimumThumb = horizontal and 24 or 28,
         Hovered = false,
         Dragging = false,
@@ -3515,7 +3532,7 @@ function ScrollbarController:Attach(scroller: ScrollingFrame): AnyTable?
     local track = create("Frame", {
         Name = "KronosScrollTrack",
         BackgroundColor3 = Theme.ScrollTrack,
-        BackgroundTransparency = 0.96,
+        BackgroundTransparency = 0.88,
         BorderSizePixel = 0,
         Active = true,
         ClipsDescendants = true,
@@ -3526,15 +3543,15 @@ function ScrollbarController:Attach(scroller: ScrollingFrame): AnyTable?
     local thumb = create("Frame", {
         Name = "KronosScrollThumb",
         BackgroundColor3 = Theme.Accent,
-        BackgroundTransparency = 0.52,
+        BackgroundTransparency = 0.16,
         BorderSizePixel = 0,
         Active = false,
         ZIndex = track.ZIndex + 1,
         Parent = track,
     }) :: Frame
     thumb:SetAttribute("KronosNoDensity", true)
-    corner(track, 3)
-    corner(thumb, 3)
+    corner(track, 4)
+    corner(thumb, 4)
     ThemeController:Bind(track, "BackgroundColor3", "ScrollTrack")
     ThemeController:Bind(thumb, "BackgroundColor3", "Accent")
     entry.Track = track
@@ -4256,7 +4273,7 @@ local function makeControlRow(section, titleText, description, height, iconOptio
     })
     row:SetAttribute("KronosSearch", string.lower(tostring(titleText or "") .. " " .. tostring(description or "")))
     corner(row, 4)
-    local rowStroke = stroke(row, Theme.StrokeSoft, 0.78, 1)
+    local rowStroke = stroke(row, Theme.StrokeSoft, 0.62, 1, "Control")
     ThemeController:Bind(row, "BackgroundColor3", "Surface2")
     ThemeController:Bind(rowStroke, "Color", "StrokeSoft")
 
@@ -6580,6 +6597,87 @@ function SubtabController:Attach(tab: AnyTable)
             end)
         )
     end
+    -- Mouse-wheel horizontal scrolling for the subtab rail.
+    addConnection(
+        tab,
+        bar.InputChanged:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseWheel and bar.Visible then
+                local maximum = math.max(bar.AbsoluteCanvasSize.X - bar.AbsoluteSize.X, 0)
+                if maximum > 0 then
+                    bar.CanvasPosition =
+                        Vector2.new(math.clamp(bar.CanvasPosition.X - input.Position.Z * 42, 0, maximum), 0)
+                end
+            end
+        end)
+    )
+    -- Touch / drag scrolling for the subtab rail (compact mobile rail).
+    local dragOwner = {}
+    local dragStartX: number? = nil
+    local dragStartCanvas: number? = nil
+    local touchScrolled = false
+    local function isInsideSubtabButton(position: Vector2): boolean
+        for _, selector in pairs(tab.SubTabSelectors or {}) do
+            if selector.Button and selector.Button.Parent and selector.Button.Visible then
+                local absolute = selector.Button.AbsolutePosition
+                local size = selector.Button.AbsoluteSize
+                if
+                    position.X >= absolute.X
+                    and position.X <= absolute.X + size.X
+                    and position.Y >= absolute.Y
+                    and position.Y <= absolute.Y + size.Y
+                then
+                    return true
+                end
+            end
+        end
+        return false
+    end
+    addConnection(
+        tab,
+        bar.InputBegan:Connect(function(input)
+            if
+                bar.Visible
+                and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1)
+                and bar.AbsoluteCanvasSize.X > bar.AbsoluteSize.X + 2
+                and not isInsideSubtabButton(input.Position)
+            then
+                if
+                    not InputController:BeginPointer(dragOwner, input, function(changed)
+                        local maximum = math.max(bar.AbsoluteCanvasSize.X - bar.AbsoluteSize.X, 0)
+                        if maximum <= 0 then
+                            return
+                        end
+                        if dragStartX == nil then
+                            dragStartX = changed.Position.X
+                            dragStartCanvas = bar.CanvasPosition.X
+                            touchScrolled = false
+                        end
+                        local delta = changed.Position.X - dragStartX
+                        if math.abs(delta) > 6 then
+                            touchScrolled = true
+                        end
+                        if touchScrolled then
+                            bar.CanvasPosition = Vector2.new(math.clamp(dragStartCanvas - delta, 0, maximum), 0)
+                        end
+                    end, function()
+                        dragStartX = nil
+                        dragStartCanvas = nil
+                        touchScrolled = false
+                    end)
+                then
+                    return
+                end
+            end
+        end)
+    )
+    addConnection(
+        tab,
+        bar.InputEnded:Connect(function()
+            if dragOwner and InputController.ActivePointer == dragOwner then
+                InputController:CancelPointer(dragOwner)
+            end
+        end)
+    )
     self:Refresh(tab)
 end
 
@@ -6617,8 +6715,9 @@ function Tab:_createSubTabSelector(owner: AnyTable, config: AnyTable): AnyTable
     end
     local titleText = tostring(config.Name or config.Title or "General")
     local iconSize = IconController:Normalize(config.Icon) and math.clamp(finiteNumber(config.IconSize, 12), 8, 32) or 0
-    local textSize = TextService:GetTextSize(titleText, 9, Enum.Font.GothamBold, Vector2.new(300, 22))
-    local width = math.clamp(textSize.X + (iconSize > 0 and iconSize + 16 or 18), 52, 180)
+    local textSize = TextService:GetTextSize(titleText, 10, Enum.Font.GothamBold, Vector2.new(400, 24))
+    local paddingTotal = iconSize > 0 and iconSize + 20 or 22
+    local width = math.clamp(textSize.X + paddingTotal, 64, 220)
     local button = create("TextButton", {
         Name = "SubTabButton",
         BackgroundColor3 = Theme.Surface2,
@@ -6626,7 +6725,7 @@ function Tab:_createSubTabSelector(owner: AnyTable, config: AnyTable): AnyTable
         BorderSizePixel = 0,
         Text = "",
         AutoButtonColor = false,
-        Size = UDim2.fromOffset(width, 26),
+        Size = UDim2.fromOffset(width, 28),
         Parent = self.SubTabBar,
     }) :: TextButton
     corner(button, 5)
@@ -6634,13 +6733,13 @@ function Tab:_createSubTabSelector(owner: AnyTable, config: AnyTable): AnyTable
     local icon = makeIcon(button, config, "Muted")
     if icon then
         icon.AnchorPoint = Vector2.new(0, 0.5)
-        icon.Position = UDim2.new(0, 8, 0.5, 0)
+        icon.Position = UDim2.new(0, 9, 0.5, 0)
         icon.ZIndex = 3
-        offset = icon.Size.X.Offset + 13
+        offset = icon.Size.X.Offset + 14
     end
-    local label = makeText(button, titleText, 9, Theme.SubText, "bold")
+    local label = makeText(button, titleText, 10, Theme.SubText, "bold")
     label.Position = UDim2.fromOffset(offset, 0)
-    label.Size = UDim2.new(1, -offset - 7, 1, 0)
+    label.Size = UDim2.new(1, -offset - 8, 1, 0)
     label.ZIndex = 3
     local marker = create("Frame", {
         BackgroundColor3 = Theme.Accent,
@@ -6666,7 +6765,7 @@ function Tab:_createSubTabSelector(owner: AnyTable, config: AnyTable): AnyTable
         owner,
         button.MouseEnter:Connect(function()
             if self.ActiveSubTab ~= owner then
-                tween(button, { BackgroundTransparency = 0.42 }, Motion.Hover)
+                tween(button, { BackgroundTransparency = 0.4 }, Motion.Hover)
             end
         end)
     )
@@ -6674,7 +6773,29 @@ function Tab:_createSubTabSelector(owner: AnyTable, config: AnyTable): AnyTable
         owner,
         button.MouseLeave:Connect(function()
             if self.ActiveSubTab ~= owner then
-                tween(button, { BackgroundTransparency = 0.7 }, Motion.Hover)
+                tween(button, { BackgroundTransparency = 0.72 }, Motion.Hover)
+            end
+        end)
+    )
+    addConnection(
+        owner,
+        button.InputBegan:Connect(function(input)
+            if
+                input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.Touch
+            then
+                tween(button, { BackgroundTransparency = 0.3 }, Motion.Press)
+            end
+        end)
+    )
+    addConnection(
+        owner,
+        button.InputEnded:Connect(function(input)
+            if
+                input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.Touch
+            then
+                tween(button, { BackgroundTransparency = self.ActiveSubTab == owner and 0.2 or 0.4 }, Motion.Press)
             end
         end)
     )
@@ -6741,6 +6862,49 @@ function Tab:_updateCanvas()
     end)
 end
 
+function Tab:_applyColumnWidths()
+    if not self.LeftColumn or not self.LeftColumn.Parent or not self.Columns then
+        return
+    end
+    local contentWidth = self.Columns.AbsoluteSize.X
+    if contentWidth <= 1 then
+        task.defer(function()
+            if self.LeftColumn and self.LeftColumn.Parent then
+                self:_applyColumnWidths()
+            end
+        end)
+        return
+    end
+    local window = self.Window
+    local gap = ResponsiveController:Scale(window, 5)
+    local d = function(value: number): number
+        return ResponsiveController:Scale(window, value)
+    end
+    if not self.TwoColumn then
+        -- Single column: cap its width so it does not stretch across the whole viewport.
+        local maxSingle = math.min(d(Metrics.SingleColumnMaxWidth), contentWidth)
+        local columnWidth = math.max(contentWidth - d(2), 0)
+        self.LeftColumn.Size = UDim2.fromOffset(columnWidth, 0)
+        self.LeftColumn.Position = UDim2.new(0, math.max(math.floor((columnWidth - maxSingle) * 0.5), 0), 0, 0)
+        local inner = self.LeftColumn:FindFirstChildOfType("UIPadding")
+        if inner then
+            inner.PaddingLeft = UDim.new(0, 0)
+            inner.PaddingRight = UDim.new(0, 0)
+        end
+        return
+    end
+    -- Two balanced columns with a preferred max width; center them when extra width exists.
+    local columnMax = d(Metrics.ColumnMaxWidth)
+    local fill = math.max(contentWidth - d(2), 0)
+    local columnWidth = math.min(columnMax, math.max(math.floor((fill - gap) * 0.5), d(120)))
+    local total = columnWidth * 2 + gap
+    local offset = math.max(math.floor((fill - total) * 0.5), 0)
+    self.LeftColumn.Size = UDim2.fromOffset(columnWidth, 0)
+    self.LeftColumn.Position = UDim2.fromOffset(offset, 0)
+    self.RightColumn.Size = UDim2.fromOffset(columnWidth, 0)
+    self.RightColumn.Position = UDim2.fromOffset(offset + columnWidth + gap, 0)
+end
+
 function Tab:ApplyColumns(twoColumn: boolean)
     if self.TwoColumn == twoColumn and self.ColumnsInitialized then
         self:_updateCanvas()
@@ -6749,11 +6913,7 @@ function Tab:ApplyColumns(twoColumn: boolean)
     self.TwoColumn = twoColumn
     self.ColumnsInitialized = true
     self.RightColumn.Visible = twoColumn
-    local gap = ResponsiveController:Scale(self.Window, 5)
     if twoColumn then
-        self.LeftColumn.Size = UDim2.new(0.5, -gap, 0, 0)
-        self.RightColumn.Size = UDim2.new(0.5, -gap, 0, 0)
-        self.RightColumn.Position = UDim2.new(0.5, gap, 0, 0)
         for index, section in ipairs(self.Sections) do
             local side = section.PreferredSide
             if side == nil then
@@ -6762,12 +6922,12 @@ function Tab:ApplyColumns(twoColumn: boolean)
             section.Instance.Parent = side == "Right" and self.RightColumn or self.LeftColumn
         end
     else
-        self.LeftColumn.Size = UDim2.new(1, 0, 0, 0)
         self.RightColumn.Position = UDim2.fromOffset(0, 0)
         for _, section in ipairs(self.Sections) do
             section.Instance.Parent = self.LeftColumn
         end
     end
+    self:_applyColumnWidths()
     self:_updateCanvas()
     if not self.ParentTab then
         for _, subTab in ipairs(self.SubTabs or {}) do
@@ -6848,7 +7008,7 @@ function Tab:CreateSection(config: (NavigationOptions | string)?): AnyTable
     local frame = create("Frame", {
         Name = "Section",
         BackgroundColor3 = Theme.Surface,
-        BackgroundTransparency = 0.52,
+        BackgroundTransparency = 0.48,
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
@@ -6857,7 +7017,7 @@ function Tab:CreateSection(config: (NavigationOptions | string)?): AnyTable
     }) :: Frame
     frame:SetAttribute("KronosSearch", section.SearchText)
     corner(frame, Metrics.Radius)
-    local frameStroke = stroke(frame, Theme.Border, 0.78, 1, "Quiet")
+    local frameStroke = stroke(frame, Theme.Border, 0.58, 1, "Section")
     ThemeController:Bind(frameStroke, "Color", "Border")
     padding(frame, 8, 6, 8, 8)
     local frameLayout = list(frame, Enum.FillDirection.Vertical, 4)
@@ -7150,8 +7310,8 @@ function Window:SelectTab(tab: any)
     if self.ActiveTab then
         local previousTab = self.ActiveTab
         self:_setActiveTabVisual(previousTab, false)
-        tween(previousTab.Page, { GroupTransparency = 1, Position = UDim2.fromOffset(-7, 0) }, Motion.TabExit)
-        task.delay(AnimationController:Duration(Motion.TabExit), function()
+        tween(previousTab.Page, { GroupTransparency = 1, Position = UDim2.fromOffset(-6, 0) }, Motion.PageExit)
+        task.delay(AnimationController:Duration(Motion.PageExit), function()
             if self.ActiveTab ~= previousTab and previousTab.Page.Parent then
                 previousTab.Page.Visible = false
             end
@@ -7159,9 +7319,9 @@ function Window:SelectTab(tab: any)
     end
     self.ActiveTab = tab
     tab.Page.Visible = true
-    tab.Page.Position = UDim2.fromOffset(7, 0)
+    tab.Page.Position = UDim2.fromOffset(6, 0)
     tab.Page.GroupTransparency = 1
-    tween(tab.Page, { GroupTransparency = 0, Position = UDim2.fromOffset(0, 0) }, Motion.Tab)
+    tween(tab.Page, { GroupTransparency = 0, Position = UDim2.fromOffset(0, 0) }, Motion.PageEnter)
     self:_setActiveTabVisual(tab, true)
     tab:ApplyColumns(self.TwoColumn)
     if tab.HasSubTabs and not tab.ActiveSubTab then
@@ -7251,7 +7411,7 @@ function Window:CreateTab(config: (NavigationOptions | string)?): AnyTable
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(7, 4),
-        Size = UDim2.new(1, -14, 0, 26),
+        Size = UDim2.new(1, -14, 0, 30),
         CanvasSize = UDim2.fromOffset(0, 0),
         ScrollBarThickness = 0,
         ScrollingDirection = Enum.ScrollingDirection.X,
@@ -7396,7 +7556,7 @@ function Window:_makeHeader(config: WindowConfig)
     local header = create("Frame", {
         Name = "Header",
         BackgroundColor3 = Theme.BackgroundSoft,
-        BackgroundTransparency = 0.1,
+        BackgroundTransparency = 0.06,
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, Metrics.Header),
         ZIndex = 25,
@@ -7405,6 +7565,7 @@ function Window:_makeHeader(config: WindowConfig)
     ThemeController:Bind(header, "BackgroundColor3", "BackgroundSoft")
     local divider = create("Frame", {
         BackgroundColor3 = Theme.Divider,
+        BackgroundTransparency = 0.15,
         BorderSizePixel = 0,
         AnchorPoint = Vector2.new(0, 1),
         Position = UDim2.new(0, 0, 1, 0),
@@ -7630,6 +7791,9 @@ function Window:ApplyResponsive()
     local contentWidth = width - sidebarWidth
     self.TwoColumn = layoutMode ~= "Portrait" and contentWidth >= d(520) and height - headerHeight >= d(300)
     for _, tab in ipairs(self.Tabs) do
+        if tab.TwoColumn == self.TwoColumn and tab.ColumnsInitialized then
+            tab:_applyColumnWidths()
+        end
         tab:ApplyColumns(self.TwoColumn)
         SubtabController:Refresh(tab)
         if tab.ActiveSubTab then
@@ -8021,7 +8185,7 @@ function Window:_openSidePanel(kind: string)
         ZIndex = 170,
         Parent = self.Main,
     }) :: TextButton
-    local panelWidth = math.min(d(kind == "Presets" and 220 or 240), math.max(self.Width - d(70), d(176)))
+    local panelWidth = math.min(d(kind == "Presets" and 224 or 258), math.max(self.Width - d(70), d(176)))
     local headerHeight = d(Metrics.Header)
     local openPosition: UDim2
     local closedPosition: UDim2
@@ -8037,7 +8201,7 @@ function Window:_openSidePanel(kind: string)
     local panel = create("CanvasGroup", {
         Name = kind .. "Panel",
         BackgroundColor3 = Theme.ElevatedSurface,
-        BackgroundTransparency = 0.07,
+        BackgroundTransparency = 0.05,
         BorderSizePixel = 0,
         GroupTransparency = 0,
         Position = closedPosition,
@@ -8046,8 +8210,8 @@ function Window:_openSidePanel(kind: string)
         Parent = self.Main,
     }) :: CanvasGroup
     ThemeController:Bind(panel, "BackgroundColor3", "ElevatedSurface")
-    corner(panel, 6)
-    local panelStroke = stroke(panel, Theme.Border, 0.25, 1, "Floating")
+    corner(panel, 7)
+    local panelStroke = stroke(panel, Theme.Border, 0.16, 1, "Settings")
     ThemeController:Bind(panelStroke, "Color", "Border")
     AcrylicController:Register(panel, kind .. "Panel")
     self.SidePanel = panel
@@ -8058,9 +8222,9 @@ function Window:_openSidePanel(kind: string)
 
     local header = create("Frame", {
         BackgroundColor3 = Theme.Surface2,
-        BackgroundTransparency = 0.12,
+        BackgroundTransparency = 0.1,
         BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 42),
+        Size = UDim2.new(1, 0, 0, 40),
         ZIndex = 176,
         Parent = panel,
     }) :: Frame
@@ -8120,8 +8284,8 @@ function Window:_openSidePanel(kind: string)
         Name = "PanelContent",
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        Position = UDim2.fromOffset(0, 42),
-        Size = UDim2.new(1, 0, 1, -42),
+        Position = UDim2.fromOffset(0, 40),
+        Size = UDim2.new(1, 0, 1, -40),
         CanvasSize = UDim2.fromOffset(0, 0),
         ScrollBarThickness = 2,
         ScrollBarImageColor3 = Theme.Accent,
@@ -8193,7 +8357,7 @@ function Window:_openSidePanel(kind: string)
         callback: (() -> ())?,
         iconName: string?
     ): TextButton
-        local rowHeight = subtitleText and 40 or 32
+        local rowHeight = subtitleText and 38 or 30
         local row = create("TextButton", {
             BackgroundColor3 = Theme.Surface2,
             BackgroundTransparency = 0.38,
@@ -8205,7 +8369,7 @@ function Window:_openSidePanel(kind: string)
             Parent = page,
         }) :: TextButton
         corner(row, 5)
-        stroke(row, Theme.Border, 0.72, 1)
+        stroke(row, Theme.Border, 0.6, 1)
         local textOffset = 10
         if iconName then
             local rowIcon = makeIcon(row, { Icon = iconName, IconSize = 13 }, "SubText")
@@ -8900,8 +9064,8 @@ end
 
 function FloatingWidgetController:Create(window: AnyTable, config: FloatingWidgetOptions): AnyTable
     local density = window.Density or ResponsiveController:GetDensity()
-    local designWidth = math.max(finiteNumber(config.Width or (config.Size and config.Size.X.Offset), 246), 40)
-    local designHeight = math.max(finiteNumber(config.Height or (config.Size and config.Size.Y.Offset), 120), 40)
+    local designWidth = math.max(finiteNumber(config.Width or (config.Size and config.Size.X.Offset), 224), 40)
+    local designHeight = math.max(finiteNumber(config.Height or (config.Size and config.Size.Y.Offset), 104), 40)
     local widget: AnyTable = {
         Window = window,
         Connections = {},
@@ -8938,15 +9102,15 @@ function FloatingWidgetController:Create(window: AnyTable, config: FloatingWidge
     root:SetAttribute("KronosNoDensity", true)
     ThemeController:Bind(root, "BackgroundColor3", "ElevatedSurface")
     corner(root, Metrics.Radius)
-    local rootStroke = stroke(root, Theme.Border, 0.36, 1, "Floating")
+    local rootStroke = stroke(root, Theme.Border, 0.22, 1, "Floating")
     ThemeController:Bind(rootStroke, "Color", "Border")
     AcrylicController:Register(root, "FloatingWidget")
     local header = create("Frame", {
         BackgroundColor3 = Theme.Surface2,
-        BackgroundTransparency = 0.12,
+        BackgroundTransparency = 0.1,
         BorderSizePixel = 0,
         Active = true,
-        Size = UDim2.new(1, 0, 0, 24),
+        Size = UDim2.new(1, 0, 0, 22),
         ZIndex = root.ZIndex + 1,
         Parent = root,
     }) :: Frame
@@ -9010,8 +9174,8 @@ function FloatingWidgetController:Create(window: AnyTable, config: FloatingWidge
     ThemeController:Bind(header, "BackgroundColor3", "Surface2")
     local body = create("Frame", {
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(0, 24),
-        Size = UDim2.new(1, 0, 1, -24),
+        Position = UDim2.fromOffset(0, 22),
+        Size = UDim2.new(1, 0, 1, -22),
         ZIndex = root.ZIndex + 1,
         Parent = root,
     }) :: Frame
@@ -10061,18 +10225,18 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
     root:SetAttribute("KronosNoDensity", true)
     local shadow = create("Frame", {
         BackgroundColor3 = Theme.Shadow,
-        BackgroundTransparency = 0.78,
+        BackgroundTransparency = 0.66,
         BorderSizePixel = 0,
-        Position = UDim2.fromOffset(0, 6),
+        Position = UDim2.fromOffset(0, 7),
         Size = UDim2.fromScale(1, 1),
         ZIndex = 8,
         Parent = root,
     }) :: Frame
-    corner(shadow, Metrics.Radius + 1)
+    corner(shadow, Metrics.Radius + 2)
     local main = create("Frame", {
         Name = "Main",
         BackgroundColor3 = Theme.Background,
-        BackgroundTransparency = 0.08,
+        BackgroundTransparency = 0.06,
         BorderSizePixel = 0,
         Size = UDim2.fromScale(1, 1),
         ClipsDescendants = true,
@@ -10081,9 +10245,9 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
     }) :: Frame
     ThemeController:Bind(main, "BackgroundColor3", "Background")
     corner(main, Metrics.Radius)
-    local mainStroke = stroke(main, Theme.Border, 0.34, 1, "Shell")
+    local mainStroke = stroke(main, Theme.Border, 0.28, 1, "Shell")
     ThemeController:Bind(mainStroke, "Color", "Border")
-    local innerStroke = stroke(main, Theme.InnerHighlight, 0.78, 1, "Quiet")
+    local innerStroke = stroke(main, Theme.InnerHighlight, 0.84, 1, "Quiet")
     ThemeController:Bind(innerStroke, "Color", "InnerHighlight")
     AcrylicController:Register(main, "MainWindow")
     window.Root = root
@@ -10104,6 +10268,7 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
     ThemeController:Bind(sidebar, "BackgroundColor3", "BackgroundSoft")
     local sidebarDivider = create("Frame", {
         BackgroundColor3 = Theme.Divider,
+        BackgroundTransparency = 0.1,
         BorderSizePixel = 0,
         AnchorPoint = Vector2.new(1, 0),
         Position = UDim2.new(1, 0, 0, 0),
@@ -10193,7 +10358,7 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
     local content = create("Frame", {
         Name = "Content",
         BackgroundColor3 = Theme.Background,
-        BackgroundTransparency = 0.1,
+        BackgroundTransparency = 0.16,
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(Metrics.Sidebar, Metrics.Header),
         Size = UDim2.new(1, -Metrics.Sidebar, 1, -Metrics.Header),
@@ -10201,6 +10366,15 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
         Parent = main,
     }) :: Frame
     ThemeController:Bind(content, "BackgroundColor3", "Background")
+    local contentTopDivider = create("Frame", {
+        BackgroundColor3 = Theme.Divider,
+        BackgroundTransparency = 0.25,
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 0, 1),
+        ZIndex = 13,
+        Parent = content,
+    }) :: Frame
+    ThemeController:Bind(contentTopDivider, "BackgroundColor3", "Divider")
     local pageHost = create("Frame", {
         Name = "PageHost",
         BackgroundTransparency = 1,
@@ -10577,6 +10751,7 @@ local function buildShowcase(): AnyTable
     local overview = window:AddTab({ Name = "Overview", Icon = "house" })
     local mainSubTab = overview:AddSubTab({ Name = "Main", Icon = "layout-dashboard" })
     local statesSubTab = overview:AddSubTab({ Name = "States", Icon = "toggle-right" })
+    local performanceSubTab = overview:AddSubTab({ Name = "Performance tuning", Icon = "gauge" })
     local general = mainSubTab:AddSection({
         Title = "General",
         Side = "Left",
@@ -10654,6 +10829,33 @@ local function buildShowcase(): AnyTable
         Title = "States",
         Side = "Left",
         Icon = "circle-check",
+    })
+    local performance = performanceSubTab:AddSection({
+        Title = "Performance",
+        Side = "Left",
+        Icon = "gauge",
+    })
+    performance:AddToggle({
+        Id = "ShowcaseFrameCap",
+        Title = "Frame pacing",
+        Icon = "activity",
+        Default = true,
+    })
+    performance:AddSlider({
+        Id = "ShowcaseUpdateRate",
+        Title = "Update rate",
+        Icon = "timer",
+        Min = 1,
+        Max = 30,
+        Default = 10,
+        Suffix = " Hz",
+    })
+    performance:AddDropdown({
+        Id = "ShowcaseTargetMode",
+        Title = "Target mode",
+        Icon = "crosshair",
+        Values = { "Nearest", "Lowest health", "Highest threat", "Custom" },
+        Default = "Lowest health",
     })
     local dependency =
         states:AddToggle({ Id = "ShowcaseDependency", Title = "Advanced controls", Icon = "eye", Default = true })
