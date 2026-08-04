@@ -1943,6 +1943,14 @@ local IconAliases: { [string]: string } = {
     ["no-recoil"] = "shield-check",
     ["check-circle"] = "circle-check",
     ["x-circle"] = "circle-x",
+    ["layoutdashboard"] = "layout-dashboard",
+    ["sliders"] = "sliders-horizontal",
+    ["sliders2"] = "sliders-vertical",
+    ["toggles"] = "toggle-right",
+    ["keybinds"] = "keyboard",
+    ["widgets"] = "panels-top-left",
+    ["notifications"] = "bell",
+    ["minimize2"] = "minimize-2",
 }
 
 local Maid = {}
@@ -3401,8 +3409,9 @@ function ScrollbarController:GetLengths(entry: AnyTable): (number, number, numbe
     content = math.max(content, view)
     local trackLength = math.max(view - entry.Margin * 2, 1)
     local maximumCanvas = math.max(content - view, 0)
+    local minimumThumb = math.min(entry.MinimumThumb, trackLength)
     local thumbLength = maximumCanvas > 0
-            and math.clamp(trackLength * view / math.max(content, 1), entry.MinimumThumb, trackLength)
+            and math.clamp(trackLength * view / math.max(content, 1), minimumThumb, trackLength)
         or trackLength
     return view, trackLength, maximumCanvas, thumbLength
 end
@@ -6014,6 +6023,7 @@ function Section:CreateColorpicker(id: any, config: ComponentOptions?): AnyTable
             GroupTransparency = 1,
             Size = UDim2.fromOffset(200, popupHeight),
             Visible = false,
+            ClipsDescendants = false,
             ZIndex = 740,
         }) :: CanvasGroup
         corner(popup, Metrics.PopupRadius)
@@ -6846,6 +6856,9 @@ function Tab:SelectSubTab(owner: AnyTable): AnyTable
     }, Motion.SubTab)
     SubtabController:Reveal(self, owner)
     owner:ApplyColumns(self.Window.TwoColumn)
+    if owner.ColumnsInitialized then
+        owner:_applyColumnWidths()
+    end
     return self
 end
 
@@ -6868,11 +6881,16 @@ function Tab:_applyColumnWidths()
     end
     local contentWidth = self.Columns.AbsoluteSize.X
     if contentWidth <= 1 then
-        task.defer(function()
-            if self.LeftColumn and self.LeftColumn.Parent then
-                self:_applyColumnWidths()
-            end
-        end)
+        -- Hidden or not yet laid out: retry briefly until the page is visible.
+        if not self.WidthRetryScheduled then
+            self.WidthRetryScheduled = true
+            task.delay(0.08, function()
+                self.WidthRetryScheduled = nil
+                if self.LeftColumn and self.LeftColumn.Parent then
+                    self:_applyColumnWidths()
+                end
+            end)
+        end
         return
     end
     local window = self.Window
@@ -7074,6 +7092,7 @@ end
 Tab.AddSection = Tab.CreateSection
 
 SubTab._updateCanvas = Tab._updateCanvas
+SubTab._applyColumnWidths = Tab._applyColumnWidths
 SubTab.ApplyColumns = Tab.ApplyColumns
 SubTab.CreateSection = Tab.CreateSection
 SubTab.AddSection = Tab.CreateSection
@@ -7802,7 +7821,7 @@ function Window:ApplyResponsive()
     end
     if self.SidePanel and self.SidePanel.Parent then
         local isPresets = self.SidePanelKind == "Presets"
-        local panelWidth = math.min(d(isPresets and 220 or 240), math.max(width - d(70), d(176)))
+        local panelWidth = math.min(d(isPresets and 224 or 258), math.max(width - d(70), d(176)))
         local openPosition: UDim2
         local closedPosition: UDim2
         if isPresets then
@@ -9094,7 +9113,7 @@ function FloatingWidgetController:Create(window: AnyTable, config: FloatingWidge
         GroupTransparency = 0,
         Position = scaledUDim2(config.Position or UDim2.fromOffset(14, 80), density),
         Size = UDim2.fromOffset(math.floor(designWidth * density + 0.5), math.floor(designHeight * density + 0.5)),
-        ClipsDescendants = true,
+        ClipsDescendants = false,
         Visible = widget.Visible,
         ZIndex = config.ZIndex or 500,
         Parent = Kronos.Layers.Floating,
@@ -9176,6 +9195,7 @@ function FloatingWidgetController:Create(window: AnyTable, config: FloatingWidge
         BackgroundTransparency = 1,
         Position = UDim2.fromOffset(0, 22),
         Size = UDim2.new(1, 0, 1, -22),
+        ClipsDescendants = true,
         ZIndex = root.ZIndex + 1,
         Parent = root,
     }) :: Frame
@@ -9618,7 +9638,7 @@ function Window:CreateStatusStrip(config: FloatingWidgetOptions?): AnyTable
         AnchorPoint = Vector2.new(1, 0),
         Position = scaledUDim2(config.Position or UDim2.new(1, -12, 0, 12), density),
         Size = UDim2.fromOffset(math.floor(designWidth * density + 0.5), math.floor(designHeight * density + 0.5)),
-        ClipsDescendants = true,
+        ClipsDescendants = false,
         Visible = widget.Visible,
         ZIndex = 540,
         Parent = Kronos.Layers.Floating,
