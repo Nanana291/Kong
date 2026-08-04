@@ -9,6 +9,23 @@
 
 type AnyTable = { [any]: any }
 type ThemeMap = { [string]: Color3 }
+type IconOptions = {
+    Icon: string?,
+    IconSize: number?,
+    IconColor: Color3?,
+    IconTransparency: number?,
+}
+type DragOptions = {
+    DragBounds: string?,
+    KeepFullyVisible: boolean?,
+    DragMargin: number?,
+    MinimumVisiblePixels: number?,
+    DragThreshold: number?,
+}
+type ComponentOptions = IconOptions & { [string]: any }
+type NavigationOptions = IconOptions & { [string]: any }
+type NotificationOptions = IconOptions & { [string]: any }
+type FloatingWidgetOptions = IconOptions & DragOptions & { [string]: any }
 type WindowConfig = {
     Title: string?,
     Subtitle: string?,
@@ -24,6 +41,15 @@ type WindowConfig = {
     Size: UDim2?,
     Width: number?,
     Height: number?,
+    Icon: string?,
+    IconSize: number?,
+    IconColor: Color3?,
+    IconTransparency: number?,
+    Draggable: boolean?,
+    DragBounds: string?,
+    KeepFullyVisible: boolean?,
+    DragMargin: number?,
+    MinimumVisiblePixels: number?,
 }
 
 local Kronos: AnyTable = {}
@@ -32,6 +58,7 @@ Kronos.Options = {} :: AnyTable
 Kronos.Windows = {} :: { AnyTable }
 Kronos.Connections = {} :: { RBXScriptConnection }
 Kronos.Notifications = {} :: { Instance }
+Kronos.NotificationHandles = {} :: { AnyTable }
 Kronos.Flags = {} :: AnyTable
 Kronos.ThemeBindings = {} :: { AnyTable }
 Kronos.ActiveTweens = setmetatable({}, { __mode = "k" }) :: AnyTable
@@ -113,7 +140,12 @@ local Motion = {
     Dropdown = 0.19,
     PopupClose = 0.12,
     Tab = 0.2,
+    SubTab = 0.17,
     TabExit = 0.12,
+    Search = 0.14,
+    Settings = 0.23,
+    Widget = 0.2,
+    DragRelease = 0.12,
     Window = 0.28,
     Notification = 0.28,
     Tooltip = 0.14,
@@ -122,164 +154,1763 @@ local Motion = {
 }
 
 local Metrics = {
-    Window = Vector2.new(820, 480),
-    Header = 58,
-    Sidebar = 205,
-    CompactSidebar = 58,
-    Row = 38,
-    SectionGap = 12,
-    Radius = 7,
-    PopupRadius = 7,
-    TouchTarget = 42,
-    SafePadding = 12,
+    Window = Vector2.new(800, 470),
+    Header = 50,
+    Sidebar = 190,
+    CompactSidebar = 48,
+    Row = 32,
+    DescriptionRow = 40,
+    SectionGap = 8,
+    Radius = 6,
+    PopupRadius = 6,
 }
 
-local Icons = {
-    Crosshair = "⊙",
-    Target = "◎",
-    Combat = "⊙",
-    Trigger = "◌",
-    Eye = "◉",
-    Visuals = "◉",
-    Settings = "⚙",
-    Gear = "⚙",
-    Search = "⌕",
-    User = "•",
-    Home = "⌂",
-    Folder = "▱",
-    Misc = "✦",
-    Shield = "◆",
-    Color = "◐",
-    Bell = "◒",
-    Code = "<>",
-    Star = "✦",
-    NoRecoil = "◈",
-    Rocket = "▲",
-    Play = "▶",
-    ChevronDown = "⌄",
-    ChevronRight = "›",
-    PanelTop = "▤",
-    Sliders = "≡",
-    Palette = "◐",
-    Keyboard = "⌨",
-    MousePointer = "⌖",
-    Zap = "ϟ",
-    Sparkles = "✦",
-    Info = "i",
-    Circle = "○",
-    Check = "✓",
-    X = "×",
-    Default = "•",
+local LayerZ = {
+    Main = 10,
+    Floating = 500,
+    Popup = 700,
+    Notification = 1000,
+    Modal = 1200,
+    Mobile = 1400,
 }
 
-local IconAliases = {
-    Aimbot = "Crosshair",
-    Aim = "Crosshair",
-    Visual = "Eye",
-    Options = "Settings",
-    Config = "Settings",
-    Player = "User",
-    Kronos = "Folder",
+-- Generated Lucide name-to-asset table, embedded so icon resolution is offline and deterministic.
+local LucideAssets: { [string]: string } = {
+    ["a-arrow-down"] = "rbxassetid://92867583610071",
+    ["a-arrow-up"] = "rbxassetid://132318504999733",
+    ["a-large-small"] = "rbxassetid://111491496660216",
+    ["accessibility"] = "rbxassetid://114029945302017",
+    ["activity"] = "rbxassetid://94212016861936",
+    ["air-vent"] = "rbxassetid://81517226012329",
+    ["airplay"] = "rbxassetid://115020759309179",
+    ["alarm-clock-check"] = "rbxassetid://76437352099157",
+    ["alarm-clock-minus"] = "rbxassetid://77364179863205",
+    ["alarm-clock-off"] = "rbxassetid://97904885874823",
+    ["alarm-clock-plus"] = "rbxassetid://80468822979214",
+    ["alarm-clock"] = "rbxassetid://126259032907535",
+    ["alarm-smoke"] = "rbxassetid://96965448419685",
+    ["album"] = "rbxassetid://127358331163602",
+    ["align-center-horizontal"] = "rbxassetid://81570549209434",
+    ["align-center-vertical"] = "rbxassetid://118470463752466",
+    ["align-end-horizontal"] = "rbxassetid://139502909745427",
+    ["align-end-vertical"] = "rbxassetid://96528869059554",
+    ["align-horizontal-distribute-center"] = "rbxassetid://97220086126656",
+    ["align-horizontal-distribute-end"] = "rbxassetid://106128590702022",
+    ["align-horizontal-distribute-start"] = "rbxassetid://76074660002997",
+    ["align-horizontal-justify-center"] = "rbxassetid://75732302772427",
+    ["align-horizontal-justify-end"] = "rbxassetid://129167626402283",
+    ["align-horizontal-justify-start"] = "rbxassetid://130161830325281",
+    ["align-horizontal-space-around"] = "rbxassetid://91646106782950",
+    ["align-horizontal-space-between"] = "rbxassetid://103886093046990",
+    ["align-start-horizontal"] = "rbxassetid://125674804697729",
+    ["align-start-vertical"] = "rbxassetid://105020230154823",
+    ["align-vertical-distribute-center"] = "rbxassetid://93791183635525",
+    ["align-vertical-distribute-end"] = "rbxassetid://139354223511433",
+    ["align-vertical-distribute-start"] = "rbxassetid://74961997822126",
+    ["align-vertical-justify-center"] = "rbxassetid://134754696166569",
+    ["align-vertical-justify-end"] = "rbxassetid://92569381441969",
+    ["align-vertical-justify-start"] = "rbxassetid://99692844572718",
+    ["align-vertical-space-around"] = "rbxassetid://96206012459190",
+    ["align-vertical-space-between"] = "rbxassetid://124998077349706",
+    ["ambulance"] = "rbxassetid://78599995190651",
+    ["ampersand"] = "rbxassetid://75272915739209",
+    ["ampersands"] = "rbxassetid://126947193455996",
+    ["amphora"] = "rbxassetid://137370389604364",
+    ["anchor"] = "rbxassetid://92181172123618",
+    ["angry"] = "rbxassetid://74237056000103",
+    ["annoyed"] = "rbxassetid://80064369052011",
+    ["antenna"] = "rbxassetid://99628923540956",
+    ["anvil"] = "rbxassetid://100203029845919",
+    ["aperture"] = "rbxassetid://83396154449972",
+    ["app-window-mac"] = "rbxassetid://79587216113811",
+    ["app-window"] = "rbxassetid://93142176757189",
+    ["apple"] = "rbxassetid://104349242902442",
+    ["archive-restore"] = "rbxassetid://78956681942188",
+    ["archive-x"] = "rbxassetid://75830115088395",
+    ["archive"] = "rbxassetid://122180020814574",
+    ["armchair"] = "rbxassetid://105384358373973",
+    ["arrow-big-down-dash"] = "rbxassetid://137987229582002",
+    ["arrow-big-down"] = "rbxassetid://81081164158885",
+    ["arrow-big-left-dash"] = "rbxassetid://97827621354677",
+    ["arrow-big-left"] = "rbxassetid://85973092492641",
+    ["arrow-big-right-dash"] = "rbxassetid://117825834972403",
+    ["arrow-big-right"] = "rbxassetid://82960676755590",
+    ["arrow-big-up-dash"] = "rbxassetid://99260194327483",
+    ["arrow-big-up"] = "rbxassetid://93136954756149",
+    ["arrow-down-0-1"] = "rbxassetid://120961896217875",
+    ["arrow-down-1-0"] = "rbxassetid://93474255891850",
+    ["arrow-down-a-z"] = "rbxassetid://99554596207900",
+    ["arrow-down-from-line"] = "rbxassetid://132045845807798",
+    ["arrow-down-left"] = "rbxassetid://102899325237364",
+    ["arrow-down-narrow-wide"] = "rbxassetid://129105261655061",
+    ["arrow-down-right"] = "rbxassetid://123109928624974",
+    ["arrow-down-to-dot"] = "rbxassetid://101675355931221",
+    ["arrow-down-to-line"] = "rbxassetid://87050478931254",
+    ["arrow-down-up"] = "rbxassetid://85780258549577",
+    ["arrow-down-wide-narrow"] = "rbxassetid://88461733425991",
+    ["arrow-down-z-a"] = "rbxassetid://76115279362232",
+    ["arrow-down"] = "rbxassetid://98764963621439",
+    ["arrow-left-from-line"] = "rbxassetid://87857914437603",
+    ["arrow-left-right"] = "rbxassetid://131324733048447",
+    ["arrow-left-to-line"] = "rbxassetid://118645136026970",
+    ["arrow-left"] = "rbxassetid://102531941843733",
+    ["arrow-right-from-line"] = "rbxassetid://74073639809355",
+    ["arrow-right-left"] = "rbxassetid://77015754304300",
+    ["arrow-right-to-line"] = "rbxassetid://78632510329852",
+    ["arrow-right"] = "rbxassetid://113692007244654",
+    ["arrow-up-0-1"] = "rbxassetid://105257823943016",
+    ["arrow-up-1-0"] = "rbxassetid://134175521693798",
+    ["arrow-up-a-z"] = "rbxassetid://77763416595160",
+    ["arrow-up-down"] = "rbxassetid://81019887641527",
+    ["arrow-up-from-dot"] = "rbxassetid://124408496673275",
+    ["arrow-up-from-line"] = "rbxassetid://95777664626453",
+    ["arrow-up-left"] = "rbxassetid://123490598231261",
+    ["arrow-up-narrow-wide"] = "rbxassetid://73006024672636",
+    ["arrow-up-right"] = "rbxassetid://129280608535523",
+    ["arrow-up-to-line"] = "rbxassetid://108818207813537",
+    ["arrow-up-wide-narrow"] = "rbxassetid://87437426951568",
+    ["arrow-up-z-a"] = "rbxassetid://107546173611884",
+    ["arrow-up"] = "rbxassetid://89282378235317",
+    ["arrows-up-from-line"] = "rbxassetid://133710016938621",
+    ["asterisk"] = "rbxassetid://88552752106723",
+    ["at-sign"] = "rbxassetid://79059152889146",
+    ["atom"] = "rbxassetid://73167696981648",
+    ["audio-lines"] = "rbxassetid://70930641819242",
+    ["audio-waveform"] = "rbxassetid://86462036665209",
+    ["award"] = "rbxassetid://132740088158419",
+    ["axe"] = "rbxassetid://132405197863294",
+    ["axis-3d"] = "rbxassetid://122438676546804",
+    ["baby"] = "rbxassetid://93472926933440",
+    ["backpack"] = "rbxassetid://140420225386018",
+    ["badge-alert"] = "rbxassetid://101829200081951",
+    ["badge-cent"] = "rbxassetid://133345018873154",
+    ["badge-check"] = "rbxassetid://76078495178149",
+    ["badge-dollar-sign"] = "rbxassetid://127139803581141",
+    ["badge-euro"] = "rbxassetid://120016477674659",
+    ["badge-indian-rupee"] = "rbxassetid://75659682309981",
+    ["badge-info"] = "rbxassetid://131995373201472",
+    ["badge-japanese-yen"] = "rbxassetid://99081574588615",
+    ["badge-minus"] = "rbxassetid://140321561183881",
+    ["badge-percent"] = "rbxassetid://121359224294885",
+    ["badge-plus"] = "rbxassetid://100325578561866",
+    ["badge-pound-sterling"] = "rbxassetid://119688217279444",
+    ["badge-question-mark"] = "rbxassetid://121464963737502",
+    ["badge-russian-ruble"] = "rbxassetid://108839463659864",
+    ["badge-swiss-franc"] = "rbxassetid://91447608372740",
+    ["badge-turkish-lira"] = "rbxassetid://137839965873529",
+    ["badge-x"] = "rbxassetid://122931434733842",
+    ["badge"] = "rbxassetid://116620312917084",
+    ["baggage-claim"] = "rbxassetid://86922213051957",
+    ["ban"] = "rbxassetid://90767043015246",
+    ["banana"] = "rbxassetid://140713420056179",
+    ["bandage"] = "rbxassetid://129660129590770",
+    ["banknote-arrow-down"] = "rbxassetid://139366449345199",
+    ["banknote-arrow-up"] = "rbxassetid://133758343082529",
+    ["banknote-x"] = "rbxassetid://95348701438065",
+    ["banknote"] = "rbxassetid://104840231536668",
+    ["barcode"] = "rbxassetid://118473018143689",
+    ["barrel"] = "rbxassetid://130647115622774",
+    ["baseline"] = "rbxassetid://124677132511270",
+    ["bath"] = "rbxassetid://76031400297942",
+    ["battery-charging"] = "rbxassetid://80139357470047",
+    ["battery-full"] = "rbxassetid://70906718268972",
+    ["battery-low"] = "rbxassetid://139659256984314",
+    ["battery-medium"] = "rbxassetid://105934079398915",
+    ["battery-plus"] = "rbxassetid://91931341486966",
+    ["battery-warning"] = "rbxassetid://115230083817257",
+    ["battery"] = "rbxassetid://70765800346189",
+    ["beaker"] = "rbxassetid://80902539995520",
+    ["bean-off"] = "rbxassetid://98164436608714",
+    ["bean"] = "rbxassetid://89491967076869",
+    ["bed-double"] = "rbxassetid://73820193212911",
+    ["bed-single"] = "rbxassetid://113423940880634",
+    ["bed"] = "rbxassetid://97726529032925",
+    ["beef"] = "rbxassetid://105850162318915",
+    ["beer-off"] = "rbxassetid://120333134736361",
+    ["beer"] = "rbxassetid://116404978807744",
+    ["bell-dot"] = "rbxassetid://93161277118810",
+    ["bell-electric"] = "rbxassetid://100277767266983",
+    ["bell-minus"] = "rbxassetid://126334890449727",
+    ["bell-off"] = "rbxassetid://78560046118930",
+    ["bell-plus"] = "rbxassetid://77014333795836",
+    ["bell-ring"] = "rbxassetid://94612128913941",
+    ["bell"] = "rbxassetid://97392696311902",
+    ["between-horizontal-end"] = "rbxassetid://81602774794322",
+    ["between-horizontal-start"] = "rbxassetid://76112384929846",
+    ["between-vertical-end"] = "rbxassetid://72817612571631",
+    ["between-vertical-start"] = "rbxassetid://85278312190301",
+    ["biceps-flexed"] = "rbxassetid://82004462003936",
+    ["bike"] = "rbxassetid://102930322246035",
+    ["binary"] = "rbxassetid://91751953950088",
+    ["binoculars"] = "rbxassetid://101460003267896",
+    ["biohazard"] = "rbxassetid://95956532900432",
+    ["bird"] = "rbxassetid://132284145117371",
+    ["birdhouse"] = "rbxassetid://83999157401433",
+    ["bitcoin"] = "rbxassetid://95459240442938",
+    ["blend"] = "rbxassetid://111679612185257",
+    ["blinds"] = "rbxassetid://71164165283925",
+    ["blocks"] = "rbxassetid://72212693357737",
+    ["bluetooth-connected"] = "rbxassetid://96315134002985",
+    ["bluetooth-off"] = "rbxassetid://80600044218117",
+    ["bluetooth-searching"] = "rbxassetid://100673019606426",
+    ["bluetooth"] = "rbxassetid://90506573139443",
+    ["bold"] = "rbxassetid://116141470019166",
+    ["bolt"] = "rbxassetid://102881251417484",
+    ["bomb"] = "rbxassetid://139223800924636",
+    ["bone"] = "rbxassetid://111242153474115",
+    ["book-a"] = "rbxassetid://104067275658465",
+    ["book-alert"] = "rbxassetid://124159928044853",
+    ["book-audio"] = "rbxassetid://109208148317037",
+    ["book-check"] = "rbxassetid://115999656081696",
+    ["book-copy"] = "rbxassetid://108543407492005",
+    ["book-dashed"] = "rbxassetid://127430784795958",
+    ["book-down"] = "rbxassetid://101011730128222",
+    ["book-headphones"] = "rbxassetid://108670200799574",
+    ["book-heart"] = "rbxassetid://112788845135284",
+    ["book-image"] = "rbxassetid://80808285757226",
+    ["book-key"] = "rbxassetid://116024426170705",
+    ["book-lock"] = "rbxassetid://118765061220571",
+    ["book-marked"] = "rbxassetid://73211024251780",
+    ["book-minus"] = "rbxassetid://112724962046282",
+    ["book-open-check"] = "rbxassetid://130848362492667",
+    ["book-open-text"] = "rbxassetid://100629528672195",
+    ["book-open"] = "rbxassetid://129845326810392",
+    ["book-plus"] = "rbxassetid://140267785051233",
+    ["book-text"] = "rbxassetid://94011772484232",
+    ["book-type"] = "rbxassetid://97817304725443",
+    ["book-up-2"] = "rbxassetid://130161620853665",
+    ["book-up"] = "rbxassetid://98640174079190",
+    ["book-user"] = "rbxassetid://128489189240523",
+    ["book-x"] = "rbxassetid://118754548186537",
+    ["book"] = "rbxassetid://125383279695672",
+    ["bookmark-check"] = "rbxassetid://93940443347986",
+    ["bookmark-minus"] = "rbxassetid://96807096039910",
+    ["bookmark-plus"] = "rbxassetid://121469724491615",
+    ["bookmark-x"] = "rbxassetid://112272342584706",
+    ["bookmark"] = "rbxassetid://121093149326239",
+    ["boom-box"] = "rbxassetid://99901322535868",
+    ["bot-message-square"] = "rbxassetid://96145330292478",
+    ["bot-off"] = "rbxassetid://140417690560013",
+    ["bot"] = "rbxassetid://80451686744860",
+    ["bottle-wine"] = "rbxassetid://131675403196921",
+    ["bow-arrow"] = "rbxassetid://124089655150375",
+    ["box"] = "rbxassetid://101768155599700",
+    ["boxes"] = "rbxassetid://136372617578355",
+    ["braces"] = "rbxassetid://117761094704041",
+    ["brackets"] = "rbxassetid://74368995728099",
+    ["brain-circuit"] = "rbxassetid://70547962410202",
+    ["brain-cog"] = "rbxassetid://132039205501538",
+    ["brain"] = "rbxassetid://92424107303177",
+    ["brick-wall-fire"] = "rbxassetid://92980588705520",
+    ["brick-wall-shield"] = "rbxassetid://75954432775071",
+    ["brick-wall"] = "rbxassetid://112878522258821",
+    ["briefcase-business"] = "rbxassetid://129135125207283",
+    ["briefcase-conveyor-belt"] = "rbxassetid://108665725653714",
+    ["briefcase-medical"] = "rbxassetid://119917756334087",
+    ["briefcase"] = "rbxassetid://96754188164225",
+    ["bring-to-front"] = "rbxassetid://132975903553748",
+    ["brush-cleaning"] = "rbxassetid://71728977448805",
+    ["brush"] = "rbxassetid://127035535799640",
+    ["bubbles"] = "rbxassetid://106183424168227",
+    ["bug-off"] = "rbxassetid://88020025049245",
+    ["bug-play"] = "rbxassetid://80107955888092",
+    ["bug"] = "rbxassetid://83626408925438",
+    ["building-2"] = "rbxassetid://77873775611951",
+    ["building"] = "rbxassetid://110616258983082",
+    ["bus-front"] = "rbxassetid://89863432456045",
+    ["bus"] = "rbxassetid://133798469717463",
+    ["cable-car"] = "rbxassetid://128643682205596",
+    ["cable"] = "rbxassetid://128449944504901",
+    ["cake-slice"] = "rbxassetid://136769828413242",
+    ["cake"] = "rbxassetid://103131590503275",
+    ["calculator"] = "rbxassetid://74915716529646",
+    ["calendar-1"] = "rbxassetid://98458364171044",
+    ["calendar-arrow-down"] = "rbxassetid://108415736543437",
+    ["calendar-arrow-up"] = "rbxassetid://70574654109118",
+    ["calendar-check-2"] = "rbxassetid://120231170248276",
+    ["calendar-check"] = "rbxassetid://71551019465748",
+    ["calendar-clock"] = "rbxassetid://119132152594595",
+    ["calendar-cog"] = "rbxassetid://122402172360287",
+    ["calendar-days"] = "rbxassetid://99072017568595",
+    ["calendar-fold"] = "rbxassetid://117368871270394",
+    ["calendar-heart"] = "rbxassetid://88839008103676",
+    ["calendar-minus-2"] = "rbxassetid://98846170279891",
+    ["calendar-minus"] = "rbxassetid://137354318924383",
+    ["calendar-off"] = "rbxassetid://109726151749217",
+    ["calendar-plus-2"] = "rbxassetid://112264562093883",
+    ["calendar-plus"] = "rbxassetid://125266115249843",
+    ["calendar-range"] = "rbxassetid://103641849247576",
+    ["calendar-search"] = "rbxassetid://92010083223634",
+    ["calendar-sync"] = "rbxassetid://78082218499697",
+    ["calendar-x-2"] = "rbxassetid://107518051061147",
+    ["calendar-x"] = "rbxassetid://106703374806500",
+    ["calendar"] = "rbxassetid://114792700814035",
+    ["camera-off"] = "rbxassetid://81057636835256",
+    ["camera"] = "rbxassetid://79950339943067",
+    ["candy-cane"] = "rbxassetid://71689468772492",
+    ["candy-off"] = "rbxassetid://110232752314832",
+    ["candy"] = "rbxassetid://107812129154678",
+    ["cannabis"] = "rbxassetid://98792006538601",
+    ["captions-off"] = "rbxassetid://105223545364193",
+    ["captions"] = "rbxassetid://104960225031445",
+    ["car-front"] = "rbxassetid://87380942739063",
+    ["car-taxi-front"] = "rbxassetid://122455403384057",
+    ["car"] = "rbxassetid://121065933462582",
+    ["caravan"] = "rbxassetid://120070979471783",
+    ["card-sim"] = "rbxassetid://134490550095771",
+    ["carrot"] = "rbxassetid://119118221444304",
+    ["case-lower"] = "rbxassetid://129303130603241",
+    ["case-sensitive"] = "rbxassetid://125410273293056",
+    ["case-upper"] = "rbxassetid://111633433531325",
+    ["cassette-tape"] = "rbxassetid://137065788934157",
+    ["cast"] = "rbxassetid://98202245922071",
+    ["castle"] = "rbxassetid://119275077187784",
+    ["cat"] = "rbxassetid://124252153404931",
+    ["cctv"] = "rbxassetid://99979894766624",
+    ["chart-area"] = "rbxassetid://123446436762366",
+    ["chart-bar-big"] = "rbxassetid://72336824986044",
+    ["chart-bar-decreasing"] = "rbxassetid://107217459044963",
+    ["chart-bar-increasing"] = "rbxassetid://88268905998571",
+    ["chart-bar-stacked"] = "rbxassetid://98478751113024",
+    ["chart-bar"] = "rbxassetid://105389816384108",
+    ["chart-candlestick"] = "rbxassetid://125676898615697",
+    ["chart-column-big"] = "rbxassetid://98598733210787",
+    ["chart-column-decreasing"] = "rbxassetid://73586137373563",
+    ["chart-column-increasing"] = "rbxassetid://120421615068601",
+    ["chart-column-stacked"] = "rbxassetid://86031449675105",
+    ["chart-column"] = "rbxassetid://97915995538580",
+    ["chart-gantt"] = "rbxassetid://88811660555940",
+    ["chart-line"] = "rbxassetid://101833156055618",
+    ["chart-network"] = "rbxassetid://104027882693561",
+    ["chart-no-axes-column-decreasing"] = "rbxassetid://123371717192542",
+    ["chart-no-axes-column-increasing"] = "rbxassetid://140383830943049",
+    ["chart-no-axes-column"] = "rbxassetid://94078751170351",
+    ["chart-no-axes-combined"] = "rbxassetid://121424233161912",
+    ["chart-no-axes-gantt"] = "rbxassetid://131936541106368",
+    ["chart-pie"] = "rbxassetid://113412261630136",
+    ["chart-scatter"] = "rbxassetid://108217585014571",
+    ["chart-spline"] = "rbxassetid://90307460742494",
+    ["check-check"] = "rbxassetid://95183312173858",
+    ["check-line"] = "rbxassetid://115122343485290",
+    ["check"] = "rbxassetid://93898873302694",
+    ["chef-hat"] = "rbxassetid://121744015002573",
+    ["cherry"] = "rbxassetid://139519182403183",
+    ["chess-bishop"] = "rbxassetid://121701705580238",
+    ["chess-king"] = "rbxassetid://90885687223462",
+    ["chess-knight"] = "rbxassetid://96467707042169",
+    ["chess-pawn"] = "rbxassetid://111318574652751",
+    ["chess-queen"] = "rbxassetid://98304702099749",
+    ["chess-rook"] = "rbxassetid://76223925830262",
+    ["chevron-down"] = "rbxassetid://134243273101015",
+    ["chevron-first"] = "rbxassetid://105243363790238",
+    ["chevron-last"] = "rbxassetid://89268452603731",
+    ["chevron-left"] = "rbxassetid://73780377692148",
+    ["chevron-right"] = "rbxassetid://92473583511724",
+    ["chevron-up"] = "rbxassetid://122444883127455",
+    ["chevrons-down-up"] = "rbxassetid://139404716013205",
+    ["chevrons-down"] = "rbxassetid://100524612205956",
+    ["chevrons-left-right-ellipsis"] = "rbxassetid://125035817741526",
+    ["chevrons-left-right"] = "rbxassetid://87910685945204",
+    ["chevrons-left"] = "rbxassetid://82617201744347",
+    ["chevrons-right-left"] = "rbxassetid://87149546686569",
+    ["chevrons-right"] = "rbxassetid://139121276490483",
+    ["chevrons-up-down"] = "rbxassetid://131833120209646",
+    ["chevrons-up"] = "rbxassetid://100467452364672",
+    ["chromium"] = "rbxassetid://128165143739006",
+    ["church"] = "rbxassetid://113714744350666",
+    ["cigarette-off"] = "rbxassetid://77797883078452",
+    ["circle-alert"] = "rbxassetid://83898160590116",
+    ["circle-arrow-down"] = "rbxassetid://95901860261344",
+    ["circle-arrow-left"] = "rbxassetid://102148876968988",
+    ["circle-arrow-out-down-left"] = "rbxassetid://140598097856694",
+    ["circle-arrow-out-down-right"] = "rbxassetid://119952801379305",
+    ["circle-arrow-out-up-left"] = "rbxassetid://132858212688303",
+    ["circle-arrow-out-up-right"] = "rbxassetid://81783743753173",
+    ["circle-arrow-right"] = "rbxassetid://70786767999559",
+    ["circle-arrow-up"] = "rbxassetid://84395128546494",
+    ["circle-check-big"] = "rbxassetid://93202927221730",
+    ["circle-check"] = "rbxassetid://85262178816537",
+    ["circle-chevron-down"] = "rbxassetid://137069490345718",
+    ["circle-chevron-left"] = "rbxassetid://130250009740827",
+    ["circle-chevron-right"] = "rbxassetid://125943696958495",
+    ["circle-chevron-up"] = "rbxassetid://111223574026321",
+    ["circle-dashed"] = "rbxassetid://126799443883746",
+    ["circle-divide"] = "rbxassetid://106398997754208",
+    ["circle-dollar-sign"] = "rbxassetid://91106238890387",
+    ["circle-dot-dashed"] = "rbxassetid://111451232827180",
+    ["circle-dot"] = "rbxassetid://82947033619201",
+    ["circle-ellipsis"] = "rbxassetid://91687150884779",
+    ["circle-equal"] = "rbxassetid://95133963751438",
+    ["circle-fading-arrow-up"] = "rbxassetid://104648212910336",
+    ["circle-fading-plus"] = "rbxassetid://91847890443490",
+    ["circle-gauge"] = "rbxassetid://108157549473765",
+    ["circle-minus"] = "rbxassetid://133556159576809",
+    ["circle-off"] = "rbxassetid://97923456918886",
+    ["circle-parking-off"] = "rbxassetid://128369410981252",
+    ["circle-parking"] = "rbxassetid://124034962915196",
+    ["circle-pause"] = "rbxassetid://139337739700879",
+    ["circle-percent"] = "rbxassetid://133311912860256",
+    ["circle-play"] = "rbxassetid://120408917249739",
+    ["circle-plus"] = "rbxassetid://113157136350384",
+    ["circle-pound-sterling"] = "rbxassetid://105476153083828",
+    ["circle-power"] = "rbxassetid://140676030155098",
+    ["circle-question-mark"] = "rbxassetid://97516698664325",
+    ["circle-slash-2"] = "rbxassetid://136766902186549",
+    ["circle-slash"] = "rbxassetid://125206439913049",
+    ["circle-small"] = "rbxassetid://73685402843600",
+    ["circle-star"] = "rbxassetid://120318414957104",
+    ["circle-stop"] = "rbxassetid://87400503942659",
+    ["circle-user-round"] = "rbxassetid://95489465399880",
+    ["circle-user"] = "rbxassetid://136220511671311",
+    ["circle-x"] = "rbxassetid://76821953846248",
+    ["circle"] = "rbxassetid://130359823580534",
+    ["circuit-board"] = "rbxassetid://107695264369312",
+    ["citrus"] = "rbxassetid://139018222976433",
+    ["clapperboard"] = "rbxassetid://132660667070200",
+    ["clipboard-check"] = "rbxassetid://92649798577170",
+    ["clipboard-clock"] = "rbxassetid://123957515687745",
+    ["clipboard-copy"] = "rbxassetid://125851897718493",
+    ["clipboard-list"] = "rbxassetid://96460215958908",
+    ["clipboard-minus"] = "rbxassetid://107968008485671",
+    ["clipboard-paste"] = "rbxassetid://74382068849983",
+    ["clipboard-pen-line"] = "rbxassetid://77711589791615",
+    ["clipboard-pen"] = "rbxassetid://75290966822953",
+    ["clipboard-plus"] = "rbxassetid://134285318675662",
+    ["clipboard-type"] = "rbxassetid://89949374318028",
+    ["clipboard-x"] = "rbxassetid://102222456890103",
+    ["clipboard"] = "rbxassetid://89601995828423",
+    ["clock-1"] = "rbxassetid://129363225422045",
+    ["clock-10"] = "rbxassetid://104332695855541",
+    ["clock-11"] = "rbxassetid://119023205186105",
+    ["clock-12"] = "rbxassetid://117789618723068",
+    ["clock-2"] = "rbxassetid://134710777209413",
+    ["clock-3"] = "rbxassetid://136385631189327",
+    ["clock-4"] = "rbxassetid://121808839832144",
+    ["clock-5"] = "rbxassetid://85082019959457",
+    ["clock-6"] = "rbxassetid://71009733505593",
+    ["clock-7"] = "rbxassetid://103111188546225",
+    ["clock-8"] = "rbxassetid://110059272125337",
+    ["clock-9"] = "rbxassetid://77610027126437",
+    ["clock-alert"] = "rbxassetid://97157344465162",
+    ["clock-arrow-down"] = "rbxassetid://92349314416042",
+    ["clock-arrow-up"] = "rbxassetid://111484286332629",
+    ["clock-check"] = "rbxassetid://85231630218857",
+    ["clock-fading"] = "rbxassetid://93205297285245",
+    ["clock-plus"] = "rbxassetid://93367709263150",
+    ["clock"] = "rbxassetid://121808839832144",
+    ["closed-caption"] = "rbxassetid://99832644030788",
+    ["cloud-alert"] = "rbxassetid://91967273658626",
+    ["cloud-check"] = "rbxassetid://97318598202432",
+    ["cloud-cog"] = "rbxassetid://96497764065749",
+    ["cloud-download"] = "rbxassetid://121435581993566",
+    ["cloud-drizzle"] = "rbxassetid://139525315752605",
+    ["cloud-fog"] = "rbxassetid://76650233148776",
+    ["cloud-hail"] = "rbxassetid://72320462748242",
+    ["cloud-lightning"] = "rbxassetid://133517088924849",
+    ["cloud-moon-rain"] = "rbxassetid://127667837827018",
+    ["cloud-moon"] = "rbxassetid://71938114737914",
+    ["cloud-off"] = "rbxassetid://131907154501444",
+    ["cloud-rain-wind"] = "rbxassetid://107414583736721",
+    ["cloud-rain"] = "rbxassetid://105547081967408",
+    ["cloud-snow"] = "rbxassetid://72307126270226",
+    ["cloud-sun-rain"] = "rbxassetid://99041604425705",
+    ["cloud-sun"] = "rbxassetid://86114208148727",
+    ["cloud-upload"] = "rbxassetid://93307473217005",
+    ["cloud"] = "rbxassetid://121226497050352",
+    ["cloudy"] = "rbxassetid://105360479023346",
+    ["clover"] = "rbxassetid://74925550436750",
+    ["club"] = "rbxassetid://108490365816628",
+    ["code-xml"] = "rbxassetid://130150477351734",
+    ["code"] = "rbxassetid://107380207681249",
+    ["codepen"] = "rbxassetid://135643965971885",
+    ["codesandbox"] = "rbxassetid://106911852964823",
+    ["coffee"] = "rbxassetid://106864403231093",
+    ["cog"] = "rbxassetid://116544501716299",
+    ["coins"] = "rbxassetid://116510979641930",
+    ["columns-2"] = "rbxassetid://113004100221850",
+    ["columns-3-cog"] = "rbxassetid://121589691981064",
+    ["columns-3"] = "rbxassetid://115223357399375",
+    ["columns-4"] = "rbxassetid://130807991968419",
+    ["combine"] = "rbxassetid://79908476334048",
+    ["command"] = "rbxassetid://93648221906330",
+    ["compass"] = "rbxassetid://115123411028382",
+    ["component"] = "rbxassetid://110027788875080",
+    ["computer"] = "rbxassetid://77480056459407",
+    ["concierge-bell"] = "rbxassetid://140384259310436",
+    ["cone"] = "rbxassetid://97759550688437",
+    ["construction"] = "rbxassetid://106539489968173",
+    ["contact-round"] = "rbxassetid://71907624112229",
+    ["contact"] = "rbxassetid://75868297719012",
+    ["container"] = "rbxassetid://91507237573499",
+    ["contrast"] = "rbxassetid://112796643981497",
+    ["cookie"] = "rbxassetid://73159504540002",
+    ["cooking-pot"] = "rbxassetid://94959783129799",
+    ["copy-check"] = "rbxassetid://91177247988892",
+    ["copy-minus"] = "rbxassetid://109524509933035",
+    ["copy-plus"] = "rbxassetid://113618379616952",
+    ["copy-slash"] = "rbxassetid://93805787810390",
+    ["copy-x"] = "rbxassetid://106557557978061",
+    ["copy"] = "rbxassetid://78979572434545",
+    ["copyleft"] = "rbxassetid://78559055698593",
+    ["copyright"] = "rbxassetid://129433635747111",
+    ["corner-down-left"] = "rbxassetid://90473561177832",
+    ["corner-down-right"] = "rbxassetid://86512767702085",
+    ["corner-left-down"] = "rbxassetid://139876989150630",
+    ["corner-left-up"] = "rbxassetid://126228268096099",
+    ["corner-right-down"] = "rbxassetid://89237035551302",
+    ["corner-right-up"] = "rbxassetid://112851237026705",
+    ["corner-up-left"] = "rbxassetid://84669279763024",
+    ["corner-up-right"] = "rbxassetid://115099889693145",
+    ["cpu"] = "rbxassetid://77549309870247",
+    ["creative-commons"] = "rbxassetid://90408210735312",
+    ["credit-card"] = "rbxassetid://99163352872346",
+    ["croissant"] = "rbxassetid://130710485559420",
+    ["crop"] = "rbxassetid://116344601101413",
+    ["cross"] = "rbxassetid://101833377863588",
+    ["crosshair"] = "rbxassetid://134242818164054",
+    ["crown"] = "rbxassetid://127843403295538",
+    ["cuboid"] = "rbxassetid://75618807946111",
+    ["cup-soda"] = "rbxassetid://121098640829562",
+    ["currency"] = "rbxassetid://90551250119972",
+    ["cylinder"] = "rbxassetid://90569677179169",
+    ["dam"] = "rbxassetid://76874486231393",
+    ["database-backup"] = "rbxassetid://103403210984699",
+    ["database-zap"] = "rbxassetid://131199921258418",
+    ["database"] = "rbxassetid://126791525623846",
+    ["decimals-arrow-left"] = "rbxassetid://120198500638749",
+    ["decimals-arrow-right"] = "rbxassetid://118263047146797",
+    ["delete"] = "rbxassetid://126279426372342",
+    ["dessert"] = "rbxassetid://71508133278830",
+    ["diameter"] = "rbxassetid://97429051503783",
+    ["diamond-minus"] = "rbxassetid://128989071438290",
+    ["diamond-percent"] = "rbxassetid://107717860105959",
+    ["diamond-plus"] = "rbxassetid://134701163723675",
+    ["diamond"] = "rbxassetid://105846996304890",
+    ["dice-1"] = "rbxassetid://112650149591038",
+    ["dice-2"] = "rbxassetid://112278274566793",
+    ["dice-3"] = "rbxassetid://118526270626312",
+    ["dice-4"] = "rbxassetid://113365650364004",
+    ["dice-5"] = "rbxassetid://72768312430593",
+    ["dice-6"] = "rbxassetid://85376239182543",
+    ["dices"] = "rbxassetid://81268120302865",
+    ["diff"] = "rbxassetid://135052708609715",
+    ["disc-2"] = "rbxassetid://91419420404185",
+    ["disc-3"] = "rbxassetid://135470554736048",
+    ["disc-album"] = "rbxassetid://74693460404344",
+    ["disc"] = "rbxassetid://101908120120777",
+    ["divide"] = "rbxassetid://136678191878278",
+    ["dna-off"] = "rbxassetid://89612426361540",
+    ["dna"] = "rbxassetid://74007982981741",
+    ["dock"] = "rbxassetid://121997427160252",
+    ["dog"] = "rbxassetid://71920105558570",
+    ["dollar-sign"] = "rbxassetid://127320961224019",
+    ["donut"] = "rbxassetid://72204922742657",
+    ["door-closed-locked"] = "rbxassetid://74027613267551",
+    ["door-closed"] = "rbxassetid://136249099949073",
+    ["door-open"] = "rbxassetid://91306356501736",
+    ["dot"] = "rbxassetid://137321056643916",
+    ["download"] = "rbxassetid://134814648082393",
+    ["drafting-compass"] = "rbxassetid://99701976182841",
+    ["drama"] = "rbxassetid://110297795801577",
+    ["dribbble"] = "rbxassetid://80231809663849",
+    ["drill"] = "rbxassetid://108644821412796",
+    ["drone"] = "rbxassetid://117299095794783",
+    ["droplet-off"] = "rbxassetid://119365002225172",
+    ["droplet"] = "rbxassetid://100597455015098",
+    ["droplets"] = "rbxassetid://140111846025180",
+    ["drum"] = "rbxassetid://136979060344890",
+    ["drumstick"] = "rbxassetid://104662462521709",
+    ["dumbbell"] = "rbxassetid://80277236776212",
+    ["ear-off"] = "rbxassetid://87421916192807",
+    ["ear"] = "rbxassetid://121894949934209",
+    ["earth-lock"] = "rbxassetid://88814147073745",
+    ["earth"] = "rbxassetid://76231597751076",
+    ["eclipse"] = "rbxassetid://114829622118222",
+    ["egg-fried"] = "rbxassetid://90622538210545",
+    ["egg-off"] = "rbxassetid://92288321309285",
+    ["egg"] = "rbxassetid://117851493400222",
+    ["ellipsis-vertical"] = "rbxassetid://117978708573781",
+    ["ellipsis"] = "rbxassetid://140019550645825",
+    ["equal-approximately"] = "rbxassetid://105382689698323",
+    ["equal-not"] = "rbxassetid://76864449458032",
+    ["equal"] = "rbxassetid://123467780715624",
+    ["eraser"] = "rbxassetid://133957773112410",
+    ["ethernet-port"] = "rbxassetid://75391715149314",
+    ["euro"] = "rbxassetid://72229646524456",
+    ["ev-charger"] = "rbxassetid://97906158859623",
+    ["expand"] = "rbxassetid://137492887754537",
+    ["external-link"] = "rbxassetid://129331830773832",
+    ["eye-closed"] = "rbxassetid://111063268625789",
+    ["eye-off"] = "rbxassetid://135928786788378",
+    ["eye"] = "rbxassetid://100033680381365",
+    ["facebook"] = "rbxassetid://72098528632192",
+    ["factory"] = "rbxassetid://102170024318039",
+    ["fan"] = "rbxassetid://78391400440696",
+    ["fast-forward"] = "rbxassetid://121615540167909",
+    ["feather"] = "rbxassetid://91872927606406",
+    ["fence"] = "rbxassetid://123451565578029",
+    ["ferris-wheel"] = "rbxassetid://79729205796176",
+    ["figma"] = "rbxassetid://134182122852301",
+    ["file-archive"] = "rbxassetid://77018106869967",
+    ["file-axis-3d"] = "rbxassetid://133912328009885",
+    ["file-badge"] = "rbxassetid://74564895394477",
+    ["file-box"] = "rbxassetid://119264004071690",
+    ["file-braces-corner"] = "rbxassetid://77253337986109",
+    ["file-braces"] = "rbxassetid://95314128621234",
+    ["file-chart-column-increasing"] = "rbxassetid://134449481172067",
+    ["file-chart-column"] = "rbxassetid://82048481252560",
+    ["file-chart-line"] = "rbxassetid://71954360551345",
+    ["file-chart-pie"] = "rbxassetid://81072193564497",
+    ["file-check-corner"] = "rbxassetid://76295552859171",
+    ["file-check"] = "rbxassetid://82604001452455",
+    ["file-clock"] = "rbxassetid://102325208830990",
+    ["file-code-corner"] = "rbxassetid://78293841184371",
+    ["file-code"] = "rbxassetid://130978036895504",
+    ["file-cog"] = "rbxassetid://101385347151368",
+    ["file-diff"] = "rbxassetid://96147216772241",
+    ["file-digit"] = "rbxassetid://89220220354580",
+    ["file-down"] = "rbxassetid://120650154178290",
+    ["file-exclamation-point"] = "rbxassetid://102821865889635",
+    ["file-headphone"] = "rbxassetid://100533735901986",
+    ["file-heart"] = "rbxassetid://132214916401696",
+    ["file-image"] = "rbxassetid://123334057511782",
+    ["file-input"] = "rbxassetid://124728604166044",
+    ["file-key"] = "rbxassetid://118790255921100",
+    ["file-lock"] = "rbxassetid://72170228691242",
+    ["file-minus-corner"] = "rbxassetid://119263271735124",
+    ["file-minus"] = "rbxassetid://111014798459222",
+    ["file-music"] = "rbxassetid://134948051536671",
+    ["file-output"] = "rbxassetid://92146832572911",
+    ["file-pen-line"] = "rbxassetid://104622936345006",
+    ["file-pen"] = "rbxassetid://79556179730240",
+    ["file-play"] = "rbxassetid://89006821567838",
+    ["file-plus-corner"] = "rbxassetid://76544604043974",
+    ["file-plus"] = "rbxassetid://78881710800060",
+    ["file-question-mark"] = "rbxassetid://127617422859576",
+    ["file-scan"] = "rbxassetid://129480105228213",
+    ["file-search-corner"] = "rbxassetid://90974165234008",
+    ["file-search"] = "rbxassetid://97780235974933",
+    ["file-signal"] = "rbxassetid://122070252538165",
+    ["file-sliders"] = "rbxassetid://85787771732439",
+    ["file-spreadsheet"] = "rbxassetid://134501869359270",
+    ["file-stack"] = "rbxassetid://138929929862605",
+    ["file-symlink"] = "rbxassetid://91865722036510",
+    ["file-terminal"] = "rbxassetid://116757454755476",
+    ["file-text"] = "rbxassetid://90496405707281",
+    ["file-type-corner"] = "rbxassetid://124902230275209",
+    ["file-type"] = "rbxassetid://115272552799361",
+    ["file-up"] = "rbxassetid://131173039312748",
+    ["file-user"] = "rbxassetid://99552018455009",
+    ["file-video-camera"] = "rbxassetid://81719056173960",
+    ["file-volume"] = "rbxassetid://111264764438958",
+    ["file-x-corner"] = "rbxassetid://87554136773609",
+    ["file-x"] = "rbxassetid://107333775515154",
+    ["file"] = "rbxassetid://74748492079329",
+    ["files"] = "rbxassetid://102806336233202",
+    ["film"] = "rbxassetid://120978945609706",
+    ["fingerprint"] = "rbxassetid://112173305232811",
+    ["fire-extinguisher"] = "rbxassetid://111643493006960",
+    ["fish-off"] = "rbxassetid://89756724887508",
+    ["fish-symbol"] = "rbxassetid://118475177681618",
+    ["fish"] = "rbxassetid://124360663785796",
+    ["flag-off"] = "rbxassetid://112944528856799",
+    ["flag-triangle-left"] = "rbxassetid://88045221285272",
+    ["flag-triangle-right"] = "rbxassetid://108292480304566",
+    ["flag"] = "rbxassetid://78183383236196",
+    ["flame-kindling"] = "rbxassetid://139728976917928",
+    ["flame"] = "rbxassetid://98218034436456",
+    ["flashlight-off"] = "rbxassetid://79780362871740",
+    ["flashlight"] = "rbxassetid://100286985600444",
+    ["flask-conical-off"] = "rbxassetid://112597970025298",
+    ["flask-conical"] = "rbxassetid://128406680901165",
+    ["flask-round"] = "rbxassetid://127508287324940",
+    ["flip-horizontal-2"] = "rbxassetid://103726993598186",
+    ["flip-horizontal"] = "rbxassetid://122937530107837",
+    ["flip-vertical-2"] = "rbxassetid://103836358956328",
+    ["flip-vertical"] = "rbxassetid://108003917346888",
+    ["flower-2"] = "rbxassetid://72934574245145",
+    ["flower"] = "rbxassetid://86129438272762",
+    ["focus"] = "rbxassetid://87493973153317",
+    ["fold-horizontal"] = "rbxassetid://92835712442240",
+    ["fold-vertical"] = "rbxassetid://108873727253656",
+    ["folder-archive"] = "rbxassetid://97312009460206",
+    ["folder-check"] = "rbxassetid://128492920904557",
+    ["folder-clock"] = "rbxassetid://111964836738545",
+    ["folder-closed"] = "rbxassetid://118286209350843",
+    ["folder-code"] = "rbxassetid://70624096349370",
+    ["folder-cog"] = "rbxassetid://85299519462846",
+    ["folder-dot"] = "rbxassetid://138687772725278",
+    ["folder-down"] = "rbxassetid://118044108459225",
+    ["folder-git-2"] = "rbxassetid://101394054141166",
+    ["folder-git"] = "rbxassetid://121885778095158",
+    ["folder-heart"] = "rbxassetid://79104747211105",
+    ["folder-input"] = "rbxassetid://90699920697871",
+    ["folder-kanban"] = "rbxassetid://78313285104072",
+    ["folder-key"] = "rbxassetid://85270407596791",
+    ["folder-lock"] = "rbxassetid://119201572260567",
+    ["folder-minus"] = "rbxassetid://85648718999010",
+    ["folder-open-dot"] = "rbxassetid://74741494767354",
+    ["folder-open"] = "rbxassetid://76018996254888",
+    ["folder-output"] = "rbxassetid://101532447937612",
+    ["folder-pen"] = "rbxassetid://112770491173911",
+    ["folder-plus"] = "rbxassetid://91865663406119",
+    ["folder-root"] = "rbxassetid://103333751154693",
+    ["folder-search-2"] = "rbxassetid://71276453442655",
+    ["folder-search"] = "rbxassetid://110568075123861",
+    ["folder-symlink"] = "rbxassetid://127485747227189",
+    ["folder-sync"] = "rbxassetid://91544602659796",
+    ["folder-tree"] = "rbxassetid://85577554337861",
+    ["folder-up"] = "rbxassetid://72008269765857",
+    ["folder-x"] = "rbxassetid://91699618247635",
+    ["folder"] = "rbxassetid://80846616596607",
+    ["folders"] = "rbxassetid://110351216219061",
+    ["footprints"] = "rbxassetid://139192589041315",
+    ["forklift"] = "rbxassetid://72030930983101",
+    ["forward"] = "rbxassetid://97545944739523",
+    ["frame"] = "rbxassetid://109080612832751",
+    ["framer"] = "rbxassetid://108384807262391",
+    ["frown"] = "rbxassetid://124407301067982",
+    ["fuel"] = "rbxassetid://106447647274511",
+    ["fullscreen"] = "rbxassetid://77793665526178",
+    ["funnel-plus"] = "rbxassetid://100780233821928",
+    ["funnel-x"] = "rbxassetid://70984385812555",
+    ["funnel"] = "rbxassetid://108829540827529",
+    ["gallery-horizontal-end"] = "rbxassetid://74672430161161",
+    ["gallery-horizontal"] = "rbxassetid://80004001442122",
+    ["gallery-thumbnails"] = "rbxassetid://136219289862706",
+    ["gallery-vertical-end"] = "rbxassetid://106461402088317",
+    ["gallery-vertical"] = "rbxassetid://119299431466725",
+    ["gamepad-2"] = "rbxassetid://92483947987410",
+    ["gamepad-directional"] = "rbxassetid://84342305212226",
+    ["gamepad"] = "rbxassetid://121607283959010",
+    ["gauge"] = "rbxassetid://110273524101447",
+    ["gavel"] = "rbxassetid://78952298198456",
+    ["gem"] = "rbxassetid://112904952151156",
+    ["georgian-lari"] = "rbxassetid://98084432591687",
+    ["ghost"] = "rbxassetid://113822048130017",
+    ["gift"] = "rbxassetid://109855212076373",
+    ["git-branch-minus"] = "rbxassetid://97385010649411",
+    ["git-branch-plus"] = "rbxassetid://125944221134316",
+    ["git-branch"] = "rbxassetid://90490195516649",
+    ["git-commit-horizontal"] = "rbxassetid://133646041800147",
+    ["git-commit-vertical"] = "rbxassetid://122098032990350",
+    ["git-compare-arrows"] = "rbxassetid://84874426520216",
+    ["git-compare"] = "rbxassetid://91945124438792",
+    ["git-fork"] = "rbxassetid://89954992404765",
+    ["git-graph"] = "rbxassetid://86166832019304",
+    ["git-merge"] = "rbxassetid://131833355158059",
+    ["git-pull-request-arrow"] = "rbxassetid://94507974577439",
+    ["git-pull-request-closed"] = "rbxassetid://78070600389091",
+    ["git-pull-request-create-arrow"] = "rbxassetid://127422677061091",
+    ["git-pull-request-create"] = "rbxassetid://105929577383926",
+    ["git-pull-request-draft"] = "rbxassetid://76173459869943",
+    ["git-pull-request"] = "rbxassetid://138463010991471",
+    ["github"] = "rbxassetid://120349554354380",
+    ["gitlab"] = "rbxassetid://114054627192933",
+    ["glass-water"] = "rbxassetid://115526102400988",
+    ["glasses"] = "rbxassetid://87936407455373",
+    ["globe-lock"] = "rbxassetid://134065526704402",
+    ["globe"] = "rbxassetid://114238209622913",
+    ["goal"] = "rbxassetid://120517954878160",
+    ["gpu"] = "rbxassetid://95577823614219",
+    ["graduation-cap"] = "rbxassetid://93771896340220",
+    ["grape"] = "rbxassetid://134760640415561",
+    ["grid-2x2-check"] = "rbxassetid://138468840220821",
+    ["grid-2x2-plus"] = "rbxassetid://91811610580247",
+    ["grid-2x2-x"] = "rbxassetid://72407303981388",
+    ["grid-2x2"] = "rbxassetid://99050491897640",
+    ["grid-3x2"] = "rbxassetid://95528684210010",
+    ["grid-3x3"] = "rbxassetid://70419024781206",
+    ["grip-horizontal"] = "rbxassetid://136255899715930",
+    ["grip-vertical"] = "rbxassetid://137183678565296",
+    ["grip"] = "rbxassetid://109058783556768",
+    ["group"] = "rbxassetid://107643418926671",
+    ["guitar"] = "rbxassetid://75915531867926",
+    ["ham"] = "rbxassetid://74465607934635",
+    ["hamburger"] = "rbxassetid://93086916815495",
+    ["hammer"] = "rbxassetid://83545120140895",
+    ["hand-coins"] = "rbxassetid://126990543175462",
+    ["hand-fist"] = "rbxassetid://83341608917591",
+    ["hand-grab"] = "rbxassetid://88867162163985",
+    ["hand-heart"] = "rbxassetid://117507367668412",
+    ["hand-helping"] = "rbxassetid://89897738419446",
+    ["hand-metal"] = "rbxassetid://113619498548713",
+    ["hand-platter"] = "rbxassetid://88594727743168",
+    ["hand"] = "rbxassetid://130703864968637",
+    ["handbag"] = "rbxassetid://135675846264061",
+    ["handshake"] = "rbxassetid://78442115255814",
+    ["hard-drive-download"] = "rbxassetid://73913801230614",
+    ["hard-drive-upload"] = "rbxassetid://85762133615118",
+    ["hard-drive"] = "rbxassetid://88183305858463",
+    ["hard-hat"] = "rbxassetid://128050846767382",
+    ["hash"] = "rbxassetid://82890331678520",
+    ["hat-glasses"] = "rbxassetid://101165538224815",
+    ["haze"] = "rbxassetid://108857561768901",
+    ["hdmi-port"] = "rbxassetid://103693661037020",
+    ["heading-1"] = "rbxassetid://118129315662110",
+    ["heading-2"] = "rbxassetid://110209069670094",
+    ["heading-3"] = "rbxassetid://90267885237062",
+    ["heading-4"] = "rbxassetid://129625620307602",
+    ["heading-5"] = "rbxassetid://120386663181267",
+    ["heading-6"] = "rbxassetid://90959079775093",
+    ["heading"] = "rbxassetid://129254312067735",
+    ["headphone-off"] = "rbxassetid://85038251615641",
+    ["headphones"] = "rbxassetid://118833729589183",
+    ["headset"] = "rbxassetid://129269236787694",
+    ["heart-crack"] = "rbxassetid://110987638564119",
+    ["heart-handshake"] = "rbxassetid://111483078692002",
+    ["heart-minus"] = "rbxassetid://96827380163326",
+    ["heart-off"] = "rbxassetid://89748414415617",
+    ["heart-plus"] = "rbxassetid://94877796283249",
+    ["heart-pulse"] = "rbxassetid://129352925579546",
+    ["heart"] = "rbxassetid://116559368303288",
+    ["heater"] = "rbxassetid://140478466880916",
+    ["helicopter"] = "rbxassetid://111557171735930",
+    ["hexagon"] = "rbxassetid://127592089339199",
+    ["highlighter"] = "rbxassetid://77411555641113",
+    ["history"] = "rbxassetid://123980022019922",
+    ["hop-off"] = "rbxassetid://103386036934034",
+    ["hop"] = "rbxassetid://82778923997672",
+    ["hospital"] = "rbxassetid://105868763850707",
+    ["hotel"] = "rbxassetid://132283390859718",
+    ["hourglass"] = "rbxassetid://86160434939203",
+    ["house-heart"] = "rbxassetid://136054771868597",
+    ["house-plug"] = "rbxassetid://71438263712075",
+    ["house-plus"] = "rbxassetid://118495165208309",
+    ["house-wifi"] = "rbxassetid://126495519725698",
+    ["house"] = "rbxassetid://98755624629571",
+    ["ice-cream-bowl"] = "rbxassetid://124867218454386",
+    ["ice-cream-cone"] = "rbxassetid://90751397288639",
+    ["id-card-lanyard"] = "rbxassetid://90761480469224",
+    ["id-card"] = "rbxassetid://75354294622640",
+    ["image-down"] = "rbxassetid://78972295741235",
+    ["image-minus"] = "rbxassetid://101066016918565",
+    ["image-off"] = "rbxassetid://81934811700938",
+    ["image-play"] = "rbxassetid://129501806784210",
+    ["image-plus"] = "rbxassetid://70391970623917",
+    ["image-up"] = "rbxassetid://126610009605241",
+    ["image-upscale"] = "rbxassetid://106963545024679",
+    ["images"] = "rbxassetid://79350649395557",
+    ["import"] = "rbxassetid://116545008906029",
+    ["inbox"] = "rbxassetid://112591360302868",
+    ["indian-rupee"] = "rbxassetid://113038778381805",
+    ["infinity"] = "rbxassetid://98083086936965",
+    ["info"] = "rbxassetid://124560466474914",
+    ["inspection-panel"] = "rbxassetid://70905313146088",
+    ["instagram"] = "rbxassetid://119864798614855",
+    ["italic"] = "rbxassetid://96220378864282",
+    ["iteration-ccw"] = "rbxassetid://140221832794083",
+    ["iteration-cw"] = "rbxassetid://95534489554662",
+    ["japanese-yen"] = "rbxassetid://106362863465813",
+    ["joystick"] = "rbxassetid://99416790224739",
+    ["kanban"] = "rbxassetid://125934100055431",
+    ["kayak"] = "rbxassetid://136107544609389",
+    ["key-round"] = "rbxassetid://83619031955390",
+    ["key-square"] = "rbxassetid://94621420033649",
+    ["key"] = "rbxassetid://96510194465420",
+    ["keyboard-music"] = "rbxassetid://121058541758636",
+    ["keyboard-off"] = "rbxassetid://92466375369772",
+    ["keyboard"] = "rbxassetid://121474456068237",
+    ["lamp-ceiling"] = "rbxassetid://80032758469141",
+    ["lamp-desk"] = "rbxassetid://85290686983238",
+    ["lamp-floor"] = "rbxassetid://104585881375892",
+    ["lamp-wall-down"] = "rbxassetid://91271394132073",
+    ["lamp-wall-up"] = "rbxassetid://132141464337445",
+    ["lamp"] = "rbxassetid://110730830653382",
+    ["land-plot"] = "rbxassetid://96449039620294",
+    ["landmark"] = "rbxassetid://76885079756393",
+    ["languages"] = "rbxassetid://90816903776498",
+    ["laptop-minimal-check"] = "rbxassetid://114352019833865",
+    ["laptop-minimal"] = "rbxassetid://136705765566068",
+    ["laptop"] = "rbxassetid://111387063244975",
+    ["lasso-select"] = "rbxassetid://105609719912753",
+    ["lasso"] = "rbxassetid://121072936884007",
+    ["laugh"] = "rbxassetid://104491311361166",
+    ["layers-2"] = "rbxassetid://70536710516357",
+    ["layers"] = "rbxassetid://81973586053257",
+    ["layout-dashboard"] = "rbxassetid://139929981863901",
+    ["layout-grid"] = "rbxassetid://81344910161871",
+    ["layout-list"] = "rbxassetid://87462136296578",
+    ["layout-panel-left"] = "rbxassetid://125092469751491",
+    ["layout-panel-top"] = "rbxassetid://91943941515944",
+    ["layout-template"] = "rbxassetid://115564446417985",
+    ["leaf"] = "rbxassetid://119951075637174",
+    ["leafy-green"] = "rbxassetid://105146290493154",
+    ["lectern"] = "rbxassetid://106166425183862",
+    ["library-big"] = "rbxassetid://106794530191412",
+    ["library"] = "rbxassetid://114334671982047",
+    ["life-buoy"] = "rbxassetid://81168450671956",
+    ["ligature"] = "rbxassetid://111397873269411",
+    ["lightbulb-off"] = "rbxassetid://83795722296178",
+    ["lightbulb"] = "rbxassetid://103871245626488",
+    ["line-squiggle"] = "rbxassetid://109555164424447",
+    ["link-2-off"] = "rbxassetid://76885956296867",
+    ["link-2"] = "rbxassetid://86072351557466",
+    ["link"] = "rbxassetid://131607023382430",
+    ["linkedin"] = "rbxassetid://132842789255788",
+    ["list-check"] = "rbxassetid://72374358471156",
+    ["list-checks"] = "rbxassetid://99809353635593",
+    ["list-chevrons-down-up"] = "rbxassetid://137409641500711",
+    ["list-chevrons-up-down"] = "rbxassetid://81825351389084",
+    ["list-collapse"] = "rbxassetid://124505247702401",
+    ["list-end"] = "rbxassetid://77650610048119",
+    ["list-filter-plus"] = "rbxassetid://96385120752336",
+    ["list-filter"] = "rbxassetid://103321376129527",
+    ["list-indent-decrease"] = "rbxassetid://137879979228193",
+    ["list-indent-increase"] = "rbxassetid://79051053161201",
+    ["list-minus"] = "rbxassetid://138507965142671",
+    ["list-music"] = "rbxassetid://126380635781840",
+    ["list-ordered"] = "rbxassetid://83212528113913",
+    ["list-plus"] = "rbxassetid://112384738137814",
+    ["list-restart"] = "rbxassetid://91703153577421",
+    ["list-start"] = "rbxassetid://84828348299727",
+    ["list-todo"] = "rbxassetid://132980603752108",
+    ["list-tree"] = "rbxassetid://97685396239010",
+    ["list-video"] = "rbxassetid://93648525452489",
+    ["list-x"] = "rbxassetid://113025303988861",
+    ["list"] = "rbxassetid://113179976918783",
+    ["loader-circle"] = "rbxassetid://116535712789945",
+    ["loader-pinwheel"] = "rbxassetid://108513357940900",
+    ["loader"] = "rbxassetid://78408734580845",
+    ["locate-fixed"] = "rbxassetid://137367361548433",
+    ["locate-off"] = "rbxassetid://73729216338137",
+    ["locate"] = "rbxassetid://84467676590391",
+    ["lock-keyhole-open"] = "rbxassetid://110863509313073",
+    ["lock-keyhole"] = "rbxassetid://78672912777756",
+    ["lock-open"] = "rbxassetid://93597915325122",
+    ["lock"] = "rbxassetid://134724289526879",
+    ["log-in"] = "rbxassetid://103768533135201",
+    ["log-out"] = "rbxassetid://84895399304975",
+    ["logs"] = "rbxassetid://89772091251787",
+    ["lollipop"] = "rbxassetid://84681611583044",
+    ["luggage"] = "rbxassetid://76619236486400",
+    ["magnet"] = "rbxassetid://135162361226972",
+    ["mail-check"] = "rbxassetid://86921536259917",
+    ["mail-minus"] = "rbxassetid://81989813236553",
+    ["mail-open"] = "rbxassetid://122785416858638",
+    ["mail-plus"] = "rbxassetid://104886401588341",
+    ["mail-question-mark"] = "rbxassetid://126540170949819",
+    ["mail-search"] = "rbxassetid://135616173775287",
+    ["mail-warning"] = "rbxassetid://81495303676089",
+    ["mail-x"] = "rbxassetid://74607841705644",
+    ["mail"] = "rbxassetid://103945161245599",
+    ["mailbox"] = "rbxassetid://82765503320335",
+    ["mails"] = "rbxassetid://90673453450080",
+    ["map-minus"] = "rbxassetid://129525760577747",
+    ["map-pin-check-inside"] = "rbxassetid://107130529843809",
+    ["map-pin-check"] = "rbxassetid://118110914690154",
+    ["map-pin-house"] = "rbxassetid://80546885029816",
+    ["map-pin-minus-inside"] = "rbxassetid://79005529692964",
+    ["map-pin-minus"] = "rbxassetid://74518762643623",
+    ["map-pin-off"] = "rbxassetid://82474689391020",
+    ["map-pin-pen"] = "rbxassetid://113515395277504",
+    ["map-pin-plus-inside"] = "rbxassetid://134639656514430",
+    ["map-pin-plus"] = "rbxassetid://91875228967029",
+    ["map-pin-x-inside"] = "rbxassetid://126235934252379",
+    ["map-pin-x"] = "rbxassetid://101085273547316",
+    ["map-pin"] = "rbxassetid://84279202219901",
+    ["map-pinned"] = "rbxassetid://103963788475034",
+    ["map-plus"] = "rbxassetid://129388826743495",
+    ["map"] = "rbxassetid://95107167260947",
+    ["mars-stroke"] = "rbxassetid://131973193186828",
+    ["mars"] = "rbxassetid://111287112372511",
+    ["martini"] = "rbxassetid://82977695401058",
+    ["maximize-2"] = "rbxassetid://73085922906397",
+    ["maximize"] = "rbxassetid://76045941763188",
+    ["medal"] = "rbxassetid://79016002264450",
+    ["megaphone-off"] = "rbxassetid://124280774193935",
+    ["megaphone"] = "rbxassetid://118759541854879",
+    ["meh"] = "rbxassetid://132197867028557",
+    ["memory-stick"] = "rbxassetid://93212591343119",
+    ["menu"] = "rbxassetid://77021539815611",
+    ["merge"] = "rbxassetid://126201866476775",
+    ["message-circle-code"] = "rbxassetid://112865244991651",
+    ["message-circle-dashed"] = "rbxassetid://81525157881897",
+    ["message-circle-heart"] = "rbxassetid://101990756073677",
+    ["message-circle-more"] = "rbxassetid://92856823884663",
+    ["message-circle-off"] = "rbxassetid://134955643890328",
+    ["message-circle-plus"] = "rbxassetid://106562979649273",
+    ["message-circle-question-mark"] = "rbxassetid://107700302759934",
+    ["message-circle-reply"] = "rbxassetid://137071749508334",
+    ["message-circle-warning"] = "rbxassetid://119020096067894",
+    ["message-circle-x"] = "rbxassetid://126843387725536",
+    ["message-circle"] = "rbxassetid://127255077587058",
+    ["message-square-code"] = "rbxassetid://110968863152123",
+    ["message-square-dashed"] = "rbxassetid://107653455516238",
+    ["message-square-diff"] = "rbxassetid://75472190472625",
+    ["message-square-dot"] = "rbxassetid://127806382463916",
+    ["message-square-heart"] = "rbxassetid://75612811742074",
+    ["message-square-lock"] = "rbxassetid://81268215619563",
+    ["message-square-more"] = "rbxassetid://120139782405970",
+    ["message-square-off"] = "rbxassetid://99961019005789",
+    ["message-square-plus"] = "rbxassetid://76934450256199",
+    ["message-square-quote"] = "rbxassetid://116670768629340",
+    ["message-square-reply"] = "rbxassetid://130985622754637",
+    ["message-square-share"] = "rbxassetid://131017005324026",
+    ["message-square-text"] = "rbxassetid://94899503194205",
+    ["message-square-warning"] = "rbxassetid://138432903962261",
+    ["message-square-x"] = "rbxassetid://137285463279462",
+    ["message-square"] = "rbxassetid://83881670383280",
+    ["messages-square"] = "rbxassetid://97532166733358",
+    ["mic-off"] = "rbxassetid://82123034444822",
+    ["mic-vocal"] = "rbxassetid://99082286164362",
+    ["mic"] = "rbxassetid://89640799126523",
+    ["microchip"] = "rbxassetid://73937907669903",
+    ["microscope"] = "rbxassetid://116875530102782",
+    ["microwave"] = "rbxassetid://108411735353008",
+    ["milestone"] = "rbxassetid://101618292325920",
+    ["milk-off"] = "rbxassetid://72388480962742",
+    ["milk"] = "rbxassetid://96221903896918",
+    ["minimize-2"] = "rbxassetid://116269596042539",
+    ["minimize"] = "rbxassetid://121304296213645",
+    ["minus"] = "rbxassetid://118026365011536",
+    ["monitor-check"] = "rbxassetid://86651948439229",
+    ["monitor-cloud"] = "rbxassetid://85931096038318",
+    ["monitor-cog"] = "rbxassetid://94345128715799",
+    ["monitor-dot"] = "rbxassetid://130394010063680",
+    ["monitor-down"] = "rbxassetid://97466933743423",
+    ["monitor-off"] = "rbxassetid://74395526657953",
+    ["monitor-pause"] = "rbxassetid://76002184067562",
+    ["monitor-play"] = "rbxassetid://133018824306217",
+    ["monitor-smartphone"] = "rbxassetid://84335680433378",
+    ["monitor-speaker"] = "rbxassetid://81744810060380",
+    ["monitor-stop"] = "rbxassetid://98708958984757",
+    ["monitor-up"] = "rbxassetid://96035360858377",
+    ["monitor-x"] = "rbxassetid://126265210441423",
+    ["monitor"] = "rbxassetid://72664649203050",
+    ["moon-star"] = "rbxassetid://82782200506348",
+    ["moon"] = "rbxassetid://83380517901735",
+    ["motorbike"] = "rbxassetid://94580787368233",
+    ["mountain-snow"] = "rbxassetid://105315495740588",
+    ["mountain"] = "rbxassetid://73269957566415",
+    ["mouse-off"] = "rbxassetid://75267871697595",
+    ["mouse-pointer-2-off"] = "rbxassetid://104701076865632",
+    ["mouse-pointer-2"] = "rbxassetid://117093892862228",
+    ["mouse-pointer-ban"] = "rbxassetid://106849413057133",
+    ["mouse-pointer-click"] = "rbxassetid://107150227368485",
+    ["mouse-pointer"] = "rbxassetid://72322454962935",
+    ["mouse"] = "rbxassetid://73096068864710",
+    ["move-3d"] = "rbxassetid://103365982054003",
+    ["move-diagonal-2"] = "rbxassetid://117298577948096",
+    ["move-diagonal"] = "rbxassetid://101433481954184",
+    ["move-down-left"] = "rbxassetid://102819433534567",
+    ["move-down-right"] = "rbxassetid://101479760041877",
+    ["move-down"] = "rbxassetid://70510115135583",
+    ["move-horizontal"] = "rbxassetid://88513523439149",
+    ["move-left"] = "rbxassetid://137614740247980",
+    ["move-right"] = "rbxassetid://132455779472989",
+    ["move-up-left"] = "rbxassetid://139079815540148",
+    ["move-up-right"] = "rbxassetid://105885140592646",
+    ["move-up"] = "rbxassetid://84505444262658",
+    ["move-vertical"] = "rbxassetid://86234730730899",
+    ["move"] = "rbxassetid://116138709011735",
+    ["music-2"] = "rbxassetid://134397426600888",
+    ["music-3"] = "rbxassetid://94466120066498",
+    ["music-4"] = "rbxassetid://132459323665838",
+    ["music"] = "rbxassetid://113343203848535",
+    ["navigation-2-off"] = "rbxassetid://116569611780763",
+    ["navigation-2"] = "rbxassetid://81889066747907",
+    ["navigation-off"] = "rbxassetid://87003270290777",
+    ["navigation"] = "rbxassetid://79308213542922",
+    ["network"] = "rbxassetid://127410729922644",
+    ["newspaper"] = "rbxassetid://123479530460544",
+    ["nfc"] = "rbxassetid://76822396542242",
+    ["non-binary"] = "rbxassetid://78442360386235",
+    ["notebook-pen"] = "rbxassetid://140380614761023",
+    ["notebook-tabs"] = "rbxassetid://127371085570083",
+    ["notebook-text"] = "rbxassetid://93061585217270",
+    ["notebook"] = "rbxassetid://136132108664987",
+    ["notepad-text-dashed"] = "rbxassetid://135793446376219",
+    ["notepad-text"] = "rbxassetid://93404682958966",
+    ["nut-off"] = "rbxassetid://78795397311573",
+    ["nut"] = "rbxassetid://127146410705656",
+    ["octagon-alert"] = "rbxassetid://140438367956051",
+    ["octagon-minus"] = "rbxassetid://74720436795421",
+    ["octagon-pause"] = "rbxassetid://103161463909039",
+    ["octagon-x"] = "rbxassetid://90498161006311",
+    ["octagon"] = "rbxassetid://120803515514852",
+    ["omega"] = "rbxassetid://70414080018786",
+    ["option"] = "rbxassetid://100776883894054",
+    ["orbit"] = "rbxassetid://108926136860562",
+    ["origami"] = "rbxassetid://136020626667101",
+    ["package-2"] = "rbxassetid://70394974762575",
+    ["package-check"] = "rbxassetid://102374216055130",
+    ["package-minus"] = "rbxassetid://114492858789692",
+    ["package-open"] = "rbxassetid://132890233237818",
+    ["package-plus"] = "rbxassetid://129261988138366",
+    ["package-search"] = "rbxassetid://95465120894145",
+    ["package-x"] = "rbxassetid://70818501607442",
+    ["package"] = "rbxassetid://97261141732706",
+    ["paint-bucket"] = "rbxassetid://124275586663284",
+    ["paint-roller"] = "rbxassetid://115248074358348",
+    ["paintbrush-vertical"] = "rbxassetid://105151296591292",
+    ["paintbrush"] = "rbxassetid://125572663700289",
+    ["palette"] = "rbxassetid://86350350950064",
+    ["panda"] = "rbxassetid://132509022802512",
+    ["panel-bottom-close"] = "rbxassetid://74287004071159",
+    ["panel-bottom-dashed"] = "rbxassetid://131084651621603",
+    ["panel-bottom-open"] = "rbxassetid://107768659586540",
+    ["panel-bottom"] = "rbxassetid://132127145048511",
+    ["panel-left-close"] = "rbxassetid://126579818823552",
+    ["panel-left-dashed"] = "rbxassetid://75536606374585",
+    ["panel-left-open"] = "rbxassetid://111075816195767",
+    ["panel-left-right-dashed"] = "rbxassetid://110100707973959",
+    ["panel-left"] = "rbxassetid://97419752870313",
+    ["panel-right-close"] = "rbxassetid://139528655524132",
+    ["panel-right-dashed"] = "rbxassetid://94959793877311",
+    ["panel-right-open"] = "rbxassetid://118114419142794",
+    ["panel-right"] = "rbxassetid://116365035443156",
+    ["panel-top-bottom-dashed"] = "rbxassetid://134737235653344",
+    ["panel-top-close"] = "rbxassetid://83578325777808",
+    ["panel-top-dashed"] = "rbxassetid://70522913169237",
+    ["panel-top-open"] = "rbxassetid://137959875507454",
+    ["panel-top"] = "rbxassetid://75838479462875",
+    ["panels-left-bottom"] = "rbxassetid://72996856149149",
+    ["panels-right-bottom"] = "rbxassetid://90659068960726",
+    ["panels-top-left"] = "rbxassetid://79858853850600",
+    ["paperclip"] = "rbxassetid://92088291163453",
+    ["parentheses"] = "rbxassetid://78950955173096",
+    ["parking-meter"] = "rbxassetid://84652733960568",
+    ["party-popper"] = "rbxassetid://111626795712193",
+    ["pause"] = "rbxassetid://74873705394436",
+    ["paw-print"] = "rbxassetid://112218825427601",
+    ["pc-case"] = "rbxassetid://122978648019101",
+    ["pen-line"] = "rbxassetid://109108135755303",
+    ["pen-off"] = "rbxassetid://84807123119438",
+    ["pen-tool"] = "rbxassetid://106145404953445",
+    ["pen"] = "rbxassetid://72037878096321",
+    ["pencil-line"] = "rbxassetid://88392917053533",
+    ["pencil-off"] = "rbxassetid://103330927652832",
+    ["pencil-ruler"] = "rbxassetid://110120288284597",
+    ["pencil"] = "rbxassetid://137986121120732",
+    ["pentagon"] = "rbxassetid://79184802179890",
+    ["percent"] = "rbxassetid://130155041032013",
+    ["person-standing"] = "rbxassetid://125020872044147",
+    ["philippine-peso"] = "rbxassetid://91173798254675",
+    ["phone-call"] = "rbxassetid://70555587592860",
+    ["phone-forwarded"] = "rbxassetid://113269614319737",
+    ["phone-incoming"] = "rbxassetid://82863576359288",
+    ["phone-missed"] = "rbxassetid://130156165198376",
+    ["phone-off"] = "rbxassetid://133318623553383",
+    ["phone-outgoing"] = "rbxassetid://104576478735825",
+    ["phone"] = "rbxassetid://128804946640049",
+    ["pi"] = "rbxassetid://74936036243146",
+    ["piano"] = "rbxassetid://85008880789520",
+    ["pickaxe"] = "rbxassetid://105888023317688",
+    ["picture-in-picture-2"] = "rbxassetid://112803319544468",
+    ["picture-in-picture"] = "rbxassetid://80579597835123",
+    ["piggy-bank"] = "rbxassetid://79498575790721",
+    ["pilcrow-left"] = "rbxassetid://103803000849583",
+    ["pilcrow-right"] = "rbxassetid://104881733911870",
+    ["pilcrow"] = "rbxassetid://139512780392871",
+    ["pill-bottle"] = "rbxassetid://118394692404597",
+    ["pill"] = "rbxassetid://73280534813448",
+    ["pin-off"] = "rbxassetid://127696372451750",
+    ["pin"] = "rbxassetid://120978111007514",
+    ["pipette"] = "rbxassetid://133167932934404",
+    ["pizza"] = "rbxassetid://126964453193501",
+    ["plane-landing"] = "rbxassetid://122555692211889",
+    ["plane-takeoff"] = "rbxassetid://117179478829575",
+    ["plane"] = "rbxassetid://126985561580989",
+    ["play"] = "rbxassetid://135609604299893",
+    ["plug-2"] = "rbxassetid://97912386476366",
+    ["plug-zap"] = "rbxassetid://74506269884055",
+    ["plug"] = "rbxassetid://99782373064495",
+    ["plus"] = "rbxassetid://111774323017047",
+    ["pocket-knife"] = "rbxassetid://134075428063965",
+    ["pocket"] = "rbxassetid://136686762542964",
+    ["podcast"] = "rbxassetid://109577075549215",
+    ["pointer-off"] = "rbxassetid://95488389312794",
+    ["pointer"] = "rbxassetid://92615117311099",
+    ["popcorn"] = "rbxassetid://139446511232750",
+    ["popsicle"] = "rbxassetid://112696318077073",
+    ["pound-sterling"] = "rbxassetid://127482649469130",
+    ["power-off"] = "rbxassetid://118768311012214",
+    ["power"] = "rbxassetid://96479131758775",
+    ["presentation"] = "rbxassetid://106134583757890",
+    ["printer-check"] = "rbxassetid://130273549443689",
+    ["printer"] = "rbxassetid://76080649734247",
+    ["projector"] = "rbxassetid://103281856385283",
+    ["proportions"] = "rbxassetid://130046855997237",
+    ["puzzle"] = "rbxassetid://136837798892463",
+    ["pyramid"] = "rbxassetid://107811442374127",
+    ["qr-code"] = "rbxassetid://105329945723350",
+    ["quote"] = "rbxassetid://103271711590001",
+    ["rabbit"] = "rbxassetid://98580518804206",
+    ["radar"] = "rbxassetid://138528222906635",
+    ["radiation"] = "rbxassetid://104499586848433",
+    ["radical"] = "rbxassetid://132758286926047",
+    ["radio-receiver"] = "rbxassetid://129598303378835",
+    ["radio-tower"] = "rbxassetid://93958663130054",
+    ["radio"] = "rbxassetid://85611589536956",
+    ["radius"] = "rbxassetid://89814505307129",
+    ["rail-symbol"] = "rbxassetid://134295386306962",
+    ["rainbow"] = "rbxassetid://132488862841895",
+    ["rat"] = "rbxassetid://127400975953159",
+    ["ratio"] = "rbxassetid://126369423897295",
+    ["receipt-cent"] = "rbxassetid://91557573925201",
+    ["receipt-euro"] = "rbxassetid://94015722210295",
+    ["receipt-indian-rupee"] = "rbxassetid://89718170439990",
+    ["receipt-japanese-yen"] = "rbxassetid://132472560758851",
+    ["receipt-pound-sterling"] = "rbxassetid://73934967569625",
+    ["receipt-russian-ruble"] = "rbxassetid://105164576936853",
+    ["receipt-swiss-franc"] = "rbxassetid://72503668620116",
+    ["receipt-text"] = "rbxassetid://138483536013737",
+    ["receipt-turkish-lira"] = "rbxassetid://91950765836342",
+    ["receipt"] = "rbxassetid://77877895901792",
+    ["rectangle-circle"] = "rbxassetid://100642423153903",
+    ["rectangle-ellipsis"] = "rbxassetid://112919953980965",
+    ["rectangle-goggles"] = "rbxassetid://98605436666727",
+    ["rectangle-horizontal"] = "rbxassetid://90224199814966",
+    ["rectangle-vertical"] = "rbxassetid://117277050590967",
+    ["recycle"] = "rbxassetid://140417023381961",
+    ["redo-2"] = "rbxassetid://70451039017914",
+    ["redo-dot"] = "rbxassetid://94252981719732",
+    ["redo"] = "rbxassetid://116150342119054",
+    ["refresh-ccw-dot"] = "rbxassetid://106702246753270",
+    ["refresh-ccw"] = "rbxassetid://117913330389477",
+    ["refresh-cw-off"] = "rbxassetid://140179498843054",
+    ["refresh-cw"] = "rbxassetid://138133190015277",
+    ["refrigerator"] = "rbxassetid://102614042652753",
+    ["regex"] = "rbxassetid://100727200791841",
+    ["remove-formatting"] = "rbxassetid://112833162022628",
+    ["repeat-1"] = "rbxassetid://130144534857095",
+    ["repeat-2"] = "rbxassetid://85927537182704",
+    ["repeat"] = "rbxassetid://121886242955173",
+    ["replace-all"] = "rbxassetid://127862728198635",
+    ["replace"] = "rbxassetid://128404082279430",
+    ["reply-all"] = "rbxassetid://71723137343562",
+    ["reply"] = "rbxassetid://109788633497028",
+    ["rewind"] = "rbxassetid://95205297521988",
+    ["ribbon"] = "rbxassetid://94265331526851",
+    ["rocket"] = "rbxassetid://87412317685854",
+    ["rocking-chair"] = "rbxassetid://110420269495360",
+    ["roller-coaster"] = "rbxassetid://112426178972099",
+    ["rose"] = "rbxassetid://126336840238769",
+    ["rotate-3d"] = "rbxassetid://76300551576392",
+    ["rotate-ccw-key"] = "rbxassetid://74976035240976",
+    ["rotate-ccw-square"] = "rbxassetid://90515853170424",
+    ["rotate-ccw"] = "rbxassetid://110116685948665",
+    ["rotate-cw-square"] = "rbxassetid://77095448159303",
+    ["rotate-cw"] = "rbxassetid://84183336178654",
+    ["route-off"] = "rbxassetid://106350402024079",
+    ["route"] = "rbxassetid://89968303228953",
+    ["router"] = "rbxassetid://102130331994471",
+    ["rows-2"] = "rbxassetid://112556185960101",
+    ["rows-3"] = "rbxassetid://117215586961375",
+    ["rows-4"] = "rbxassetid://125646021959055",
+    ["rss"] = "rbxassetid://131789058984793",
+    ["ruler-dimension-line"] = "rbxassetid://70673861371412",
+    ["ruler"] = "rbxassetid://81432445547423",
+    ["russian-ruble"] = "rbxassetid://126357936542156",
+    ["sailboat"] = "rbxassetid://87110567187540",
+    ["salad"] = "rbxassetid://128864507821603",
+    ["sandwich"] = "rbxassetid://104573187458917",
+    ["satellite-dish"] = "rbxassetid://136742443888305",
+    ["satellite"] = "rbxassetid://134967053164645",
+    ["saudi-riyal"] = "rbxassetid://102282769104635",
+    ["save-all"] = "rbxassetid://116946975799440",
+    ["save-off"] = "rbxassetid://87085435778560",
+    ["save"] = "rbxassetid://126116963775616",
+    ["scale-3d"] = "rbxassetid://72414199620352",
+    ["scale"] = "rbxassetid://108203682317477",
+    ["scaling"] = "rbxassetid://122360365318466",
+    ["scan-barcode"] = "rbxassetid://96889457154761",
+    ["scan-eye"] = "rbxassetid://99244790601968",
+    ["scan-face"] = "rbxassetid://109959345069668",
+    ["scan-heart"] = "rbxassetid://106280819776142",
+    ["scan-line"] = "rbxassetid://126544908146540",
+    ["scan-qr-code"] = "rbxassetid://105409149549927",
+    ["scan-search"] = "rbxassetid://80009010551347",
+    ["scan-text"] = "rbxassetid://73702396787766",
+    ["scan"] = "rbxassetid://123104789658180",
+    ["school"] = "rbxassetid://76351530290068",
+    ["scissors-line-dashed"] = "rbxassetid://122237447974173",
+    ["scissors"] = "rbxassetid://118665510911274",
+    ["screen-share-off"] = "rbxassetid://107677572669805",
+    ["screen-share"] = "rbxassetid://85137895705653",
+    ["scroll-text"] = "rbxassetid://97321022666868",
+    ["scroll"] = "rbxassetid://74072101474951",
+    ["search-check"] = "rbxassetid://75442076191356",
+    ["search-code"] = "rbxassetid://117114794592802",
+    ["search-slash"] = "rbxassetid://96483932261041",
+    ["search-x"] = "rbxassetid://137319957522951",
+    ["search"] = "rbxassetid://121018724060431",
+    ["section"] = "rbxassetid://91732188298948",
+    ["send-horizontal"] = "rbxassetid://111734392411664",
+    ["send-to-back"] = "rbxassetid://75340312862253",
+    ["send"] = "rbxassetid://127751956873796",
+    ["separator-horizontal"] = "rbxassetid://84864453699927",
+    ["separator-vertical"] = "rbxassetid://84031801478581",
+    ["server-cog"] = "rbxassetid://138470287250966",
+    ["server-crash"] = "rbxassetid://132810618000212",
+    ["server-off"] = "rbxassetid://114048751507723",
+    ["server"] = "rbxassetid://92188766517878",
+    ["settings-2"] = "rbxassetid://135684703553372",
+    ["settings"] = "rbxassetid://80758916183665",
+    ["shapes"] = "rbxassetid://129989433311409",
+    ["share-2"] = "rbxassetid://71210767962065",
+    ["share"] = "rbxassetid://87340985053299",
+    ["sheet"] = "rbxassetid://134902122480171",
+    ["shell"] = "rbxassetid://140212943563599",
+    ["shield-alert"] = "rbxassetid://114995877719925",
+    ["shield-ban"] = "rbxassetid://108765041044649",
+    ["shield-check"] = "rbxassetid://87354736164608",
+    ["shield-ellipsis"] = "rbxassetid://114794739892123",
+    ["shield-half"] = "rbxassetid://117842634172647",
+    ["shield-minus"] = "rbxassetid://89965059528921",
+    ["shield-off"] = "rbxassetid://133426959132690",
+    ["shield-plus"] = "rbxassetid://100664857995498",
+    ["shield-question-mark"] = "rbxassetid://135722075265150",
+    ["shield-user"] = "rbxassetid://124832775645347",
+    ["shield-x"] = "rbxassetid://73370117343811",
+    ["shield"] = "rbxassetid://110987169760162",
+    ["ship-wheel"] = "rbxassetid://130797795829448",
+    ["ship"] = "rbxassetid://83995100553930",
+    ["shirt"] = "rbxassetid://106579555405966",
+    ["shopping-bag"] = "rbxassetid://71885477293226",
+    ["shopping-basket"] = "rbxassetid://138646411956433",
+    ["shopping-cart"] = "rbxassetid://128420521375441",
+    ["shovel"] = "rbxassetid://102465000512056",
+    ["shower-head"] = "rbxassetid://75884944024117",
+    ["shredder"] = "rbxassetid://122125164414463",
+    ["shrimp"] = "rbxassetid://102625900815307",
+    ["shrink"] = "rbxassetid://90953687918880",
+    ["shrub"] = "rbxassetid://127326280714343",
+    ["shuffle"] = "rbxassetid://132382786975101",
+    ["sigma"] = "rbxassetid://126884244870899",
+    ["signal-high"] = "rbxassetid://130436670012270",
+    ["signal-low"] = "rbxassetid://73674683500458",
+    ["signal-medium"] = "rbxassetid://125003021367019",
+    ["signal-zero"] = "rbxassetid://130045332414754",
+    ["signal"] = "rbxassetid://78424889355261",
+    ["signature"] = "rbxassetid://114402748013000",
+    ["signpost-big"] = "rbxassetid://115780185675001",
+    ["signpost"] = "rbxassetid://106584743791433",
+    ["siren"] = "rbxassetid://134210267818039",
+    ["skip-back"] = "rbxassetid://70466132711334",
+    ["skip-forward"] = "rbxassetid://124844823753990",
+    ["skull"] = "rbxassetid://137726256442333",
+    ["slack"] = "rbxassetid://96089719516736",
+    ["slash"] = "rbxassetid://117792185664263",
+    ["slice"] = "rbxassetid://95810504278179",
+    ["sliders-horizontal"] = "rbxassetid://85538382643347",
+    ["sliders-vertical"] = "rbxassetid://101190569086853",
+    ["smartphone-charging"] = "rbxassetid://102837532613995",
+    ["smartphone-nfc"] = "rbxassetid://82326425754446",
+    ["smartphone"] = "rbxassetid://96623008834511",
+    ["smile-plus"] = "rbxassetid://131981881472144",
+    ["smile"] = "rbxassetid://105880397565283",
+    ["snail"] = "rbxassetid://70904536548363",
+    ["snowflake"] = "rbxassetid://101235206534566",
+    ["soap-dispenser-droplet"] = "rbxassetid://77258480479465",
+    ["sofa"] = "rbxassetid://114427687218324",
+    ["solar-panel"] = "rbxassetid://132448188047921",
+    ["soup"] = "rbxassetid://115092551871618",
+    ["space"] = "rbxassetid://87072088914178",
+    ["spade"] = "rbxassetid://131444449466462",
+    ["sparkle"] = "rbxassetid://111044800239623",
+    ["sparkles"] = "rbxassetid://138635884129147",
+    ["speaker"] = "rbxassetid://96227183003618",
+    ["speech"] = "rbxassetid://87013139446349",
+    ["spell-check-2"] = "rbxassetid://81556731785534",
+    ["spell-check"] = "rbxassetid://91913483031334",
+    ["spline-pointer"] = "rbxassetid://84842840956804",
+    ["spline"] = "rbxassetid://129406685807412",
+    ["split"] = "rbxassetid://105112438805988",
+    ["spool"] = "rbxassetid://124541981347743",
+    ["spotlight"] = "rbxassetid://77571742539344",
+    ["spray-can"] = "rbxassetid://128372039366326",
+    ["sprout"] = "rbxassetid://100091687832508",
+    ["square-activity"] = "rbxassetid://89496630185293",
+    ["square-arrow-down-left"] = "rbxassetid://108194680296901",
+    ["square-arrow-down-right"] = "rbxassetid://99403846801050",
+    ["square-arrow-down"] = "rbxassetid://135962519626588",
+    ["square-arrow-left"] = "rbxassetid://111671474549238",
+    ["square-arrow-out-down-left"] = "rbxassetid://125714881756353",
+    ["square-arrow-out-down-right"] = "rbxassetid://89971003001390",
+    ["square-arrow-out-up-left"] = "rbxassetid://103759986579087",
+    ["square-arrow-out-up-right"] = "rbxassetid://91221896066807",
+    ["square-arrow-right"] = "rbxassetid://113920471701361",
+    ["square-arrow-up-left"] = "rbxassetid://112424670290693",
+    ["square-arrow-up-right"] = "rbxassetid://76602291406940",
+    ["square-arrow-up"] = "rbxassetid://106998604646718",
+    ["square-asterisk"] = "rbxassetid://89186832353625",
+    ["square-bottom-dashed-scissors"] = "rbxassetid://79076980104803",
+    ["square-chart-gantt"] = "rbxassetid://104034017316411",
+    ["square-check-big"] = "rbxassetid://115320390907184",
+    ["square-check"] = "rbxassetid://134682053539509",
+    ["square-chevron-down"] = "rbxassetid://91032307924592",
+    ["square-chevron-left"] = "rbxassetid://73143404829510",
+    ["square-chevron-right"] = "rbxassetid://90612077729930",
+    ["square-chevron-up"] = "rbxassetid://85565910197337",
+    ["square-code"] = "rbxassetid://81604576616881",
+    ["square-dashed-bottom-code"] = "rbxassetid://100354801563230",
+    ["square-dashed-bottom"] = "rbxassetid://101102319625624",
+    ["square-dashed-kanban"] = "rbxassetid://90388067649847",
+    ["square-dashed-mouse-pointer"] = "rbxassetid://121016142178467",
+    ["square-dashed-top-solid"] = "rbxassetid://117157577548540",
+    ["square-dashed"] = "rbxassetid://136905537847606",
+    ["square-divide"] = "rbxassetid://99894657101970",
+    ["square-dot"] = "rbxassetid://116613421354866",
+    ["square-equal"] = "rbxassetid://110283363706707",
+    ["square-function"] = "rbxassetid://86075219551088",
+    ["square-kanban"] = "rbxassetid://114537101260131",
+    ["square-library"] = "rbxassetid://73810931222081",
+    ["square-m"] = "rbxassetid://117662700410577",
+    ["square-menu"] = "rbxassetid://104067089444415",
+    ["square-minus"] = "rbxassetid://116764432015770",
+    ["square-mouse-pointer"] = "rbxassetid://76141850603920",
+    ["square-parking-off"] = "rbxassetid://100857293535141",
+    ["square-parking"] = "rbxassetid://133116656122387",
+    ["square-pause"] = "rbxassetid://86608552787615",
+    ["square-pen"] = "rbxassetid://120239476110475",
+    ["square-percent"] = "rbxassetid://87111930314567",
+    ["square-pi"] = "rbxassetid://75383328781618",
+    ["square-pilcrow"] = "rbxassetid://131854284699367",
+    ["square-play"] = "rbxassetid://108186325238481",
+    ["square-plus"] = "rbxassetid://114713264461873",
+    ["square-power"] = "rbxassetid://129240437805187",
+    ["square-radical"] = "rbxassetid://132645931868292",
+    ["square-round-corner"] = "rbxassetid://104592745113567",
+    ["square-scissors"] = "rbxassetid://110601255612411",
+    ["square-sigma"] = "rbxassetid://113231244246816",
+    ["square-slash"] = "rbxassetid://105477013908757",
+    ["square-split-horizontal"] = "rbxassetid://76095370148660",
+    ["square-split-vertical"] = "rbxassetid://88589192032058",
+    ["square-square"] = "rbxassetid://136555087357875",
+    ["square-stack"] = "rbxassetid://100463396619394",
+    ["square-star"] = "rbxassetid://94506958703720",
+    ["square-stop"] = "rbxassetid://80018708472943",
+    ["square-terminal"] = "rbxassetid://83969264476798",
+    ["square-user-round"] = "rbxassetid://86484997229302",
+    ["square-user"] = "rbxassetid://70771214183445",
+    ["square-x"] = "rbxassetid://125136183850190",
+    ["square"] = "rbxassetid://86304921356806",
+    ["squares-exclude"] = "rbxassetid://102345385822324",
+    ["squares-intersect"] = "rbxassetid://120869602570119",
+    ["squares-subtract"] = "rbxassetid://131484650948795",
+    ["squares-unite"] = "rbxassetid://96673080107843",
+    ["squircle-dashed"] = "rbxassetid://129936702532522",
+    ["squircle"] = "rbxassetid://82426632573807",
+    ["squirrel"] = "rbxassetid://112864252085343",
+    ["stamp"] = "rbxassetid://92370779813368",
+    ["star-half"] = "rbxassetid://117449275562979",
+    ["star-off"] = "rbxassetid://75742832732503",
+    ["star"] = "rbxassetid://136141469398409",
+    ["step-back"] = "rbxassetid://108672750005121",
+    ["step-forward"] = "rbxassetid://126131872136145",
+    ["stethoscope"] = "rbxassetid://122331031702148",
+    ["sticker"] = "rbxassetid://79938203791608",
+    ["sticky-note"] = "rbxassetid://111894074643919",
+    ["store"] = "rbxassetid://90338129673705",
+    ["stretch-horizontal"] = "rbxassetid://87665042192343",
+    ["stretch-vertical"] = "rbxassetid://95265463417122",
+    ["strikethrough"] = "rbxassetid://103417324549613",
+    ["subscript"] = "rbxassetid://74553514785183",
+    ["sun-dim"] = "rbxassetid://129141645592715",
+    ["sun-medium"] = "rbxassetid://130278807964710",
+    ["sun-moon"] = "rbxassetid://75752898854559",
+    ["sun-snow"] = "rbxassetid://112791898014579",
+    ["sun"] = "rbxassetid://110150589884127",
+    ["sunrise"] = "rbxassetid://134705665494098",
+    ["sunset"] = "rbxassetid://75904872203588",
+    ["superscript"] = "rbxassetid://96887696590118",
+    ["swatch-book"] = "rbxassetid://126786244872453",
+    ["swiss-franc"] = "rbxassetid://113497920041625",
+    ["switch-camera"] = "rbxassetid://76841154349737",
+    ["sword"] = "rbxassetid://124448418211665",
+    ["swords"] = "rbxassetid://81872698913435",
+    ["syringe"] = "rbxassetid://123891270479254",
+    ["table-2"] = "rbxassetid://95751552281545",
+    ["table-cells-merge"] = "rbxassetid://95363715175258",
+    ["table-cells-split"] = "rbxassetid://114799086088649",
+    ["table-columns-split"] = "rbxassetid://111011625447949",
+    ["table-of-contents"] = "rbxassetid://135044763275414",
+    ["table-properties"] = "rbxassetid://125062886015372",
+    ["table-rows-split"] = "rbxassetid://96443733673997",
+    ["table"] = "rbxassetid://109109148250737",
+    ["tablet-smartphone"] = "rbxassetid://133680859813404",
+    ["tablet"] = "rbxassetid://128403991264386",
+    ["tablets"] = "rbxassetid://80835787970735",
+    ["tag"] = "rbxassetid://129104970103940",
+    ["tags"] = "rbxassetid://107179263080798",
+    ["tally-1"] = "rbxassetid://115301298241643",
+    ["tally-2"] = "rbxassetid://110363186864027",
+    ["tally-3"] = "rbxassetid://97655344572540",
+    ["tally-4"] = "rbxassetid://102633494371890",
+    ["tally-5"] = "rbxassetid://88031817475886",
+    ["tangent"] = "rbxassetid://123263132981724",
+    ["target"] = "rbxassetid://87563802520297",
+    ["telescope"] = "rbxassetid://91755049143647",
+    ["tent-tree"] = "rbxassetid://76698322463977",
+    ["tent"] = "rbxassetid://109779587826330",
+    ["terminal"] = "rbxassetid://106783148545356",
+    ["test-tube-diagonal"] = "rbxassetid://75662704378840",
+    ["test-tube"] = "rbxassetid://98801015650164",
+    ["test-tubes"] = "rbxassetid://92555361447433",
+    ["text-align-center"] = "rbxassetid://84051028246390",
+    ["text-align-end"] = "rbxassetid://130041738343555",
+    ["text-align-justify"] = "rbxassetid://80279880143030",
+    ["text-align-start"] = "rbxassetid://134489585487649",
+    ["text-cursor-input"] = "rbxassetid://107551944047171",
+    ["text-cursor"] = "rbxassetid://115984654447300",
+    ["text-initial"] = "rbxassetid://129458097472087",
+    ["text-quote"] = "rbxassetid://139278366448736",
+    ["text-search"] = "rbxassetid://92345384671606",
+    ["text-select"] = "rbxassetid://117087320884956",
+    ["text-wrap"] = "rbxassetid://114804318314018",
+    ["theater"] = "rbxassetid://108558145549163",
+    ["thermometer-snowflake"] = "rbxassetid://121876188028425",
+    ["thermometer-sun"] = "rbxassetid://106693240074310",
+    ["thermometer"] = "rbxassetid://106546011492311",
+    ["thumbs-down"] = "rbxassetid://87794009914015",
+    ["thumbs-up"] = "rbxassetid://111137070767020",
+    ["ticket-check"] = "rbxassetid://105428777212507",
+    ["ticket-minus"] = "rbxassetid://78966299769328",
+    ["ticket-percent"] = "rbxassetid://80834774406405",
+    ["ticket-plus"] = "rbxassetid://110086734392189",
+    ["ticket-slash"] = "rbxassetid://89045681172265",
+    ["ticket-x"] = "rbxassetid://88674114109926",
+    ["ticket"] = "rbxassetid://126527071492145",
+    ["tickets-plane"] = "rbxassetid://100367018248695",
+    ["tickets"] = "rbxassetid://135268612687833",
+    ["timer-off"] = "rbxassetid://110916370767271",
+    ["timer-reset"] = "rbxassetid://110052125369932",
+    ["timer"] = "rbxassetid://85473888890506",
+    ["toggle-left"] = "rbxassetid://85887872573050",
+    ["toggle-right"] = "rbxassetid://90411952142550",
+    ["toilet"] = "rbxassetid://80930782432931",
+    ["tool-case"] = "rbxassetid://87533537832522",
+    ["tornado"] = "rbxassetid://88358291515768",
+    ["torus"] = "rbxassetid://70855707283051",
+    ["touchpad-off"] = "rbxassetid://78784008075456",
+    ["touchpad"] = "rbxassetid://74882354908014",
+    ["tower-control"] = "rbxassetid://95937619060532",
+    ["toy-brick"] = "rbxassetid://86293483924633",
+    ["tractor"] = "rbxassetid://103376704722051",
+    ["traffic-cone"] = "rbxassetid://74110220470369",
+    ["train-front-tunnel"] = "rbxassetid://105194827005114",
+    ["train-front"] = "rbxassetid://125237934215370",
+    ["train-track"] = "rbxassetid://77451032453723",
+    ["tram-front"] = "rbxassetid://93315182364998",
+    ["transgender"] = "rbxassetid://135530817673639",
+    ["trash-2"] = "rbxassetid://109843431391323",
+    ["trash"] = "rbxassetid://106723740584310",
+    ["tree-deciduous"] = "rbxassetid://123124389219004",
+    ["tree-palm"] = "rbxassetid://103846705893963",
+    ["tree-pine"] = "rbxassetid://124662547202594",
+    ["trees"] = "rbxassetid://121203841375919",
+    ["trello"] = "rbxassetid://130987241149527",
+    ["trending-down"] = "rbxassetid://139309232226438",
+    ["trending-up-down"] = "rbxassetid://85083293981691",
+    ["trending-up"] = "rbxassetid://81819858538839",
+    ["triangle-alert"] = "rbxassetid://125920361880643",
+    ["triangle-dashed"] = "rbxassetid://124324079103935",
+    ["triangle-right"] = "rbxassetid://116930791412791",
+    ["triangle"] = "rbxassetid://126330486745540",
+    ["trophy"] = "rbxassetid://131545003268773",
+    ["truck-electric"] = "rbxassetid://111873446387359",
+    ["truck"] = "rbxassetid://86662707764771",
+    ["turkish-lira"] = "rbxassetid://114589876174070",
+    ["turntable"] = "rbxassetid://129870346487856",
+    ["turtle"] = "rbxassetid://118295081560334",
+    ["tv-minimal-play"] = "rbxassetid://99201833426972",
+    ["tv-minimal"] = "rbxassetid://100382201729427",
+    ["tv"] = "rbxassetid://135687724791776",
+    ["twitch"] = "rbxassetid://71383308134888",
+    ["twitter"] = "rbxassetid://88791703276842",
+    ["type-outline"] = "rbxassetid://80108627791690",
+    ["type"] = "rbxassetid://133543553793564",
+    ["umbrella-off"] = "rbxassetid://72395143739955",
+    ["umbrella"] = "rbxassetid://127502210274589",
+    ["underline"] = "rbxassetid://123709229216544",
+    ["undo-2"] = "rbxassetid://113885292059932",
+    ["undo-dot"] = "rbxassetid://132055277744844",
+    ["undo"] = "rbxassetid://111258459077271",
+    ["unfold-horizontal"] = "rbxassetid://117128358526398",
+    ["unfold-vertical"] = "rbxassetid://116593025265499",
+    ["ungroup"] = "rbxassetid://106674800451003",
+    ["university"] = "rbxassetid://84652528263642",
+    ["unlink-2"] = "rbxassetid://128131898892572",
+    ["unlink"] = "rbxassetid://139835795227752",
+    ["unplug"] = "rbxassetid://90171381619874",
+    ["upload"] = "rbxassetid://138212042425501",
+    ["usb"] = "rbxassetid://117230058949613",
+    ["user-check"] = "rbxassetid://81775205032725",
+    ["user-cog"] = "rbxassetid://92795491530865",
+    ["user-lock"] = "rbxassetid://78892639693821",
+    ["user-minus"] = "rbxassetid://126976941957511",
+    ["user-pen"] = "rbxassetid://87445472574836",
+    ["user-plus"] = "rbxassetid://118514469915884",
+    ["user-round-check"] = "rbxassetid://118794737621941",
+    ["user-round-cog"] = "rbxassetid://78239503290053",
+    ["user-round-minus"] = "rbxassetid://98944176636447",
+    ["user-round-pen"] = "rbxassetid://108155244324878",
+    ["user-round-plus"] = "rbxassetid://113301899567470",
+    ["user-round-search"] = "rbxassetid://71565774381870",
+    ["user-round-x"] = "rbxassetid://122367980560930",
+    ["user-round"] = "rbxassetid://136485052187963",
+    ["user-search"] = "rbxassetid://101335649828115",
+    ["user-star"] = "rbxassetid://98777846316000",
+    ["user-x"] = "rbxassetid://139748155894754",
+    ["user"] = "rbxassetid://81589895647169",
+    ["users-round"] = "rbxassetid://103005444008339",
+    ["users"] = "rbxassetid://115398113982385",
+    ["utensils-crossed"] = "rbxassetid://109520762270383",
+    ["utensils"] = "rbxassetid://139952569804235",
+    ["utility-pole"] = "rbxassetid://101965541238242",
+    ["variable"] = "rbxassetid://104743088438151",
+    ["vault"] = "rbxassetid://108049164599845",
+    ["vector-square"] = "rbxassetid://86713728565344",
+    ["vegan"] = "rbxassetid://119489190688082",
+    ["venetian-mask"] = "rbxassetid://102636443033920",
+    ["venus-and-mars"] = "rbxassetid://120227752103771",
+    ["venus"] = "rbxassetid://82891342220859",
+    ["vibrate-off"] = "rbxassetid://113446447326246",
+    ["vibrate"] = "rbxassetid://108330910738733",
+    ["video-off"] = "rbxassetid://132239189859305",
+    ["video"] = "rbxassetid://107587444636945",
+    ["videotape"] = "rbxassetid://114816894323398",
+    ["view"] = "rbxassetid://118717253976805",
+    ["voicemail"] = "rbxassetid://134313454010227",
+    ["volleyball"] = "rbxassetid://83889351124153",
+    ["volume-1"] = "rbxassetid://98514588731639",
+    ["volume-2"] = "rbxassetid://89344380902620",
+    ["volume-off"] = "rbxassetid://103047478058767",
+    ["volume-x"] = "rbxassetid://139252359189540",
+    ["volume"] = "rbxassetid://103236289817396",
+    ["vote"] = "rbxassetid://89409762851246",
+    ["wallet-cards"] = "rbxassetid://129728715308337",
+    ["wallet-minimal"] = "rbxassetid://137800448816116",
+    ["wallet"] = "rbxassetid://132331555762628",
+    ["wallpaper"] = "rbxassetid://74682121235494",
+    ["wand-sparkles"] = "rbxassetid://82546429942392",
+    ["wand"] = "rbxassetid://114580617777835",
+    ["warehouse"] = "rbxassetid://78388887451080",
+    ["washing-machine"] = "rbxassetid://104194127573858",
+    ["watch"] = "rbxassetid://130544621618405",
+    ["waves-ladder"] = "rbxassetid://101808619355514",
+    ["waves"] = "rbxassetid://96340135183647",
+    ["waypoints"] = "rbxassetid://102450133666017",
+    ["webcam"] = "rbxassetid://104148487911129",
+    ["webhook-off"] = "rbxassetid://96370548093471",
+    ["webhook"] = "rbxassetid://112812457747322",
+    ["weight"] = "rbxassetid://103860559844854",
+    ["wheat-off"] = "rbxassetid://133294844612307",
+    ["wheat"] = "rbxassetid://85261952080359",
+    ["whole-word"] = "rbxassetid://90111083954485",
+    ["wifi-cog"] = "rbxassetid://110500263326209",
+    ["wifi-high"] = "rbxassetid://81954601342139",
+    ["wifi-low"] = "rbxassetid://138217335635913",
+    ["wifi-off"] = "rbxassetid://74113634330106",
+    ["wifi-pen"] = "rbxassetid://91290205064712",
+    ["wifi-sync"] = "rbxassetid://84043971055177",
+    ["wifi-zero"] = "rbxassetid://124286465246123",
+    ["wifi"] = "rbxassetid://104669375183960",
+    ["wind-arrow-down"] = "rbxassetid://127753987414870",
+    ["wind"] = "rbxassetid://114551690399915",
+    ["wine-off"] = "rbxassetid://108294164302317",
+    ["wine"] = "rbxassetid://115743721332829",
+    ["workflow"] = "rbxassetid://99186544029189",
+    ["worm"] = "rbxassetid://115752311548091",
+    ["wrench"] = "rbxassetid://112148279212860",
+    ["x"] = "rbxassetid://110786993356448",
+    ["youtube"] = "rbxassetid://123663668456341",
+    ["zap-off"] = "rbxassetid://81385483183652",
+    ["zap"] = "rbxassetid://130551565616516",
+    ["zoom-in"] = "rbxassetid://127956924984803",
+    ["zoom-out"] = "rbxassetid://108334162607319",
+    ["balloon"] = "rbxassetid://97489111621526",
+    ["beef-off"] = "rbxassetid://99869959725200",
+    ["book-search"] = "rbxassetid://132585409504950",
+    ["calendars"] = "rbxassetid://130944763042289",
+    ["cannabis-off"] = "rbxassetid://101938500363812",
+    ["cctv-off"] = "rbxassetid://75925370187295",
+    ["cigarette"] = "rbxassetid://137149549886852",
+    ["circle-pile"] = "rbxassetid://116353155251541",
+    ["cloud-backup"] = "rbxassetid://111649579696132",
+    ["cloud-sync"] = "rbxassetid://79393911188593",
+    ["database-search"] = "rbxassetid://92017137080138",
+    ["ellipse"] = "rbxassetid://71559658267482",
+    ["fingerprint-pattern"] = "rbxassetid://80934710831288",
+    ["fishing-hook"] = "rbxassetid://121038780855899",
+    ["fishing-rod"] = "rbxassetid://71754848048049",
+    ["form"] = "rbxassetid://72999643971000",
+    ["git-merge-conflict"] = "rbxassetid://85677801675703",
+    ["globe-off"] = "rbxassetid://77775243585824",
+    ["globe-x"] = "rbxassetid://109268097029296",
+    ["hd"] = "rbxassetid://71682790698278",
+    ["image"] = "rbxassetid://112751259236831",
+    ["layers-plus"] = "rbxassetid://77587765623057",
+    ["lens-concave"] = "rbxassetid://94819631937027",
+    ["lens-convex"] = "rbxassetid://74736504195474",
+    ["line-dot-right-horizontal"] = "rbxassetid://104718593155221",
+    ["line-style"] = "rbxassetid://90176717785772",
+    ["map-pin-search"] = "rbxassetid://89065012915078",
+    ["message-circle-check"] = "rbxassetid://132772297689418",
+    ["message-square-check"] = "rbxassetid://125789987055668",
+    ["metronome"] = "rbxassetid://101991829345965",
+    ["mirror-rectangular"] = "rbxassetid://109046769760336",
+    ["mirror-round"] = "rbxassetid://121534049429097",
+    ["mouse-left"] = "rbxassetid://99144293708743",
+    ["mouse-right"] = "rbxassetid://88331710212594",
+    ["printer-x"] = "rbxassetid://103002721801548",
+    ["radio-off"] = "rbxassetid://80359258046586",
+    ["road"] = "rbxassetid://120251329173530",
+    ["scooter"] = "rbxassetid://100035452787934",
+    ["search-alert"] = "rbxassetid://127597984617505",
+    ["shelving-unit"] = "rbxassetid://80116568514793",
+    ["shield-cog-corner"] = "rbxassetid://111694066132698",
+    ["shield-cog"] = "rbxassetid://129235695057857",
+    ["sport-shoe"] = "rbxassetid://120495992692630",
+    ["square-arrow-right-enter"] = "rbxassetid://138867831495334",
+    ["square-arrow-right-exit"] = "rbxassetid://133688575845430",
+    ["square-centerline-dashed-horizontal"] = "rbxassetid://77780104374341",
+    ["square-centerline-dashed-vertical"] = "rbxassetid://107878435803525",
+    ["stone"] = "rbxassetid://135161057497830",
+    ["toolbox"] = "rbxassetid://85341033903792",
+    ["towel-rack"] = "rbxassetid://125223915620991",
+    ["user-key"] = "rbxassetid://105403041782190",
+    ["user-round-key"] = "rbxassetid://124547549008939",
+    ["van"] = "rbxassetid://122066377022942",
+    ["waves-arrow-down"] = "rbxassetid://129215220911792",
+    ["waves-arrow-up"] = "rbxassetid://102314705716217",
+    ["weight-tilde"] = "rbxassetid://112081212176951",
+    ["x-line-top"] = "rbxassetid://140592656289509",
+    ["zodiac-aquarius"] = "rbxassetid://74560047770362",
+    ["zodiac-aries"] = "rbxassetid://73255859670234",
+    ["zodiac-cancer"] = "rbxassetid://131985162532947",
+    ["zodiac-capricorn"] = "rbxassetid://97859568140652",
+    ["zodiac-gemini"] = "rbxassetid://80997588122992",
+    ["zodiac-leo"] = "rbxassetid://75509406718106",
+    ["zodiac-libra"] = "rbxassetid://113222735060218",
+    ["zodiac-ophiuchus"] = "rbxassetid://129180108892480",
+    ["zodiac-pisces"] = "rbxassetid://95845819440327",
+    ["zodiac-sagittarius"] = "rbxassetid://82651026742181",
+    ["zodiac-scorpio"] = "rbxassetid://113640924054631",
+    ["zodiac-taurus"] = "rbxassetid://123053219704400",
+    ["zodiac-virgo"] = "rbxassetid://99462994613661",
 }
 
-local LucideFallbacks = {
-    Activity = "⌁",
-    Airplay = "▭",
-    AlarmClock = "◷",
-    AlignJustify = "≡",
-    Archive = "▣",
-    ArrowDown = "↓",
-    ArrowLeft = "←",
-    ArrowRight = "→",
-    ArrowUp = "↑",
-    Badge = "◇",
-    Ban = "⊘",
-    BellRing = "◒",
-    Book = "▤",
-    Bookmark = "▮",
-    Box = "□",
-    Briefcase = "▣",
-    Calendar = "□",
-    Camera = "◉",
-    ChartBar = "▥",
-    ChartLine = "⌁",
-    CheckCircle = "✓",
-    ChevronLeft = "‹",
-    ChevronsUpDown = "↕",
-    CircleDot = "⊙",
-    Clipboard = "▤",
-    Clock = "◷",
-    Cloud = "☁",
-    Cog = "⚙",
-    Command = "⌘",
-    Compass = "◎",
-    Copy = "▣",
-    Cpu = "◈",
-    Database = "▥",
-    Download = "↓",
-    Edit = "✎",
-    ExternalLink = "↗",
-    EyeOff = "◌",
-    File = "▤",
-    Filter = "⌯",
-    Flag = "⚑",
-    Flame = "♢",
-    Gauge = "◔",
-    Gift = "◇",
-    Globe = "○",
-    Heart = "♡",
-    Image = "▧",
-    Inbox = "▤",
-    Layers = "▦",
-    LayoutDashboard = "▦",
-    Link = "⌁",
-    List = "☰",
-    Lock = "◆",
-    LogOut = "↦",
-    Mail = "✉",
-    Map = "▱",
-    Menu = "☰",
-    Minus = "−",
-    Monitor = "▭",
-    Moon = "◐",
-    MoreHorizontal = "…",
-    MoreVertical = "⋮",
-    Mouse = "⌖",
-    Move = "✥",
-    Music = "♪",
-    Package = "▣",
-    Pause = "Ⅱ",
-    Pen = "✎",
-    Plus = "+",
-    Power = "⏻",
-    RefreshCcw = "↺",
-    Save = "▣",
-    Scan = "⌗",
-    Send = "↗",
-    Server = "▥",
-    Share = "↗",
-    ShoppingCart = "▱",
-    Signal = "⌁",
-    Skull = "☠",
-    Smartphone = "▯",
-    Sun = "☼",
-    Terminal = ">_",
-    Trash = "⌫",
-    Trophy = "♢",
-    Unlock = "◇",
-    Upload = "↑",
-    Volume2 = ")))",
-    Wand = "✦",
-    Wifi = "⌁",
-    Wrench = "⚒",
-    XCircle = "×",
+local IconAliases: { [string]: string } = {
+    home = "house",
+    aimbot = "crosshair",
+    aim = "crosshair",
+    combat = "crosshair",
+    trigger = "circle-dot",
+    visual = "eye",
+    visuals = "eye",
+    options = "settings",
+    config = "settings",
+    gear = "settings",
+    player = "user",
+    kronos = "orbit",
+    color = "palette",
+    ["no-recoil"] = "shield-check",
+    ["check-circle"] = "circle-check",
+    ["x-circle"] = "circle-x",
 }
-
-for iconName, iconGlyph in pairs(LucideFallbacks) do
-    if Icons[iconName] == nil then
-        Icons[iconName] = iconGlyph
-    end
-end
 
 local Maid = {}
 Maid.__index = Maid
@@ -313,6 +1944,12 @@ function Maid:Cleanup()
 end
 
 local ThemeController = {}
+local IconController: AnyTable = {
+    Cache = {} :: { [string]: string },
+    Canonical = {} :: { [string]: string },
+    Valid = {} :: { [string]: boolean },
+    InvalidWarned = {} :: { [string]: boolean },
+}
 local AnimationController = {}
 local InputController = {}
 local DragController = {}
@@ -321,6 +1958,9 @@ local NotificationController = {}
 local FloatingWidgetController = {}
 local WindowController = {}
 local NavigationController = {}
+local ResponsiveController: AnyTable = {
+    Records = setmetatable({}, { __mode = "k" }),
+}
 local Components = {}
 
 function ThemeController:Bind(instance: Instance, property: string, token: string)
@@ -626,23 +2266,6 @@ local function formatNumber(value, precision)
     return string.format("%." .. tostring(precision) .. "f", rounded)
 end
 
-local function getIcon(name)
-    if type(name) ~= "string" then
-        return Icons.Default
-    end
-    local resolved = IconAliases[name] or name
-    if Icons[resolved] then
-        return Icons[resolved]
-    end
-    local lowered = string.lower(resolved)
-    for iconName, iconValue in pairs(Icons) do
-        if string.lower(iconName) == lowered then
-            return iconValue
-        end
-    end
-    return Icons.Default
-end
-
 local function makeText(parent, text, size, color, weight)
     return create("TextLabel", {
         BackgroundTransparency = 1,
@@ -657,12 +2280,231 @@ local function makeText(parent, text, size, color, weight)
     })
 end
 
+function IconController:Normalize(name: any): string?
+    if type(name) ~= "string" then
+        return nil
+    end
+    local normalized = name:match("^%s*(.-)%s*$") or ""
+    if normalized == "" then
+        return nil
+    end
+    normalized = normalized:gsub("(%u)(%u%l)", "%1-%2")
+    normalized = normalized:gsub("(%l%d)(%u)", "%1-%2")
+    normalized = normalized:gsub("[%s_]+", "-")
+    normalized = normalized:lower():gsub("^lucide%-", ""):gsub("^icon%-", "")
+    normalized = normalized:gsub("[^%w%-]", ""):gsub("%-+", "-")
+    normalized = normalized:gsub("^%-", ""):gsub("%-$", "")
+    return normalized ~= "" and normalized or nil
+end
+
+function IconController:Resolve(name: any): (string?, string?, boolean)
+    local normalized = self:Normalize(name)
+    if not normalized then
+        return nil, nil, true
+    end
+    local cached = self.Cache[normalized]
+    if cached then
+        return cached, self.Canonical[normalized], self.Valid[normalized] == true
+    end
+    local canonical = IconAliases[normalized] or normalized
+    local asset = LucideAssets[canonical]
+    local valid = asset ~= nil
+    if not asset then
+        canonical = "circle"
+        asset = LucideAssets[canonical]
+        if not self.InvalidWarned[normalized] then
+            self.InvalidWarned[normalized] = true
+            warn("[Kronos][LucideResolver] Unknown icon '" .. normalized .. "'; using circle")
+        end
+    end
+    self.Cache[normalized] = asset
+    self.Canonical[normalized] = canonical
+    self.Valid[normalized] = valid
+    return asset, canonical, valid
+end
+
+function IconController:Create(parent: Instance, options: any, token: string?): ImageLabel?
+    local config: AnyTable = type(options) == "table" and options or { Icon = options }
+    local asset, canonical = self:Resolve(config.Icon)
+    if not asset then
+        return nil
+    end
+    local size = math.clamp(math.floor(finiteNumber(config.IconSize, 14) + 0.5), 8, 32)
+    local explicitColor = typeof(config.IconColor) == "Color3"
+    local colorToken = token or "SubText"
+    local icon = create("ImageLabel", {
+        Name = "LucideIcon",
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Image = asset,
+        ImageColor3 = explicitColor and config.IconColor or Theme[colorToken] or Theme.SubText,
+        ImageTransparency = math.clamp(finiteNumber(config.IconTransparency, 0), 0, 1),
+        ScaleType = Enum.ScaleType.Fit,
+        Size = UDim2.fromOffset(size, size),
+        Parent = parent,
+    }) :: ImageLabel
+    icon:SetAttribute("KronosLucide", canonical)
+    if not explicitColor and Theme[colorToken] then
+        ThemeController:Bind(icon, "ImageColor3", colorToken)
+    end
+    return icon
+end
+
+local function makeIcon(parent: Instance, options: any, token: string?): ImageLabel?
+    return IconController:Create(parent, options, token)
+end
+
 local function viewportSize()
     local cam = workspace.CurrentCamera
     if cam then
         return cam.ViewportSize
     end
     return Vector2.new(1920, 1080)
+end
+
+local function scaledUDim(value: UDim, density: number): UDim
+    return UDim.new(value.Scale, math.floor(value.Offset * density + 0.5))
+end
+
+local function scaledUDim2(value: UDim2, density: number): UDim2
+    return UDim2.new(
+        value.X.Scale,
+        math.floor(value.X.Offset * density + 0.5),
+        value.Y.Scale,
+        math.floor(value.Y.Offset * density + 0.5)
+    )
+end
+
+function ResponsiveController:GetDensity(viewport: Vector2?): number
+    local size = viewport or viewportSize()
+    if UserInputService.TouchEnabled and size.X > size.Y and size.Y <= 650 then
+        return 0.55
+    end
+    if size.X < 800 then
+        return 0.65
+    end
+    if size.X < 900 then
+        return 0.72
+    end
+    if size.X < 1000 then
+        return 0.75
+    end
+    if size.X < 1400 or size.Y < 760 then
+        return 0.88
+    end
+    return 1
+end
+
+function ResponsiveController:Scale(window: AnyTable?, value: number): number
+    return math.floor(value * ((window and window.Density) or self:GetDensity()) + 0.5)
+end
+
+function ResponsiveController:_capture(window: AnyTable, instance: Instance)
+    if self.Records[instance] or instance:GetAttribute("KronosNoDensity") then
+        return
+    end
+    local record: AnyTable = { Window = window }
+    if instance:IsA("GuiObject") then
+        record.Size = instance.Size
+        record.Position = instance.Position
+        if instance:IsA("TextLabel") or instance:IsA("TextButton") or instance:IsA("TextBox") then
+            record.TextSize = instance.TextSize
+        end
+        if instance:IsA("ScrollingFrame") then
+            record.ScrollBarThickness = instance.ScrollBarThickness
+        end
+    elseif instance:IsA("UICorner") then
+        record.CornerRadius = instance.CornerRadius
+    elseif instance:IsA("UIPadding") then
+        record.PaddingLeft = instance.PaddingLeft
+        record.PaddingTop = instance.PaddingTop
+        record.PaddingRight = instance.PaddingRight
+        record.PaddingBottom = instance.PaddingBottom
+    elseif instance:IsA("UIListLayout") then
+        record.Padding = instance.Padding
+    elseif instance:IsA("UIStroke") then
+        record.Thickness = instance.Thickness
+    else
+        return
+    end
+    self.Records[instance] = record
+end
+
+function ResponsiveController:_applyRecord(instance: Instance, record: AnyTable, density: number)
+    if not instance.Parent then
+        self.Records[instance] = nil
+        return
+    end
+    if record.Size then
+        local guiObject = instance :: GuiObject
+        local previousDensity = record.AppliedDensity
+        local ratio = previousDensity and density / previousDensity or density
+        local expectedSize = previousDensity and scaledUDim2(record.Size, previousDensity) or nil
+        local expectedPosition = previousDensity and scaledUDim2(record.Position, previousDensity) or nil
+        guiObject.Size = expectedSize and guiObject.Size ~= expectedSize and scaledUDim2(guiObject.Size, ratio)
+            or scaledUDim2(record.Size, density)
+        guiObject.Position = expectedPosition
+                and guiObject.Position ~= expectedPosition
+                and scaledUDim2(guiObject.Position, ratio)
+            or scaledUDim2(record.Position, density)
+        if record.TextSize then
+            (instance :: any).TextSize = math.max(record.TextSize * density, 7)
+        end
+        if record.ScrollBarThickness then
+            local scrollingFrame = instance :: ScrollingFrame
+            scrollingFrame.ScrollBarThickness = math.max(
+                math.floor(record.ScrollBarThickness * density + 0.5),
+                record.ScrollBarThickness > 0 and 1 or 0
+            )
+        end
+        record.AppliedDensity = density
+    elseif record.CornerRadius then
+        local cornerObject = instance :: UICorner
+        cornerObject.CornerRadius = scaledUDim(record.CornerRadius, density)
+    elseif record.PaddingLeft then
+        local pad = instance :: UIPadding
+        pad.PaddingLeft = scaledUDim(record.PaddingLeft, density)
+        pad.PaddingTop = scaledUDim(record.PaddingTop, density)
+        pad.PaddingRight = scaledUDim(record.PaddingRight, density)
+        pad.PaddingBottom = scaledUDim(record.PaddingBottom, density)
+    elseif record.Padding then
+        local layout = instance :: UIListLayout
+        layout.Padding = scaledUDim(record.Padding, density)
+    elseif record.Thickness then
+        local strokeObject = instance :: UIStroke
+        strokeObject.Thickness = math.max(record.Thickness * density, 0.5)
+    end
+end
+
+function ResponsiveController:RegisterTree(window: AnyTable, root: Instance, excludeRoot: boolean?)
+    if not excludeRoot then
+        self:_capture(window, root)
+    end
+    for _, descendant in ipairs(root:GetDescendants()) do
+        self:_capture(window, descendant)
+    end
+    local density = window.Density or self:GetDensity()
+    if not excludeRoot then
+        local rootRecord = self.Records[root]
+        if rootRecord then
+            self:_applyRecord(root, rootRecord, density)
+        end
+    end
+    for _, descendant in ipairs(root:GetDescendants()) do
+        local record = self.Records[descendant]
+        if record then
+            self:_applyRecord(descendant, record, density)
+        end
+    end
+end
+
+function ResponsiveController:Apply(window: AnyTable)
+    local density = window.Density or self:GetDensity()
+    for instance, record in pairs(self.Records) do
+        if record.Window == window then
+            self:_applyRecord(instance, record, density)
+        end
+    end
 end
 
 local function rgbToHex(color)
@@ -719,36 +2561,197 @@ local function guiInsets(): (Vector2, Vector2)
     return Vector2.zero, Vector2.zero
 end
 
-local function clampGuiCenter(target: GuiObject, center: Vector2): Vector2
-    local viewport = viewportSize()
-    local topLeftInset, bottomRightInset = guiInsets()
-    local size = target.AbsoluteSize
-    local anchor = target.AnchorPoint
-    local paddingValue = Metrics.SafePadding
-    local minimum = Vector2.new(
-        topLeftInset.X + paddingValue + size.X * anchor.X,
-        topLeftInset.Y + paddingValue + size.Y * anchor.Y
+local function viewportBounds(target: GuiObject, options: AnyTable?): (Vector2, Vector2)
+    options = options or {}
+    local parent = target.Parent
+    local origin = Vector2.zero
+    local size = viewportSize()
+    if parent and parent:IsA("GuiObject") then
+        origin = parent.AbsolutePosition
+        size = parent.AbsoluteSize
+    end
+    if Kronos.GUI and Kronos.GUI.IgnoreGuiInset then
+        local topLeftInset, bottomRightInset = guiInsets()
+        origin += topLeftInset
+        size -= topLeftInset + bottomRightInset
+    end
+    local margin = math.clamp(finiteNumber(options.DragMargin, 4), 0, 32)
+    return origin + Vector2.new(margin, margin), origin + size - Vector2.new(margin, margin)
+end
+
+local function clampTopLeftForSize(target: GuiObject, topLeft: Vector2, size: Vector2, options: AnyTable?): Vector2
+    options = options or {}
+    if options.DragBounds == "None" then
+        return topLeft
+    end
+    local minimum, maximumEdge = viewportBounds(target, options)
+    local keepFullyVisible = options.KeepFullyVisible ~= false
+    local minimumVisible =
+        math.clamp(finiteNumber(options.MinimumVisiblePixels, 24), 1, math.max(math.min(size.X, size.Y), 1))
+    local maximum = keepFullyVisible and (maximumEdge - size)
+        or (maximumEdge - Vector2.new(minimumVisible, minimumVisible))
+    if not keepFullyVisible then
+        minimum -= size - Vector2.new(minimumVisible, minimumVisible)
+    end
+    local function clamped(value: number, low: number, high: number): number
+        if high < low then
+            return (low + high) * 0.5
+        end
+        return math.clamp(value, low, high)
+    end
+    return Vector2.new(clamped(topLeft.X, minimum.X, maximum.X), clamped(topLeft.Y, minimum.Y, maximum.Y))
+end
+
+local function clampAbsoluteTopLeft(target: GuiObject, topLeft: Vector2, options: AnyTable?): Vector2
+    return clampTopLeftForSize(target, topLeft, target.AbsoluteSize, options)
+end
+
+local function setAbsoluteTopLeft(target: GuiObject, topLeft: Vector2): Vector2
+    local parent = target.Parent
+    local parentPosition = Vector2.zero
+    if parent and parent:IsA("GuiObject") then
+        parentPosition = parent.AbsolutePosition
+    end
+    local anchorPosition = topLeft + target.AbsoluteSize * target.AnchorPoint - parentPosition
+    anchorPosition = Vector2.new(math.floor(anchorPosition.X + 0.5), math.floor(anchorPosition.Y + 0.5))
+    target.Position = UDim2.fromOffset(anchorPosition.X, anchorPosition.Y)
+    return anchorPosition
+end
+
+local function nearestEdgeLayout(target: GuiObject, requestedSize: Vector2, options: AnyTable?): (UDim2, UDim2)
+    local minimum, maximumEdge = viewportBounds(target, options)
+    local available = maximumEdge - minimum
+    local size = Vector2.new(
+        math.min(math.max(requestedSize.X, 1), math.max(available.X, 1)),
+        math.min(math.max(requestedSize.Y, 1), math.max(available.Y, 1))
     )
-    local maximum = Vector2.new(
-        viewport.X - bottomRightInset.X - paddingValue - size.X * (1 - anchor.X),
-        viewport.Y - bottomRightInset.Y - paddingValue - size.Y * (1 - anchor.Y)
+    local oldTopLeft = target.AbsolutePosition
+    local oldSize = target.AbsoluteSize
+    local left = oldTopLeft.X - minimum.X
+    local right = maximumEdge.X - oldTopLeft.X - oldSize.X
+    local top = oldTopLeft.Y - minimum.Y
+    local bottom = maximumEdge.Y - oldTopLeft.Y - oldSize.Y
+    local topLeft = Vector2.new(
+        math.abs(right) < math.abs(left) and maximumEdge.X - size.X - right or minimum.X + left,
+        math.abs(bottom) < math.abs(top) and maximumEdge.Y - size.Y - bottom or minimum.Y + top
     )
-    return Vector2.new(
-        math.clamp(center.X, math.min(minimum.X, maximum.X), math.max(minimum.X, maximum.X)),
-        math.clamp(center.Y, math.min(minimum.Y, maximum.Y), math.max(minimum.Y, maximum.Y))
+    topLeft = clampTopLeftForSize(target, topLeft, size, options)
+    local parentPosition = Vector2.zero
+    if target.Parent and target.Parent:IsA("GuiObject") then
+        parentPosition = target.Parent.AbsolutePosition
+    end
+    local anchored = topLeft + size * target.AnchorPoint - parentPosition
+    return UDim2.fromOffset(math.floor(size.X + 0.5), math.floor(size.Y + 0.5)),
+        UDim2.fromOffset(math.floor(anchored.X + 0.5), math.floor(anchored.Y + 0.5))
+end
+
+function DragController:Initialize()
+    if self.Initialized then
+        return
+    end
+    self.Initialized = true
+    self.Bindings = setmetatable({}, { __mode = "k" })
+    addConnection(
+        Kronos,
+        UserInputService.InputChanged:Connect(function(input)
+            local active = self.Active
+            if not active then
+                return
+            end
+            local isTouch = active.Input.UserInputType == Enum.UserInputType.Touch
+            if
+                (isTouch and input ~= active.Input)
+                or (not isTouch and input.UserInputType ~= Enum.UserInputType.MouseMovement)
+            then
+                return
+            end
+            if not active.Target.Parent then
+                self.Active = nil
+                return
+            end
+            local pointer = Vector2.new(input.Position.X, input.Position.Y)
+            active.LastPointer = pointer
+            local delta = pointer - active.StartPointer
+            if not active.Moved and delta.Magnitude < active.Threshold then
+                return
+            end
+            active.Moved = true
+            local topLeft = clampAbsoluteTopLeft(active.Target, active.StartTopLeft + delta, active.Options)
+            local position = setAbsoluteTopLeft(active.Target, topLeft)
+            if active.MovedCallback then
+                active.MovedCallback(position)
+            end
+        end)
+    )
+    addConnection(
+        Kronos,
+        UserInputService.InputEnded:Connect(function(input)
+            local active = self.Active
+            if not active then
+                return
+            end
+            local finished = (active.Input.UserInputType == Enum.UserInputType.Touch and input == active.Input)
+                or (
+                    active.Input.UserInputType ~= Enum.UserInputType.Touch
+                    and input.UserInputType == Enum.UserInputType.MouseButton1
+                )
+            if finished then
+                self.Active = nil
+                if active.EndedCallback then
+                    active.EndedCallback(active.Moved == true)
+                end
+            end
+        end)
     )
 end
 
-function DragController:Bind(owner: AnyTable, handle: GuiObject, target: GuiObject, movedCallback: ((Vector2) -> ())?)
-    local active = false
-    local dragTouch: InputObject? = nil
-    local pointerStart = Vector2.zero
-    local centerStart = Vector2.zero
+function DragController:Cancel(target: GuiObject?)
+    if self.Active and (target == nil or self.Active.Target == target) then
+        self.Active = nil
+    end
+end
 
+function DragController:IsDragging(target: GuiObject): boolean
+    return self.Active ~= nil and self.Active.Target == target
+end
+
+function DragController:Clamp(target: GuiObject, options: AnyTable?): Vector2
+    if not target.Parent then
+        return Vector2.zero
+    end
+    local binding = self.Bindings and self.Bindings[target]
+    options = options or (binding and binding.Options) or {}
+    local topLeft = clampAbsoluteTopLeft(target, target.AbsolutePosition, options)
+    local position = setAbsoluteTopLeft(target, topLeft)
+    if self.Active and self.Active.Target == target then
+        self.Active.StartTopLeft = target.AbsolutePosition
+        self.Active.StartPointer = self.Active.LastPointer or self.Active.StartPointer
+    end
+    return position
+end
+
+function DragController:Bind(
+    owner: AnyTable,
+    handle: GuiObject,
+    target: GuiObject,
+    movedCallback: ((Vector2) -> ())?,
+    options: AnyTable?
+): AnyTable
+    self:Initialize()
+    options = options or {}
+    local binding = {
+        Owner = owner,
+        Handle = handle,
+        Target = target,
+        Options = options,
+        MovedCallback = movedCallback,
+    }
+    self.Bindings[target] = binding
+    handle.Active = true
     addConnection(
         owner,
         handle.InputBegan:Connect(function(input)
-            if active then
+            if Kronos.Destroyed or self.Active or not target.Parent or not target.Visible then
                 return
             end
             if
@@ -757,47 +2760,50 @@ function DragController:Bind(owner: AnyTable, handle: GuiObject, target: GuiObje
             then
                 return
             end
-            active = true
-            dragTouch = input.UserInputType == Enum.UserInputType.Touch and input or nil
-            pointerStart = Vector2.new(input.Position.X, input.Position.Y)
-            centerStart = target.AbsolutePosition + target.AbsoluteSize * target.AnchorPoint
-        end)
-    )
-    addConnection(
-        owner,
-        UserInputService.InputChanged:Connect(function(input)
-            if
-                not active
-                or not (
-                    (dragTouch and input == dragTouch)
-                    or (not dragTouch and input.UserInputType == Enum.UserInputType.MouseMovement)
-                )
-            then
-                return
+            for _, ignored in ipairs(options.Ignore or {}) do
+                if pointInside(ignored, input.Position) then
+                    return
+                end
+            end
+            local activeTweens = Kronos.ActiveTweens[target]
+            if activeTweens and (activeTweens.Position or activeTweens.Size) then
+                AnimationController:Cancel(target)
+                if type(owner.Clamp) == "function" then
+                    owner:Clamp()
+                elseif type(owner.ApplyResponsive) == "function" then
+                    owner:ApplyResponsive()
+                end
+                if target:IsA("CanvasGroup") and owner.Visible ~= false then
+                    target.GroupTransparency = 0
+                end
             end
             local pointer = Vector2.new(input.Position.X, input.Position.Y)
-            local center = clampGuiCenter(target, centerStart + pointer - pointerStart)
-            target.Position = UDim2.fromOffset(math.floor(center.X + 0.5), math.floor(center.Y + 0.5))
-            if movedCallback then
-                movedCallback(center)
-            end
+            self.Active = {
+                Input = input,
+                Target = target,
+                StartPointer = pointer,
+                LastPointer = pointer,
+                StartTopLeft = target.AbsolutePosition,
+                Threshold = math.max(finiteNumber(options.DragThreshold, 5), 0),
+                Options = options,
+                MovedCallback = movedCallback,
+                EndedCallback = options.Ended,
+                Moved = false,
+            }
         end)
     )
     addConnection(
         owner,
-        UserInputService.InputEnded:Connect(function(input)
-            if
-                active
-                and (
-                    (dragTouch and input == dragTouch)
-                    or (not dragTouch and input.UserInputType == Enum.UserInputType.MouseButton1)
-                )
-            then
-                active = false
-                dragTouch = nil
+        target.AncestryChanged:Connect(function(_, parent)
+            if parent == nil then
+                self:Cancel(target)
+                if self.Bindings then
+                    self.Bindings[target] = nil
+                end
             end
         end)
     )
+    return binding
 end
 
 function PopupController:Close(window: AnyTable)
@@ -844,28 +2850,33 @@ function PopupController:Position(
 )
     local layer = window.PopupLayer or window.Overlay
     local rootPosition = layer.AbsolutePosition
-    local rootSize = layer.AbsoluteSize
     local anchorPosition = anchor.AbsolutePosition - rootPosition
     local anchorSize = anchor.AbsoluteSize
     local popupSize = popup.AbsoluteSize
     local spacing = gap or 6
+    local topLeftInset, bottomRightInset = guiInsets()
+    local viewport = viewportSize()
+    local minimumX = topLeftInset.X - rootPosition.X + 8
+    local minimumY = topLeftInset.Y - rootPosition.Y + 8
+    local maximumX = viewport.X - bottomRightInset.X - rootPosition.X - popupSize.X - 8
+    local maximumY = viewport.Y - bottomRightInset.Y - rootPosition.Y - popupSize.Y - 8
     local x: number
     local y: number
     if placement == "Side" then
         x = anchorPosition.X + anchorSize.X + spacing
         y = anchorPosition.Y
-        if x + popupSize.X > rootSize.X - 8 then
+        if x > maximumX then
             x = anchorPosition.X - popupSize.X - spacing
         end
     else
         x = anchorPosition.X
         y = anchorPosition.Y + anchorSize.Y + spacing
-        if y + popupSize.Y > rootSize.Y - 8 then
+        if y > maximumY then
             y = anchorPosition.Y - popupSize.Y - spacing
         end
     end
-    x = math.clamp(x, 8, math.max(rootSize.X - popupSize.X - 8, 8))
-    y = math.clamp(y, 8, math.max(rootSize.Y - popupSize.Y - 8, 8))
+    x = math.clamp(x, minimumX, math.max(maximumX, minimumX))
+    y = math.clamp(y, minimumY, math.max(maximumY, minimumY))
     popup.Position = UDim2.fromOffset(math.floor(x + 0.5), math.floor(y + 0.5))
 end
 
@@ -884,7 +2895,15 @@ function PopupController:Open(
     window.ActivePopup = { Frame = popup, Maid = maid, Anchor = anchor, Gap = gap, Placement = placement }
     Kronos.ActivePopupWindow = window
     popup.Parent = window.PopupLayer or window.Overlay
+    ResponsiveController:RegisterTree(window, popup)
     popup.Visible = true
+    maid:Give(popup.DescendantAdded:Connect(function(descendant)
+        task.defer(function()
+            if descendant.Parent and descendant:IsDescendantOf(popup) then
+                ResponsiveController:RegisterTree(window, descendant)
+            end
+        end)
+    end))
     task.defer(function()
         if popup.Parent and window.ActivePopup and window.ActivePopup.Frame == popup then
             self:Position(window, popup, anchor, gap, placement)
@@ -931,30 +2950,75 @@ local function createRootGui()
     return gui
 end
 
-local function makeToastHolder(gui)
+local function makeLayer(gui: ScreenGui, name: string, zIndex: number): Frame
+    return create("Frame", {
+        Name = name,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Position = UDim2.fromScale(0, 0),
+        Size = UDim2.fromScale(1, 1),
+        ClipsDescendants = false,
+        ZIndex = zIndex,
+        Parent = gui,
+    }) :: Frame
+end
+
+local function layoutToastHolder(holder: Frame)
+    local density = ResponsiveController:GetDensity()
+    local function d(value: number): number
+        return math.floor(value * density + 0.5)
+    end
+    local topLeftInset, bottomRightInset = guiInsets()
+    local top = topLeftInset.Y + d(50)
+    holder.Position = UDim2.new(1, -(bottomRightInset.X + d(8)), 0, top)
+    holder.Size = UDim2.fromOffset(d(246), math.max(viewportSize().Y - top - bottomRightInset.Y - d(8), d(80)))
+    local layout = holder:FindFirstChildOfClass("UIListLayout")
+    if layout then
+        layout.Padding = UDim.new(0, d(5))
+    end
+end
+
+local function makeToastHolder(parent: Instance): Frame
     local holder = create("Frame", {
         Name = "ToastHolder",
         BackgroundTransparency = 1,
         AnchorPoint = Vector2.new(1, 0),
-        Position = UDim2.new(1, -16, 0, 72),
-        Size = UDim2.fromOffset(300, 560),
-        Parent = gui,
-        ZIndex = 1000,
-    })
-    local layout = list(holder, Enum.FillDirection.Vertical, 7, Enum.HorizontalAlignment.Right)
+        Position = UDim2.new(1, -8, 0, 50),
+        Size = UDim2.fromOffset(246, 460),
+        Parent = parent,
+        ZIndex = LayerZ.Notification,
+    }) :: Frame
+    local layout = list(holder, Enum.FillDirection.Vertical, 5, Enum.HorizontalAlignment.Right)
     layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layoutToastHolder(holder)
     return holder
+end
+
+function NotificationController:ApplyResponsive()
+    if Kronos.ToastHolder and Kronos.ToastHolder.Parent then
+        layoutToastHolder(Kronos.ToastHolder)
+    end
 end
 
 Kronos.GUI = nil
 Kronos.ToastHolder = nil
+Kronos.Layers = nil
 
 function Kronos:_ensureGui()
     if self.GUI and self.GUI.Parent then
         return self.GUI
     end
     self.GUI = createRootGui()
-    self.ToastHolder = makeToastHolder(self.GUI)
+    self.Layers = {
+        Main = makeLayer(self.GUI, "MainWindowLayer", LayerZ.Main),
+        Floating = makeLayer(self.GUI, "FloatingWidgetLayer", LayerZ.Floating),
+        Popup = makeLayer(self.GUI, "PopupLayer", LayerZ.Popup),
+        Notification = makeLayer(self.GUI, "NotificationLayer", LayerZ.Notification),
+        Modal = makeLayer(self.GUI, "ModalLayer", LayerZ.Modal),
+        Mobile = makeLayer(self.GUI, "MobileLayer", LayerZ.Mobile),
+    }
+    self.GlobalPopupLayer = self.Layers.Popup
+    self.ToastHolder = makeToastHolder(self.Layers.Notification)
     return self.GUI
 end
 
@@ -970,28 +3034,41 @@ function Kronos:SafeCallback(callback, ...)
     return safeCall(callback, ...)
 end
 
-function Kronos:Notify(config: AnyTable?): AnyTable
+function Kronos:GetIcon(name: any): (string?, string?, boolean)
+    return IconController:Resolve(name)
+end
+
+function Kronos:IsIconValid(name: any): (boolean, string?)
+    local _, canonical, valid = IconController:Resolve(name)
+    return valid, canonical
+end
+
+Kronos.ResolveIcon = Kronos.GetIcon
+
+function Kronos:Notify(config: NotificationOptions?): AnyTable
     if self.Destroyed then
         return { Destroy = function() end }
     end
     config = config or {}
-    local gui = self:_ensureGui()
+    self:_ensureGui()
     if not self.ToastHolder or not self.ToastHolder.Parent then
-        self.ToastHolder = makeToastHolder(gui)
+        self.ToastHolder = makeToastHolder(self.Layers.Notification)
     end
 
     local duration = math.max(finiteNumber(config.Duration, 4), 0.5)
     local message = tostring(config.Content or config.Message or config.Subtitle or "")
-    local height = message ~= "" and 76 or 58
+    local height = message ~= "" and 62 or 46
+    local width = 246
+    local kind = string.lower(tostring(config.Type or "info"))
     local accent = Theme.Accent
     local accentToken = "Accent"
-    if config.Type == "success" then
+    if kind == "success" then
         accent = Theme.Success
         accentToken = "Success"
-    elseif config.Type == "warning" then
+    elseif kind == "warning" then
         accent = Theme.Warning
         accentToken = "Warning"
-    elseif config.Type == "error" then
+    elseif kind == "error" then
         accent = Theme.Error
         accentToken = "Error"
     end
@@ -1000,7 +3077,7 @@ function Kronos:Notify(config: AnyTable?): AnyTable
         Name = "NotificationSlot",
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        Size = UDim2.fromOffset(292, height),
+        Size = UDim2.fromOffset(width, height),
         LayoutOrder = -math.floor(os.clock() * 1000),
         Parent = self.ToastHolder,
         ZIndex = 1000,
@@ -1008,11 +3085,11 @@ function Kronos:Notify(config: AnyTable?): AnyTable
     local toast = create("CanvasGroup", {
         Name = "Notification",
         BackgroundColor3 = Theme.ElevatedSurface,
-        BackgroundTransparency = 0.08,
+        BackgroundTransparency = 0.1,
         BorderSizePixel = 0,
         GroupTransparency = 1,
-        Position = UDim2.fromOffset(18, 0),
-        Size = UDim2.fromOffset(292, height),
+        Position = UDim2.fromOffset(14, 0),
+        Size = UDim2.fromOffset(width, height),
         Parent = slot,
         ZIndex = 1001,
     }) :: CanvasGroup
@@ -1023,36 +3100,35 @@ function Kronos:Notify(config: AnyTable?): AnyTable
     local accentBar = create("Frame", {
         BackgroundColor3 = accent,
         BorderSizePixel = 0,
-        Size = UDim2.fromOffset(3, height - 16),
-        Position = UDim2.fromOffset(0, 8),
+        Size = UDim2.fromOffset(2, height - 12),
+        Position = UDim2.fromOffset(0, 6),
         Parent = toast,
         ZIndex = 1002,
     }) :: Frame
     corner(accentBar, 2)
     ThemeController:Bind(accentBar, "BackgroundColor3", accentToken)
 
-    local icon = makeText(
-        toast,
-        getIcon(config.Icon or (config.Type == "success" and "CheckCircle" or "Info")),
-        14,
-        accent,
-        "bold"
-    )
-    icon.Position = UDim2.fromOffset(13, 11)
-    icon.Size = UDim2.fromOffset(22, 22)
-    icon.TextXAlignment = Enum.TextXAlignment.Center
-    icon.ZIndex = 1002
-    ThemeController:Bind(icon, "TextColor3", accentToken)
+    local icon = makeIcon(toast, {
+        Icon = config.Icon,
+        IconSize = config.IconSize or 12,
+        IconColor = config.IconColor,
+        IconTransparency = config.IconTransparency,
+    }, accentToken)
+    if icon then
+        icon.Position = UDim2.fromOffset(13, 11)
+        icon.ZIndex = 1002
+    end
 
-    local title = makeText(toast, tostring(config.Title or "Kronos"), 12, Theme.Text, "bold")
-    title.Position = UDim2.fromOffset(40, 8)
-    title.Size = UDim2.new(1, -50, 0, 22)
+    local textOffset = icon and 33 or 13
+    local title = makeText(toast, tostring(config.Title or "Kronos"), 10, Theme.Text, "bold")
+    title.Position = UDim2.fromOffset(textOffset, 5)
+    title.Size = UDim2.new(1, -textOffset - 9, 0, 19)
     title.ZIndex = 1002
 
     if message ~= "" then
-        local content = makeText(toast, message, 11, Theme.SubText)
-        content.Position = UDim2.fromOffset(40, 29)
-        content.Size = UDim2.new(1, -50, 0, 31)
+        local content = makeText(toast, message, 9, Theme.SubText)
+        content.Position = UDim2.fromOffset(textOffset, 23)
+        content.Size = UDim2.new(1, -textOffset - 9, 0, 26)
         content.TextWrapped = true
         content.TextYAlignment = Enum.TextYAlignment.Top
         content.ZIndex = 1002
@@ -1062,46 +3138,66 @@ function Kronos:Notify(config: AnyTable?): AnyTable
         BackgroundColor3 = accent,
         BorderSizePixel = 0,
         AnchorPoint = Vector2.new(0, 1),
-        Position = UDim2.new(0, 9, 1, -5),
-        Size = UDim2.new(1, -18, 0, 2),
+        Position = UDim2.new(0, 7, 1, -4),
+        Size = UDim2.new(1, -14, 0, 1),
         Parent = toast,
         ZIndex = 1002,
     }) :: Frame
     corner(progress, 1)
     ThemeController:Bind(progress, "BackgroundColor3", accentToken)
 
+    local responsiveOwner = self.Windows[1] or { Density = ResponsiveController:GetDensity() }
+    ResponsiveController:RegisterTree(responsiveOwner, slot)
+    local function d(value: number): number
+        return ResponsiveController:Scale(responsiveOwner, value)
+    end
     table.insert(self.Notifications, toast)
     local dismissed = false
     local handle: AnyTable = {}
+    local timerThread: thread? = nil
     function handle:Destroy()
         if dismissed then
             return
         end
         dismissed = true
+        if timerThread then
+            pcall(task.cancel, timerThread)
+            timerThread = nil
+        end
         if toast.Parent then
             ThemeController:UnbindTree(slot)
-            tween(
-                toast,
-                { GroupTransparency = 1, Position = UDim2.fromOffset(18, 0) },
-                Motion.Notification,
-                Enum.EasingStyle.Quart,
-                Enum.EasingDirection.In
-            )
-            task.delay(Motion.Notification, function()
-                if slot.Parent then
-                    slot:Destroy()
-                end
-            end)
+            if Kronos.Destroyed then
+                slot:Destroy()
+            else
+                tween(
+                    toast,
+                    { GroupTransparency = 1, Position = UDim2.fromOffset(d(14), 0) },
+                    Motion.Notification,
+                    Enum.EasingStyle.Quart,
+                    Enum.EasingDirection.In
+                )
+                task.delay(Motion.Notification, function()
+                    if slot.Parent then
+                        slot:Destroy()
+                    end
+                end)
+            end
         end
         local index = table.find(Kronos.Notifications, toast)
         if index then
             table.remove(Kronos.Notifications, index)
         end
+        local handleIndex = table.find(Kronos.NotificationHandles, self)
+        if handleIndex then
+            table.remove(Kronos.NotificationHandles, handleIndex)
+        end
     end
 
+    table.insert(self.NotificationHandles, handle)
     tween(toast, { GroupTransparency = 0, Position = UDim2.fromOffset(0, 0) }, Motion.Notification)
-    tween(progress, { Size = UDim2.fromOffset(0, 2) }, duration, Enum.EasingStyle.Linear)
-    task.delay(duration, function()
+    tween(progress, { Size = UDim2.fromOffset(0, d(1)) }, duration, Enum.EasingStyle.Linear)
+    timerThread = task.delay(duration, function()
+        timerThread = nil
         handle:Destroy()
     end)
     return handle
@@ -1134,6 +3230,9 @@ Window.__index = Window
 
 local Tab = {}
 Tab.__index = Tab
+
+local SubTab = {}
+SubTab.__index = SubTab
 
 local Section = {}
 Section.__index = Section
@@ -1296,9 +3395,9 @@ function BaseControl:_fire(value)
     end
 end
 
-local function makeControlRow(section, titleText, description, height)
+local function makeControlRow(section, titleText, description, height, iconOptions: IconOptions?)
     local rowOwner: AnyTable = { Connections = {} }
-    local rowHeight = height or (description and 48 or Metrics.Row)
+    local rowHeight = height or (description and Metrics.DescriptionRow or Metrics.Row)
     local row = create("Frame", {
         Name = "ControlRow",
         BackgroundColor3 = Theme.Surface2,
@@ -1309,26 +3408,37 @@ local function makeControlRow(section, titleText, description, height)
         Parent = section.Content,
     })
     row:SetAttribute("KronosSearch", string.lower(tostring(titleText or "") .. " " .. tostring(description or "")))
-    corner(row, 5)
+    corner(row, 4)
     local rowStroke = stroke(row, Theme.StrokeSoft, 0.78, 1)
     ThemeController:Bind(row, "BackgroundColor3", "Surface2")
     ThemeController:Bind(rowStroke, "Color", "StrokeSoft")
 
-    local title = makeText(row, titleText or "Control", 11, Theme.Text, "bold")
+    local titleOffset = 9
+    local rowIcon: ImageLabel? = nil
+    if iconOptions and iconOptions.Icon then
+        rowIcon = makeIcon(row, iconOptions, "SubText")
+        if rowIcon then
+            rowIcon.AnchorPoint = Vector2.new(0, 0.5)
+            rowIcon.Position = UDim2.new(0, 9, 0.5, 0)
+            rowIcon.ZIndex = 2
+            titleOffset = 28
+        end
+    end
+    local title = makeText(row, titleText or "Control", 10, Theme.Text, "bold")
     title.Name = "ControlTitle"
-    title.Position = UDim2.fromOffset(11, description and 5 or 0)
-    title.Size = UDim2.new(0.56, -14, 0, 18)
+    title.Position = UDim2.fromOffset(titleOffset, description and 4 or 0)
+    title.Size = UDim2.new(0.56, -titleOffset - 3, 0, 18)
     if not description then
         title.AnchorPoint = Vector2.new(0, 0.5)
-        title.Position = UDim2.new(0, 11, 0.5, 0)
-        title.Size = UDim2.new(0.56, -14, 0, 18)
+        title.Position = UDim2.new(0, titleOffset, 0.5, 0)
+        title.Size = UDim2.new(0.56, -titleOffset - 3, 0, 18)
     end
 
     local descLabel
     if description then
-        descLabel = makeText(row, description, 9, Theme.Muted)
-        descLabel.Position = UDim2.fromOffset(11, 24)
-        descLabel.Size = UDim2.new(0.61, -16, 0, 15)
+        descLabel = makeText(row, description, 8, Theme.Muted)
+        descLabel.Position = UDim2.fromOffset(titleOffset, 21)
+        descLabel.Size = UDim2.new(0.61, -titleOffset - 5, 0, 15)
     end
 
     local holder = create("Frame", {
@@ -1360,7 +3470,7 @@ local function makeControlRow(section, titleText, description, height)
     section.RowConnectionOwners = section.RowConnectionOwners or {}
     section.RowConnectionOwners[row] = rowOwner
 
-    return row, holder, title, descLabel, hover
+    return row, holder, title, descLabel, hover, rowIcon
 end
 
 function Section:_control(id, object)
@@ -1389,16 +3499,20 @@ function Section:_control(id, object)
     if id then
         Kronos:_registerOption(id, object)
     end
+    if object.Instance then
+        ResponsiveController:RegisterTree(self.Window, object.Instance)
+    end
     return object
 end
 
-function Section:CreateToggle(id: any, config: AnyTable?): AnyTable
+function Section:CreateToggle(id: any, config: ComponentOptions?): AnyTable
     if type(id) == "table" then
         config = id
-        id = config.Id or config.Title
+        id = config.Id or config.Flag or config.Name or config.Title
     end
     config = config or {}
-    local row, holder, titleLabel, _, hitbox = makeControlRow(self, config.Title or id or "Toggle", config.Description)
+    local row, holder, titleLabel, _, hitbox =
+        makeControlRow(self, config.Name or config.Title or id or "Toggle", config.Description, nil, config)
     local toggle = setmetatable({
         Value = config.Default == true,
         Callback = config.Callback,
@@ -1422,10 +3536,13 @@ function Section:CreateToggle(id: any, config: AnyTable?): AnyTable
     }) :: TextButton
     corner(box, 4)
     local boxStroke = stroke(box, toggle.Value and Theme.Accent or Theme.Stroke, toggle.Value and 0.08 or 0.5, 1)
-    local check = makeText(box, toggle.Value and "✓" or "", 12, Theme.White, "bold")
-    check.Size = UDim2.fromScale(1, 1)
-    check.TextXAlignment = Enum.TextXAlignment.Center
-    check.ZIndex = 7
+    local check = makeIcon(box, { Icon = "check", IconSize = 12 }, "White")
+    if check then
+        check.AnchorPoint = Vector2.new(0.5, 0.5)
+        check.Position = UDim2.fromScale(0.5, 0.5)
+        check.ImageTransparency = toggle.Value and 0 or 1
+        check.ZIndex = 7
+    end
 
     local function render(value: boolean, instant: boolean?)
         local duration = instant and 0 or Motion.Toggle
@@ -1437,10 +3554,8 @@ function Section:CreateToggle(id: any, config: AnyTable?): AnyTable
             Color = value and Theme.Accent or Theme.Stroke,
             Transparency = value and 0.08 or 0.5,
         }, duration)
-        check.Text = value and "✓" or ""
-        check.TextTransparency = value and 1 or 0
-        if value then
-            AnimationController:Tween(check, { TextTransparency = 0 }, duration)
+        if check then
+            AnimationController:Tween(check, { ImageTransparency = value and 0 or 1 }, duration)
         end
         titleLabel.TextColor3 = value and Theme.Text or Theme.SubText
     end
@@ -1520,10 +3635,10 @@ function Section:CreateToggle(id: any, config: AnyTable?): AnyTable
     return result
 end
 
-function Section:CreateSlider(id: any, config: AnyTable?): AnyTable
+function Section:CreateSlider(id: any, config: ComponentOptions?): AnyTable
     if type(id) == "table" then
         config = id
-        id = config.Id or config.Title
+        id = config.Id or config.Flag or config.Name or config.Title
     end
     config = config or {}
     local minimum = finiteNumber(config.Min, 0)
@@ -1535,8 +3650,13 @@ function Section:CreateSlider(id: any, config: AnyTable?): AnyTable
     local step = math.max(finiteNumber(config.Step, 10 ^ -precision), 10 ^ -precision)
     local default = math.clamp(finiteNumber(config.Default, minimum), minimum, maximum)
     local suffix = tostring(config.Suffix or "")
-    local row, holder, titleLabel =
-        makeControlRow(self, config.Title or id or "Slider", config.Description, config.Description and 50 or 42)
+    local row, holder, titleLabel = makeControlRow(
+        self,
+        config.Name or config.Title or id or "Slider",
+        config.Description,
+        config.Description and 50 or 42,
+        config
+    )
     holder.Size = UDim2.new(0.45, -6, 1, -8)
 
     local slider = setmetatable({
@@ -1640,7 +3760,8 @@ function Section:CreateSlider(id: any, config: AnyTable?): AnyTable
                 dragging = true
                 dragTouch = input.UserInputType == Enum.UserInputType.Touch and input or nil
                 update(input)
-                tween(knob, { Size = UDim2.fromOffset(12, 12) }, Motion.Press)
+                local size = ResponsiveController:Scale(self.Window, 12)
+                tween(knob, { Size = UDim2.fromOffset(size, size) }, Motion.Press)
             end
         end)
     )
@@ -1670,7 +3791,8 @@ function Section:CreateSlider(id: any, config: AnyTable?): AnyTable
             then
                 dragging = false
                 dragTouch = nil
-                tween(knob, { Size = UDim2.fromOffset(9, 9) }, Motion.Press)
+                local size = ResponsiveController:Scale(self.Window, 9)
+                tween(knob, { Size = UDim2.fromOffset(size, size) }, Motion.Press)
             end
         end)
     )
@@ -1696,13 +3818,14 @@ function Section:CreateSlider(id: any, config: AnyTable?): AnyTable
     end
     return result
 end
-function Section:CreateInput(id: any, config: AnyTable?): AnyTable
+function Section:CreateInput(id: any, config: ComponentOptions?): AnyTable
     if type(id) == "table" then
         config = id
-        id = config.Id or config.Title
+        id = config.Id or config.Flag or config.Name or config.Title
     end
     config = config or {}
-    local row, holder, titleLabel = makeControlRow(self, config.Title or id or "Input", config.Description)
+    local row, holder, titleLabel =
+        makeControlRow(self, config.Name or config.Title or id or "Input", config.Description, nil, config)
     local input = setmetatable({
         Value = tostring(config.Default or ""),
         Callback = config.Callback,
@@ -1917,6 +4040,7 @@ local function attachTooltip(window: AnyTable, target: GuiObject, value: any, ow
                 corner(tip, Metrics.PopupRadius)
                 stroke(tip, Theme.Border, 0.38, 1)
                 padding(tip, 9, 5, 9, 5)
+                ResponsiveController:RegisterTree(window, tip)
                 local mouse = UserInputService:GetMouseLocation()
                 local viewport = viewportSize()
                 local width = tip.AbsoluteSize.X
@@ -1942,10 +4066,10 @@ local function attachTooltip(window: AnyTable, target: GuiObject, value: any, ow
     )
 end
 
-function Section:CreateDropdown(id: any, config: AnyTable?): AnyTable
+function Section:CreateDropdown(id: any, config: ComponentOptions?): AnyTable
     if type(id) == "table" then
         config = id
-        id = config.Id or config.Title
+        id = config.Id or config.Flag or config.Name or config.Title
     end
     config = config or {}
     local options = copyArray(config.Values or config.Options or {})
@@ -1974,7 +4098,8 @@ function Section:CreateDropdown(id: any, config: AnyTable?): AnyTable
         initial = options[1]
     end
 
-    local row, holder, titleLabel = makeControlRow(self, config.Title or id or "Dropdown", config.Description)
+    local row, holder, titleLabel =
+        makeControlRow(self, config.Name or config.Title or id or "Dropdown", config.Description, nil, config)
     local dropdown = setmetatable({
         Value = initial,
         Values = options,
@@ -2005,12 +4130,12 @@ function Section:CreateDropdown(id: any, config: AnyTable?): AnyTable
     label.Position = UDim2.fromOffset(9, 0)
     label.Size = UDim2.new(1, -29, 1, 0)
     label.ZIndex = 7
-    local arrow = makeText(button, getIcon("ChevronDown"), 11, Theme.Muted, "bold")
-    arrow.AnchorPoint = Vector2.new(1, 0.5)
-    arrow.Position = UDim2.new(1, -7, 0.5, 0)
-    arrow.Size = UDim2.fromOffset(14, 18)
-    arrow.TextXAlignment = Enum.TextXAlignment.Center
-    arrow.ZIndex = 7
+    local arrow = makeIcon(button, { Icon = "chevron-down", IconSize = 12 }, "Muted")
+    if arrow then
+        arrow.AnchorPoint = Vector2.new(1, 0.5)
+        arrow.Position = UDim2.new(1, -7, 0.5, 0)
+        arrow.ZIndex = 7
+    end
 
     local function displayValue(): string
         if multi then
@@ -2019,7 +4144,7 @@ function Section:CreateDropdown(id: any, config: AnyTable?): AnyTable
                 return tostring(config.Placeholder or "Select...")
             end
             if #selected > 2 then
-                return tostring(selected[1]) .. ", " .. tostring(selected[2]) .. "  +" .. tostring(#selected - 2)
+                return string.format("%s, %s  +%d", tostring(selected[1]), tostring(selected[2]), #selected - 2)
             end
             local result = {}
             for _, value in ipairs(selected) do
@@ -2102,8 +4227,8 @@ function Section:CreateDropdown(id: any, config: AnyTable?): AnyTable
         padding(popup, 7, 7, 7, 7)
         local popupMaid = PopupController:Open(self.Window, popup, button, 5)
         popupMaid:Give(function()
-            if arrow.Parent then
-                tween(arrow, { Rotation = 0, TextColor3 = Theme.Muted }, Motion.PopupClose)
+            if arrow and arrow.Parent then
+                tween(arrow, { Rotation = 0, ImageColor3 = Theme.Muted }, Motion.PopupClose)
             end
         end)
         local optionConnections = {} :: { RBXScriptConnection }
@@ -2219,6 +4344,18 @@ function Section:CreateDropdown(id: any, config: AnyTable?): AnyTable
                         Parent = item,
                     }) :: Frame
                     ThemeController:Bind(indicator, "BackgroundColor3", "Accent")
+                    local optionIconName = type(config.OptionIcons) == "table"
+                            and (config.OptionIcons[option] or config.OptionIcons[optionText])
+                        or nil
+                    local optionOffset = 9
+                    local optionIcon =
+                        makeIcon(item, { Icon = optionIconName, IconSize = 11 }, selected and "Accent" or "Muted")
+                    if optionIcon then
+                        optionIcon.AnchorPoint = Vector2.new(0, 0.5)
+                        optionIcon.Position = UDim2.new(0, 9, 0.5, 0)
+                        optionIcon.ZIndex = 705
+                        optionOffset = 26
+                    end
                     local optionLabel = makeText(
                         item,
                         optionText,
@@ -2226,8 +4363,8 @@ function Section:CreateDropdown(id: any, config: AnyTable?): AnyTable
                         selected and Theme.Text or Theme.SubText,
                         selected and "bold" or nil
                     )
-                    optionLabel.Position = UDim2.fromOffset(9, 0)
-                    optionLabel.Size = UDim2.new(1, dropdown.Multi and -32 or -16, 1, 0)
+                    optionLabel.Position = UDim2.fromOffset(optionOffset, 0)
+                    optionLabel.Size = UDim2.new(1, dropdown.Multi and -optionOffset - 23 or -optionOffset - 7, 1, 0)
                     optionLabel.ZIndex = 705
                     if dropdown.Multi then
                         local checkBox = create("Frame", {
@@ -2247,10 +4384,14 @@ function Section:CreateDropdown(id: any, config: AnyTable?): AnyTable
                             ThemeController:Bind(checkBox, "BackgroundColor3", "Accent")
                             ThemeController:Bind(checkStroke, "Color", "Accent")
                         end
-                        local check = makeText(checkBox, selected and "✓" or "", 9, Theme.White, "bold")
-                        check.Size = UDim2.fromScale(1, 1)
-                        check.TextXAlignment = Enum.TextXAlignment.Center
-                        check.ZIndex = 706
+                        if selected then
+                            local check = makeIcon(checkBox, { Icon = "check", IconSize = 9 }, "White")
+                            if check then
+                                check.AnchorPoint = Vector2.new(0.5, 0.5)
+                                check.Position = UDim2.fromScale(0.5, 0.5)
+                                check.ZIndex = 706
+                            end
+                        end
                     end
                     table.insert(
                         optionConnections,
@@ -2311,7 +4452,9 @@ function Section:CreateDropdown(id: any, config: AnyTable?): AnyTable
                 local resting = popup.Position
                 popup.Position = resting + UDim2.fromOffset(0, -4)
                 tween(popup, { GroupTransparency = 0, Position = resting }, Motion.Dropdown)
-                tween(arrow, { Rotation = 180, TextColor3 = Theme.Accent }, Motion.Dropdown)
+                if arrow then
+                    tween(arrow, { Rotation = 180, ImageColor3 = Theme.Accent }, Motion.Dropdown)
+                end
             end
         end)
     end
@@ -2342,13 +4485,14 @@ function Section:CreateDropdown(id: any, config: AnyTable?): AnyTable
     return result
 end
 
-function Section:CreateButton(id: any, config: AnyTable?): AnyTable
+function Section:CreateButton(id: any, config: ComponentOptions?): AnyTable
     if type(id) == "table" then
         config = id
-        id = config.Id or config.Title
+        id = config.Id or config.Flag or config.Name or config.Title
     end
     config = config or {}
-    local row, holder, titleLabel = makeControlRow(self, config.Title or id or "Button", config.Description)
+    local row, holder, titleLabel =
+        makeControlRow(self, config.Name or config.Title or id or "Button", config.Description, nil, config)
     local control = setmetatable({
         Value = nil,
         Callback = config.Callback,
@@ -2378,14 +4522,9 @@ function Section:CreateButton(id: any, config: AnyTable?): AnyTable
     label.Size = UDim2.fromScale(1, 1)
     label.TextXAlignment = Enum.TextXAlignment.Center
     label.ZIndex = 7
-    if config.Icon then
-        label.Text = getIcon(config.Icon) .. "  " .. actionText
-    end
-
     function control:SetBusy(busy: boolean): AnyTable
         self.Busy = busy == true
-        label.Text = self.Busy and "···"
-            or (config.Icon and getIcon(config.Icon) .. "  " .. actionText or actionText)
+        label.Text = self.Busy and "···" or actionText
         button.Interactable = not self.Busy and not self.Disabled
         tween(button, { BackgroundTransparency = self.Busy and 0.42 or (config.Primary and 0 or 0.1) }, Motion.Hover)
         return self
@@ -2422,14 +4561,21 @@ function Section:CreateButton(id: any, config: AnyTable?): AnyTable
         control,
         button.MouseButton1Down:Connect(function()
             if not control.Disabled and not control.Busy then
-                tween(button, { Size = UDim2.new(1, -3, 0, 25) }, Motion.Press)
+                tween(button, {
+                    Size = UDim2.new(
+                        1,
+                        -ResponsiveController:Scale(self.Window, 3),
+                        0,
+                        ResponsiveController:Scale(self.Window, 25)
+                    ),
+                }, Motion.Press)
             end
         end)
     )
     addConnection(
         control,
         button.MouseButton1Up:Connect(function()
-            tween(button, { Size = UDim2.new(1, 0, 0, 28) }, Motion.Press)
+            tween(button, { Size = UDim2.new(1, 0, 0, ResponsiveController:Scale(self.Window, 28)) }, Motion.Press)
         end)
     )
     addConnection(
@@ -2462,30 +4608,39 @@ function Section:CreateButton(id: any, config: AnyTable?): AnyTable
     return result
 end
 
-function Section:CreateLabel(id: any, config: AnyTable?): AnyTable
+function Section:CreateLabel(id: any, config: (ComponentOptions | string)?): AnyTable
     if type(id) == "table" then
         config = id
-        id = config.Id or config.Title or config.Text
+        id = config.Id or config.Flag or config.Name or config.Title or config.Text
     end
     if type(config) == "string" then
         config = { Text = config }
     end
     config = config or {}
+    local textValue = tostring(config.Text or config.Name or config.Title or id or "Label")
     local frame = create("Frame", {
         Name = "Label",
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 0, 24),
         Parent = self.Content,
     }) :: Frame
-    frame:SetAttribute("KronosSearch", string.lower(tostring(config.Text or config.Title or id or "Label")))
+    frame:SetAttribute("KronosSearch", string.lower(textValue))
+    local iconOffset = 0
+    local labelIcon = makeIcon(frame, config, config.Muted and "Muted" or "SubText")
+    if labelIcon then
+        labelIcon.AnchorPoint = Vector2.new(0, 0.5)
+        labelIcon.Position = UDim2.new(0, 2, 0.5, 0)
+        iconOffset = (labelIcon.Size.X.Offset or 14) + 8
+    end
     local label = makeText(
         frame,
-        tostring(config.Text or config.Title or id or "Label"),
+        textValue,
         tonumber(config.TextSize) or 10,
         config.Muted and Theme.SubText or Theme.Text,
         config.Bold and "bold" or nil
     )
-    label.Size = UDim2.fromScale(1, 1)
+    label.Position = UDim2.fromOffset(iconOffset, 0)
+    label.Size = UDim2.new(1, -iconOffset, 1, 0)
     label.TextWrapped = config.Wrap == true
     local control = setmetatable({ Value = label.Text, Instance = frame, TitleLabel = label }, BaseControl)
     function control:SetValue(value: any): AnyTable
@@ -2497,13 +4652,14 @@ function Section:CreateLabel(id: any, config: AnyTable?): AnyTable
     return self:_control(id, control)
 end
 
-function Section:CreateParagraph(id: any, config: AnyTable?): AnyTable
+function Section:CreateParagraph(id: any, config: ComponentOptions?): AnyTable
     if type(id) == "table" then
         config = id
-        id = config.Id or config.Title
+        id = config.Id or config.Flag or config.Name or config.Title
     end
     config = config or {}
     local textValue = tostring(config.Content or config.Text or "")
+    local titleText = config.Name or config.Title
     local frame = create("Frame", {
         Name = "Paragraph",
         BackgroundColor3 = Theme.Surface2,
@@ -2516,13 +4672,26 @@ function Section:CreateParagraph(id: any, config: AnyTable?): AnyTable
     corner(frame, 5)
     stroke(frame, Theme.Border, 0.74, 1)
     padding(frame, 10, 8, 10, 8)
-    frame:SetAttribute("KronosSearch", string.lower(tostring(config.Title or "") .. " " .. textValue))
+    frame:SetAttribute("KronosSearch", string.lower(tostring(titleText or "") .. " " .. textValue))
     local paragraphLayout = list(frame, Enum.FillDirection.Vertical, 3)
     local titleLabel: TextLabel? = nil
-    if config.Title then
-        titleLabel = makeText(frame, tostring(config.Title), 10, Theme.Text, "bold")
-        titleLabel.Size = UDim2.new(1, 0, 0, 16)
-        titleLabel.LayoutOrder = 1
+    if titleText then
+        local heading = create("Frame", {
+            BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 0, 16),
+            LayoutOrder = 1,
+            Parent = frame,
+        }) :: Frame
+        local titleOffset = 0
+        local paragraphIcon = makeIcon(heading, config, "SubText")
+        if paragraphIcon then
+            paragraphIcon.AnchorPoint = Vector2.new(0, 0.5)
+            paragraphIcon.Position = UDim2.new(0, 0, 0.5, 0)
+            titleOffset = paragraphIcon.Size.X.Offset + 6
+        end
+        titleLabel = makeText(heading, tostring(titleText), 10, Theme.Text, "bold")
+        titleLabel.Position = UDim2.fromOffset(titleOffset, 0)
+        titleLabel.Size = UDim2.new(1, -titleOffset, 1, 0)
     end
     local content = makeText(frame, textValue, 10, Theme.SubText)
     content.Size = UDim2.new(1, 0, 0, 28)
@@ -2547,10 +4716,10 @@ function Section:CreateParagraph(id: any, config: AnyTable?): AnyTable
     return self:_control(id, paragraph)
 end
 
-function Section:CreateDivider(id: any, config: AnyTable?): AnyTable
+function Section:CreateDivider(id: any, config: (ComponentOptions | string)?): AnyTable
     if type(id) == "table" then
         config = id
-        id = config.Id or config.Title
+        id = config.Id or config.Flag or config.Name or config.Title
     elseif type(config) == "string" then
         config = { Title = config }
     end
@@ -2558,7 +4727,7 @@ function Section:CreateDivider(id: any, config: AnyTable?): AnyTable
     local frame = create("Frame", {
         Name = "Divider",
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, config.Title and 20 or 12),
+        Size = UDim2.new(1, 0, 0, (config.Name or config.Title) and 20 or 12),
         Parent = self.Content,
     }) :: Frame
     local line = create("Frame", {
@@ -2571,21 +4740,34 @@ function Section:CreateDivider(id: any, config: AnyTable?): AnyTable
     }) :: Frame
     ThemeController:Bind(line, "BackgroundColor3", "Divider")
     local titleLabel: TextLabel? = nil
-    if config.Title then
-        titleLabel = makeText(frame, " " .. tostring(config.Title) .. " ", 9, Theme.Muted, "bold")
-        titleLabel.BackgroundColor3 = Theme.Surface
-        titleLabel.BackgroundTransparency = 0
-        titleLabel.AutomaticSize = Enum.AutomaticSize.X
-        titleLabel.Size = UDim2.fromOffset(0, 16)
-        titleLabel.Position = UDim2.fromOffset(8, 2)
+    local dividerTitle = config.Name or config.Title
+    if dividerTitle then
+        local measured = TextService:GetTextSize(tostring(dividerTitle), 9, Enum.Font.GothamBold, Vector2.new(1000, 16))
+        local iconWidth = config.Icon and math.clamp(finiteNumber(config.IconSize, 11), 8, 32) + 5 or 0
+        local titleHolder = create("Frame", {
+            BackgroundColor3 = Theme.Surface,
+            BorderSizePixel = 0,
+            Position = UDim2.fromOffset(8, 2),
+            Size = UDim2.fromOffset(measured.X + iconWidth + 12, 16),
+            Parent = frame,
+        }) :: Frame
+        ThemeController:Bind(titleHolder, "BackgroundColor3", "Surface")
+        local dividerIcon = makeIcon(titleHolder, config, "Muted")
+        if dividerIcon then
+            dividerIcon.AnchorPoint = Vector2.new(0, 0.5)
+            dividerIcon.Position = UDim2.new(0, 5, 0.5, 0)
+        end
+        titleLabel = makeText(titleHolder, tostring(dividerTitle), 9, Theme.Muted, "bold")
+        titleLabel.Position = UDim2.fromOffset(iconWidth + 6, 0)
+        titleLabel.Size = UDim2.new(1, -iconWidth - 9, 1, 0)
     end
     return self:_control(id, setmetatable({ Value = nil, Instance = frame, TitleLabel = titleLabel }, BaseControl))
 end
 
-function Section:CreateKeybind(id: any, config: AnyTable?): AnyTable
+function Section:CreateKeybind(id: any, config: ComponentOptions?): AnyTable
     if type(id) == "table" then
         config = id
-        id = config.Id or config.Title
+        id = config.Id or config.Flag or config.Name or config.Title
     end
     config = config or {}
     local initialValue = config.Default
@@ -2600,7 +4782,8 @@ function Section:CreateKeybind(id: any, config: AnyTable?): AnyTable
     if initialMode ~= "Hold" and initialMode ~= "Toggle" and initialMode ~= "Always" then
         initialMode = "Toggle"
     end
-    local row, holder, titleLabel = makeControlRow(self, config.Title or id or "Keybind", config.Description)
+    local row, holder, titleLabel =
+        makeControlRow(self, config.Name or config.Title or id or "Keybind", config.Description, nil, config)
     holder.Size = UDim2.fromOffset(132, 30)
     local keybind = setmetatable({
         Value = initialValue,
@@ -2613,7 +4796,7 @@ function Section:CreateKeybind(id: any, config: AnyTable?): AnyTable
         Disabled = false,
         Listening = false,
         Active = initialMode == "Always",
-        DisplayName = config.Title or id or "Keybind",
+        DisplayName = config.Name or config.Title or id or "Keybind",
         ShowInList = config.ShowInList ~= false,
     }, BaseControl)
 
@@ -2782,10 +4965,11 @@ function Section:CreateKeybind(id: any, config: AnyTable?): AnyTable
                 ZIndex = 722,
                 Parent = popup,
             }) :: Frame
-            local bindingIcon = makeText(bindingHeader, getIcon("Keyboard"), 10, Theme.Muted, "bold")
-            bindingIcon.Size = UDim2.fromOffset(20, 22)
-            bindingIcon.TextXAlignment = Enum.TextXAlignment.Center
-            bindingIcon.ZIndex = 723
+            local bindingIcon = makeIcon(bindingHeader, { Icon = "keyboard", IconSize = 12 }, "Muted")
+            if bindingIcon then
+                bindingIcon.Position = UDim2.fromOffset(4, 5)
+                bindingIcon.ZIndex = 723
+            end
             local bindingValue = makeText(bindingHeader, string.upper(tostring(keybind.Value)), 9, Theme.Text, "bold")
             bindingValue.Position = UDim2.fromOffset(25, 0)
             bindingValue.Size = UDim2.new(1, -25, 1, 0)
@@ -2863,15 +5047,20 @@ function Section:CreateKeybind(id: any, config: AnyTable?): AnyTable
                 Parent = showChoice,
             }) :: Frame
             corner(showCheck, 3)
-            local showMark = makeText(showCheck, keybind.ShowInList and "✓" or "", 9, Theme.White, "bold")
-            showMark.Size = UDim2.fromScale(1, 1)
-            showMark.TextXAlignment = Enum.TextXAlignment.Center
-            showMark.ZIndex = 724
+            local showMark = makeIcon(showCheck, { Icon = "check", IconSize = 9 }, "White")
+            if showMark then
+                showMark.AnchorPoint = Vector2.new(0.5, 0.5)
+                showMark.Position = UDim2.fromScale(0.5, 0.5)
+                showMark.Visible = keybind.ShowInList
+                showMark.ZIndex = 724
+            end
             popupMaid:Give(showChoice.Activated:Connect(function()
                 keybind:SetShowInList(not keybind.ShowInList)
                 showCheck.BackgroundColor3 = keybind.ShowInList and Theme.Accent or Theme.Surface3
                 showCheck.BackgroundTransparency = keybind.ShowInList and 0 or 0.16
-                showMark.Text = keybind.ShowInList and "✓" or ""
+                if showMark then
+                    showMark.Visible = keybind.ShowInList
+                end
             end))
             task.defer(function()
                 if popup.Parent and self.Window.ActivePopup and self.Window.ActivePopup.Frame == popup then
@@ -2897,15 +5086,16 @@ function Section:CreateKeybind(id: any, config: AnyTable?): AnyTable
     return result
 end
 
-function Section:CreateColorpicker(id: any, config: AnyTable?): AnyTable
+function Section:CreateColorpicker(id: any, config: ComponentOptions?): AnyTable
     if type(id) == "table" then
         config = id
-        id = config.Id or config.Title
+        id = config.Id or config.Flag or config.Name or config.Title
     end
     config = config or {}
     local initial = typeof(config.Default) == "Color3" and config.Default or Theme.Accent
     local initialAlpha = math.clamp(finiteNumber(config.Transparency or config.Alpha, 0), 0, 1)
-    local row, holder, titleLabel = makeControlRow(self, config.Title or id or "Color", config.Description)
+    local row, holder, titleLabel =
+        makeControlRow(self, config.Name or config.Title or id or "Color", config.Description, nil, config)
     local picker = setmetatable({
         Value = initial,
         Transparency = initialAlpha,
@@ -3384,10 +5574,10 @@ function Section:CreateColorpicker(id: any, config: AnyTable?): AnyTable
     return result
 end
 
-function Section:CreateMultiDropdown(id: any, config: AnyTable?): AnyTable
+function Section:CreateMultiDropdown(id: any, config: ComponentOptions?): AnyTable
     if type(id) == "table" then
         config = id
-        id = config.Id or config.Title
+        id = config.Id or config.Flag or config.Name or config.Title
     end
     config = config or {}
     config.Multi = true
@@ -3420,7 +5610,13 @@ function Section:RefreshSearch(query: string, parentMatch: boolean?): boolean
             local controlMatch = sectionMatch
                 or (type(searchText) == "string" and string.find(searchText, normalized, 1, true) ~= nil)
             control.SearchVisible = controlMatch
+            local wasVisible = instance.Visible
             instance.Visible = controlMatch and control.ManualVisible ~= false
+            if instance.Visible and not wasVisible then
+                local restingTransparency = control.BaseTransparency or instance.BackgroundTransparency
+                instance.BackgroundTransparency = 1
+                tween(instance, { BackgroundTransparency = restingTransparency }, Motion.Search)
+            end
             anyVisible = anyVisible or instance.Visible
         end
     end
@@ -3459,6 +5655,156 @@ function Section:Destroy()
     self.Tab:_updateCanvas()
 end
 
+local function applySubTabInset(owner: AnyTable, enabled: boolean)
+    if not owner.Scroll then
+        return
+    end
+    local inset = ResponsiveController:Scale(owner.Window, 34)
+    owner.Scroll.Position = enabled and UDim2.fromOffset(0, inset) or UDim2.fromOffset(0, 0)
+    owner.Scroll.Size = enabled and UDim2.new(1, 0, 1, -inset) or UDim2.fromScale(1, 1)
+end
+
+function Tab:_setSubTabVisual(owner: AnyTable, active: boolean)
+    local selector = self.SubTabSelectors and self.SubTabSelectors[owner]
+    if not selector then
+        return
+    end
+    tween(selector.Button, {
+        BackgroundColor3 = active and Theme.PressedSurface or Theme.Surface2,
+        BackgroundTransparency = active and 0.2 or 0.7,
+    }, Motion.SubTab)
+    tween(selector.Marker, {
+        BackgroundTransparency = active and 0 or 1,
+        Size = active
+                and UDim2.new(
+                    1,
+                    -ResponsiveController:Scale(self.Window, 12),
+                    0,
+                    ResponsiveController:Scale(self.Window, 2)
+                )
+            or UDim2.fromOffset(ResponsiveController:Scale(self.Window, 8), ResponsiveController:Scale(self.Window, 2)),
+    }, Motion.SubTab)
+    tween(selector.Label, { TextColor3 = active and Theme.Text or Theme.SubText }, Motion.SubTab)
+    if selector.Icon then
+        tween(selector.Icon, { ImageColor3 = active and Theme.Accent or Theme.Muted }, Motion.SubTab)
+    end
+end
+
+function Tab:_createSubTabSelector(owner: AnyTable, config: AnyTable): AnyTable
+    self.SubTabSelectors = self.SubTabSelectors or {}
+    local existing = self.SubTabSelectors[owner]
+    if existing then
+        return existing
+    end
+    local titleText = tostring(config.Name or config.Title or "General")
+    local iconSize = config.Icon and math.clamp(finiteNumber(config.IconSize, 12), 8, 32) or 0
+    local textSize = TextService:GetTextSize(titleText, 9, Enum.Font.GothamBold, Vector2.new(300, 22))
+    local width = math.clamp(textSize.X + (iconSize > 0 and iconSize + 16 or 18), 52, 150)
+    local button = create("TextButton", {
+        Name = "SubTabButton",
+        BackgroundColor3 = Theme.Surface2,
+        BackgroundTransparency = 0.78,
+        BorderSizePixel = 0,
+        Text = "",
+        AutoButtonColor = false,
+        Size = UDim2.fromOffset(width, 26),
+        Parent = self.SubTabBar,
+    }) :: TextButton
+    corner(button, 5)
+    local offset = 9
+    local icon = makeIcon(button, config, "Muted")
+    if icon then
+        icon.AnchorPoint = Vector2.new(0, 0.5)
+        icon.Position = UDim2.new(0, 8, 0.5, 0)
+        icon.ZIndex = 3
+        offset = icon.Size.X.Offset + 13
+    end
+    local label = makeText(button, titleText, 9, Theme.SubText, "bold")
+    label.Position = UDim2.fromOffset(offset, 0)
+    label.Size = UDim2.new(1, -offset - 7, 1, 0)
+    label.ZIndex = 3
+    local marker = create("Frame", {
+        BackgroundColor3 = Theme.Accent,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        AnchorPoint = Vector2.new(0.5, 1),
+        Position = UDim2.new(0.5, 0, 1, 0),
+        Size = UDim2.fromOffset(8, 2),
+        ZIndex = 4,
+        Parent = button,
+    }) :: Frame
+    corner(marker, 1)
+    ThemeController:Bind(marker, "BackgroundColor3", "Accent")
+    local selector = { Button = button, Label = label, Icon = icon, Marker = marker }
+    self.SubTabSelectors[owner] = selector
+    addConnection(
+        owner,
+        button.Activated:Connect(function()
+            self:SelectSubTab(owner)
+        end)
+    )
+    addConnection(
+        owner,
+        button.MouseEnter:Connect(function()
+            if self.ActiveSubTab ~= owner then
+                tween(button, { BackgroundTransparency = 0.42 }, Motion.Hover)
+            end
+        end)
+    )
+    addConnection(
+        owner,
+        button.MouseLeave:Connect(function()
+            if self.ActiveSubTab ~= owner then
+                tween(button, { BackgroundTransparency = 0.7 }, Motion.Hover)
+            end
+        end)
+    )
+    ResponsiveController:RegisterTree(self.Window, button)
+    return selector
+end
+
+function Tab:_ensureDefaultSubTabSelector()
+    if self.SubTabSelectors and self.SubTabSelectors[self] then
+        return
+    end
+    self:_createSubTabSelector(self, { Name = self.DefaultSubTabName or "General" })
+    self.SearchVisible = true
+end
+
+function Tab:SelectSubTab(owner: AnyTable): AnyTable
+    if owner ~= self and table.find(self.SubTabs, owner) == nil then
+        return self
+    end
+    if owner.SearchVisible == false or self.ActiveSubTab == owner then
+        return self
+    end
+    dismissTooltip(self.Window)
+    PopupController:Close(self.Window)
+    local owners = { self }
+    for _, subTab in ipairs(self.SubTabs) do
+        table.insert(owners, subTab)
+    end
+    for _, candidate in ipairs(owners) do
+        local active = candidate == owner
+        if candidate.Scroll then
+            candidate.Scroll.Visible = active
+        end
+        self:_setSubTabVisual(candidate, active)
+    end
+    self.ActiveSubTab = owner
+    owner.Scroll.Visible = true
+    owner.Columns.Position =
+        UDim2.fromOffset(ResponsiveController:Scale(self.Window, 11), ResponsiveController:Scale(self.Window, 7))
+    tween(owner.Columns, {
+        Position = UDim2.fromOffset(
+            ResponsiveController:Scale(self.Window, 7),
+            ResponsiveController:Scale(self.Window, 7)
+        ),
+    }, Motion.SubTab)
+    owner:ApplyColumns(self.Window.TwoColumn)
+    return self
+end
+
 function Tab:_updateCanvas()
     task.defer(function()
         if not self.Scroll or not self.Scroll.Parent then
@@ -3467,8 +5813,8 @@ function Tab:_updateCanvas()
         local leftHeight = self.LeftLayout.AbsoluteContentSize.Y
         local rightHeight = self.TwoColumn and self.RightLayout.AbsoluteContentSize.Y or 0
         local height = self.TwoColumn and math.max(leftHeight, rightHeight) or leftHeight
-        self.Columns.Size = UDim2.new(1, -2, 0, height)
-        self.Scroll.CanvasSize = UDim2.fromOffset(0, height + 18)
+        self.Columns.Size = UDim2.new(1, -ResponsiveController:Scale(self.Window, 2), 0, height)
+        self.Scroll.CanvasSize = UDim2.fromOffset(0, height + ResponsiveController:Scale(self.Window, 18))
     end)
 end
 
@@ -3480,10 +5826,11 @@ function Tab:ApplyColumns(twoColumn: boolean)
     self.TwoColumn = twoColumn
     self.ColumnsInitialized = true
     self.RightColumn.Visible = twoColumn
+    local gap = ResponsiveController:Scale(self.Window, 5)
     if twoColumn then
-        self.LeftColumn.Size = UDim2.new(0.5, -5, 0, 0)
-        self.RightColumn.Size = UDim2.new(0.5, -5, 0, 0)
-        self.RightColumn.Position = UDim2.new(0.5, 5, 0, 0)
+        self.LeftColumn.Size = UDim2.new(0.5, -gap, 0, 0)
+        self.RightColumn.Size = UDim2.new(0.5, -gap, 0, 0)
+        self.RightColumn.Position = UDim2.new(0.5, gap, 0, 0)
         for index, section in ipairs(self.Sections) do
             local side = section.PreferredSide
             if side == nil then
@@ -3499,6 +5846,11 @@ function Tab:ApplyColumns(twoColumn: boolean)
         end
     end
     self:_updateCanvas()
+    if not self.ParentTab then
+        for _, subTab in ipairs(self.SubTabs or {}) do
+            Tab.ApplyColumns(subTab, twoColumn)
+        end
+    end
 end
 
 function Tab:RefreshSearch(query: string): boolean
@@ -3508,17 +5860,47 @@ function Tab:RefreshSearch(query: string): boolean
     for _, section in ipairs(self.Sections) do
         anySection = section:RefreshSearch(normalized, tabMatch) or anySection
     end
-    self.SearchVisible = tabMatch or anySection
+    local firstVisibleOwner: AnyTable? = nil
+    if self.HasSubTabs then
+        local defaultVisible = #self.Sections > 0 and (tabMatch or anySection)
+        local defaultSelector = self.SubTabSelectors[self]
+        if defaultSelector then
+            defaultSelector.Button.Visible = defaultVisible
+        end
+        self.SearchVisible = defaultVisible
+        if defaultVisible then
+            firstVisibleOwner = self
+        end
+        for _, subTab in ipairs(self.SubTabs) do
+            local subVisible = subTab:RefreshSearch(normalized, tabMatch)
+            anySection = subVisible or anySection
+            firstVisibleOwner = firstVisibleOwner or (subVisible and subTab or nil)
+        end
+        local activeOwner = self.ActiveSubTab
+        if activeOwner and activeOwner.SearchVisible == false then
+            self.ActiveSubTab = nil
+        end
+        if not self.ActiveSubTab and firstVisibleOwner then
+            self:SelectSubTab(firstVisibleOwner)
+        end
+    end
+    self.SearchVisible = tabMatch or anySection or firstVisibleOwner ~= nil
     self.Button.Visible = self.SearchVisible
     self:_updateCanvas()
     return self.SearchVisible
 end
 
-function Tab:CreateSection(config: AnyTable?): AnyTable
+function Tab:CreateSection(config: (NavigationOptions | string)?): AnyTable
     if type(config) == "string" then
         config = { Title = config }
     end
     config = config or {}
+    if self.HasSubTabs then
+        self:_ensureDefaultSubTabSelector()
+        if not self.ActiveSubTab then
+            self:SelectSubTab(self)
+        end
+    end
     local index = #self.Sections + 1
     local preferredSide: string? = nil
     if type(config.Side) == "string" then
@@ -3536,7 +5918,7 @@ function Tab:CreateSection(config: AnyTable?): AnyTable
         PreferredSide = preferredSide,
         ManualVisible = true,
         SearchVisible = true,
-        Title = tostring(config.Title or "Section"),
+        Title = tostring(config.Name or config.Title or "Section"),
     }, Section)
     section.SearchText = string.lower(section.Title .. " " .. tostring(config.Description or ""))
 
@@ -3554,31 +5936,30 @@ function Tab:CreateSection(config: AnyTable?): AnyTable
     corner(frame, Metrics.Radius)
     local frameStroke = stroke(frame, Theme.Border, 0.78, 1)
     ThemeController:Bind(frameStroke, "Color", "Border")
-    padding(frame, 10, 8, 10, 10)
-    local frameLayout = list(frame, Enum.FillDirection.Vertical, 6)
+    padding(frame, 8, 6, 8, 8)
+    local frameLayout = list(frame, Enum.FillDirection.Vertical, 4)
 
     local heading = create("Frame", {
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, config.Description and 31 or 21),
+        Size = UDim2.new(1, 0, 0, config.Description and 28 or 19),
         LayoutOrder = 1,
         Parent = frame,
     }) :: Frame
     local titleOffset = 0
     if config.Icon then
-        local icon = makeText(heading, getIcon(config.Icon), 11, Theme.Accent, "bold")
-        icon.Position = UDim2.fromOffset(0, 0)
-        icon.Size = UDim2.fromOffset(16, 18)
-        icon.TextXAlignment = Enum.TextXAlignment.Center
-        titleOffset = 21
-        ThemeController:Bind(icon, "TextColor3", "Accent")
+        local icon = makeIcon(heading, config, "Accent")
+        if icon then
+            icon.Position = UDim2.fromOffset(0, 2)
+            titleOffset = icon.Size.X.Offset + 6
+        end
     end
-    local title = makeText(heading, section.Title, 11, Theme.Text, "bold")
+    local title = makeText(heading, section.Title, 10, Theme.Text, "bold")
     title.Position = UDim2.fromOffset(titleOffset, 0)
     title.Size = UDim2.new(1, -titleOffset, 0, 18)
     if config.Description then
         local description = makeText(heading, tostring(config.Description), 9, Theme.Muted)
-        description.Position = UDim2.fromOffset(titleOffset, 16)
-        description.Size = UDim2.new(1, -titleOffset, 0, 14)
+        description.Position = UDim2.fromOffset(titleOffset, 15)
+        description.Size = UDim2.new(1, -titleOffset, 0, 13)
     end
 
     local content = create("Frame", {
@@ -3601,6 +5982,7 @@ function Tab:CreateSection(config: AnyTable?): AnyTable
         end)
     )
     table.insert(self.Sections, section)
+    ResponsiveController:RegisterTree(self.Window, frame)
     self:ApplyColumns(self.TwoColumn)
     self:_updateCanvas()
     return section
@@ -3608,8 +5990,176 @@ end
 
 Tab.AddSection = Tab.CreateSection
 
+SubTab._updateCanvas = Tab._updateCanvas
+SubTab.ApplyColumns = Tab.ApplyColumns
+SubTab.CreateSection = Tab.CreateSection
+SubTab.AddSection = Tab.CreateSection
+
+function SubTab:RefreshSearch(query: string, parentMatch: boolean?): boolean
+    local normalized = string.lower(query)
+    local subTabMatch = parentMatch == true
+        or normalized == ""
+        or string.find(string.lower(self.Title), normalized, 1, true) ~= nil
+    local anySection = false
+    for _, section in ipairs(self.Sections) do
+        anySection = section:RefreshSearch(normalized, subTabMatch) or anySection
+    end
+    self.SearchVisible = subTabMatch or anySection
+    local selector = self.ParentTab.SubTabSelectors[self]
+    if selector then
+        selector.Button.Visible = self.SearchVisible
+    end
+    if not self.SearchVisible then
+        self.Scroll.Visible = false
+    end
+    self:_updateCanvas()
+    return self.SearchVisible
+end
+
+function SubTab:Select(): AnyTable
+    self.ParentTab:SelectSubTab(self)
+    return self
+end
+
+function SubTab:Destroy()
+    local parentTab = self.ParentTab
+    local wasActive = parentTab.ActiveSubTab == self
+    local sections = copyArray(self.Sections)
+    for _, section in ipairs(sections) do
+        section:Destroy()
+    end
+    disconnectAll(self)
+    local selector = parentTab.SubTabSelectors[self]
+    if selector and selector.Button then
+        ThemeController:UnbindTree(selector.Button)
+        selector.Button:Destroy()
+    end
+    parentTab.SubTabSelectors[self] = nil
+    if self.Scroll then
+        ThemeController:UnbindTree(self.Scroll)
+        self.Scroll:Destroy()
+    end
+    removeArrayValue(parentTab.SubTabs, self)
+    if #parentTab.SubTabs == 0 then
+        parentTab.HasSubTabs = false
+        parentTab.ActiveSubTab = nil
+        parentTab.SubTabBar.Visible = false
+        applySubTabInset(parentTab, false)
+        parentTab.Scroll.Visible = true
+        local defaultSelector = parentTab.SubTabSelectors[parentTab]
+        if defaultSelector then
+            defaultSelector.Button:Destroy()
+            parentTab.SubTabSelectors[parentTab] = nil
+        end
+    elseif wasActive then
+        parentTab.ActiveSubTab = nil
+        if #parentTab.Sections > 0 then
+            parentTab:SelectSubTab(parentTab)
+        else
+            parentTab:SelectSubTab(parentTab.SubTabs[1])
+        end
+    end
+end
+
+function Tab:CreateSubTab(config: (NavigationOptions | string)?): AnyTable
+    if type(config) == "string" then
+        config = { Name = config }
+    end
+    config = config or {}
+    if not self.HasSubTabs then
+        self.HasSubTabs = true
+        self.SubTabBar.Visible = true
+        applySubTabInset(self, true)
+        if #self.Sections > 0 then
+            self:_ensureDefaultSubTabSelector()
+            self.ActiveSubTab = self
+            self:_setSubTabVisual(self, true)
+        else
+            self.Scroll.Visible = false
+        end
+    end
+    local subTab = setmetatable({
+        ParentTab = self,
+        Window = self.Window,
+        Title = tostring(config.Name or config.Title or "Subtab"),
+        Sections = {},
+        Connections = {},
+        SearchVisible = true,
+        TwoColumn = self.Window.TwoColumn,
+    }, SubTab)
+    local scroll = create("ScrollingFrame", {
+        Name = "SubTabContent",
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Position = UDim2.fromOffset(0, 34),
+        Size = UDim2.new(1, 0, 1, -34),
+        CanvasSize = UDim2.fromOffset(0, 0),
+        ScrollBarThickness = 2,
+        ScrollBarImageColor3 = Theme.Accent,
+        ScrollBarImageTransparency = 0.08,
+        ScrollingDirection = Enum.ScrollingDirection.Y,
+        Visible = false,
+        Parent = self.Page,
+    }) :: ScrollingFrame
+    ThemeController:Bind(scroll, "ScrollBarImageColor3", "Accent")
+    local columns = create("Frame", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(7, 7),
+        Size = UDim2.new(1, -18, 0, 0),
+        Parent = scroll,
+    }) :: Frame
+    local leftColumn = create("Frame", {
+        BackgroundTransparency = 1,
+        Size = UDim2.new(0.5, -5, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        Parent = columns,
+    }) :: Frame
+    local rightColumn = create("Frame", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0.5, 5, 0, 0),
+        Size = UDim2.new(0.5, -5, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        Parent = columns,
+    }) :: Frame
+    local leftLayout = list(leftColumn, Enum.FillDirection.Vertical, Metrics.SectionGap)
+    local rightLayout = list(rightColumn, Enum.FillDirection.Vertical, Metrics.SectionGap)
+    subTab.Scroll = scroll
+    subTab.Columns = columns
+    subTab.LeftColumn = leftColumn
+    subTab.RightColumn = rightColumn
+    subTab.LeftLayout = leftLayout
+    subTab.RightLayout = rightLayout
+    addConnection(
+        subTab,
+        leftLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+            subTab:_updateCanvas()
+        end)
+    )
+    addConnection(
+        subTab,
+        rightLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+            subTab:_updateCanvas()
+        end)
+    )
+    table.insert(self.SubTabs, subTab)
+    self:_createSubTabSelector(subTab, config)
+    ResponsiveController:RegisterTree(self.Window, scroll)
+    subTab:ApplyColumns(self.Window.TwoColumn)
+    if not self.ActiveSubTab then
+        self:SelectSubTab(subTab)
+    end
+    return subTab
+end
+
+Tab.AddSubTab = Tab.CreateSubTab
+Tab.AddSubtab = Tab.CreateSubTab
+
 function Tab:Destroy()
     local wasActive = self.Window.ActiveTab == self
+    local subTabs = copyArray(self.SubTabs)
+    for _, subTab in ipairs(subTabs) do
+        subTab:Destroy()
+    end
     local sections = copyArray(self.Sections)
     for _, section in ipairs(sections) do
         section:Destroy()
@@ -3648,9 +6198,12 @@ function Window:_setActiveTabVisual(tab: AnyTable, active: boolean)
     }, Motion.Tab)
     tween(tab.ActiveBar, {
         BackgroundTransparency = active and 0 or 1,
-        Size = active and UDim2.fromOffset(2, 20) or UDim2.fromOffset(2, 8),
+        Size = active and UDim2.fromOffset(ResponsiveController:Scale(self, 2), ResponsiveController:Scale(self, 20))
+            or UDim2.fromOffset(ResponsiveController:Scale(self, 2), ResponsiveController:Scale(self, 8)),
     }, Motion.Tab)
-    tween(tab.IconLabel, { TextColor3 = active and Theme.Accent or Theme.Muted }, Motion.Tab)
+    if tab.IconLabel then
+        tween(tab.IconLabel, { ImageColor3 = active and Theme.Accent or Theme.Muted }, Motion.Tab)
+    end
     tween(tab.TitleLabel, { TextColor3 = active and Theme.Text or Theme.SubText }, Motion.Tab)
 end
 
@@ -3685,6 +6238,13 @@ function Window:SelectTab(tab: any)
     tween(tab.Page, { GroupTransparency = 0, Position = UDim2.fromOffset(0, 0) }, Motion.Tab)
     self:_setActiveTabVisual(tab, true)
     tab:ApplyColumns(self.TwoColumn)
+    if tab.HasSubTabs and not tab.ActiveSubTab then
+        if #tab.Sections > 0 then
+            tab:SelectSubTab(tab)
+        elseif tab.SubTabs[1] then
+            tab:SelectSubTab(tab.SubTabs[1])
+        end
+    end
     task.defer(function()
         if tab.Button.Parent and self.NavigationScroll.AbsoluteCanvasSize.Y > self.NavigationScroll.AbsoluteSize.Y then
             local buttonTop = tab.Button.AbsolutePosition.Y - self.NavigationScroll.AbsolutePosition.Y
@@ -3701,18 +6261,22 @@ function Window:SelectTab(tab: any)
     return self
 end
 
-function Window:CreateTab(config: AnyTable?): AnyTable
+function Window:CreateTab(config: (NavigationOptions | string)?): AnyTable
     if type(config) == "string" then
         config = { Title = config }
     end
     config = config or {}
     local tab = setmetatable({
         Window = self,
-        Title = tostring(config.Title or "Tab"),
+        Title = tostring(config.Name or config.Title or "Tab"),
         Sections = {},
+        SubTabs = {},
+        SubTabSelectors = {},
         Connections = {},
         SearchVisible = true,
         TwoColumn = self.TwoColumn,
+        HasSubTabs = false,
+        DefaultSubTabName = config.DefaultSubTabName,
     }, Tab)
     local button = create("TextButton", {
         Name = "TabButton",
@@ -3721,7 +6285,7 @@ function Window:CreateTab(config: AnyTable?): AnyTable
         BorderSizePixel = 0,
         Text = "",
         AutoButtonColor = false,
-        Size = UDim2.new(1, 0, 0, 34),
+        Size = UDim2.new(1, 0, 0, 30),
         Parent = self.SidebarList,
     }) :: TextButton
     button:SetAttribute("KronosSearch", string.lower(tab.Title))
@@ -3737,13 +6301,15 @@ function Window:CreateTab(config: AnyTable?): AnyTable
     }) :: Frame
     corner(activeBar, 1)
     ThemeController:Bind(activeBar, "BackgroundColor3", "Accent")
-    local icon = makeText(button, getIcon(config.Icon or tab.Title), 12, Theme.Muted, "bold")
-    icon.Position = UDim2.fromOffset(9, 0)
-    icon.Size = UDim2.fromOffset(22, 34)
-    icon.TextXAlignment = Enum.TextXAlignment.Center
+    local icon = makeIcon(button, config, "Muted")
+    if icon then
+        icon.AnchorPoint = Vector2.new(0, 0.5)
+        icon.Position = UDim2.new(0, 12, 0.5, 0)
+    end
     local title = makeText(button, tab.Title, 10, Theme.SubText, "bold")
-    title.Position = UDim2.fromOffset(36, 0)
-    title.Size = UDim2.new(1, -43, 1, 0)
+    local titleOffset = icon and (icon.Size.X.Offset + 20) or 11
+    title.Position = UDim2.fromOffset(titleOffset, 0)
+    title.Size = UDim2.new(1, -titleOffset - 7, 1, 0)
 
     local page = create("CanvasGroup", {
         Name = "TabPage",
@@ -3754,6 +6320,20 @@ function Window:CreateTab(config: AnyTable?): AnyTable
         Visible = false,
         Parent = self.PageHost,
     }) :: CanvasGroup
+    local subTabBar = create("ScrollingFrame", {
+        Name = "SubTabBar",
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Position = UDim2.fromOffset(7, 4),
+        Size = UDim2.new(1, -14, 0, 26),
+        CanvasSize = UDim2.fromOffset(0, 0),
+        ScrollBarThickness = 0,
+        ScrollingDirection = Enum.ScrollingDirection.X,
+        Visible = false,
+        Parent = page,
+    }) :: ScrollingFrame
+    local subTabBarLayout = list(subTabBar, Enum.FillDirection.Horizontal, 5)
+    subTabBarLayout.VerticalAlignment = Enum.VerticalAlignment.Center
     local scroll = create("ScrollingFrame", {
         Name = "ContentScroll",
         BackgroundTransparency = 1,
@@ -3793,12 +6373,20 @@ function Window:CreateTab(config: AnyTable?): AnyTable
     tab.IconLabel = icon
     tab.TitleLabel = title
     tab.Page = page
+    tab.SubTabBar = subTabBar
+    tab.SubTabBarLayout = subTabBarLayout
     tab.Scroll = scroll
     tab.Columns = columns
     tab.LeftColumn = leftColumn
     tab.RightColumn = rightColumn
     tab.LeftLayout = leftLayout
     tab.RightLayout = rightLayout
+    addConnection(
+        tab,
+        subTabBarLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+            subTabBar.CanvasSize = UDim2.fromOffset(subTabBarLayout.AbsoluteContentSize.X + 2, 0)
+        end)
+    )
     addConnection(
         tab,
         leftLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
@@ -3835,6 +6423,8 @@ function Window:CreateTab(config: AnyTable?): AnyTable
     )
     attachTooltip(self, button, config.Tooltip, tab)
     table.insert(self.Tabs, tab)
+    ResponsiveController:RegisterTree(self, button)
+    ResponsiveController:RegisterTree(self, page)
     tab:ApplyColumns(self.TwoColumn)
     if not self.ActiveTab then
         self:SelectTab(tab)
@@ -3847,33 +6437,37 @@ Window.AddTab = Window.CreateTab
 function Window:AddSection(config: AnyTable?): AnyTable
     local tab = self.ActiveTab or self.Tabs[1]
     if not tab then
-        tab = self:CreateTab({ Title = "General", Icon = "Home" })
+        tab = self:CreateTab({ Title = "General", Icon = "house" })
     end
     return tab:CreateSection(config)
 end
 
-function Window:Notify(config: AnyTable?): AnyTable
+function Window:Notify(config: NotificationOptions?): AnyTable
     return self.Kronos:Notify(config)
 end
 
-local function makeUtilityButton(parent: Instance, glyph: string, order: number): TextButton
+local function makeUtilityButton(parent: Instance, iconName: string, order: number): TextButton
     local button = create("TextButton", {
         BackgroundColor3 = Theme.Surface2,
         BackgroundTransparency = 0.38,
         BorderSizePixel = 0,
-        Text = glyph,
-        TextColor3 = Theme.SubText,
-        Font = Enum.Font.GothamBold,
-        TextSize = 12,
+        Text = "",
         AutoButtonColor = false,
         AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, -(10 + (order - 1) * 31), 0.5, 0),
-        Size = UDim2.fromOffset(25, 25),
+        Position = UDim2.new(1, -(9 + (order - 1) * 28), 0.5, 0),
+        Size = UDim2.fromOffset(23, 23),
         ZIndex = 32,
         Parent = parent,
     }) :: TextButton
     corner(button, 5)
     stroke(button, Theme.Border, 0.7, 1)
+    local icon = makeIcon(button, { Icon = iconName, IconSize = 12 }, "SubText")
+    if icon then
+        icon.Name = "UtilityIcon"
+        icon.AnchorPoint = Vector2.new(0.5, 0.5)
+        icon.Position = UDim2.fromScale(0.5, 0.5)
+        icon.ZIndex = 33
+    end
     return button
 end
 
@@ -3881,7 +6475,7 @@ function Window:_makeHeader(config: WindowConfig)
     local header = create("Frame", {
         Name = "Header",
         BackgroundColor3 = Theme.BackgroundSoft,
-        BackgroundTransparency = 0.08,
+        BackgroundTransparency = 0.1,
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, Metrics.Header),
         ZIndex = 25,
@@ -3903,7 +6497,7 @@ function Window:_makeHeader(config: WindowConfig)
         BackgroundTransparency = 1,
         Active = true,
         Position = UDim2.fromOffset(0, 0),
-        Size = UDim2.new(1, -155, 1, 0),
+        Size = UDim2.new(1, -132, 1, 0),
         ZIndex = 27,
         Parent = header,
     }) :: Frame
@@ -3911,50 +6505,67 @@ function Window:_makeHeader(config: WindowConfig)
     local logo = create("Frame", {
         BackgroundColor3 = Theme.Accent,
         BorderSizePixel = 0,
-        Position = UDim2.fromOffset(13, 14),
-        Size = UDim2.fromOffset(27, 27),
+        Position = UDim2.fromOffset(12, 12),
+        Size = UDim2.fromOffset(24, 24),
         ZIndex = 29,
         Parent = header,
     }) :: Frame
     corner(logo, 5)
     ThemeController:Bind(logo, "BackgroundColor3", "Accent")
-    local logoText = makeText(logo, "K", 13, Theme.White, "bold")
-    logoText.Size = UDim2.fromScale(1, 1)
-    logoText.TextXAlignment = Enum.TextXAlignment.Center
-    logoText.ZIndex = 30
-    local title = makeText(header, tostring(config.Title or "Kronos"), 13, Theme.Text, "bold")
-    title.Position = UDim2.fromOffset(49, 10)
-    title.Size = UDim2.fromOffset(180, 20)
+    local logoIcon = makeIcon(logo, config, "White")
+    if logoIcon then
+        logoIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+        logoIcon.Position = UDim2.fromScale(0.5, 0.5)
+        logoIcon.ZIndex = 30
+    else
+        local logoText = makeText(logo, "K", 13, Theme.White, "bold")
+        logoText.Size = UDim2.fromScale(1, 1)
+        logoText.TextXAlignment = Enum.TextXAlignment.Center
+        logoText.ZIndex = 30
+    end
+    local title = makeText(header, tostring(config.Title or "Kronos"), 12, Theme.Text, "bold")
+    title.Position = UDim2.fromOffset(44, 7)
+    title.Size = UDim2.fromOffset(180, 19)
     title.ZIndex = 29
     local subtitle =
         makeText(header, tostring(config.Subtitle or config.SubTitle or "Interface Library"), 9, Theme.Muted)
-    subtitle.Position = UDim2.fromOffset(49, 28)
-    subtitle.Size = UDim2.fromOffset(260, 17)
+    subtitle.Position = UDim2.fromOffset(44, 25)
+    subtitle.Size = UDim2.fromOffset(250, 15)
     subtitle.ZIndex = 29
 
-    local closeButton = makeUtilityButton(header, "×", 1)
-    local minimizeButton = makeUtilityButton(header, "−", 2)
-    local settingsButton = makeUtilityButton(header, getIcon("Settings"), 3)
-    local presetsButton = makeUtilityButton(header, getIcon("Save"), 4)
+    local closeButton = makeUtilityButton(header, "x", 1)
+    local minimizeButton = makeUtilityButton(header, "minus", 2)
+    local settingsButton = makeUtilityButton(header, "settings", 3)
+    local presetsButton = makeUtilityButton(header, "save", 4)
     self.SettingsButton = settingsButton
     self.PresetsButton = presetsButton
     self.HeaderTitle = title
     self.HeaderSubtitle = subtitle
     self.Header = header
-    DragController:Bind(self, dragSurface, self.Root, function(position)
-        self.LastPosition = position
-    end)
+    if config.Draggable ~= false then
+        DragController:Bind(self, dragSurface, self.Root, function(position)
+            self.LastPosition = position
+        end, self.DragOptions)
+    end
     for _, button in ipairs({ closeButton, minimizeButton, settingsButton, presetsButton }) do
         addConnection(
             self,
             button.MouseEnter:Connect(function()
-                tween(button, { BackgroundTransparency = 0.12, TextColor3 = Theme.Text }, Motion.Hover)
+                tween(button, { BackgroundTransparency = 0.12 }, Motion.Hover)
+                local icon = button:FindFirstChild("UtilityIcon")
+                if icon then
+                    tween(icon, { ImageColor3 = Theme.Text }, Motion.Hover)
+                end
             end)
         )
         addConnection(
             self,
             button.MouseLeave:Connect(function()
-                tween(button, { BackgroundTransparency = 0.38, TextColor3 = Theme.SubText }, Motion.Hover)
+                tween(button, { BackgroundTransparency = 0.38 }, Motion.Hover)
+                local icon = button:FindFirstChild("UtilityIcon")
+                if icon then
+                    tween(icon, { ImageColor3 = Theme.SubText }, Motion.Hover)
+                end
             end)
         )
     end
@@ -4038,70 +6649,149 @@ function Window:ApplyResponsive()
         return
     end
     local viewport = viewportSize()
+    local density = ResponsiveController:GetDensity(viewport)
+    local densityChanged = self.Density ~= density
+    self.Density = density
+    ResponsiveController:Apply(self)
+    NotificationController:ApplyResponsive()
+    local function d(value: number): number
+        return ResponsiveController:Scale(self, value)
+    end
     local topLeftInset, bottomRightInset = guiInsets()
-    local safeWidth = math.max(viewport.X - topLeftInset.X - bottomRightInset.X - Metrics.SafePadding * 2, 280)
-    local safeHeight = math.max(viewport.Y - topLeftInset.Y - bottomRightInset.Y - Metrics.SafePadding * 2, 300)
-    local width = math.min(self.BaseWidth, safeWidth)
-    local height = math.min(self.BaseHeight, safeHeight)
+    local dragMargin = math.clamp(finiteNumber(self.DragOptions and self.DragOptions.DragMargin, 4), 0, 32)
+    local safeWidth = math.max(viewport.X - topLeftInset.X - bottomRightInset.X - dragMargin * 2, 1)
+    local safeHeight = math.max(viewport.Y - topLeftInset.Y - bottomRightInset.Y - dragMargin * 2, 1)
+    local heightLimit = safeHeight
+    if self.ReserveFloatingBand and UserInputService.TouchEnabled and viewport.X > viewport.Y and viewport.Y <= 650 then
+        heightLimit = math.max(safeHeight - d(190), math.min(safeHeight, d(180)))
+    end
+    local width = math.min(self.BaseWidth * density, safeWidth)
+    local height = math.min(self.BaseHeight * density, heightLimit)
     width = math.floor(width + 0.5)
     height = math.floor(height + 0.5)
     self.Width = width
     self.Height = height
-    self.Root.Size = UDim2.fromOffset(width, height)
-    local anchorPoint = self.Root.AbsolutePosition + self.Root.AbsoluteSize * self.Root.AnchorPoint
-    local clamped = clampGuiCenter(self.Root, anchorPoint)
-    self.Root.Position = UDim2.fromOffset(clamped.X, clamped.Y)
+    if self.LastPosition then
+        local size, position = nearestEdgeLayout(self.Root, Vector2.new(width, height), self.DragOptions)
+        self.Root.Size = size
+        self.Root.Position = position
+    else
+        self.Root.Size = UDim2.fromOffset(width, height)
+    end
+    DragController:Clamp(self.Root, self.DragOptions)
 
-    local expanded = width >= 690 and self.ForceCompactNavigation ~= true
-    local sidebarWidth = expanded and Metrics.Sidebar or Metrics.CompactSidebar
+    local expanded = width >= d(690) and self.ForceCompactNavigation ~= true
+    local sidebarWidth = expanded and d(Metrics.Sidebar) or d(Metrics.CompactSidebar)
+    local headerHeight = d(Metrics.Header)
     self.ExpandedNavigation = expanded
-    self.Sidebar.Size = UDim2.new(0, sidebarWidth, 1, -Metrics.Header)
-    self.Content.Position = UDim2.fromOffset(sidebarWidth, Metrics.Header)
-    self.Content.Size = UDim2.new(1, -sidebarWidth, 1, -Metrics.Header)
+    self.Sidebar.Size = UDim2.new(0, sidebarWidth, 1, -headerHeight)
+    self.Content.Position = UDim2.fromOffset(sidebarWidth, headerHeight)
+    self.Content.Size = UDim2.new(1, -sidebarWidth, 1, -headerHeight)
     self.SearchBox.PlaceholderText = expanded and "Search" or ""
     self.SearchBox.TextXAlignment = Enum.TextXAlignment.Left
     if not expanded and self.SearchExpanded then
-        self.SearchBox.Size = UDim2.fromOffset(math.min(190, width - 74), 30)
+        self.SearchBox.Size = UDim2.fromOffset(math.min(d(180), width - d(64)), d(26))
     else
-        self.SearchBox.Size = UDim2.new(1, -16, 0, 30)
+        self.SearchBox.Size = UDim2.new(1, -d(16), 0, d(26))
     end
-    self.SearchBox.Position = UDim2.fromOffset(8, 8)
+    self.SearchBox.Position = UDim2.fromOffset(d(8), d(8))
     self.SearchIcon.Visible = true
     for _, tab in ipairs(self.Tabs) do
-        tab.TitleLabel.Visible = expanded
-        tab.IconLabel.Position = expanded and UDim2.fromOffset(9, 0) or UDim2.fromOffset(16, 0)
-        tab.IconLabel.Size = expanded and UDim2.fromOffset(22, 34) or UDim2.fromOffset(22, 34)
-        tab.Button.Size = UDim2.new(1, 0, 0, expanded and 34 or 38)
+        tab.TitleLabel.Visible = expanded or tab.IconLabel == nil
+        if tab.IconLabel then
+            tab.IconLabel.AnchorPoint = Vector2.new(0, 0.5)
+            tab.IconLabel.Position = expanded and UDim2.new(0, d(12), 0.5, 0) or UDim2.new(0.5, 0, 0.5, 0)
+            if not expanded then
+                tab.IconLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+            end
+        end
+        tab.Button.Size = UDim2.new(1, 0, 0, expanded and d(30) or d(34))
     end
     if self.SidebarFooterLabel then
         self.SidebarFooterLabel.Visible = expanded
     end
-    self.TwoColumn = width >= 730 and height >= 340
+    self.TwoColumn = width >= d(730) and height >= d(340)
     for _, tab in ipairs(self.Tabs) do
         tab:ApplyColumns(self.TwoColumn)
     end
     if self.SidePanel and self.SidePanel.Parent then
         local isPresets = self.SidePanelKind == "Presets"
-        local panelWidth = math.min(isPresets and 250 or 292, math.max(width - 76, 226))
+        local panelWidth = math.min(d(isPresets and 240 or 280), math.max(width - d(70), d(176)))
         local openPosition: UDim2
         local closedPosition: UDim2
         if isPresets then
-            local x = math.min(sidebarWidth + 9, math.max(width - panelWidth - 9, 9))
-            openPosition = UDim2.fromOffset(x, Metrics.Header + 6)
-            closedPosition = UDim2.fromOffset(x, Metrics.Header - 3)
+            local x = math.min(sidebarWidth + d(9), math.max(width - panelWidth - d(9), d(9)))
+            openPosition = UDim2.fromOffset(x, headerHeight + d(6))
+            closedPosition = UDim2.fromOffset(x, headerHeight - d(3))
         else
-            openPosition = UDim2.new(1, -panelWidth - 7, 0, Metrics.Header + 6)
-            closedPosition = UDim2.new(1, 5, 0, Metrics.Header + 6)
+            openPosition = UDim2.new(1, -panelWidth - d(7), 0, headerHeight + d(6))
+            closedPosition = UDim2.new(1, d(5), 0, headerHeight + d(6))
         end
-        self.SidePanel.Size = UDim2.new(0, panelWidth, 1, -(Metrics.Header + 12))
+        self.SidePanel.Size = UDim2.new(0, panelWidth, 1, -(headerHeight + d(12)))
         self.SidePanel.Position = openPosition
         self.SidePanelOpenPosition = openPosition
         self.SidePanelClosedPosition = closedPosition
     end
     for _, widget in ipairs(self.Widgets) do
-        if widget.Clamp then
+        if densityChanged and widget.Reflow then
+            widget:Reflow()
+        elseif widget.Clamp then
             widget:Clamp()
         end
+    end
+    local function placeDefault(widget: AnyTable?, topLeft: Vector2?)
+        if
+            not widget
+            or widget.UserMoved
+            or widget.CustomPosition
+            or not widget.Root
+            or not widget.Root.Parent
+            or not topLeft
+        then
+            return
+        end
+        local root = widget.Root :: GuiObject
+        setAbsoluteTopLeft(root, clampTopLeftForSize(root, topLeft, root.AbsoluteSize, widget.DragOptions))
+    end
+    local status = self.StatusStrip
+    local target = self.TargetList
+    local keybinds = self.KeybindWidget
+    local reopen = self.ReopenButton
+    local gap = d(8)
+    if status and status.Root and status.Root.Parent then
+        local minimum, maximumEdge = viewportBounds(status.Root, status.DragOptions)
+        placeDefault(status, Vector2.new(maximumEdge.X - status.Root.AbsoluteSize.X, minimum.Y))
+    end
+    if target and target.Root and target.Root.Parent then
+        local minimum = viewportBounds(target.Root, target.DragOptions)
+        local targetY = minimum.Y
+        if viewport.X < viewport.Y and status and status.Root and status.Root.Parent then
+            targetY += status.Root.AbsoluteSize.Y + gap
+        end
+        placeDefault(target, Vector2.new(minimum.X, targetY))
+    end
+    if keybinds and keybinds.Root and keybinds.Root.Parent then
+        local minimum, maximumEdge = viewportBounds(keybinds.Root, keybinds.DragOptions)
+        local topLeft =
+            Vector2.new(minimum.X + (maximumEdge.X - minimum.X) * 0.54 - keybinds.Root.AbsoluteSize.X * 0.5, minimum.Y)
+        if viewport.X < viewport.Y then
+            local y = minimum.Y
+            if status and status.Root and status.Root.Parent then
+                y += status.Root.AbsoluteSize.Y + gap
+            end
+            if target and target.Root and target.Root.Parent then
+                y += target.Root.AbsoluteSize.Y + gap
+            end
+            topLeft = Vector2.new(minimum.X, y)
+        end
+        placeDefault(keybinds, topLeft)
+    end
+    if reopen and reopen.Root and reopen.Root.Parent then
+        local minimum, maximumEdge = viewportBounds(reopen.Root, reopen.DragOptions)
+        placeDefault(
+            reopen,
+            Vector2.new(maximumEdge.X - reopen.Root.AbsoluteSize.X, maximumEdge.Y - reopen.Root.AbsoluteSize.Y)
+        )
     end
     local activePopup = self.ActivePopup
     if activePopup and activePopup.Frame.Parent and activePopup.Anchor.Parent then
@@ -4127,6 +6817,7 @@ function Window:SetVisible(visible: boolean): AnyTable
             Size = UDim2.fromOffset(self.Width, self.Height),
         }, Motion.Window, Enum.EasingStyle.Quart)
     else
+        DragController:Cancel(self.Root)
         tween(self.Root, {
             GroupTransparency = 1,
             Size = UDim2.fromOffset(self.Width * 0.97, self.Height * 0.97),
@@ -4201,14 +6892,14 @@ function Window:_closeSidePanel(immediate: boolean?)
     tween(
         panel,
         { Position = closedPosition, GroupTransparency = 1 },
-        Motion.Tab,
+        Motion.Settings,
         Enum.EasingStyle.Quart,
         Enum.EasingDirection.In
     )
     if dim then
-        tween(dim, { BackgroundTransparency = 1 }, Motion.Tab)
+        tween(dim, { BackgroundTransparency = 1 }, Motion.Settings)
     end
-    task.delay(Motion.Tab, function()
+    task.delay(Motion.Settings, function()
         if dim and dim.Parent then
             dim:Destroy()
         end
@@ -4255,6 +6946,9 @@ function Window:_openSidePanel(kind: string)
     PopupController:Close(self)
     local sideMaid = Maid.new()
     self.SideMaid = sideMaid
+    local function d(value: number): number
+        return ResponsiveController:Scale(self, value)
+    end
     local dim = create("TextButton", {
         Name = "PanelDim",
         BackgroundColor3 = Theme.Overlay,
@@ -4266,26 +6960,27 @@ function Window:_openSidePanel(kind: string)
         ZIndex = 170,
         Parent = self.Main,
     }) :: TextButton
-    local panelWidth = math.min(kind == "Presets" and 250 or 292, math.max(self.Width - 76, 226))
+    local panelWidth = math.min(d(kind == "Presets" and 240 or 280), math.max(self.Width - d(70), d(176)))
+    local headerHeight = d(Metrics.Header)
     local openPosition: UDim2
     local closedPosition: UDim2
     if kind == "Presets" then
         local navigationWidth = self.ExpandedNavigation and Metrics.Sidebar or Metrics.CompactSidebar
-        local x = math.min(navigationWidth + 9, math.max(self.Width - panelWidth - 9, 9))
-        openPosition = UDim2.fromOffset(x, Metrics.Header + 6)
-        closedPosition = UDim2.fromOffset(x, Metrics.Header - 3)
+        local x = math.min(d(navigationWidth) + d(9), math.max(self.Width - panelWidth - d(9), d(9)))
+        openPosition = UDim2.fromOffset(x, headerHeight + d(6))
+        closedPosition = UDim2.fromOffset(x, headerHeight - d(3))
     else
-        openPosition = UDim2.new(1, -panelWidth - 7, 0, Metrics.Header + 6)
-        closedPosition = UDim2.new(1, 5, 0, Metrics.Header + 6)
+        openPosition = UDim2.new(1, -panelWidth - d(7), 0, headerHeight + d(6))
+        closedPosition = UDim2.new(1, d(5), 0, headerHeight + d(6))
     end
     local panel = create("CanvasGroup", {
         Name = kind .. "Panel",
         BackgroundColor3 = Theme.ElevatedSurface,
-        BackgroundTransparency = 0.015,
+        BackgroundTransparency = 0.07,
         BorderSizePixel = 0,
         GroupTransparency = 0,
         Position = closedPosition,
-        Size = UDim2.new(0, panelWidth, 1, -(Metrics.Header + 12)),
+        Size = UDim2.new(0, panelWidth, 1, -(headerHeight + d(12))),
         ZIndex = 175,
         Parent = self.Main,
     }) :: CanvasGroup
@@ -4302,7 +6997,7 @@ function Window:_openSidePanel(kind: string)
         BackgroundColor3 = Theme.Surface2,
         BackgroundTransparency = 0.12,
         BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 52),
+        Size = UDim2.new(1, 0, 0, 42),
         ZIndex = 176,
         Parent = panel,
     }) :: Frame
@@ -4321,43 +7016,49 @@ function Window:_openSidePanel(kind: string)
         BackgroundColor3 = Theme.Surface2,
         BackgroundTransparency = 0.35,
         BorderSizePixel = 0,
-        Text = "‹",
-        TextColor3 = Theme.SubText,
-        Font = Enum.Font.GothamBold,
-        TextSize = 16,
+        Text = "",
         AutoButtonColor = false,
-        Position = UDim2.fromOffset(10, 13),
-        Size = UDim2.fromOffset(26, 26),
+        Position = UDim2.fromOffset(9, 10),
+        Size = UDim2.fromOffset(22, 22),
         Visible = false,
         ZIndex = 178,
         Parent = header,
     }) :: TextButton
     corner(back, 5)
-    local headerTitle = makeText(header, kind == "Presets" and "Presets" or "Settings", 12, Theme.Text, "bold")
+    local backIcon = makeIcon(back, { Icon = "chevron-left", IconSize = 13 }, "SubText")
+    if backIcon then
+        backIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+        backIcon.Position = UDim2.fromScale(0.5, 0.5)
+        backIcon.ZIndex = 179
+    end
+    local headerTitle = makeText(header, kind == "Presets" and "Presets" or "Settings", 11, Theme.Text, "bold")
     headerTitle.Position = UDim2.fromOffset(14, 0)
     headerTitle.Size = UDim2.new(1, -54, 1, 0)
     headerTitle.ZIndex = 177
     local close = create("TextButton", {
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        Text = "×",
-        TextColor3 = Theme.Muted,
-        Font = Enum.Font.GothamBold,
-        TextSize = 15,
+        Text = "",
         AutoButtonColor = false,
         AnchorPoint = Vector2.new(1, 0.5),
         Position = UDim2.new(1, -10, 0.5, 0),
-        Size = UDim2.fromOffset(28, 28),
+        Size = UDim2.fromOffset(24, 24),
         ZIndex = 178,
         Parent = header,
     }) :: TextButton
+    local closeIcon = makeIcon(close, { Icon = "x", IconSize = 13 }, "Muted")
+    if closeIcon then
+        closeIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+        closeIcon.Position = UDim2.fromScale(0.5, 0.5)
+        closeIcon.ZIndex = 179
+    end
 
     local content = create("ScrollingFrame", {
         Name = "PanelContent",
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        Position = UDim2.fromOffset(0, 52),
-        Size = UDim2.new(1, 0, 1, -52),
+        Position = UDim2.fromOffset(0, 42),
+        Size = UDim2.new(1, 0, 1, -42),
         CanvasSize = UDim2.fromOffset(0, 0),
         ScrollBarThickness = 2,
         ScrollBarImageColor3 = Theme.Accent,
@@ -4368,8 +7069,8 @@ function Window:_openSidePanel(kind: string)
     ThemeController:Bind(content, "ScrollBarImageColor3", "Accent")
     local page = create("Frame", {
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(12, 12),
-        Size = UDim2.new(1, -26, 0, 0),
+        Position = UDim2.fromOffset(10, 10),
+        Size = UDim2.new(1, -22, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
         ZIndex = 177,
         Parent = content,
@@ -4400,7 +7101,7 @@ function Window:_openSidePanel(kind: string)
     local function addHeading(titleText: string, subtitleText: string?)
         local heading = create("Frame", {
             BackgroundTransparency = 1,
-            Size = UDim2.new(1, 0, 0, subtitleText and 42 or 25),
+            Size = UDim2.new(1, 0, 0, subtitleText and 36 or 22),
             ZIndex = 178,
             Parent = page,
         }) :: Frame
@@ -4415,8 +7116,13 @@ function Window:_openSidePanel(kind: string)
         end
     end
 
-    local function addRow(titleText: string, subtitleText: string?, callback: (() -> ())?): TextButton
-        local rowHeight = subtitleText and 46 or 36
+    local function addRow(
+        titleText: string,
+        subtitleText: string?,
+        callback: (() -> ())?,
+        iconName: string?
+    ): TextButton
+        local rowHeight = subtitleText and 40 or 32
         local row = create("TextButton", {
             BackgroundColor3 = Theme.Surface2,
             BackgroundTransparency = 0.38,
@@ -4429,23 +7135,33 @@ function Window:_openSidePanel(kind: string)
         }) :: TextButton
         corner(row, 5)
         stroke(row, Theme.Border, 0.72, 1)
+        local textOffset = 10
+        if iconName then
+            local rowIcon = makeIcon(row, { Icon = iconName, IconSize = 13 }, "SubText")
+            if rowIcon then
+                rowIcon.AnchorPoint = Vector2.new(0, 0.5)
+                rowIcon.Position = UDim2.new(0, 10, 0.5, 0)
+                rowIcon.ZIndex = 179
+                textOffset = 31
+            end
+        end
         local titleLabel = makeText(row, titleText, 10, Theme.Text, "bold")
-        titleLabel.Position = UDim2.fromOffset(10, subtitleText and 4 or 0)
-        titleLabel.Size = UDim2.new(1, -36, 0, subtitleText and 20 or rowHeight)
+        titleLabel.Position = UDim2.fromOffset(textOffset, subtitleText and 4 or 0)
+        titleLabel.Size = UDim2.new(1, -textOffset - 26, 0, subtitleText and 20 or rowHeight)
         titleLabel.ZIndex = 179
         if subtitleText then
             local subtitleLabel = makeText(row, subtitleText, 9, Theme.Muted)
-            subtitleLabel.Position = UDim2.fromOffset(10, 22)
-            subtitleLabel.Size = UDim2.new(1, -36, 0, 16)
+            subtitleLabel.Position = UDim2.fromOffset(textOffset, 22)
+            subtitleLabel.Size = UDim2.new(1, -textOffset - 26, 0, 16)
             subtitleLabel.ZIndex = 179
         end
         if callback then
-            local chevron = makeText(row, "›", 14, Theme.Muted, "bold")
-            chevron.AnchorPoint = Vector2.new(1, 0.5)
-            chevron.Position = UDim2.new(1, -9, 0.5, 0)
-            chevron.Size = UDim2.fromOffset(18, 22)
-            chevron.TextXAlignment = Enum.TextXAlignment.Center
-            chevron.ZIndex = 179
+            local chevron = makeIcon(row, { Icon = "chevron-right", IconSize = 12 }, "Muted")
+            if chevron then
+                chevron.AnchorPoint = Vector2.new(1, 0.5)
+                chevron.Position = UDim2.new(1, -10, 0.5, 0)
+                chevron.ZIndex = 179
+            end
             pageMaid:Give(row.Activated:Connect(callback))
         end
         pageMaid:Give(row.MouseEnter:Connect(function()
@@ -4462,7 +7178,7 @@ function Window:_openSidePanel(kind: string)
         clearPage()
         currentPage = pageName
         back.Visible = pageName ~= "root"
-        headerTitle.Position = pageName ~= "root" and UDim2.fromOffset(45, 0) or UDim2.fromOffset(14, 0)
+        headerTitle.Position = pageName ~= "root" and UDim2.fromOffset(38, 0) or UDim2.fromOffset(12, 0)
         if kind == "Presets" then
             headerTitle.Text = pageName == "root" and "Presets" or pageName
         else
@@ -4474,7 +7190,7 @@ function Window:_openSidePanel(kind: string)
                 BackgroundColor3 = Theme.Surface2,
                 BackgroundTransparency = 0.28,
                 BorderSizePixel = 0,
-                Size = UDim2.new(1, 0, 0, 67),
+                Size = UDim2.new(1, 0, 0, 58),
                 ZIndex = 178,
                 Parent = page,
             }) :: Frame
@@ -4484,12 +7200,12 @@ function Window:_openSidePanel(kind: string)
                 BackgroundColor3 = Theme.Surface3,
                 BorderSizePixel = 0,
                 Image = "",
-                Position = UDim2.fromOffset(10, 11),
-                Size = UDim2.fromOffset(44, 44),
+                Position = UDim2.fromOffset(9, 10),
+                Size = UDim2.fromOffset(38, 38),
                 ZIndex = 179,
                 Parent = profile,
             }) :: ImageLabel
-            corner(avatar, 22)
+            corner(avatar, 19)
             local fallback = makeText(
                 avatar,
                 string.upper(string.sub(LocalPlayer and LocalPlayer.Name or "K", 1, 1)),
@@ -4502,13 +7218,13 @@ function Window:_openSidePanel(kind: string)
             fallback.ZIndex = 180
             local userName =
                 makeText(profile, LocalPlayer and LocalPlayer.DisplayName or "Local Player", 11, Theme.Text, "bold")
-            userName.Position = UDim2.fromOffset(64, 13)
-            userName.Size = UDim2.new(1, -74, 0, 19)
+            userName.Position = UDim2.fromOffset(56, 10)
+            userName.Size = UDim2.new(1, -65, 0, 18)
             userName.ZIndex = 179
             local metadata =
                 makeText(profile, LocalPlayer and ("@" .. LocalPlayer.Name) or "Profile unavailable", 9, Theme.Muted)
-            metadata.Position = UDim2.fromOffset(64, 31)
-            metadata.Size = UDim2.new(1, -74, 0, 17)
+            metadata.Position = UDim2.fromOffset(56, 28)
+            metadata.Size = UDim2.new(1, -65, 0, 16)
             metadata.ZIndex = 179
             if LocalPlayer then
                 task.spawn(function()
@@ -4528,16 +7244,16 @@ function Window:_openSidePanel(kind: string)
             addHeading("Interface", "Appearance, input, and floating panels")
             addRow("Theme & accent", "Reference violet and semantic colors", function()
                 showPage("Theme")
-            end)
+            end, "palette")
             addRow("Installed hotkeys", "Window and control bindings", function()
                 showPage("Hotkeys")
-            end)
+            end, "keyboard")
             addRow("Interface behavior", "Navigation and notifications", function()
                 showPage("Interface")
-            end)
+            end, "settings-2")
             addRow("Floating widgets", "Status, target, and keybind lists", function()
                 showPage("Widgets")
-            end)
+            end, "panels-top-left")
         elseif kind == "Settings" and pageName == "Theme" then
             addHeading("Accent color", "Changes propagate without rebuilding controls")
             local palette = create("Frame", {
@@ -4574,10 +7290,10 @@ function Window:_openSidePanel(kind: string)
             end
             addRow("Restore reference violet", rgbToHex(Color3.fromRGB(143, 104, 255)), function()
                 self:SetAccent(Color3.fromRGB(143, 104, 255))
-            end)
+            end, "rotate-ccw")
         elseif kind == "Settings" and pageName == "Hotkeys" then
             addHeading("Window hotkey", "Click the row, then press a keyboard key")
-            local row = addRow("Toggle interface", tostring(self.ToggleKey.Name), nil)
+            local row = addRow("Toggle interface", tostring(self.ToggleKey.Name), nil, "keyboard")
             local keyLabel = makeText(row, self.ToggleKey.Name, 9, Theme.Accent, "bold")
             keyLabel.AnchorPoint = Vector2.new(1, 0.5)
             keyLabel.Position = UDim2.new(1, -9, 0.5, 0)
@@ -4593,11 +7309,16 @@ function Window:_openSidePanel(kind: string)
                 addRow(keybind.DisplayName, tostring(keybind.Value) .. "  ·  " .. keybind.Mode, function()
                     self:_closeSidePanel(false)
                     keybind:BeginListening()
-                end)
+                end, "command")
             end
         elseif kind == "Settings" and pageName == "Interface" then
             addHeading("Layout", "Compact geometry is preserved at every breakpoint")
-            local navRow = addRow("Compact navigation", self.ForceCompactNavigation and "Enabled" or "Automatic", nil)
+            local navRow = addRow(
+                "Compact navigation",
+                self.ForceCompactNavigation and "Enabled" or "Automatic",
+                nil,
+                "panel-left"
+            )
             local navState = makeText(navRow, self.ForceCompactNavigation and "ON" or "AUTO", 9, Theme.Accent, "bold")
             navState.AnchorPoint = Vector2.new(1, 0.5)
             navState.Position = UDim2.new(1, -9, 0.5, 0)
@@ -4610,7 +7331,7 @@ function Window:_openSidePanel(kind: string)
             end))
             addRow("Notification preview", "Show the compact stacked notification", function()
                 self:Notify({ Title = "Kronos", Content = "Interface settings are active.", Type = "success" })
-            end)
+            end, "bell")
         elseif kind == "Settings" and pageName == "Widgets" then
             addHeading("Floating widgets", "Each panel is draggable and independently hideable")
             for _, widget in ipairs(self.Widgets) do
@@ -4665,10 +7386,7 @@ function Window:_openSidePanel(kind: string)
             local addPreset = create("TextButton", {
                 BackgroundColor3 = Theme.Accent,
                 BorderSizePixel = 0,
-                Text = "+",
-                TextColor3 = Theme.White,
-                Font = Enum.Font.GothamBold,
-                TextSize = 15,
+                Text = "",
                 AutoButtonColor = false,
                 AnchorPoint = Vector2.new(1, 0),
                 Position = UDim2.new(1, 0, 0, 0),
@@ -4678,6 +7396,12 @@ function Window:_openSidePanel(kind: string)
             }) :: TextButton
             corner(addPreset, 5)
             ThemeController:Bind(addPreset, "BackgroundColor3", "Accent")
+            local addPresetIcon = makeIcon(addPreset, { Icon = "plus", IconSize = 13 }, "White")
+            if addPresetIcon then
+                addPresetIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+                addPresetIcon.Position = UDim2.fromScale(0.5, 0.5)
+                addPresetIcon.ZIndex = 180
+            end
 
             local presetList = create("Frame", {
                 BackgroundTransparency = 1,
@@ -4752,10 +7476,7 @@ function Window:_openSidePanel(kind: string)
                             local delete = create("TextButton", {
                                 BackgroundTransparency = 1,
                                 BorderSizePixel = 0,
-                                Text = "×",
-                                TextColor3 = Theme.Error,
-                                Font = Enum.Font.GothamBold,
-                                TextSize = 13,
+                                Text = "",
                                 AutoButtonColor = false,
                                 AnchorPoint = Vector2.new(1, 0.5),
                                 Position = UDim2.new(1, -6, 0.5, 0),
@@ -4763,6 +7484,12 @@ function Window:_openSidePanel(kind: string)
                                 ZIndex = 180,
                                 Parent = presetRow,
                             }) :: TextButton
+                            local deleteIcon = makeIcon(delete, { Icon = "trash-2", IconSize = 12 }, "Error")
+                            if deleteIcon then
+                                deleteIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+                                deleteIcon.Position = UDim2.fromScale(0.5, 0.5)
+                                deleteIcon.ZIndex = 181
+                            end
                             presetMaid:Give(delete.Activated:Connect(function()
                                 table.remove(self.Presets, index)
                                 renderPresets(presetSearch.Text)
@@ -4865,6 +7592,7 @@ function Window:_openSidePanel(kind: string)
             end))
             renderPresets("")
         end
+        ResponsiveController:RegisterTree(self, page, true)
     end
 
     sideMaid:Give(dim.Activated:Connect(function()
@@ -4881,8 +7609,9 @@ function Window:_openSidePanel(kind: string)
         end
     end))
     showPage("root")
-    tween(dim, { BackgroundTransparency = 0.36 }, Motion.Tab)
-    tween(panel, { Position = openPosition, GroupTransparency = 0 }, Motion.Tab)
+    ResponsiveController:RegisterTree(self, panel, true)
+    tween(dim, { BackgroundTransparency = 0.36 }, Motion.Settings)
+    tween(panel, { Position = openPosition, GroupTransparency = 0 }, Motion.Settings)
 end
 
 function Window:OpenSettings(): AnyTable
@@ -4895,29 +7624,43 @@ function Window:OpenPresets(): AnyTable
     return self
 end
 
-function FloatingWidgetController:Create(window: AnyTable, config: AnyTable): AnyTable
+function FloatingWidgetController:Create(window: AnyTable, config: FloatingWidgetOptions): AnyTable
+    local density = window.Density or ResponsiveController:GetDensity()
+    local designWidth = math.max(finiteNumber(config.Width or (config.Size and config.Size.X.Offset), 246), 40)
+    local designHeight = math.max(finiteNumber(config.Height or (config.Size and config.Size.Y.Offset), 120), 40)
     local widget: AnyTable = {
         Window = window,
         Connections = {},
         Visible = config.Visible ~= false,
         Title = tostring(config.Title or "Widget"),
         Alive = true,
-        DesiredWidth = (config.Size and config.Size.X.Offset) or 246,
-        DesiredHeight = (config.Size and config.Size.Y.Offset) or 120,
+        CustomPosition = if config.CustomPosition ~= nil then config.CustomPosition == true else config.Position ~= nil,
+        DesignWidth = designWidth,
+        DesignHeight = designHeight,
+        DesiredWidth = math.floor(designWidth * density + 0.5),
+        DesiredHeight = math.floor(designHeight * density + 0.5),
+        DragOptions = {
+            DragBounds = config.DragBounds or "Viewport",
+            KeepFullyVisible = config.KeepFullyVisible ~= false,
+            DragMargin = finiteNumber(config.DragMargin, 4),
+            MinimumVisiblePixels = finiteNumber(config.MinimumVisiblePixels, 24),
+            DragThreshold = finiteNumber(config.DragThreshold, 5),
+        },
     }
     local root = create("CanvasGroup", {
         Name = config.Name or "FloatingWidget",
         BackgroundColor3 = Theme.ElevatedSurface,
-        BackgroundTransparency = 0.06,
+        BackgroundTransparency = 0.1,
         BorderSizePixel = 0,
         GroupTransparency = 0,
-        Position = config.Position or UDim2.fromOffset(14, 80),
-        Size = config.Size or UDim2.fromOffset(246, 120),
+        Position = scaledUDim2(config.Position or UDim2.fromOffset(14, 80), density),
+        Size = UDim2.fromOffset(math.floor(designWidth * density + 0.5), math.floor(designHeight * density + 0.5)),
         ClipsDescendants = true,
         Visible = widget.Visible,
         ZIndex = config.ZIndex or 500,
-        Parent = Kronos.GUI,
+        Parent = Kronos.Layers.Floating,
     }) :: CanvasGroup
+    root:SetAttribute("KronosNoDensity", true)
     ThemeController:Bind(root, "BackgroundColor3", "ElevatedSurface")
     corner(root, Metrics.Radius)
     local rootStroke = stroke(root, Theme.Border, 0.36, 1)
@@ -4927,43 +7670,54 @@ function FloatingWidgetController:Create(window: AnyTable, config: AnyTable): An
         BackgroundTransparency = 0.12,
         BorderSizePixel = 0,
         Active = true,
-        Size = UDim2.new(1, 0, 0, 31),
+        Size = UDim2.new(1, 0, 0, 26),
         ZIndex = root.ZIndex + 1,
         Parent = root,
     }) :: Frame
     local marker = create("Frame", {
         BackgroundColor3 = Theme.Accent,
         BorderSizePixel = 0,
-        Position = UDim2.fromOffset(0, 8),
-        Size = UDim2.fromOffset(2, 15),
+        Position = UDim2.fromOffset(0, 6),
+        Size = UDim2.fromOffset(2, 14),
         ZIndex = root.ZIndex + 2,
         Parent = header,
     }) :: Frame
     corner(marker, 1)
     ThemeController:Bind(marker, "BackgroundColor3", "Accent")
-    local title = makeText(header, widget.Title, 10, Theme.Text, "bold")
-    title.Position = UDim2.fromOffset(10, 0)
-    title.Size = UDim2.new(1, -34, 1, 0)
+    local titleOffset = 10
+    local widgetIcon = makeIcon(header, config, "Accent")
+    if widgetIcon then
+        widgetIcon.AnchorPoint = Vector2.new(0, 0.5)
+        widgetIcon.Position = UDim2.new(0, 10, 0.5, 0)
+        widgetIcon.ZIndex = root.ZIndex + 2
+        titleOffset = widgetIcon.Size.X.Offset + 16
+    end
+    local title = makeText(header, widget.Title, 9, Theme.Text, "bold")
+    title.Position = UDim2.fromOffset(titleOffset, 0)
+    title.Size = UDim2.new(1, -titleOffset - 28, 1, 0)
     title.ZIndex = root.ZIndex + 2
     local hide = create("TextButton", {
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        Text = "⌖",
-        TextColor3 = Theme.Muted,
-        Font = Enum.Font.GothamBold,
-        TextSize = 12,
+        Text = "",
         AutoButtonColor = false,
         AnchorPoint = Vector2.new(1, 0.5),
         Position = UDim2.new(1, -5, 0.5, 0),
-        Size = UDim2.fromOffset(24, 24),
+        Size = UDim2.fromOffset(22, 22),
         ZIndex = root.ZIndex + 3,
         Parent = header,
     }) :: TextButton
+    local hideIcon = makeIcon(hide, { Icon = "eye-off", IconSize = 12 }, "Muted")
+    if hideIcon then
+        hideIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+        hideIcon.Position = UDim2.fromScale(0.5, 0.5)
+        hideIcon.ZIndex = root.ZIndex + 4
+    end
     ThemeController:Bind(header, "BackgroundColor3", "Surface2")
     local body = create("Frame", {
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(0, 31),
-        Size = UDim2.new(1, 0, 1, -31),
+        Position = UDim2.fromOffset(0, 26),
+        Size = UDim2.new(1, 0, 1, -26),
         ZIndex = root.ZIndex + 1,
         Parent = root,
     }) :: Frame
@@ -4975,10 +7729,11 @@ function FloatingWidgetController:Create(window: AnyTable, config: AnyTable): An
         if self.Visible then
             root.Visible = true
             root.GroupTransparency = 1
-            tween(root, { GroupTransparency = 0 }, Motion.Window)
+            tween(root, { GroupTransparency = 0 }, Motion.Widget)
         else
-            tween(root, { GroupTransparency = 1 }, Motion.Tab)
-            task.delay(Motion.Tab, function()
+            DragController:Cancel(root)
+            tween(root, { GroupTransparency = 1 }, Motion.Widget)
+            task.delay(Motion.Widget, function()
                 if not self.Visible and root.Parent then
                     root.Visible = false
                 end
@@ -4988,38 +7743,43 @@ function FloatingWidgetController:Create(window: AnyTable, config: AnyTable): An
     end
     function widget:Clamp()
         if root.Parent then
-            local viewport = viewportSize()
-            root.Size = UDim2.fromOffset(
-                math.min(self.DesiredWidth, math.max(viewport.X - Metrics.SafePadding * 2, 220)),
-                math.min(self.DesiredHeight, math.max(viewport.Y - Metrics.SafePadding * 2, 72))
-            )
-            local anchorPoint = root.AbsolutePosition + root.AbsoluteSize * root.AnchorPoint
-            local clamped = clampGuiCenter(root, anchorPoint)
-            root.Position = UDim2.fromOffset(clamped.X, clamped.Y)
+            local size, position =
+                nearestEdgeLayout(root, Vector2.new(self.DesiredWidth, self.DesiredHeight), self.DragOptions)
+            root.Size = size
+            root.Position = position
+            DragController:Clamp(root, self.DragOptions)
         end
     end
     function widget:Resize(width: number, height: number)
-        width = math.max(finiteNumber(width, self.DesiredWidth), 40)
-        height = math.max(finiteNumber(height, self.DesiredHeight), 40)
-        self.DesiredWidth = width
-        self.DesiredHeight = height
+        self.DesignWidth = math.max(finiteNumber(width, self.DesignWidth), 40)
+        self.DesignHeight = math.max(finiteNumber(height, self.DesignHeight), 40)
+        self.DesiredWidth = ResponsiveController:Scale(self.Window, self.DesignWidth)
+        self.DesiredHeight = ResponsiveController:Scale(self.Window, self.DesignHeight)
         self.ResizeGeneration = (self.ResizeGeneration or 0) + 1
         local generation = self.ResizeGeneration
-        local viewport = viewportSize()
-        tween(root, {
-            Size = UDim2.fromOffset(
-                math.min(width, math.max(viewport.X - Metrics.SafePadding * 2, 220)),
-                math.min(height, math.max(viewport.Y - Metrics.SafePadding * 2, 72))
-            ),
-        }, Motion.Tab)
-        task.delay(Motion.Tab, function()
+        local size, position =
+            nearestEdgeLayout(root, Vector2.new(self.DesiredWidth, self.DesiredHeight), self.DragOptions)
+        if DragController:IsDragging(root) then
+            root.Size = size
+            root.Position = position
+            DragController:Clamp(root, self.DragOptions)
+        else
+            tween(root, { Size = size, Position = position }, Motion.Widget)
+        end
+        task.delay(Motion.Widget, function()
             if self.Alive and self.ResizeGeneration == generation and root.Parent then
                 self:Clamp()
             end
         end)
     end
+    function widget:Reflow()
+        self.DesiredWidth = ResponsiveController:Scale(self.Window, self.DesignWidth)
+        self.DesiredHeight = ResponsiveController:Scale(self.Window, self.DesignHeight)
+        self:Clamp()
+    end
     function widget:Destroy()
         self.Alive = false
+        DragController:Cancel(root)
         disconnectAll(self)
         if root.Parent then
             ThemeController:UnbindTree(root)
@@ -5040,28 +7800,66 @@ function FloatingWidgetController:Create(window: AnyTable, config: AnyTable): An
             widget:SetVisible(false)
         end)
     )
-    DragController:Bind(widget, header, root)
+    if config.Draggable ~= false then
+        DragController:Bind(widget, header, root, function()
+            widget.UserMoved = true
+        end, {
+            DragBounds = widget.DragOptions.DragBounds,
+            KeepFullyVisible = widget.DragOptions.KeepFullyVisible,
+            DragMargin = widget.DragOptions.DragMargin,
+            MinimumVisiblePixels = widget.DragOptions.MinimumVisiblePixels,
+            DragThreshold = widget.DragOptions.DragThreshold,
+            Ignore = { hide },
+        })
+    end
+    ResponsiveController:RegisterTree(window, root, true)
+    addConnection(
+        widget,
+        root.DescendantAdded:Connect(function(descendant)
+            task.defer(function()
+                if widget.Alive and descendant.Parent and descendant:IsDescendantOf(root) then
+                    ResponsiveController:RegisterTree(window, descendant)
+                end
+            end)
+        end)
+    )
     table.insert(window.Widgets, widget)
     table.insert(Kronos.Widgets, widget)
     widget:Clamp()
     return widget
 end
 
-function Window:CreateTargetList(config: AnyTable?): AnyTable
+function Window:CreateFloatingWidget(config: FloatingWidgetOptions?): AnyTable
+    return FloatingWidgetController:Create(self, config or {})
+end
+
+Window.AddFloatingWidget = Window.CreateFloatingWidget
+
+function Window:CreateTargetList(config: FloatingWidgetOptions?): AnyTable
     config = config or {}
     local widget = FloatingWidgetController:Create(self, {
         Name = "TargetList",
-        Title = config.Title or "Target List",
-        Size = UDim2.fromOffset(410, 130),
-        Position = config.Position or UDim2.fromOffset(14, 86),
+        Title = config.Name or config.Title or "Target List",
+        Icon = config.Icon or "target",
+        IconSize = config.IconSize,
+        IconColor = config.IconColor,
+        IconTransparency = config.IconTransparency,
+        Size = config.Size or UDim2.fromOffset(380, 100),
+        Position = config.Position or UDim2.fromOffset(12, 12),
+        CustomPosition = config.Position ~= nil,
         Visible = config.Visible ~= false,
+        Draggable = config.Draggable,
+        DragBounds = config.DragBounds,
+        KeepFullyVisible = config.KeepFullyVisible,
+        DragMargin = config.DragMargin,
+        MinimumVisiblePixels = config.MinimumVisiblePixels,
     })
     local avatar = create("ImageLabel", {
         BackgroundColor3 = Theme.Surface3,
         BorderSizePixel = 0,
         Image = "",
-        Position = UDim2.fromOffset(10, 12),
-        Size = UDim2.fromOffset(43, 43),
+        Position = UDim2.fromOffset(9, 8),
+        Size = UDim2.fromOffset(38, 38),
         ZIndex = 503,
         Parent = widget.Body,
     }) :: ImageLabel
@@ -5070,19 +7868,20 @@ function Window:CreateTargetList(config: AnyTable?): AnyTable
     fallback.Size = UDim2.fromScale(1, 1)
     fallback.TextXAlignment = Enum.TextXAlignment.Center
     fallback.ZIndex = 504
-    local nameLabel = makeText(widget.Body, "No target", 10, Theme.Text, "bold")
-    nameLabel.Position = UDim2.fromOffset(62, 10)
-    nameLabel.Size = UDim2.new(1, -72, 0, 18)
+    local nameLabel = makeText(widget.Body, "No target", 9, Theme.Text, "bold")
+    nameLabel.Position = UDim2.fromOffset(56, 7)
+    nameLabel.Size = UDim2.new(1, -65, 0, 17)
     nameLabel.ZIndex = 503
-    local healthLabel = makeText(widget.Body, "Waiting", 9, Theme.Muted)
-    healthLabel.Position = UDim2.fromOffset(62, 28)
-    healthLabel.Size = UDim2.new(1, -72, 0, 17)
+    local healthLabel = makeText(widget.Body, "Waiting", 8, Theme.Muted)
+    healthLabel.Position = UDim2.fromOffset(56, 24)
+    healthLabel.Size = UDim2.new(1, -65, 0, 16)
+    healthLabel.TextXAlignment = Enum.TextXAlignment.Right
     healthLabel.ZIndex = 503
     local healthTrack = create("Frame", {
         BackgroundColor3 = Theme.Surface3,
         BorderSizePixel = 0,
-        Position = UDim2.fromOffset(62, 50),
-        Size = UDim2.new(1, -72, 0, 5),
+        Position = UDim2.fromOffset(56, 47),
+        Size = UDim2.new(1, -65, 0, 4),
         ZIndex = 503,
         Parent = widget.Body,
     }) :: Frame
@@ -5097,10 +7896,19 @@ function Window:CreateTargetList(config: AnyTable?): AnyTable
     }) :: Frame
     corner(healthFill, 3)
     ThemeController:Bind(healthFill, "BackgroundColor3", "Accent")
-    function widget:SetTarget(name: string?, health: number?, maximumHealth: number?, userId: number?)
+    function widget:SetTarget(name: any, health: number?, maximumHealth: number?, userId: number?)
+        local avatarImage: any = nil
+        if type(name) == "table" then
+            local data = name
+            name = data.Name or data.DisplayName
+            health = data.Health
+            maximumHealth = data.MaxHealth or data.MaximumHealth
+            userId = data.UserId
+            avatarImage = data.Avatar or data.Image
+        end
         self.TargetGeneration = (self.TargetGeneration or 0) + 1
         local generation = self.TargetGeneration
-        if not name then
+        if name == nil or tostring(name) == "" then
             nameLabel.Text = "No target"
             healthLabel.Text = "Waiting"
             fallback.Text = "—"
@@ -5111,18 +7919,24 @@ function Window:CreateTargetList(config: AnyTable?): AnyTable
         end
         local current = math.max(finiteNumber(health, 0), 0)
         local maximum = math.max(finiteNumber(maximumHealth, 100), 1)
+        local numericUserId = math.max(math.floor(finiteNumber(userId, 0)), 0)
         local ratio = math.clamp(current / maximum, 0, 1)
         nameLabel.Text = tostring(name)
         healthLabel.Text = string.format("%d / %d HP", math.floor(current + 0.5), math.floor(maximum + 0.5))
         fallback.Text = string.upper(string.sub(tostring(name), 1, 1))
         fallback.Visible = true
+        avatar.Image = ""
         tween(healthFill, { Size = UDim2.fromScale(ratio, 1) }, Motion.Health)
-        if userId and userId > 0 then
+        if avatarImage ~= nil and tostring(avatarImage) ~= "" then
+            avatar.Image = type(avatarImage) == "number" and "rbxassetid://" .. tostring(avatarImage)
+                or tostring(avatarImage)
+            fallback.Visible = false
+        elseif numericUserId > 0 then
             task.spawn(function()
                 local ok, image = pcall(
                     Players.GetUserThumbnailAsync,
                     Players,
-                    userId,
+                    numericUserId,
                     Enum.ThumbnailType.HeadShot,
                     Enum.ThumbnailSize.Size100x100
                 )
@@ -5140,14 +7954,24 @@ function Window:CreateTargetList(config: AnyTable?): AnyTable
     return widget
 end
 
-function Window:CreateKeybindList(config: AnyTable?): AnyTable
+function Window:CreateKeybindList(config: FloatingWidgetOptions?): AnyTable
     config = config or {}
     local widget = FloatingWidgetController:Create(self, {
         Name = "KeybindList",
-        Title = config.Title or "Keybind List",
-        Size = UDim2.fromOffset(410, 87),
-        Position = config.Position or UDim2.new(0.5, -205, 0, 76),
+        Title = config.Name or config.Title or "Keybind List",
+        Icon = config.Icon or "keyboard",
+        IconSize = config.IconSize,
+        IconColor = config.IconColor,
+        IconTransparency = config.IconTransparency,
+        Size = config.Size or UDim2.fromOffset(380, 76),
+        Position = config.Position or UDim2.new(0.54, -190, 0, 12),
+        CustomPosition = config.Position ~= nil,
         Visible = config.Visible ~= false,
+        Draggable = config.Draggable,
+        DragBounds = config.DragBounds,
+        KeepFullyVisible = config.KeepFullyVisible,
+        DragMargin = config.DragMargin,
+        MinimumVisiblePixels = config.MinimumVisiblePixels,
     })
     local columnHeader = create("Frame", {
         BackgroundTransparency = 1,
@@ -5212,7 +8036,7 @@ function Window:CreateKeybindList(config: AnyTable?): AnyTable
                     BackgroundColor3 = Theme.Surface2,
                     BackgroundTransparency = 0.55,
                     BorderSizePixel = 0,
-                    Size = UDim2.new(1, 0, 0, 22),
+                    Size = UDim2.new(1, 0, 0, 19),
                     LayoutOrder = count,
                     ZIndex = 504,
                     Parent = rowHolder,
@@ -5256,9 +8080,9 @@ function Window:CreateKeybindList(config: AnyTable?): AnyTable
                 tween(row, { BackgroundTransparency = 0.55 }, Motion.KeybindRow)
             end
         end
-        local bodyHeight = 31 + math.max(count, 1) * 24
-        local finalHeight = math.clamp(bodyHeight + 31, 80, 202)
-        widget:Resize(410, finalHeight)
+        local bodyHeight = 22 + math.max(count, 1) * 21
+        local finalHeight = math.clamp(bodyHeight + 26, 70, 170)
+        widget:Resize(380, finalHeight)
         rows.Visible = true
         columnHeader.Visible = count > 0
         if count == 0 then
@@ -5273,30 +8097,45 @@ function Window:CreateKeybindList(config: AnyTable?): AnyTable
     return widget
 end
 
-function Window:CreateStatusStrip(config: AnyTable?): AnyTable
+function Window:CreateStatusStrip(config: FloatingWidgetOptions?): AnyTable
     config = config or {}
+    local density = self.Density or ResponsiveController:GetDensity()
+    local designWidth = math.max(finiteNumber(config.Width, 232), 80)
+    local designHeight = math.max(finiteNumber(config.Height, 30), 24)
     local widget: AnyTable = {
         Window = self,
         Connections = {},
         Visible = config.Visible ~= false,
         Alive = true,
-        Title = "Status Strip",
+        Title = config.Name or config.Title or "Status Strip",
+        CustomPosition = config.Position ~= nil,
         Fields = { Kronos = true, FPS = true, Ping = true, Time = true },
-        DesiredWidth = 318,
+        DesignWidth = designWidth,
+        DesignHeight = designHeight,
+        DesiredWidth = math.floor(designWidth * density + 0.5),
+        DesiredHeight = math.floor(designHeight * density + 0.5),
+        DragOptions = {
+            DragBounds = config.DragBounds or "Viewport",
+            KeepFullyVisible = config.KeepFullyVisible ~= false,
+            DragMargin = finiteNumber(config.DragMargin, 4),
+            MinimumVisiblePixels = finiteNumber(config.MinimumVisiblePixels, 24),
+            DragThreshold = finiteNumber(config.DragThreshold, 5),
+        },
     }
     local root = create("CanvasGroup", {
         Name = "StatusStrip",
         BackgroundColor3 = Theme.ElevatedSurface,
-        BackgroundTransparency = 0.05,
+        BackgroundTransparency = 0.1,
         BorderSizePixel = 0,
         AnchorPoint = Vector2.new(1, 0),
-        Position = config.Position or UDim2.new(1, -14, 0, 14),
-        Size = UDim2.fromOffset(318, 30),
+        Position = scaledUDim2(config.Position or UDim2.new(1, -12, 0, 12), density),
+        Size = UDim2.fromOffset(math.floor(designWidth * density + 0.5), math.floor(designHeight * density + 0.5)),
         ClipsDescendants = true,
         Visible = widget.Visible,
         ZIndex = 540,
-        Parent = Kronos.GUI,
+        Parent = Kronos.Layers.Floating,
     }) :: CanvasGroup
+    root:SetAttribute("KronosNoDensity", true)
     ThemeController:Bind(root, "BackgroundColor3", "ElevatedSurface")
     corner(root, 5)
     stroke(root, Theme.Border, 0.36, 1)
@@ -5309,6 +8148,17 @@ function Window:CreateStatusStrip(config: AnyTable?): AnyTable
         Parent = root,
     }) :: Frame
     ThemeController:Bind(marker, "BackgroundColor3", "Accent")
+    local statusIcon = makeIcon(root, {
+        Icon = config.Icon or "orbit",
+        IconSize = config.IconSize or 12,
+        IconColor = config.IconColor,
+        IconTransparency = config.IconTransparency,
+    }, "Accent")
+    if statusIcon then
+        statusIcon.AnchorPoint = Vector2.new(0, 0.5)
+        statusIcon.Position = UDim2.new(0, 8, 0.5, 0)
+        statusIcon.ZIndex = 543
+    end
     local dragHandle = create("Frame", {
         BackgroundTransparency = 1,
         Active = true,
@@ -5318,8 +8168,8 @@ function Window:CreateStatusStrip(config: AnyTable?): AnyTable
     }) :: Frame
     local fieldHolder = create("Frame", {
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(8, 0),
-        Size = UDim2.new(1, -38, 1, 0),
+        Position = UDim2.fromOffset(statusIcon and 24 or 8, 0),
+        Size = UDim2.new(1, statusIcon and -54 or -38, 1, 0),
         ZIndex = 542,
         Parent = root,
     }) :: Frame
@@ -5334,17 +8184,15 @@ function Window:CreateStatusStrip(config: AnyTable?): AnyTable
         label.ZIndex = 543
         labels[name] = label
     end
-    addField("Kronos", 84, Theme.Text)
-    addField("FPS", 58, Theme.SubText)
-    addField("Ping", 72, Theme.SubText)
-    addField("Time", 66, Theme.SubText)
+    local fieldWidths = { Kronos = 54, FPS = 42, Ping = 56, Time = 42 }
+    addField("Kronos", fieldWidths.Kronos, Theme.Text)
+    addField("FPS", fieldWidths.FPS, Theme.SubText)
+    addField("Ping", fieldWidths.Ping, Theme.SubText)
+    addField("Time", fieldWidths.Time, Theme.SubText)
     local menu = create("TextButton", {
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        Text = "⋮",
-        TextColor3 = Theme.Muted,
-        Font = Enum.Font.GothamBold,
-        TextSize = 13,
+        Text = "",
         AutoButtonColor = false,
         AnchorPoint = Vector2.new(1, 0.5),
         Position = UDim2.new(1, -3, 0.5, 0),
@@ -5352,24 +8200,54 @@ function Window:CreateStatusStrip(config: AnyTable?): AnyTable
         ZIndex = 544,
         Parent = root,
     }) :: TextButton
+    local menuIcon = makeIcon(menu, { Icon = "ellipsis-vertical", IconSize = 13 }, "Muted")
+    if menuIcon then
+        menuIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+        menuIcon.Position = UDim2.fromScale(0.5, 0.5)
+        menuIcon.ZIndex = 545
+    end
     widget.Root = root
     function widget:SetVisible(visible: boolean): AnyTable
         self.Visible = visible ~= false
+        if not self.Visible then
+            DragController:Cancel(root)
+        end
         root.Visible = self.Visible
         return self
     end
     function widget:Clamp()
-        root.Size =
-            UDim2.fromOffset(math.min(self.DesiredWidth, math.max(viewportSize().X - Metrics.SafePadding * 2, 150)), 30)
-        local anchorPoint = root.AbsolutePosition + root.AbsoluteSize * root.AnchorPoint
-        local clamped = clampGuiCenter(root, anchorPoint)
-        root.Position = UDim2.fromOffset(clamped.X, clamped.Y)
+        local size, position =
+            nearestEdgeLayout(root, Vector2.new(self.DesiredWidth, self.DesiredHeight), self.DragOptions)
+        root.Size = size
+        root.Position = position
+        DragController:Clamp(root, self.DragOptions)
+    end
+    function widget:Resize(width: number, height: number)
+        self.DesignWidth = math.max(finiteNumber(width, self.DesignWidth), 80)
+        self.DesignHeight = math.max(finiteNumber(height, self.DesignHeight), 24)
+        self.DesiredWidth = ResponsiveController:Scale(self.Window, self.DesignWidth)
+        self.DesiredHeight = ResponsiveController:Scale(self.Window, self.DesignHeight)
+        local size, position =
+            nearestEdgeLayout(root, Vector2.new(self.DesiredWidth, self.DesiredHeight), self.DragOptions)
+        if DragController:IsDragging(root) then
+            root.Size = size
+            root.Position = position
+            DragController:Clamp(root, self.DragOptions)
+        else
+            tween(root, { Size = size, Position = position }, Motion.Widget)
+        end
+    end
+    function widget:Reflow()
+        self.DesiredWidth = ResponsiveController:Scale(self.Window, self.DesignWidth)
+        self.DesiredHeight = ResponsiveController:Scale(self.Window, self.DesignHeight)
+        self:Clamp()
     end
     function widget:Refresh()
         marker.BackgroundColor3 = Theme.Accent
     end
     function widget:Destroy()
         self.Alive = false
+        DragController:Cancel(root)
         disconnectAll(self)
         if root.Parent then
             ThemeController:UnbindTree(root)
@@ -5379,15 +8257,14 @@ function Window:CreateStatusStrip(config: AnyTable?): AnyTable
         removeArrayValue(Kronos.Widgets, self)
     end
     local function layoutFields()
-        local width = 10
+        local width = 38
         for name, label in pairs(labels) do
             label.Visible = widget.Fields[name] == true
             if label.Visible then
-                width += label.Size.X.Offset
+                width += fieldWidths[name]
             end
         end
-        widget.DesiredWidth = width + 30
-        widget:Clamp()
+        widget:Resize(width, widget.DesignHeight)
     end
     addConnection(
         widget,
@@ -5423,15 +8300,18 @@ function Window:CreateStatusStrip(config: AnyTable?): AnyTable
                 choiceLabel.Position = UDim2.fromOffset(8, 0)
                 choiceLabel.Size = UDim2.new(1, -34, 1, 0)
                 choiceLabel.ZIndex = 763
-                local check = makeText(choice, widget.Fields[name] and "✓" or "", 10, Theme.Accent, "bold")
-                check.AnchorPoint = Vector2.new(1, 0.5)
-                check.Position = UDim2.new(1, -7, 0.5, 0)
-                check.Size = UDim2.fromOffset(18, 18)
-                check.TextXAlignment = Enum.TextXAlignment.Center
-                check.ZIndex = 763
+                local check = makeIcon(choice, { Icon = "check", IconSize = 10 }, "Accent")
+                if check then
+                    check.AnchorPoint = Vector2.new(1, 0.5)
+                    check.Position = UDim2.new(1, -9, 0.5, 0)
+                    check.Visible = widget.Fields[name]
+                    check.ZIndex = 763
+                end
                 popupMaid:Give(choice.Activated:Connect(function()
                     widget.Fields[name] = not widget.Fields[name]
-                    check.Text = widget.Fields[name] and "✓" or ""
+                    if check then
+                        check.Visible = widget.Fields[name]
+                    end
                     layoutFields()
                     PopupController:Position(self, popup, menu, 5)
                 end))
@@ -5443,7 +8323,12 @@ function Window:CreateStatusStrip(config: AnyTable?): AnyTable
             end)
         end)
     )
-    DragController:Bind(widget, dragHandle, root)
+    if config.Draggable ~= false then
+        DragController:Bind(widget, dragHandle, root, function()
+            widget.UserMoved = true
+        end, widget.DragOptions)
+    end
+    ResponsiveController:RegisterTree(self, root, true)
     table.insert(self.Widgets, widget)
     table.insert(Kronos.Widgets, widget)
     layoutFields()
@@ -5464,7 +8349,7 @@ function Window:CreateStatusStrip(config: AnyTable?): AnyTable
                     ping = item:GetValueString()
                 end
             end)
-            labels.Kronos.Text = "KRONOS  " .. tostring(game.PlaceId)
+            labels.Kronos.Text = "KRONOS"
             labels.FPS.Text = tostring(fps) .. " FPS"
             labels.Ping.Text = ping
             labels.Time.Text = os.date("%H:%M")
@@ -5475,46 +8360,71 @@ function Window:CreateStatusStrip(config: AnyTable?): AnyTable
     return widget
 end
 
-function Window:CreateReopenButton(config: AnyTable?): AnyTable
+function Window:CreateReopenButton(config: FloatingWidgetOptions?): AnyTable
     config = config or {}
+    local density = self.Density or ResponsiveController:GetDensity()
+    local configuredSize = typeof(config.Size) == "UDim2" and config.Size.X.Offset or config.Size
+    local designSize = math.max(finiteNumber(configuredSize, 40), 28)
     local widget: AnyTable = {
         Window = self,
         Connections = {},
         Visible = false,
         Alive = true,
         Title = "Reopen Button",
+        DesignSize = designSize,
+        CustomPosition = config.Position ~= nil,
+        DragOptions = {
+            DragBounds = config.DragBounds or "Viewport",
+            KeepFullyVisible = config.KeepFullyVisible ~= false,
+            DragMargin = finiteNumber(config.DragMargin, 4),
+            MinimumVisiblePixels = finiteNumber(config.MinimumVisiblePixels, 24),
+            DragThreshold = finiteNumber(config.DragThreshold, 5),
+        },
     }
     local root = create("CanvasGroup", {
         Name = "KronosReopen",
         BackgroundTransparency = 1,
         AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = config.Position or UDim2.new(1, -55, 1, -70),
-        Size = UDim2.fromOffset(40, 40),
+        Position = scaledUDim2(config.Position or UDim2.new(1, -44, 1, -44), density),
+        Size = UDim2.fromOffset(math.floor(designSize * density + 0.5), math.floor(designSize * density + 0.5)),
         Visible = false,
         ZIndex = 900,
-        Parent = Kronos.GUI,
+        Parent = Kronos.Layers.Mobile,
     }) :: CanvasGroup
+    root:SetAttribute("KronosNoDensity", true)
     local button = create("TextButton", {
         BackgroundColor3 = Theme.ElevatedSurface,
         BackgroundTransparency = 0.02,
         BorderSizePixel = 0,
-        Text = "K",
-        TextColor3 = Theme.Accent,
-        Font = Enum.Font.GothamBold,
-        TextSize = 14,
+        Text = "",
         AutoButtonColor = false,
-        Size = UDim2.fromScale(1, 1),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(designSize, designSize),
         ZIndex = 901,
         Parent = root,
     }) :: TextButton
     ThemeController:Bind(button, "BackgroundColor3", "ElevatedSurface")
-    corner(button, 10)
+    corner(button, math.floor(designSize * 0.25 + 0.5))
     local buttonStroke = stroke(button, Theme.Accent, 0.18, 1)
-    ThemeController:Bind(button, "TextColor3", "Accent")
     ThemeController:Bind(buttonStroke, "Color", "Accent")
+    local reopenIcon = makeIcon(button, {
+        Icon = config.Icon or "orbit",
+        IconSize = config.IconSize or 15,
+        IconColor = config.IconColor,
+        IconTransparency = config.IconTransparency,
+    }, "Accent")
+    if reopenIcon then
+        reopenIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+        reopenIcon.Position = UDim2.fromScale(0.5, 0.5)
+        reopenIcon.ZIndex = 902
+    end
     widget.Root = root
     function widget:SetVisible(visible: boolean): AnyTable
         self.Visible = visible ~= false
+        if not self.Visible then
+            DragController:Cancel(root)
+        end
         root.Visible = self.Visible
         if self.Visible then
             root.GroupTransparency = 1
@@ -5523,12 +8433,18 @@ function Window:CreateReopenButton(config: AnyTable?): AnyTable
         return self
     end
     function widget:Clamp()
-        local anchorPoint = root.AbsolutePosition + root.AbsoluteSize * root.AnchorPoint
-        local clamped = clampGuiCenter(root, anchorPoint)
-        root.Position = UDim2.fromOffset(clamped.X, clamped.Y)
+        local size = ResponsiveController:Scale(self.Window, self.DesignSize)
+        local nextSize, nextPosition = nearestEdgeLayout(root, Vector2.new(size, size), self.DragOptions)
+        root.Size = nextSize
+        root.Position = nextPosition
+        DragController:Clamp(root, self.DragOptions)
+    end
+    function widget:Reflow()
+        self:Clamp()
     end
     function widget:Destroy()
         self.Alive = false
+        DragController:Cancel(root)
         disconnectAll(self)
         if root.Parent then
             ThemeController:UnbindTree(root)
@@ -5538,7 +8454,7 @@ function Window:CreateReopenButton(config: AnyTable?): AnyTable
         removeArrayValue(Kronos.Widgets, self)
     end
     local moved = false
-    local pressInput: InputObject? = nil
+    local pressedAt = 0
     addConnection(
         widget,
         button.InputBegan:Connect(function(input)
@@ -5547,14 +8463,26 @@ function Window:CreateReopenButton(config: AnyTable?): AnyTable
                 or input.UserInputType == Enum.UserInputType.Touch
             then
                 moved = false
-                pressInput = input
-                tween(root, { Size = UDim2.fromOffset(36, 36) }, Motion.Press)
+                pressedAt = os.clock()
+                local pressedSize = ResponsiveController:Scale(self, designSize - 4)
+                tween(button, { Size = UDim2.fromOffset(pressedSize, pressedSize) }, Motion.Press)
             end
         end)
     )
     DragController:Bind(widget, button, root, function()
         moved = true
-    end)
+        widget.UserMoved = true
+    end, {
+        DragBounds = widget.DragOptions.DragBounds,
+        KeepFullyVisible = widget.DragOptions.KeepFullyVisible,
+        DragMargin = widget.DragOptions.DragMargin,
+        MinimumVisiblePixels = widget.DragOptions.MinimumVisiblePixels,
+        DragThreshold = widget.DragOptions.DragThreshold,
+        Ended = function()
+            local size = ResponsiveController:Scale(self, designSize)
+            tween(button, { Size = UDim2.fromOffset(size, size) }, Motion.Press)
+        end,
+    })
     addConnection(
         widget,
         button.Activated:Connect(function()
@@ -5562,15 +8490,8 @@ function Window:CreateReopenButton(config: AnyTable?): AnyTable
                 moved = false
                 return
             end
-            self:SetVisible(true)
-        end)
-    )
-    addConnection(
-        widget,
-        UserInputService.InputEnded:Connect(function(input)
-            if input == pressInput then
-                pressInput = nil
-                tween(root, { Size = UDim2.fromOffset(40, 40) }, Motion.Press)
+            if os.clock() - pressedAt <= 0.65 then
+                self:SetVisible(true)
             end
         end)
     )
@@ -5586,6 +8507,7 @@ function Window:CreateReopenButton(config: AnyTable?): AnyTable
             tween(button, { BackgroundColor3 = Theme.ElevatedSurface, BackgroundTransparency = 0.02 }, Motion.Hover)
         end)
     )
+    ResponsiveController:RegisterTree(self, root, true)
     table.insert(self.Widgets, widget)
     table.insert(Kronos.Widgets, widget)
     self.ReopenButton = widget
@@ -5670,13 +8592,23 @@ function Window:RefreshTheme()
     end
     for _, tab in ipairs(self.Tabs) do
         self:_setActiveTabVisual(tab, self.ActiveTab == tab)
-        for _, section in ipairs(tab.Sections) do
-            section.Instance.BackgroundColor3 = Theme.Surface
-            for _, control in ipairs(section.Controls) do
-                if type(control.RefreshView) == "function" then
-                    control:RefreshView()
+        local function refreshSections(owner: AnyTable)
+            for _, section in ipairs(owner.Sections) do
+                section.Instance.BackgroundColor3 = Theme.Surface
+                for _, control in ipairs(section.Controls) do
+                    if type(control.RefreshView) == "function" then
+                        control:RefreshView()
+                    end
                 end
             end
+        end
+        refreshSections(tab)
+        for _, subTab in ipairs(tab.SubTabs) do
+            refreshSections(subTab)
+            tab:_setSubTabVisual(subTab, tab.ActiveSubTab == subTab)
+        end
+        if tab.HasSubTabs and tab.SubTabSelectors[tab] then
+            tab:_setSubTabVisual(tab, tab.ActiveSubTab == tab)
         end
     end
     for _, widget in ipairs(self.Widgets) do
@@ -5691,6 +8623,7 @@ function Window:Destroy()
         return
     end
     self.Destroyed = true
+    DragController:Cancel(self.Root)
     dismissTooltip(self)
     PopupController:Close(self)
     self:_closeSidePanel(true)
@@ -5715,18 +8648,9 @@ function Window:Destroy()
 end
 
 local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
-    local gui = library:_ensureGui()
+    library:_ensureGui()
     if typeof(config.Accent) == "Color3" then
         library:SetAccent(config.Accent)
-    end
-    if not library.GlobalPopupLayer or not library.GlobalPopupLayer.Parent then
-        library.GlobalPopupLayer = create("Frame", {
-            Name = "GlobalPopupLayer",
-            BackgroundTransparency = 1,
-            Size = UDim2.fromScale(1, 1),
-            ZIndex = 650,
-            Parent = gui,
-        }) :: Frame
     end
     local baseWidth = tonumber(config.Width)
         or (config.Size and config.Size.X.Offset > 0 and config.Size.X.Offset)
@@ -5737,45 +8661,74 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
     baseWidth = math.max(finiteNumber(baseWidth, Metrics.Window.X), 280)
     baseHeight = math.max(finiteNumber(baseHeight, Metrics.Window.Y), 300)
     local viewport = viewportSize()
+    local density = ResponsiveController:GetDensity(viewport)
     local topLeftInset, bottomRightInset = guiInsets()
+    local dragMargin = math.clamp(finiteNumber(config.DragMargin, 4), 0, 32)
+    local reserveFloatingBand = config.FloatingWidgets ~= false
+        and (config.StatusStrip ~= false or config.TargetList ~= false or config.KeybindList ~= false)
+    local initialSafeHeight = math.max(viewport.Y - topLeftInset.Y - bottomRightInset.Y - dragMargin * 2, 1)
+    local initialHeightLimit = initialSafeHeight
+    if reserveFloatingBand and UserInputService.TouchEnabled and viewport.X > viewport.Y and viewport.Y <= 650 then
+        initialHeightLimit = math.max(
+            initialSafeHeight - math.floor(190 * density + 0.5),
+            math.min(initialSafeHeight, math.floor(180 * density + 0.5))
+        )
+    end
     local initialWidth =
-        math.min(baseWidth, math.max(viewport.X - topLeftInset.X - bottomRightInset.X - Metrics.SafePadding * 2, 280))
-    local initialHeight =
-        math.min(baseHeight, math.max(viewport.Y - topLeftInset.Y - bottomRightInset.Y - Metrics.SafePadding * 2, 300))
+        math.min(baseWidth * density, math.max(viewport.X - topLeftInset.X - bottomRightInset.X - dragMargin * 2, 1))
+    local initialHeight = math.min(baseHeight * density, initialHeightLimit)
     local window = setmetatable({
         Kronos = library,
         BaseWidth = baseWidth,
         BaseHeight = baseHeight,
         Width = initialWidth,
         Height = initialHeight,
+        Density = density,
         Tabs = {},
         Keybinds = {},
         Widgets = {},
         Connections = {},
         Visible = true,
         Destroyed = false,
+        ReserveFloatingBand = reserveFloatingBand,
         ToggleKey = config.ToggleKey or Enum.KeyCode.RightShift,
-        TwoColumn = initialWidth >= 730 and initialHeight >= 340,
+        TwoColumn = initialWidth >= 730 * density and initialHeight >= 340 * density,
         Presets = {},
+        DragOptions = {
+            DragBounds = config.DragBounds or "Viewport",
+            KeepFullyVisible = config.KeepFullyVisible ~= false,
+            DragMargin = dragMargin,
+            MinimumVisiblePixels = finiteNumber(config.MinimumVisiblePixels, 24),
+            DragThreshold = 5,
+        },
     }, Window)
+    local centerX = (topLeftInset.X + viewport.X - bottomRightInset.X) * 0.5
+    local centerY = (topLeftInset.Y + viewport.Y - bottomRightInset.Y) * 0.5
+    if reserveFloatingBand then
+        local overlayDesignHeight = viewport.X < viewport.Y and (12 + 30 + 8 + 100 + 8 + 170) or (12 + 170)
+        local minimumCenterY = topLeftInset.Y + overlayDesignHeight * density + 8 * density + initialHeight * 0.5
+        local maximumCenterY = viewport.Y - bottomRightInset.Y - dragMargin - initialHeight * 0.5
+        local lowestCenterY = topLeftInset.Y + initialHeight * 0.5
+        centerY = maximumCenterY >= lowestCenterY
+                and math.clamp(math.max(centerY, minimumCenterY), lowestCenterY, maximumCenterY)
+            or (lowestCenterY + maximumCenterY) * 0.5
+    end
     local root = create("CanvasGroup", {
         Name = "Window",
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         GroupTransparency = 1,
         AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromOffset(
-            math.floor((topLeftInset.X + viewport.X - bottomRightInset.X) / 2),
-            math.floor((topLeftInset.Y + viewport.Y - bottomRightInset.Y) / 2)
-        ),
+        Position = UDim2.fromOffset(math.floor(centerX + 0.5), math.floor(centerY + 0.5)),
         Size = UDim2.fromOffset(initialWidth * 0.97, initialHeight * 0.97),
         ClipsDescendants = false,
         ZIndex = 10,
-        Parent = gui,
+        Parent = library.Layers.Main,
     }) :: CanvasGroup
+    root:SetAttribute("KronosNoDensity", true)
     local shadow = create("Frame", {
         BackgroundColor3 = Theme.Shadow,
-        BackgroundTransparency = 0.7,
+        BackgroundTransparency = 0.78,
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(0, 6),
         Size = UDim2.fromScale(1, 1),
@@ -5786,7 +8739,7 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
     local main = create("Frame", {
         Name = "Main",
         BackgroundColor3 = Theme.Background,
-        BackgroundTransparency = 0.025,
+        BackgroundTransparency = 0.08,
         BorderSizePixel = 0,
         Size = UDim2.fromScale(1, 1),
         ClipsDescendants = true,
@@ -5795,7 +8748,7 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
     }) :: Frame
     ThemeController:Bind(main, "BackgroundColor3", "Background")
     corner(main, Metrics.Radius)
-    local mainStroke = stroke(main, Theme.Border, 0.22, 1)
+    local mainStroke = stroke(main, Theme.Border, 0.34, 1)
     ThemeController:Bind(mainStroke, "Color", "Border")
     window.Root = root
     window.Main = main
@@ -5805,7 +8758,7 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
     local sidebar = create("Frame", {
         Name = "Sidebar",
         BackgroundColor3 = Theme.BackgroundSoft,
-        BackgroundTransparency = 0.08,
+        BackgroundTransparency = 0.12,
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(0, Metrics.Header),
         Size = UDim2.new(0, Metrics.Sidebar, 1, -Metrics.Header),
@@ -5837,7 +8790,7 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
         TextSize = 10,
         TextXAlignment = Enum.TextXAlignment.Left,
         Position = UDim2.fromOffset(8, 8),
-        Size = UDim2.new(1, -16, 0, 30),
+        Size = UDim2.new(1, -16, 0, 26),
         ZIndex = 15,
         Parent = sidebar,
     }) :: TextBox
@@ -5845,17 +8798,17 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
     corner(searchBox, 5)
     local searchStroke = stroke(searchBox, Theme.Border, 0.66, 1)
     padding(searchBox, 27, 0, 8, 0)
-    local searchIcon = makeText(searchBox, getIcon("Search"), 11, Theme.Muted, "bold")
-    searchIcon.Position = UDim2.fromOffset(-19, 0)
-    searchIcon.Size = UDim2.fromOffset(17, 30)
-    searchIcon.TextXAlignment = Enum.TextXAlignment.Center
+    local searchIcon = makeIcon(searchBox, { Icon = "search", IconSize = 12 }, "Muted")
+    assert(searchIcon, "Required Lucide search icon is unavailable")
+    searchIcon.AnchorPoint = Vector2.new(0, 0.5)
+    searchIcon.Position = UDim2.new(0, -19, 0.5, 0)
     searchIcon.ZIndex = 16
     local navScroll = create("ScrollingFrame", {
         Name = "Navigation",
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        Position = UDim2.fromOffset(8, 45),
-        Size = UDim2.new(1, -16, 1, -91),
+        Position = UDim2.fromOffset(8, 40),
+        Size = UDim2.new(1, -16, 1, -80),
         CanvasSize = UDim2.fromOffset(0, 0),
         AutomaticCanvasSize = Enum.AutomaticSize.None,
         ScrollBarThickness = 1,
@@ -5884,19 +8837,18 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
         BorderSizePixel = 0,
         Text = "",
         AutoButtonColor = false,
-        Position = UDim2.new(0, 8, 1, -39),
-        Size = UDim2.new(1, -16, 0, 31),
+        Position = UDim2.new(0, 8, 1, -34),
+        Size = UDim2.new(1, -16, 0, 26),
         ZIndex = 15,
         Parent = sidebar,
     }) :: TextButton
     ThemeController:Bind(footer, "BackgroundColor3", "Surface2")
     corner(footer, 5)
-    local footerIcon = makeText(footer, getIcon("User"), 11, Theme.Accent, "bold")
-    footerIcon.Position = UDim2.fromOffset(8, 0)
-    footerIcon.Size = UDim2.fromOffset(22, 31)
-    footerIcon.TextXAlignment = Enum.TextXAlignment.Center
+    local footerIcon = makeIcon(footer, { Icon = "user", IconSize = 12 }, "Accent")
+    assert(footerIcon, "Required Lucide profile icon is unavailable")
+    footerIcon.AnchorPoint = Vector2.new(0, 0.5)
+    footerIcon.Position = UDim2.new(0, 13, 0.5, 0)
     footerIcon.ZIndex = 16
-    ThemeController:Bind(footerIcon, "TextColor3", "Accent")
     local footerLabel = makeText(footer, LocalPlayer and LocalPlayer.DisplayName or "Profile", 9, Theme.SubText, "bold")
     footerLabel.Position = UDim2.fromOffset(34, 0)
     footerLabel.Size = UDim2.new(1, -39, 1, 0)
@@ -5905,7 +8857,7 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
     local content = create("Frame", {
         Name = "Content",
         BackgroundColor3 = Theme.Background,
-        BackgroundTransparency = 0.03,
+        BackgroundTransparency = 0.1,
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(Metrics.Sidebar, Metrics.Header),
         Size = UDim2.new(1, -Metrics.Sidebar, 1, -Metrics.Header),
@@ -5970,6 +8922,7 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
             window:OpenSettings()
         end)
     )
+    ResponsiveController:RegisterTree(window, main)
     window:_bindInput()
     local function viewportChanged()
         window:ApplyResponsive()
@@ -6003,6 +8956,7 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
         window:CreateTargetList({ Visible = config.TargetList ~= false })
         window:CreateKeybindList({ Visible = config.KeybindList ~= false })
     end
+    window:ApplyResponsive()
     root.Size = UDim2.fromOffset(window.Width * 0.97, window.Height * 0.97)
     tween(root, {
         GroupTransparency = 0,
@@ -6107,6 +9061,11 @@ function Kronos:Destroy()
         return
     end
     self.Destroyed = true
+    DragController:Cancel()
+    local notificationHandles = copyArray(self.NotificationHandles)
+    for _, handle in ipairs(notificationHandles) do
+        handle:Destroy()
+    end
     while #self.Windows > 0 do
         self.Windows[#self.Windows]:Destroy()
     end
@@ -6124,10 +9083,18 @@ function Kronos:Destroy()
     self.GUI = nil
     self.ToastHolder = nil
     self.GlobalPopupLayer = nil
+    self.Layers = nil
+    self.ActivePopupWindow = nil
+    DragController.Active = nil
+    if DragController.Bindings then
+        table.clear(DragController.Bindings)
+    end
     table.clear(self.Options)
     table.clear(self.Flags)
     table.clear(self.Keybinds)
     table.clear(self.Widgets)
+    table.clear(self.Notifications)
+    table.clear(self.NotificationHandles)
     table.clear(self.ThemeBindings)
     if Environment.__KRONOS_ACTIVE == self then
         Environment.__KRONOS_ACTIVE = nil
@@ -6137,39 +9104,43 @@ end
 local function buildShowcase(): AnyTable
     local window = Kronos:CreateWindow({
         Title = "Kronos",
-        Subtitle = "Interface Library  ·  Showcase",
+        Subtitle = "Interface Library",
+        Icon = "orbit",
         SearchBar = true,
         Accent = Theme.Accent,
         ToggleKey = Enum.KeyCode.RightShift,
         MobileToggle = true,
-        Width = 820,
-        Height = 480,
+        Width = 800,
+        Height = 470,
         FloatingWidgets = true,
     })
 
-    local overview = window:AddTab({ Title = "Overview", Icon = "Home" })
-    local general = overview:AddSection({
+    local overview = window:AddTab({ Name = "Overview", Icon = "house" })
+    local mainSubTab = overview:AddSubTab({ Name = "Main", Icon = "layout-dashboard" })
+    local statesSubTab = overview:AddSubTab({ Name = "States", Icon = "toggle-right" })
+    local general = mainSubTab:AddSection({
         Title = "General",
-        Description = "Compact component states",
         Side = "Left",
-        Icon = "Sliders",
+        Icon = "sliders-horizontal",
     })
-    general:AddLabel({ Id = "ShowcaseLabel", Text = "Native Roblox controls with persistent state", Bold = true })
+    general:AddLabel({ Id = "ShowcaseLabel", Text = "Kronos controls", Bold = true, Icon = "orbit" })
     general:AddParagraph({
         Id = "ShowcaseParagraph",
-        Title = "Reference composition",
-        Content = "Near-black surfaces, restrained violet emphasis, slim separators, and short interruptible motion.",
+        Title = "Compact layout",
+        Content = "Layered surfaces, dense rows, and short motion.",
+        Icon = "panel-top",
     })
     general:AddDivider({ Title = "Actions" })
     general:AddButton({
         Id = "ShowcaseNotification",
         Title = "Notification",
         ButtonText = "Preview",
-        Icon = "Bell",
+        Icon = "bell",
         Callback = function()
             window:Notify({
                 Title = "Kronos notification",
                 Content = "The compact notification stack is working.",
+                Icon = "circle-check",
                 Type = "success",
                 Duration = 3,
             })
@@ -6179,6 +9150,7 @@ local function buildShowcase(): AnyTable
         Id = "ShowcaseBusy",
         Title = "Busy state",
         ButtonText = "Run",
+        Icon = "loader-circle",
         AutoBusy = true,
         BusyDuration = 0.8,
     })
@@ -6186,27 +9158,63 @@ local function buildShowcase(): AnyTable
         Id = "ShowcaseDisabledButton",
         Title = "Disabled action",
         ButtonText = "Unavailable",
+        Icon = "ban",
         Disabled = true,
     })
 
-    local states = overview:AddSection({
+    local appearance = mainSubTab:AddSection({ Name = "Interface", Icon = "panel-left", Side = "Right" })
+    appearance:AddToggle({
+        Id = "ShowcaseCompactNavigation",
+        Name = "Compact navigation",
+        Icon = "panel-left-close",
+        Default = false,
+        Callback = function(value)
+            window:SetCompactNavigation(value)
+        end,
+    })
+    appearance:AddButton({
+        Id = "ShowcaseQuickSettings",
+        Name = "Settings",
+        Icon = "settings",
+        ButtonText = "Open",
+        Callback = function()
+            window:OpenSettings()
+        end,
+    })
+    appearance:AddColorPicker({
+        Id = "ShowcaseQuickAccent",
+        Name = "Accent",
+        Icon = "palette",
+        Default = Theme.Accent,
+        Callback = function(color)
+            window:SetAccent(color)
+        end,
+    })
+
+    local states = statesSubTab:AddSection({
         Title = "States",
-        Description = "Selection and dependency behavior",
-        Side = "Right",
-        Icon = "CheckCircle",
+        Side = "Left",
+        Icon = "circle-check",
     })
     local dependency =
-        states:AddToggle({ Id = "ShowcaseDependency", Title = "Reveal advanced control", Default = true })
+        states:AddToggle({ Id = "ShowcaseDependency", Title = "Advanced controls", Icon = "eye", Default = true })
     states:AddToggle({
         Id = "ShowcaseToggle",
         Title = "Enabled toggle",
-        Description = "Square reference treatment",
+        Icon = "check",
         Default = true,
     })
-    states:AddToggle({ Id = "ShowcaseDisabledToggle", Title = "Disabled toggle", Default = false, Disabled = true })
+    states:AddToggle({
+        Id = "ShowcaseDisabledToggle",
+        Title = "Disabled toggle",
+        Icon = "circle-off",
+        Default = false,
+        Disabled = true,
+    })
     local dependentDropdown = states:AddDropdown({
         Id = "ShowcaseDependentDropdown",
         Title = "Dependent mode",
+        Icon = "list-filter",
         Values = { "Balanced", "Precise", "Responsive" },
         Default = "Balanced",
     })
@@ -6214,6 +9222,7 @@ local function buildShowcase(): AnyTable
     states:AddSlider({
         Id = "ShowcaseStrength",
         Title = "Strength",
+        Icon = "gauge",
         Min = 0,
         Max = 100,
         Default = 64,
@@ -6221,27 +9230,30 @@ local function buildShowcase(): AnyTable
         Suffix = "%",
     })
 
-    local components = window:AddTab({ Title = "Components", Icon = "LayoutDashboard" })
-    local inputs = components:AddSection({
+    local components = window:AddTab({ Name = "Components", Icon = "component" })
+    local inputsSubTab = components:AddSubTab({ Name = "Inputs", Icon = "keyboard" })
+    local selectionSubTab = components:AddSubTab({ Name = "Selection", Icon = "list-checks" })
+    local inputs = inputsSubTab:AddSection({
         Title = "Inputs",
-        Description = "Text, number, and continuous values",
         Side = "Left",
-        Icon = "Keyboard",
+        Icon = "keyboard",
     })
     inputs:AddInput({
         Id = "ShowcaseTextInput",
         Title = "Text input",
+        Icon = "text-cursor-input",
         Placeholder = "Type a value",
         Default = "Kronos",
         MaxLength = 32,
         SubmitOnEnter = true,
         OnSubmit = function(value)
-            window:Notify({ Title = "Input submitted", Content = value, Duration = 2 })
+            window:Notify({ Title = "Input submitted", Content = value, Icon = "send", Duration = 2 })
         end,
     })
     inputs:AddInput({
         Id = "ShowcaseNumericInput",
         Title = "Numeric input",
+        Icon = "binary",
         Placeholder = "0 - 100",
         Default = "24",
         NumericOnly = true,
@@ -6253,6 +9265,7 @@ local function buildShowcase(): AnyTable
     inputs:AddSlider({
         Id = "ShowcasePrecision",
         Title = "Precision",
+        Icon = "sliders-horizontal",
         Min = 0,
         Max = 1,
         Default = 0.35,
@@ -6262,6 +9275,7 @@ local function buildShowcase(): AnyTable
     inputs:AddColorPicker({
         Id = "ShowcaseColor",
         Title = "Accent color",
+        Icon = "palette",
         Default = Theme.Accent,
         EnableAlpha = true,
         Callback = function(color)
@@ -6269,22 +9283,24 @@ local function buildShowcase(): AnyTable
         end,
     })
 
-    local selections = components:AddSection({
+    local selections = selectionSubTab:AddSection({
         Title = "Selections",
-        Description = "Overlay popups stay outside clipping",
-        Side = "Right",
-        Icon = "List",
+        Side = "Left",
+        Icon = "list-checks",
     })
     selections:AddDropdown({
         Id = "ShowcaseDropdown",
         Title = "Single dropdown",
+        Icon = "chevrons-up-down",
         Values = { "Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta", "Iota", "Kappa" },
         Default = "Gamma",
         Search = true,
+        OptionIcons = { Alpha = "a-large-small", Gamma = "circle-dot", Kappa = "key-round" },
     })
     selections:AddMultiDropdown({
         Id = "ShowcaseMultiDropdown",
         Title = "Multi-select",
+        Icon = "list-plus",
         Values = { "Status", "Target", "Keybinds", "Metrics", "Clock" },
         Default = { "Status", "Keybinds" },
         MaxSelections = 3,
@@ -6292,30 +9308,39 @@ local function buildShowcase(): AnyTable
     selections:AddKeybind({
         Id = "ShowcaseKeybind",
         Title = "Interface action",
+        Icon = "command",
         Default = Enum.KeyCode.F.Name,
         Mode = "Toggle",
         Callback = function(active)
-            window:Notify({ Title = "Keybind state", Content = active and "Active" or "Inactive", Duration = 1.6 })
+            window:Notify({
+                Title = "Keybind state",
+                Content = active and "Active" or "Inactive",
+                Icon = "keyboard",
+                Duration = 1.6,
+            })
         end,
     })
     selections:AddKeybind({
         Id = "ShowcaseHoldKeybind",
         Title = "Hold action",
+        Icon = "mouse-pointer-click",
         Default = Enum.KeyCode.LeftAlt.Name,
         Mode = "Hold",
     })
 
-    local advanced = window:AddTab({ Title = "Advanced", Icon = "Settings" })
-    local panels = advanced:AddSection({
+    local advanced = window:AddTab({ Name = "Advanced", Icon = "settings" })
+    local panelsSubTab = advanced:AddSubTab({ Name = "Panels", Icon = "panels-top-left" })
+    local widgetsSubTab = advanced:AddSubTab({ Name = "Widgets", Icon = "move" })
+    local panels = panelsSubTab:AddSection({
         Title = "Panels",
-        Description = "Reference auxiliary surfaces",
         Side = "Left",
-        Icon = "PanelTop",
+        Icon = "panel-top",
     })
     panels:AddButton({
         Id = "ShowcaseSettings",
         Title = "Profile settings",
         ButtonText = "Open",
+        Icon = "user-cog",
         Callback = function()
             window:OpenSettings()
         end,
@@ -6324,6 +9349,7 @@ local function buildShowcase(): AnyTable
         Id = "ShowcasePresets",
         Title = "Configuration presets",
         ButtonText = "Open",
+        Icon = "save",
         Callback = function()
             window:OpenPresets()
         end,
@@ -6332,37 +9358,50 @@ local function buildShowcase(): AnyTable
         Id = "ShowcaseMinimize",
         Title = "Minimize and restore",
         ButtonText = "Minimize",
+        Icon = "minimize-2",
         Callback = function()
             window:Minimize()
         end,
     })
-    panels:AddDivider({ Title = "Notification variants" })
+    panels:AddDivider({ Title = "Notifications", Icon = "bell" })
     panels:AddButton({
         Id = "ShowcaseWarning",
         Title = "Warning",
         ButtonText = "Show",
+        Icon = "triangle-alert",
         Callback = function()
-            window:Notify({ Title = "Warning", Content = "This is a restrained warning state.", Type = "warning" })
+            window:Notify({
+                Title = "Warning",
+                Content = "This is a restrained warning state.",
+                Icon = "triangle-alert",
+                Type = "warning",
+            })
         end,
     })
     panels:AddButton({
         Id = "ShowcaseError",
         Title = "Error",
         ButtonText = "Show",
+        Icon = "circle-x",
         Callback = function()
-            window:Notify({ Title = "Error", Content = "Callbacks remain isolated from the interface.", Type = "error" })
+            window:Notify({
+                Title = "Error",
+                Content = "Callbacks remain isolated from the interface.",
+                Icon = "circle-x",
+                Type = "error",
+            })
         end,
     })
 
-    local widgets = advanced:AddSection({
+    local widgets = widgetsSubTab:AddSection({
         Title = "Floating widgets",
-        Description = "Independent drag and visibility",
-        Side = "Right",
-        Icon = "Move",
+        Side = "Left",
+        Icon = "move",
     })
     widgets:AddToggle({
         Id = "ShowcaseStatusVisible",
         Title = "Status strip",
+        Icon = "activity",
         Default = true,
         Callback = function(value)
             window.StatusStrip:SetVisible(value)
@@ -6371,6 +9410,7 @@ local function buildShowcase(): AnyTable
     widgets:AddToggle({
         Id = "ShowcaseTargetVisible",
         Title = "Target list",
+        Icon = "target",
         Default = true,
         Callback = function(value)
             window.TargetList:SetVisible(value)
@@ -6379,28 +9419,27 @@ local function buildShowcase(): AnyTable
     widgets:AddToggle({
         Id = "ShowcaseKeybindsVisible",
         Title = "Keybind list",
+        Icon = "keyboard",
         Default = true,
         Callback = function(value)
             window.KeybindWidget:SetVisible(value)
         end,
     })
-    widgets:AddParagraph({
-        Title = "Responsive behavior",
-        Content = "Resize or rotate the viewport to switch navigation density and content columns without rebuilding state.",
-    })
+    widgets:AddLabel({ Text = "Drag each widget across the full viewport", Icon = "move", Muted = true })
 
     if window.TargetList then
-        window.TargetList:SetTarget(
-            LocalPlayer and LocalPlayer.DisplayName or "Local Player",
-            76,
-            100,
-            LocalPlayer and LocalPlayer.UserId or nil
-        )
+        window.TargetList:SetTarget({
+            Name = LocalPlayer and LocalPlayer.DisplayName or "Local Player",
+            Health = 76,
+            MaxHealth = 100,
+            UserId = LocalPlayer and LocalPlayer.UserId or nil,
+        })
     end
     window:ApplySearch("")
     window:Notify({
         Title = "Kronos ready",
-        Content = "Use the sidebar, search, overlays, or RightShift to explore.",
+        Content = "Interface loaded.",
+        Icon = "circle-check",
         Type = "success",
         Duration = 4,
     })
@@ -6423,8 +9462,19 @@ local function startupStage(name: string, callback: () -> any): (boolean, any)
     return ok, result
 end
 
-local startupOk = startupStage("EnvironmentValidation", function()
+local startupOk = startupStage("ServiceResolution", function()
     assert(type(Environment) == "table", "Luau environment is unavailable")
+    assert(
+        Players
+            and TweenService
+            and UserInputService
+            and RunService
+            and TextService
+            and CoreGui
+            and GuiService
+            and Stats,
+        "One or more required Roblox services are unavailable"
+    )
 end)
 if startupOk then
     startupOk = startupStage("PreviousInstanceCleanup", function()
@@ -6432,22 +9482,7 @@ if startupOk then
     end)
 end
 if startupOk then
-    startupOk = startupStage("ServiceAcquisition", function()
-        assert(
-            Players
-                and TweenService
-                and UserInputService
-                and RunService
-                and TextService
-                and CoreGui
-                and GuiService
-                and Stats,
-            "One or more required Roblox services are unavailable"
-        )
-    end)
-end
-if startupOk then
-    startupOk = startupStage("ThemeInitialization", function()
+    startupOk = startupStage("ThemeCreation", function()
         assert(
             Theme.Background and Theme.Surface and Theme.Accent and Theme.Text,
             "Semantic theme tokens are incomplete"
@@ -6456,32 +9491,59 @@ if startupOk then
     end)
 end
 if startupOk then
-    startupOk = startupStage("ControllerInitialization", function()
-        assert(
-            type(AnimationController.Tween) == "function"
-                and type(DragController.Bind) == "function"
-                and type(PopupController.Open) == "function"
-                and type(NotificationController.Push) == "function"
-                and type(WindowController.Create) == "function"
-                and type(NavigationController.Select) == "function",
-            "A required controller was not initialized"
-        )
-    end)
-end
-if startupOk then
-    startupOk = startupStage("ComponentInitialization", function()
-        assert(
-            type(Components.Toggle) == "function"
-                and type(Components.Dropdown) == "function"
-                and type(Components.Keybind) == "function"
-                and type(Components.ColorPicker) == "function",
-            "A required component constructor was not initialized"
-        )
+    startupOk = startupStage("LucideResolverCreation", function()
+        local apple, appleName, appleValid = IconController:Resolve("apple")
+        local check, checkName, checkValid = IconController:Resolve("circle-check")
+        assert(apple and appleName == "apple" and appleValid, "Lucide apple is unavailable")
+        assert(check and checkName == "circle-check" and checkValid, "Lucide circle-check is unavailable")
     end)
 end
 if startupOk then
     startupOk = startupStage("RootGuiCreation", function()
         Kronos:_ensureGui()
+    end)
+end
+if startupOk then
+    startupOk = startupStage("InputControllerCreation", function()
+        assert(type(InputController.Name) == "function" and type(InputController.Matches) == "function")
+    end)
+end
+if startupOk then
+    startupOk = startupStage("DragControllerCreation", function()
+        DragController:Initialize()
+        assert(DragController.Initialized and type(DragController.Bind) == "function")
+    end)
+end
+if startupOk then
+    startupOk = startupStage("PopupControllerCreation", function()
+        assert(type(PopupController.Open) == "function" and type(PopupController.Position) == "function")
+        assert(type(NotificationController.Push) == "function")
+    end)
+end
+if startupOk then
+    startupOk = startupStage("WindowCreation", function()
+        assert(type(WindowController.Create) == "function" and type(NavigationController.Select) == "function")
+        assert(type(Tab.CreateSubTab) == "function" and type(SubTab.AddSection) == "function")
+        assert(
+            type(Components.Toggle) == "function"
+                and type(Components.Dropdown) == "function"
+                and type(Components.MultiDropdown) == "function"
+                and type(Components.Keybind) == "function"
+                and type(Components.ColorPicker) == "function",
+            "A required component constructor is unavailable"
+        )
+    end)
+end
+if startupOk then
+    startupOk = startupStage("WidgetCreation", function()
+        assert(type(FloatingWidgetController.Create) == "function")
+        assert(
+            type(Window.CreateFloatingWidget) == "function"
+                and type(Window.CreateTargetList) == "function"
+                and type(Window.CreateKeybindList) == "function"
+                and type(Window.CreateStatusStrip) == "function"
+                and type(Window.CreateReopenButton) == "function"
+        )
     end)
 end
 if startupOk and RUN_SHOWCASE then
@@ -6490,13 +9552,14 @@ if startupOk and RUN_SHOWCASE then
         Kronos:Notify({
             Title = "Showcase failed",
             Content = tostring(showcaseError),
+            Icon = "circle-x",
             Type = "error",
             Duration = 7,
         })
     end
 end
 if startupOk then
-    startupStage("FinalActivation", function()
+    startupStage("Activation", function()
         Environment.__KRONOS_ACTIVE = Kronos
     end)
 end
