@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-    KronosV1.9.lua
+    KronosV1.10.lua
     Cumulative native Roblox UI library refined against the supplied
     2340x1080 reference video. All controllers and the optional showcase live
     in this file; no remote modules or external UI libraries are required.
@@ -74,7 +74,7 @@ type WindowConfig = {
 }
 
 local Kronos: AnyTable = {}
-Kronos.Version = "1.9.0"
+Kronos.Version = "1.10.0"
 Kronos.Options = {} :: AnyTable
 Kronos.Windows = {} :: { AnyTable }
 Kronos.Connections = {} :: { RBXScriptConnection }
@@ -233,7 +233,7 @@ local Motion = {
     Scrollbar = 0.085,
 }
 
--- V1.9 keeps objective capture measurements separate from runtime logical
+-- V1.10 keeps objective capture measurements separate from runtime logical
 -- measurements. The supplied mobile capture renders Roblox GUI coordinates at
 -- roughly 1.286 physical pixels per logical pixel; calibrating the artboard and
 -- descendant density independently prevents uniform oversizing while floating
@@ -8086,7 +8086,6 @@ function Window:_openHeaderContext()
                 Label = tostring(activeTab.DefaultSubTabName or "General"),
                 Tab = activeTab,
                 Owner = activeTab,
-                Indent = false,
             })
         end
         for _, subTab in ipairs(activeTab.SubTabs) do
@@ -8095,7 +8094,6 @@ function Window:_openHeaderContext()
                     Label = tostring(subTab.Title),
                     Tab = activeTab,
                     Owner = subTab,
-                    Indent = false,
                 })
             end
         end
@@ -8104,21 +8102,34 @@ function Window:_openHeaderContext()
             Label = tostring(activeTab.Title),
             Tab = activeTab,
             Owner = nil,
-            Indent = false,
         })
     end
     if #entries == 0 then
         return
     end
 
-    local visibleRows = math.min(#entries, 8)
+    -- Build the entire option tree before PopupController mounts and density-scales
+    -- it. The old order mounted an empty popup and then registered every row through
+    -- DescendantAdded, which could briefly display blank, overlapping, or uneven
+    -- options on touch devices.
+    local maximumVisibleRows = 7
+    local rowHeight = 27
+    local rowGap = 1
+    local outerPadding = 5
+    local visibleRows = math.min(#entries, maximumVisibleRows)
+    local visibleListHeight = visibleRows * rowHeight + math.max(visibleRows - 1, 0) * rowGap
+    local fullListHeight = #entries * rowHeight + math.max(#entries - 1, 0) * rowGap
+    local popupWidth = Metrics.HeaderContextWidth
+    local popupHeight = visibleListHeight + outerPadding * 2
+
     local popup = create("CanvasGroup", {
         Name = "HeaderContextPopup",
         BackgroundColor3 = Theme.ElevatedSurface,
         BackgroundTransparency = 0.035,
         BorderSizePixel = 0,
         GroupTransparency = 1,
-        Size = UDim2.fromOffset(228, visibleRows * 29 + 12),
+        ClipsDescendants = true,
+        Size = UDim2.fromOffset(popupWidth, popupHeight),
         Visible = false,
         ZIndex = 780,
     }) :: CanvasGroup
@@ -8130,68 +8141,116 @@ function Window:_openHeaderContext()
         Name = "ContextItems",
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        Position = UDim2.fromOffset(6, 6),
-        Size = UDim2.new(1, -12, 1, -12),
-        CanvasSize = UDim2.fromOffset(0, #entries * 29),
+        Position = UDim2.fromOffset(outerPadding, outerPadding),
+        Size = UDim2.new(1, -outerPadding * 2, 1, -outerPadding * 2),
+        CanvasSize = UDim2.fromOffset(0, fullListHeight),
+        CanvasPosition = Vector2.new(0, 0),
         ScrollBarThickness = 0,
         ScrollingDirection = Enum.ScrollingDirection.Y,
+        ScrollingEnabled = #entries > maximumVisibleRows,
+        ElasticBehavior = Enum.ElasticBehavior.Never,
+        ClipsDescendants = true,
         ZIndex = 781,
         Parent = popup,
     }) :: ScrollingFrame
-    local rowLayout = list(scroll, Enum.FillDirection.Vertical, 1)
+    local rowLayout = list(scroll, Enum.FillDirection.Vertical, rowGap)
     rowLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
-    local popupMaid = PopupController:Open(self, popup, anchor, 6)
+    local rowRecords: { AnyTable } = {}
+    local selectedIndex = 1
+
     for index, entry in ipairs(entries) do
         local selected = entry.Tab == self.ActiveTab
             and ((entry.Owner == nil and not entry.Tab.HasSubTabs)
                 or entry.Owner == entry.Tab.ActiveSubTab
                 or (entry.Owner == entry.Tab and entry.Tab.ActiveSubTab == entry.Tab))
+        if selected then
+            selectedIndex = index
+        end
+
         local row = create("TextButton", {
             Name = "ContextRow",
             BackgroundColor3 = selected and Theme.PressedSurface or Theme.Surface2,
-            BackgroundTransparency = selected and 0.28 or 1,
+            BackgroundTransparency = selected and 0.32 or 1,
             BorderSizePixel = 0,
             Text = "",
             AutoButtonColor = false,
-            Size = UDim2.new(1, -4, 0, 28),
+            Active = true,
+            Selectable = true,
+            SelectionOrder = index,
+            Size = UDim2.new(1, 0, 0, rowHeight),
             LayoutOrder = index,
             ZIndex = 782,
             Parent = scroll,
         }) :: TextButton
         corner(row, 4)
-        local x = entry.Indent and 24 or 10
-        if entry.Indent then
-            local branch = makeIcon(row, { Icon = "corner-down-right", IconSize = 10 }, "Muted")
-            if branch then
-                branch.AnchorPoint = Vector2.new(0, 0.5)
-                branch.Position = UDim2.new(0, 8, 0.5, 0)
-                branch.ZIndex = 783
-            end
-        end
+
+        local activeRail = create("Frame", {
+            Name = "SelectedRail",
+            BackgroundColor3 = Theme.Accent,
+            BackgroundTransparency = selected and 0.08 or 1,
+            BorderSizePixel = 0,
+            AnchorPoint = Vector2.new(0, 0.5),
+            Position = UDim2.new(0, 1, 0.5, 0),
+            Size = UDim2.fromOffset(2, 13),
+            ZIndex = 783,
+            Parent = row,
+        }) :: Frame
+        corner(activeRail, 1)
+        ThemeController:Bind(activeRail, "BackgroundColor3", "Accent")
+
         local rowLabel = makeText(
             row,
             entry.Label,
-            entry.Indent and 9 or 10,
+            9,
             selected and Theme.Text or Theme.SubText,
-            entry.Indent and nil or "bold"
+            selected and "bold" or nil
         )
-        rowLabel.Position = UDim2.fromOffset(x, 0)
-        rowLabel.Size = UDim2.new(1, -x - 26, 1, 0)
+        rowLabel.Position = UDim2.fromOffset(9, 0)
+        rowLabel.Size = UDim2.new(1, -34, 1, 0)
+        rowLabel.TextTruncate = Enum.TextTruncate.AtEnd
         rowLabel.ZIndex = 783
-        if selected then
-            local selectedIcon = makeIcon(row, { Icon = "check", IconSize = 11 }, "Accent")
-            if selectedIcon then
-                selectedIcon.AnchorPoint = Vector2.new(1, 0.5)
-                selectedIcon.Position = UDim2.new(1, -8, 0.5, 0)
-                selectedIcon.ZIndex = 783
-            end
+
+        local selectedIcon = makeIcon(row, { Icon = "check", IconSize = 10 }, "Accent")
+        if selectedIcon then
+            selectedIcon.AnchorPoint = Vector2.new(1, 0.5)
+            selectedIcon.Position = UDim2.new(1, -8, 0.5, 0)
+            selectedIcon.Visible = selected
+            selectedIcon.ZIndex = 783
         end
+
+        table.insert(rowRecords, {
+            Row = row,
+            Entry = entry,
+            Selected = selected,
+        })
+    end
+
+    local popupMaid = PopupController:Open(self, popup, anchor, 4)
+    if #entries > maximumVisibleRows then
+        ScrollbarController:Attach(scroll)
+    end
+
+    local contextChevron = self.HeaderContextChevron
+    if contextChevron and contextChevron.Parent then
+        tween(contextChevron, { Rotation = 180 }, Motion.HoverIn)
+        popupMaid:Give(function()
+            if contextChevron.Parent then
+                tween(contextChevron, { Rotation = 0 }, Motion.HoverOut)
+            end
+        end)
+    end
+
+    for _, record in ipairs(rowRecords) do
+        local row = record.Row
+        local entry = record.Entry
+        local selected = record.Selected
+
         popupMaid:Give(row.MouseEnter:Connect(function()
-            tween(row, { BackgroundTransparency = selected and 0.2 or 0.48 }, Motion.HoverIn)
+            tween(row, { BackgroundTransparency = selected and 0.22 or 0.54 }, Motion.HoverIn)
         end))
         popupMaid:Give(row.MouseLeave:Connect(function()
-            tween(row, { BackgroundTransparency = selected and 0.28 or 1 }, Motion.HoverOut)
+            tween(row, { BackgroundTransparency = selected and 0.32 or 1 }, Motion.HoverOut)
         end))
         popupMaid:Give(row.Activated:Connect(function()
             self:SelectTab(entry.Tab)
@@ -8201,7 +8260,21 @@ function Window:_openHeaderContext()
             PopupController:Close(self)
         end))
     end
-    tween(popup, { GroupTransparency = 0 }, Motion.PopupEnter)
+
+    task.defer(function()
+        if not popup.Parent or not self.ActivePopup or self.ActivePopup.Frame ~= popup then
+            return
+        end
+        if #entries > maximumVisibleRows then
+            local firstVisibleIndex = math.clamp(
+                selectedIndex - math.floor(maximumVisibleRows * 0.5),
+                1,
+                math.max(#entries - maximumVisibleRows + 1, 1)
+            )
+            scroll.CanvasPosition = Vector2.new(0, (firstVisibleIndex - 1) * (rowHeight + rowGap))
+        end
+        tween(popup, { GroupTransparency = 0 }, Motion.PopupEnter)
+    end)
 end
 
 function Window:_makeHeader(config: WindowConfig)
@@ -8360,6 +8433,7 @@ function Window:_makeHeader(config: WindowConfig)
     self.HeaderSubtitle = subtitle
     self.HeaderContext = contextButton
     self.HeaderContextLabel = contextLabel
+    self.HeaderContextChevron = contextChevron
     self.HeaderContextEnabled = config.HeaderContext ~= false
     self.Header = header
 
@@ -13332,7 +13406,7 @@ if startupOk then
 end
 if startupOk then
     startupOk = startupStage("PublicAPICompatibility", function()
-        assert(Kronos.Version == "1.9.0", "Unexpected Kronos version")
+        assert(Kronos.Version == "1.10.0", "Unexpected Kronos version")
         assert(
             type(Kronos.CreateWindow) == "function"
                 and type(Kronos.Notify) == "function"
