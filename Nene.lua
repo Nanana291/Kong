@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-    KronosV1.2.lua
+    KronosV1.3.lua
     Cumulative native Roblox UI library refined against the supplied
     2340x1080 reference video. All controllers and the optional showcase live
     in this file; no remote modules or external UI libraries are required.
@@ -31,6 +31,7 @@ type WindowConfig = {
     Subtitle: string?,
     SubTitle: string?,
     SearchBar: boolean?,
+    SearchBehavior: string?,
     CompactNavigation: boolean?,
     Accent: Color3?,
     ToggleKey: Enum.KeyCode?,
@@ -69,7 +70,7 @@ type WindowConfig = {
 }
 
 local Kronos: AnyTable = {}
-Kronos.Version = "1.2.0"
+Kronos.Version = "1.3.0"
 Kronos.Options = {} :: AnyTable
 Kronos.Windows = {} :: { AnyTable }
 Kronos.Connections = {} :: { RBXScriptConnection }
@@ -93,6 +94,9 @@ Kronos.BorderIntensity = 1
 Kronos.SurfaceContrast = 1.08
 Kronos.ReducedMotion = false
 Kronos.AnimationIntensity = 1
+Kronos.AnimationsEnabled = true
+Kronos.NotificationMotion = true
+Kronos.PageTransitions = true
 Kronos.DimStrength = 0.64
 
 local Players = game:GetService("Players")
@@ -130,19 +134,19 @@ Environment.__KRONOS_ACTIVE = nil
 local Theme: ThemeMap = {
     -- The objective uses a narrow dark ladder: layers are distinguishable,
     -- but no surface becomes a bright card against the shell.
-    Background = Color3.fromRGB(10, 10, 13),
-    BackgroundSoft = Color3.fromRGB(13, 13, 17),
-    Surface = Color3.fromRGB(16, 16, 20),
+    Background = Color3.fromRGB(9, 9, 12),
+    BackgroundSoft = Color3.fromRGB(12, 12, 16),
+    Surface = Color3.fromRGB(15, 15, 19),
     Surface2 = Color3.fromRGB(19, 19, 24),
-    Surface3 = Color3.fromRGB(23, 23, 29),
+    Surface3 = Color3.fromRGB(24, 24, 30),
     ElevatedSurface = Color3.fromRGB(21, 21, 27),
-    SurfaceHover = Color3.fromRGB(27, 27, 34),
-    HoverSurface = Color3.fromRGB(27, 27, 34),
-    PressedSurface = Color3.fromRGB(31, 28, 40),
-    Stroke = Color3.fromRGB(48, 48, 59),
-    StrokeSoft = Color3.fromRGB(34, 34, 42),
-    Border = Color3.fromRGB(49, 49, 60),
-    Divider = Color3.fromRGB(31, 31, 38),
+    SurfaceHover = Color3.fromRGB(28, 28, 35),
+    HoverSurface = Color3.fromRGB(28, 28, 35),
+    PressedSurface = Color3.fromRGB(31, 28, 41),
+    Stroke = Color3.fromRGB(56, 56, 68),
+    StrokeSoft = Color3.fromRGB(39, 39, 48),
+    Border = Color3.fromRGB(58, 58, 70),
+    Divider = Color3.fromRGB(38, 38, 47),
     Text = Color3.fromRGB(232, 232, 239),
     PrimaryText = Color3.fromRGB(232, 232, 239),
     SubText = Color3.fromRGB(151, 151, 165),
@@ -161,9 +165,9 @@ local Theme: ThemeMap = {
     Error = Color3.fromRGB(220, 91, 108),
     Shadow = Color3.fromRGB(0, 0, 0),
     Overlay = Color3.fromRGB(5, 5, 8),
-    InnerHighlight = Color3.fromRGB(93, 86, 113),
-    ScrollTrack = Color3.fromRGB(48, 44, 61),
-    AcrylicTint = Color3.fromRGB(27, 23, 35),
+    InnerHighlight = Color3.fromRGB(105, 97, 126),
+    ScrollTrack = Color3.fromRGB(52, 47, 67),
+    AcrylicTint = Color3.fromRGB(25, 22, 34),
 }
 
 local Motion = {
@@ -180,23 +184,23 @@ local Motion = {
     SliderIdle = 0.09,
     TabSelect = 0.145,
     SubtabSelect = 0.135,
-    PageEnter = 0.145,
-    PageExit = 0.09,
-    PopupEnter = 0.145,
-    PopupExit = 0.1,
-    SettingsEnter = 0.175,
-    SettingsExit = 0.13,
-    NotificationEnter = 0.19,
-    NotificationMove = 0.17,
-    NotificationExit = 0.15,
-    ScrollbarActivate = 0.08,
-    ScrollbarIdle = 0.15,
-    WidgetEnter = 0.17,
-    WidgetExit = 0.13,
-    RowInsert = 0.13,
-    RowRemove = 0.11,
-    Minimize = 0.18,
-    Restore = 0.2,
+    PageEnter = 0.13,
+    PageExit = 0.085,
+    PopupEnter = 0.13,
+    PopupExit = 0.09,
+    SettingsEnter = 0.16,
+    SettingsExit = 0.115,
+    NotificationEnter = 0.17,
+    NotificationMove = 0.15,
+    NotificationExit = 0.13,
+    ScrollbarActivate = 0.075,
+    ScrollbarIdle = 0.14,
+    WidgetEnter = 0.15,
+    WidgetExit = 0.115,
+    RowInsert = 0.115,
+    RowRemove = 0.1,
+    Minimize = 0.165,
+    Restore = 0.18,
     SearchFilter = 0.11,
     DependentReveal = 0.14,
     TooltipEnter = 0.11,
@@ -208,47 +212,49 @@ local Motion = {
     Press = 0.05,
     Slider = 0.065,
     Toggle = 0.14,
-    Dropdown = 0.145,
-    PopupClose = 0.1,
-    Tab = 0.145,
-    SubTab = 0.135,
-    TabExit = 0.09,
-    Search = 0.11,
-    Settings = 0.175,
-    Widget = 0.17,
-    DragRelease = 0.09,
-    Window = 0.2,
-    Notification = 0.19,
-    Tooltip = 0.11,
-    Health = 0.15,
-    KeybindRow = 0.13,
-    Scrollbar = 0.09,
+    Dropdown = 0.13,
+    PopupClose = 0.09,
+    Tab = 0.13,
+    SubTab = 0.12,
+    TabExit = 0.085,
+    Search = 0.1,
+    Settings = 0.16,
+    Widget = 0.15,
+    DragRelease = 0.085,
+    Window = 0.18,
+    Notification = 0.17,
+    Tooltip = 0.1,
+    Health = 0.14,
+    KeybindRow = 0.115,
+    Scrollbar = 0.085,
 }
 
 local Metrics = {
     -- Measured from the 2340x1080 target-reference capture.
     ReferenceViewport = Vector2.new(2340, 1080),
-    ReferenceWindow = Vector2.new(907, 542),
-    ReferenceAspect = 907 / 542,
-    Window = Vector2.new(907, 542),
-    MinimumWindow = Vector2.new(560, 336),
-    MaximumWindow = Vector2.new(980, 586),
-    Header = 52,
-    Sidebar = 232,
-    SidebarRatio = 0.24,
-    CompactSidebar = 50,
-    CompactSidebarRatio = 0.072,
-    HeaderRatio = 0.096,
-    HeaderContextWidth = 214,
-    HeaderContextHeight = 26,
-    PreferredContent = 658,
-    MaximumContent = 708,
-    SingleColumnMaximum = 438,
-    MinimumSection = 248,
-    ColumnGap = 10,
-    Row = 32,
-    DescriptionRow = 40,
-    SectionGap = 7,
+    -- V1.3 uses the objective capture rather than the physical size of the
+    -- current build. The current recording rendered about ten percent larger.
+    ReferenceWindow = Vector2.new(824, 492),
+    ReferenceAspect = 824 / 492,
+    Window = Vector2.new(824, 492),
+    MinimumWindow = Vector2.new(520, 310),
+    MaximumWindow = Vector2.new(930, 556),
+    Header = 44,
+    Sidebar = 184,
+    SidebarRatio = 0.223,
+    CompactSidebar = 46,
+    CompactSidebarRatio = 0.064,
+    HeaderRatio = 0.083,
+    HeaderContextWidth = 184,
+    HeaderContextHeight = 24,
+    PreferredContent = 622,
+    MaximumContent = 670,
+    SingleColumnMaximum = 420,
+    MinimumSection = 236,
+    ColumnGap = 9,
+    Row = 30,
+    DescriptionRow = 38,
+    SectionGap = 6,
     Radius = 7,
     PopupRadius = 7,
 }
@@ -1998,7 +2004,21 @@ local IconAliases: { [string]: string } = {
     ["no-recoil"] = "shield-check",
     ["check-circle"] = "circle-check",
     ["x-circle"] = "circle-x",
+    sliders = "sliders-horizontal",
+    layoutdashboard = "layout-dashboard",
+    paneldashboard = "panels-top-left",
 }
+
+-- Accept lower-case compact spellings such as `layoutdashboard` without
+-- weakening canonical kebab-case resolution. Collisions retain the first
+-- canonical asset deterministically.
+local CompactIconNames: { [string]: string } = {}
+for canonicalName in pairs(LucideAssets) do
+    local compactName = string.gsub(canonicalName, "%-", "")
+    if CompactIconNames[compactName] == nil then
+        CompactIconNames[compactName] = canonicalName
+    end
+end
 
 local Maid = {}
 Maid.__index = Maid
@@ -2106,29 +2126,29 @@ local BorderRoleStrength = {
 
 local BorderStyles = {
     Quiet = { Transparency = 0.74, Thickness = 1 },
-    Shell = { Transparency = 0.22, Thickness = 1 },
-    MainShellOuter = { Transparency = 0.22, Thickness = 1 },
-    InnerHighlight = { Transparency = 0.76, Thickness = 1 },
-    MainShellInner = { Transparency = 0.76, Thickness = 1 },
-    HeaderDivider = { Transparency = 0.5, Thickness = 1 },
-    SidebarDivider = { Transparency = 0.46, Thickness = 1 },
-    ContentDivider = { Transparency = 0.54, Thickness = 1 },
-    Section = { Transparency = 0.67, Thickness = 1 },
-    Control = { Transparency = 0.72, Thickness = 1 },
+    Shell = { Transparency = 0.18, Thickness = 1 },
+    MainShellOuter = { Transparency = 0.18, Thickness = 1 },
+    InnerHighlight = { Transparency = 0.72, Thickness = 1 },
+    MainShellInner = { Transparency = 0.72, Thickness = 1 },
+    HeaderDivider = { Transparency = 0.42, Thickness = 1 },
+    SidebarDivider = { Transparency = 0.39, Thickness = 1 },
+    ContentDivider = { Transparency = 0.46, Thickness = 1 },
+    Section = { Transparency = 0.58, Thickness = 1 },
+    Control = { Transparency = 0.64, Thickness = 1 },
     Hover = { Transparency = 0.46, Thickness = 1 },
     ControlHover = { Transparency = 0.46, Thickness = 1 },
     Focus = { Transparency = 0.28, Thickness = 1 },
     ControlFocused = { Transparency = 0.28, Thickness = 1 },
     Disabled = { Transparency = 0.8, Thickness = 1 },
     ControlDisabled = { Transparency = 0.8, Thickness = 1 },
-    Dropdown = { Transparency = 0.38, Thickness = 1 },
-    Popup = { Transparency = 0.27, Thickness = 1 },
-    ColorPicker = { Transparency = 0.25, Thickness = 1 },
-    Settings = { Transparency = 0.27, Thickness = 1 },
-    Notification = { Transparency = 0.33, Thickness = 1 },
-    Floating = { Transparency = 0.35, Thickness = 1 },
-    FloatingWidget = { Transparency = 0.35, Thickness = 1 },
-    ScrollTrack = { Transparency = 0.68, Thickness = 1 },
+    Dropdown = { Transparency = 0.31, Thickness = 1 },
+    Popup = { Transparency = 0.22, Thickness = 1 },
+    ColorPicker = { Transparency = 0.2, Thickness = 1 },
+    Settings = { Transparency = 0.22, Thickness = 1 },
+    Notification = { Transparency = 0.27, Thickness = 1 },
+    Floating = { Transparency = 0.29, Thickness = 1 },
+    FloatingWidget = { Transparency = 0.29, Thickness = 1 },
+    ScrollTrack = { Transparency = 0.56, Thickness = 1 },
     Reopen = { Transparency = 0.27, Thickness = 1 },
     ReopenButton = { Transparency = 0.27, Thickness = 1 },
     AcrylicHighlight = { Transparency = 0.76, Thickness = 1 },
@@ -2357,7 +2377,7 @@ function BorderController:Refresh()
 end
 
 function AnimationController:Duration(duration: number?): number
-    if Kronos.ReducedMotion then
+    if Kronos.ReducedMotion or Kronos.AnimationsEnabled == false then
         return 0
     end
     return math.max((duration or Motion.Hover) * math.clamp(Kronos.AnimationIntensity, 0, 2), 0)
@@ -2976,9 +2996,9 @@ function AcrylicController:RefreshRecord(record: AnyTable)
     record.Tint.Visible = enabled
     record.Depth.Visible = enabled
     record.Sheen.Visible = enabled
-    record.Tint.BackgroundTransparency = enabled and (0.935 - 0.255 * intensity) or 1
-    record.Depth.BackgroundTransparency = enabled and (0.978 - 0.125 * intensity) or 1
-    record.Sheen.BackgroundTransparency = enabled and (0.955 - 0.255 * intensity) or 1
+    record.Tint.BackgroundTransparency = enabled and (0.948 - 0.205 * intensity) or 1
+    record.Depth.BackgroundTransparency = enabled and (0.984 - 0.105 * intensity) or 1
+    record.Sheen.BackgroundTransparency = enabled and (0.94 - 0.22 * intensity) or 1
     record.Gradient.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0, Theme.AcrylicTint:Lerp(Theme.Accent, 0.045 + 0.07 * intensity)),
         ColorSequenceKeypoint.new(0.55, Theme.AcrylicTint),
@@ -3025,6 +3045,11 @@ function IconController:Resolve(name: any): (string?, string?, boolean)
     end
     local canonical = IconAliases[normalized] or normalized
     local asset = LucideAssets[canonical]
+    if not asset then
+        local compactName = string.gsub(normalized, "%-", "")
+        canonical = CompactIconNames[compactName] or canonical
+        asset = LucideAssets[canonical]
+    end
     local valid = asset ~= nil
     if not asset then
         canonical = "circle"
@@ -3153,8 +3178,8 @@ function ResponsiveController:CalculateWindowSize(
         width = safeWidth * 0.92
         height = math.min(safeHeight * 0.78, math.max(width * 1.42, math.min(440, safeHeight)))
     else
-        local heightRatio = 0.76
-        local widthRatio = 0.84
+        local heightRatio = 0.72
+        local widthRatio = 0.78
         local preferredHeight = baseHeight
 
         if mode == "MobileLandscape" then
@@ -3169,12 +3194,12 @@ function ResponsiveController:CalculateWindowSize(
             widthRatio = 0.84
             preferredHeight = math.min(baseHeight, safeHeight * heightRatio)
         elseif mode == "Medium" then
-            heightRatio = 0.76
-            widthRatio = 0.78
+            heightRatio = 0.72
+            widthRatio = 0.72
             preferredHeight = math.min(baseHeight, safeHeight * heightRatio)
         else
-            heightRatio = 0.76
-            widthRatio = 0.72
+            heightRatio = 0.72
+            widthRatio = 0.64
             preferredHeight = math.min(baseHeight, safeHeight * heightRatio)
         end
 
@@ -3687,8 +3712,9 @@ function ScrollbarController:GetLengths(entry: AnyTable): (number, number, numbe
     content = math.max(content, view)
     local trackLength = math.max(view - entry.Margin * 2, 1)
     local maximumCanvas = math.max(content - view, 0)
+    local minimumThumb = math.min(math.max(finiteNumber(entry.MinimumThumb, 1), 1), trackLength)
     local thumbLength = maximumCanvas > 0
-            and math.clamp(trackLength * view / math.max(content, 1), entry.MinimumThumb, trackLength)
+            and math.clamp(trackLength * view / math.max(content, 1), minimumThumb, trackLength)
         or trackLength
     return view, trackLength, maximumCanvas, thumbLength
 end
@@ -3757,15 +3783,15 @@ function ScrollbarController:Wake(entry: AnyTable, hold: boolean?)
     end
     entry.IdleGeneration = (entry.IdleGeneration or 0) + 1
     local generation = entry.IdleGeneration
-    tween(entry.Track, { BackgroundTransparency = 0.84 }, Motion.ScrollbarActivate)
-    tween(entry.Thumb, { BackgroundTransparency = 0.04 }, Motion.ScrollbarActivate)
+    tween(entry.Track, { BackgroundTransparency = 0.9 }, Motion.ScrollbarActivate)
+    tween(entry.Thumb, { BackgroundTransparency = 0.08 }, Motion.ScrollbarActivate)
     if hold then
         return
     end
     task.delay(1.05, function()
         if entry.IdleGeneration == generation and not entry.Hovered and not entry.Dragging and entry.Track.Parent then
-            tween(entry.Track, { BackgroundTransparency = 0.98 }, Motion.ScrollbarIdle)
-            tween(entry.Thumb, { BackgroundTransparency = 0.58 }, Motion.ScrollbarIdle)
+            tween(entry.Track, { BackgroundTransparency = 1 }, Motion.ScrollbarIdle)
+            tween(entry.Thumb, { BackgroundTransparency = 0.66 }, Motion.ScrollbarIdle)
         end
     end)
 end
@@ -3810,8 +3836,8 @@ function ScrollbarController:Attach(scroller: ScrollingFrame): AnyTable?
         Horizontal = horizontal,
         Margin = 4,
         IdleWidth = 2,
-        ActiveWidth = 3,
-        MinimumThumb = horizontal and 30 or 34,
+        ActiveWidth = 4,
+        MinimumThumb = horizontal and 24 or 28,
         Hovered = false,
         Dragging = false,
     }
@@ -4206,9 +4232,10 @@ function Kronos:Notify(config: NotificationOptions?): AnyTable
     end
 
     local duration = math.max(finiteNumber(config.Duration, 4), 0.5)
+    local notificationMotion = self.NotificationMotion ~= false and Motion.Notification or 0
     local message = tostring(config.Content or config.Message or config.Subtitle or "")
-    local height = message ~= "" and 58 or 42
-    local width = 220
+    local height = message ~= "" and 54 or 40
+    local width = 204
     local kind = string.lower(tostring(config.Type or "info"))
     local accent = Theme.Accent
     local accentToken = "Accent"
@@ -4323,11 +4350,11 @@ function Kronos:Notify(config: NotificationOptions?): AnyTable
                 tween(
                     toast,
                     { GroupTransparency = 1, Position = UDim2.fromOffset(d(14), 0) },
-                    Motion.Notification,
+                    notificationMotion,
                     Enum.EasingStyle.Quart,
                     Enum.EasingDirection.In
                 )
-                task.delay(AnimationController:Duration(Motion.Notification), function()
+                task.delay(AnimationController:Duration(notificationMotion), function()
                     if slot.Parent then
                         slot:Destroy()
                     end
@@ -4345,7 +4372,7 @@ function Kronos:Notify(config: NotificationOptions?): AnyTable
     end
 
     table.insert(self.NotificationHandles, handle)
-    tween(toast, { GroupTransparency = 0, Position = UDim2.fromOffset(0, 0) }, Motion.Notification)
+    tween(toast, { GroupTransparency = 0, Position = UDim2.fromOffset(0, 0) }, notificationMotion)
     tween(progress, { Size = UDim2.fromOffset(0, d(1)) }, duration, Enum.EasingStyle.Linear)
     timerThread = task.delay(duration, function()
         timerThread = nil
@@ -4555,7 +4582,7 @@ local function makeControlRow(section, titleText, description, height, iconOptio
     local row = create("Frame", {
         Name = "ControlRow",
         BackgroundColor3 = Theme.Surface2,
-        BackgroundTransparency = 0.89,
+        BackgroundTransparency = 0.82,
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, rowHeight),
         ClipsDescendants = true,
@@ -4569,7 +4596,7 @@ local function makeControlRow(section, titleText, description, height, iconOptio
     local rowDivider = create("Frame", {
         Name = "RowDivider",
         BackgroundColor3 = Theme.Divider,
-        BackgroundTransparency = 0.36,
+        BackgroundTransparency = 0.44,
         BorderSizePixel = 0,
         AnchorPoint = Vector2.new(0, 1),
         Position = UDim2.new(0, 6, 1, 0),
@@ -4590,7 +4617,7 @@ local function makeControlRow(section, titleText, description, height, iconOptio
             titleOffset = 28
         end
     end
-    local title = makeText(row, titleText or "Control", 9, Theme.Text, "bold")
+    local title = makeText(row, titleText or "Control", 10, Theme.Text, "bold")
     title.Name = "ControlTitle"
     title.Position = UDim2.fromOffset(titleOffset, description and 4 or 0)
     title.Size = UDim2.new(0.56, -titleOffset - 3, 0, 18)
@@ -4622,7 +4649,7 @@ local function makeControlRow(section, titleText, description, height, iconOptio
         rowOwner,
         hover.MouseEnter:Connect(function()
             if not row:GetAttribute("KronosDisabled") then
-                tween(row, { BackgroundTransparency = 0.68 }, Motion.HoverIn)
+                tween(row, { BackgroundTransparency = 0.61 }, Motion.HoverIn)
                 tween(rowStroke, { Transparency = BorderController:Resolve(0.52, "ControlHover") }, Motion.HoverIn)
             end
         end)
@@ -4630,7 +4657,7 @@ local function makeControlRow(section, titleText, description, height, iconOptio
     addConnection(
         rowOwner,
         hover.MouseLeave:Connect(function()
-            tween(row, { BackgroundTransparency = 0.89 }, Motion.HoverOut)
+            tween(row, { BackgroundTransparency = 0.82 }, Motion.HoverOut)
             tween(rowStroke, { Transparency = BorderController:Resolve(0.72, "Control") }, Motion.HoverOut)
         end)
     )
@@ -4822,7 +4849,7 @@ function Section:CreateSlider(id: any, config: ComponentOptions?): AnyTable
         self,
         config.Name or config.Title or id or "Slider",
         config.Description,
-        config.Description and 50 or 42,
+        config.Description and 46 or 38,
         config
     )
     holder.Size = UDim2.new(0.45, -6, 1, -8)
@@ -4861,7 +4888,7 @@ function Section:CreateSlider(id: any, config: ComponentOptions?): AnyTable
     local knob = create("Frame", {
         BackgroundColor3 = Theme.White,
         BorderSizePixel = 0,
-        Size = UDim2.fromOffset(9, 9),
+        Size = UDim2.fromOffset(8, 8),
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0, 0.5),
         Parent = track,
@@ -4922,7 +4949,7 @@ function Section:CreateSlider(id: any, config: ComponentOptions?): AnyTable
             return
         end
         dragging = false
-        local size = ResponsiveController:Scale(self.Window, 9)
+        local size = ResponsiveController:Scale(self.Window, 8)
         tween(knob, { Size = UDim2.fromOffset(size, size) }, Motion.Press)
     end
     addConnection(
@@ -4941,7 +4968,7 @@ function Section:CreateSlider(id: any, config: ComponentOptions?): AnyTable
                 end
                 dragging = true
                 update(input)
-                local size = ResponsiveController:Scale(self.Window, 12)
+                local size = ResponsiveController:Scale(self.Window, 11)
                 tween(knob, { Size = UDim2.fromOffset(size, size) }, Motion.Press)
             end
         end)
@@ -4999,11 +5026,11 @@ function Section:CreateInput(id: any, config: ComponentOptions?): AnyTable
         ClipsDescendants = true,
         AnchorPoint = Vector2.new(1, 0.5),
         Position = UDim2.new(1, 0, 0.5, 0),
-        Size = UDim2.new(1, 0, 0, 28),
+        Size = UDim2.new(1, 0, 0, 26),
         Parent = holder,
     }) :: TextBox
     corner(box, 5)
-    local boxStroke = stroke(box, Theme.Stroke, 0.56, 1)
+    local boxStroke = stroke(box, Theme.Stroke, nil, 1, "Control")
     padding(box, 9, 0, 9, 0)
 
     local changing = false
@@ -5269,12 +5296,12 @@ function Section:CreateDropdown(id: any, config: ComponentOptions?): AnyTable
         AutoButtonColor = false,
         AnchorPoint = Vector2.new(1, 0.5),
         Position = UDim2.new(1, 0, 0.5, 0),
-        Size = UDim2.new(1, 0, 0, 28),
+        Size = UDim2.new(1, 0, 0, 26),
         Parent = holder,
         ZIndex = 6,
     }) :: TextButton
     corner(button, 5)
-    local buttonStroke = stroke(button, Theme.Border, 0.58, 1)
+    local buttonStroke = stroke(button, Theme.Border, nil, 1, "Control")
     local label = makeText(button, "", 10, Theme.SubText, "bold")
     label.Position = UDim2.fromOffset(9, 0)
     label.Size = UDim2.new(1, -29, 1, 0)
@@ -5359,8 +5386,8 @@ function Section:CreateDropdown(id: any, config: ComponentOptions?): AnyTable
 
         local searchable = config.Search == true or #options > 8
         local visibleRows = math.clamp(#options, 1, 7)
-        local popupHeight = visibleRows * 28 + math.max(visibleRows - 1, 0) * 3 + 14 + (searchable and 36 or 0)
-        popupHeight = math.clamp(popupHeight, 52, searchable and 266 or 226)
+        local popupHeight = visibleRows * 26 + math.max(visibleRows - 1, 0) * 2 + 14 + (searchable and 34 or 0)
+        popupHeight = math.clamp(popupHeight, 50, searchable and 246 or 208)
         local popup = create("CanvasGroup", {
             Name = "DropdownPopup",
             BackgroundColor3 = Theme.ElevatedSurface,
@@ -5372,7 +5399,7 @@ function Section:CreateDropdown(id: any, config: ComponentOptions?): AnyTable
             ZIndex = 700,
         }) :: CanvasGroup
         corner(popup, Metrics.PopupRadius)
-        stroke(popup, Theme.Border, 0.28, 1, "Floating")
+        stroke(popup, Theme.Border, nil, 1, "Dropdown")
         padding(popup, 7, 7, 7, 7)
         local popupMaid = PopupController:Open(self.Window, popup, button, 5)
         popupMaid:Give(function()
@@ -5478,7 +5505,7 @@ function Section:CreateDropdown(id: any, config: ComponentOptions?): AnyTable
                         BorderSizePixel = 0,
                         Text = "",
                         AutoButtonColor = false,
-                        Size = UDim2.new(1, 0, 0, 28),
+                        Size = UDim2.new(1, 0, 0, 26),
                         ZIndex = 704,
                         Parent = listFrame,
                     }) :: TextButton
@@ -5660,13 +5687,18 @@ function Section:CreateButton(id: any, config: ComponentOptions?): AnyTable
         AutoButtonColor = false,
         AnchorPoint = Vector2.new(1, 0.5),
         Position = UDim2.new(1, 0, 0.5, 0),
-        Size = UDim2.new(1, 0, 0, 28),
+        Size = UDim2.new(1, 0, 0, 26),
         ZIndex = 6,
         Parent = holder,
     }) :: TextButton
     corner(button, 5)
-    local buttonStroke =
-        stroke(button, config.Primary and Theme.Accent or Theme.Border, config.Primary and 0.18 or 0.55, 1)
+    local buttonStroke = stroke(
+        button,
+        config.Primary and Theme.Accent or Theme.Border,
+        nil,
+        1,
+        config.Primary and "Accent" or "Control"
+    )
     local label = makeText(button, actionText, 10, config.Primary and Theme.White or Theme.SubText, "bold")
     label.Size = UDim2.fromScale(1, 1)
     label.TextXAlignment = Enum.TextXAlignment.Center
@@ -5715,7 +5747,7 @@ function Section:CreateButton(id: any, config: ComponentOptions?): AnyTable
                         1,
                         -ResponsiveController:Scale(self.Window, 3),
                         0,
-                        ResponsiveController:Scale(self.Window, 25)
+                        ResponsiveController:Scale(self.Window, 23)
                     ),
                 }, Motion.Press)
             end
@@ -5724,7 +5756,7 @@ function Section:CreateButton(id: any, config: ComponentOptions?): AnyTable
     addConnection(
         control,
         button.MouseButton1Up:Connect(function()
-            tween(button, { Size = UDim2.new(1, 0, 0, ResponsiveController:Scale(self.Window, 28)) }, Motion.Press)
+            tween(button, { Size = UDim2.new(1, 0, 0, ResponsiveController:Scale(self.Window, 26)) }, Motion.Press)
         end)
     )
     addConnection(
@@ -5935,7 +5967,7 @@ function Section:CreateKeybind(id: any, config: ComponentOptions?): AnyTable
     end
     local row, holder, titleLabel =
         makeControlRow(self, config.Name or config.Title or id or "Keybind", config.Description, nil, config)
-    holder.Size = UDim2.fromOffset(132, 30)
+    holder.Size = UDim2.fromOffset(120, 28)
     local keybind = setmetatable({
         Value = initialValue,
         Mode = initialMode,
@@ -5961,13 +5993,13 @@ function Section:CreateKeybind(id: any, config: ComponentOptions?): AnyTable
         TextSize = 9,
         AutoButtonColor = false,
         AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, -80, 0.5, 0),
-        Size = UDim2.fromOffset(25, 26),
+        Position = UDim2.new(1, -72, 0.5, 0),
+        Size = UDim2.fromOffset(24, 24),
         ZIndex = 6,
         Parent = holder,
     }) :: TextButton
     corner(modeButton, 4)
-    stroke(modeButton, Theme.Border, 0.62, 1)
+    stroke(modeButton, Theme.Border, nil, 1, "Control")
     local keyButton = create("TextButton", {
         BackgroundColor3 = Theme.Surface3,
         BackgroundTransparency = 0.1,
@@ -5976,12 +6008,12 @@ function Section:CreateKeybind(id: any, config: ComponentOptions?): AnyTable
         AutoButtonColor = false,
         AnchorPoint = Vector2.new(1, 0.5),
         Position = UDim2.new(1, 0, 0.5, 0),
-        Size = UDim2.fromOffset(74, 26),
+        Size = UDim2.fromOffset(68, 24),
         ZIndex = 6,
         Parent = holder,
     }) :: TextButton
     corner(keyButton, 4)
-    local keyStroke = stroke(keyButton, Theme.Border, 0.54, 1)
+    local keyStroke = stroke(keyButton, Theme.Border, nil, 1, "Control")
     local keyLabel = makeText(keyButton, "", 9, Theme.SubText, "bold")
     keyLabel.Size = UDim2.fromScale(1, 1)
     keyLabel.TextXAlignment = Enum.TextXAlignment.Center
@@ -6263,12 +6295,12 @@ function Section:CreateColorpicker(id: any, config: ComponentOptions?): AnyTable
         AutoButtonColor = false,
         AnchorPoint = Vector2.new(1, 0.5),
         Position = UDim2.new(1, 0, 0.5, 0),
-        Size = UDim2.new(1, 0, 0, 28),
+        Size = UDim2.new(1, 0, 0, 26),
         ZIndex = 6,
         Parent = holder,
     }) :: TextButton
     corner(preview, 5)
-    local previewStroke = stroke(preview, Theme.Border, 0.28, 1)
+    local previewStroke = stroke(preview, Theme.Border, nil, 1, "ColorPicker")
     local previewLabel = makeText(preview, rgbToHex(initial), 9, Theme.White, "bold")
     previewLabel.Size = UDim2.fromScale(1, 1)
     previewLabel.TextXAlignment = Enum.TextXAlignment.Center
@@ -6321,7 +6353,7 @@ function Section:CreateColorpicker(id: any, config: ComponentOptions?): AnyTable
             ZIndex = 740,
         }) :: CanvasGroup
         corner(popup, Metrics.PopupRadius)
-        stroke(popup, Theme.Border, 0.24, 1, "Floating")
+        stroke(popup, Theme.Border, nil, 1, "ColorPicker")
         padding(popup, 9, 9, 9, 9)
         local popupMaid = PopupController:Open(self.Window, popup, preview, 5)
         local hueValue, saturation, brightness = picker.Value:ToHSV()
@@ -7258,7 +7290,7 @@ function Tab:CreateSection(config: (NavigationOptions | string)?): AnyTable
     local frame = create("Frame", {
         Name = "Section",
         BackgroundColor3 = Theme.Surface,
-        BackgroundTransparency = 0.79,
+        BackgroundTransparency = 0.75,
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
@@ -7269,12 +7301,12 @@ function Tab:CreateSection(config: (NavigationOptions | string)?): AnyTable
     corner(frame, 6)
     local frameStroke = stroke(frame, Theme.Border, nil, 1, "Section")
     ThemeController:Bind(frameStroke, "Color", "Border")
-    padding(frame, 8, 7, 8, 7)
-    local frameLayout = list(frame, Enum.FillDirection.Vertical, 2)
+    padding(frame, 8, 6, 8, 6)
+    local frameLayout = list(frame, Enum.FillDirection.Vertical, 1)
 
     local heading = create("Frame", {
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, config.Description and 28 or 19),
+        Size = UDim2.new(1, 0, 0, config.Description and 26 or 18),
         LayoutOrder = 1,
         Parent = frame,
     }) :: Frame
@@ -7286,7 +7318,7 @@ function Tab:CreateSection(config: (NavigationOptions | string)?): AnyTable
             titleOffset = icon.Size.X.Offset + 6
         end
     end
-    local title = makeText(heading, section.Title, 9, Theme.SubText, "bold")
+    local title = makeText(heading, section.Title, 10, Theme.SubText, "bold")
     title.Position = UDim2.fromOffset(titleOffset, 0)
     title.Size = UDim2.new(1, -titleOffset, 0, 18)
     if config.Description then
@@ -7556,13 +7588,24 @@ function Window:SelectTab(tab: any)
     if type(tab) ~= "table" or tab == self.ActiveTab or tab.SearchVisible == false then
         return self
     end
+    if
+        self.SearchBehavior == "ClearOnNavigation"
+        and not self.ApplyingSearch
+        and self.SearchBox
+        and self.SearchBox.Text ~= ""
+    then
+        self.SearchBox.Text = ""
+        self:ApplySearch("")
+    end
     dismissTooltip(self)
     PopupController:Close(self)
+    local pageEnterMotion = self.Kronos.PageTransitions ~= false and Motion.Tab or 0
+    local pageExitMotion = self.Kronos.PageTransitions ~= false and Motion.TabExit or 0
     if self.ActiveTab then
         local previousTab = self.ActiveTab
         self:_setActiveTabVisual(previousTab, false)
-        tween(previousTab.Page, { GroupTransparency = 1, Position = UDim2.fromOffset(-4, 0) }, Motion.TabExit)
-        task.delay(AnimationController:Duration(Motion.TabExit), function()
+        tween(previousTab.Page, { GroupTransparency = 1, Position = UDim2.fromOffset(-3, 0) }, pageExitMotion)
+        task.delay(AnimationController:Duration(pageExitMotion), function()
             if self.ActiveTab ~= previousTab and previousTab.Page.Parent then
                 previousTab.Page.Visible = false
             end
@@ -7570,9 +7613,9 @@ function Window:SelectTab(tab: any)
     end
     self.ActiveTab = tab
     tab.Page.Visible = true
-    tab.Page.Position = UDim2.fromOffset(4, 0)
+    tab.Page.Position = UDim2.fromOffset(3, 0)
     tab.Page.GroupTransparency = 1
-    tween(tab.Page, { GroupTransparency = 0, Position = UDim2.fromOffset(0, 0) }, Motion.Tab)
+    tween(tab.Page, { GroupTransparency = 0, Position = UDim2.fromOffset(0, 0) }, pageEnterMotion)
     self:_setActiveTabVisual(tab, true)
     self:_refreshHeaderContext()
     tab:ApplyColumns(self.TwoColumn)
@@ -8169,6 +8212,7 @@ end
 function Window:ApplySearch(value: string)
     dismissTooltip(self)
     PopupController:Close(self)
+    self.ApplyingSearch = true
     local query = string.lower(value or "")
     local visibleTabs = 0
     local firstVisible: AnyTable? = nil
@@ -8188,6 +8232,7 @@ function Window:ApplySearch(value: string)
     elseif not self.ActiveTab and firstVisible then
         self:SelectTab(firstVisible)
     end
+    self.ApplyingSearch = false
 end
 
 function Window:EnsureVisible(instance: GuiObject)
@@ -8247,8 +8292,8 @@ function Window:ApplyResponsive()
         local usableWidth = viewport.X - topLeftInset.X - bottomRightInset.X
         local usableHeight = viewport.Y - topLeftInset.Y - bottomRightInset.Y
         self.Root.Position = UDim2.fromOffset(
-            math.floor(usableLeft + usableWidth * 0.455 + 0.5),
-            math.floor(usableTop + usableHeight * 0.49 + 0.5)
+            math.floor(usableLeft + usableWidth * 0.56 + 0.5),
+            math.floor(usableTop + usableHeight * 0.54 + 0.5)
         )
     end
     DragController:Clamp(self.Root, self.DragOptions)
@@ -8335,7 +8380,7 @@ function Window:ApplyResponsive()
     if self.SidePanel and self.SidePanel.Parent then
         local isPresets = self.SidePanelKind == "Presets"
         local isProfile = self.SidePanelKind == "Profile"
-        local designPanelWidth = isPresets and 224 or (isProfile and 242 or 256)
+        local designPanelWidth = isPresets and 206 or (isProfile and 218 or 232)
         local panelWidth = math.min(d(designPanelWidth), math.max(width - d(70), d(184)))
         local openPosition: UDim2
         local closedPosition: UDim2
@@ -8561,6 +8606,33 @@ function Window:GetAnimationIntensity(): number
     return self.Kronos:GetAnimationIntensity()
 end
 
+function Window:SetAnimationsEnabled(enabled: boolean): AnyTable
+    self.Kronos:SetAnimationsEnabled(enabled)
+    return self
+end
+
+function Window:GetAnimationsEnabled(): boolean
+    return self.Kronos:GetAnimationsEnabled()
+end
+
+function Window:SetNotificationMotion(enabled: boolean): AnyTable
+    self.Kronos:SetNotificationMotion(enabled)
+    return self
+end
+
+function Window:GetNotificationMotion(): boolean
+    return self.Kronos:GetNotificationMotion()
+end
+
+function Window:SetPageTransitions(enabled: boolean): AnyTable
+    self.Kronos:SetPageTransitions(enabled)
+    return self
+end
+
+function Window:GetPageTransitions(): boolean
+    return self.Kronos:GetPageTransitions()
+end
+
 function Window:SetDimStrength(value: number): AnyTable
     self.Kronos:SetDimStrength(value)
     return self
@@ -8569,6 +8641,9 @@ end
 function Window:GetDimStrength(): number
     return self.Kronos:GetDimStrength()
 end
+
+Window.SetBackgroundDim = Window.SetDimStrength
+Window.GetBackgroundDim = Window.GetDimStrength
 
 function Window:ResetAppearance(): AnyTable
     self.Kronos:ResetAppearance()
@@ -8581,16 +8656,55 @@ function Window:SetCompactNavigation(compact: boolean): AnyTable
     return self
 end
 
-function Window:ResetPositions(): AnyTable
+function Window:SetSearchBehavior(behavior: any): AnyTable
+    local normalized = string.gsub(string.lower(tostring(behavior or "Live")), "[%s_%-]", "")
+    self.SearchBehavior = (normalized == "clearonnavigation" or normalized == "clear")
+        and "ClearOnNavigation"
+        or "Live"
+    return self
+end
+
+function Window:GetSearchBehavior(): string
+    return self.SearchBehavior or "Live"
+end
+
+function Window:ResetInterfaceLayout(): AnyTable
     DragController:Cancel(self.Root)
     self.LastPosition = nil
+    self.ForceCompactNavigation = false
     local viewport = viewportSize()
     local topLeftInset, bottomRightInset = guiInsets()
     local usableWidth = viewport.X - topLeftInset.X - bottomRightInset.X
     local usableHeight = viewport.Y - topLeftInset.Y - bottomRightInset.Y
     self.Root.Position = UDim2.fromOffset(
-        math.floor(topLeftInset.X + usableWidth * 0.455 + 0.5),
-        math.floor(topLeftInset.Y + usableHeight * 0.49 + 0.5)
+        math.floor(topLeftInset.X + usableWidth * 0.56 + 0.5),
+        math.floor(topLeftInset.Y + usableHeight * 0.54 + 0.5)
+    )
+    self:ApplyResponsive()
+    return self
+end
+
+function Window:ResetWidgetPositions(): AnyTable
+    for _, widget in ipairs(self.Widgets) do
+        DragController:Cancel(widget.Root)
+        widget.UserMoved = false
+        widget.CustomPosition = false
+    end
+    self:ApplyResponsive()
+    return self
+end
+
+function Window:ResetPositions(): AnyTable
+    DragController:Cancel(self.Root)
+    self.LastPosition = nil
+    self.ForceCompactNavigation = false
+    local viewport = viewportSize()
+    local topLeftInset, bottomRightInset = guiInsets()
+    local usableWidth = viewport.X - topLeftInset.X - bottomRightInset.X
+    local usableHeight = viewport.Y - topLeftInset.Y - bottomRightInset.Y
+    self.Root.Position = UDim2.fromOffset(
+        math.floor(topLeftInset.X + usableWidth * 0.56 + 0.5),
+        math.floor(topLeftInset.Y + usableHeight * 0.54 + 0.5)
     )
     for _, widget in ipairs(self.Widgets) do
         DragController:Cancel(widget.Root)
@@ -9409,6 +9523,11 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
             end, "rotate-ccw")
         elseif kind == "Settings" and pageName == "Animation" then
             addHeading("Motion", "Fast, interruptible transitions with explicit reduced-motion support")
+            addToggleRow("Animations enabled", "Master switch for owned interface motion", function()
+                return self.Kronos:GetAnimationsEnabled()
+            end, function(enabled)
+                self:SetAnimationsEnabled(enabled)
+            end, "play")
             addToggleRow("Reduced motion", "Resolve transitions immediately", function()
                 return self.Kronos:GetReducedMotion()
             end, function(enabled)
@@ -9421,6 +9540,16 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
             end, function(value)
                 return formatNumber(value, 2) .. "x"
             end, "gauge")
+            addToggleRow("Notification motion", "Animate notification entrance, reflow, and exit", function()
+                return self.Kronos:GetNotificationMotion()
+            end, function(enabled)
+                self:SetNotificationMotion(enabled)
+            end, "bell")
+            addToggleRow("Page transitions", "Short opacity and three-pixel page movement", function()
+                return self.Kronos:GetPageTransitions()
+            end, function(enabled)
+                self:SetPageTransitions(enabled)
+            end, "panel-top-open")
             addRow("Motion profile", "Restrained reference timing · no overshoot", nil, "activity")
         elseif kind == "Settings" and pageName == "Hotkeys" then
             addHeading("Window hotkey", "Click the row, then press a keyboard key")
@@ -9460,7 +9589,11 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
                 self:SetCompactNavigation(not self.ForceCompactNavigation)
                 navState.Text = self.ForceCompactNavigation and "ON" or "AUTO"
             end))
-            addRow("Search behavior", "Filter tabs, subtabs, sections and controls", nil, "search")
+            addToggleRow("Clear search on navigation", "Otherwise filtering remains live and persistent", function()
+                return self:GetSearchBehavior() == "ClearOnNavigation"
+            end, function(enabled)
+                self:SetSearchBehavior(enabled and "ClearOnNavigation" or "Live")
+            end, "search")
             addRow("Notification preview", "Show the compact stacked notification", function()
                 self:Notify({ Title = "Kronos", Content = "Interface settings are active.", Type = "success" })
             end, "bell")
@@ -9491,7 +9624,7 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
                     self.StatusStrip:SetVisible(enabled)
                 end
             end, "activity")
-            addToggleRow("Show Reopen Button", "Restore access after minimizing", function()
+            addToggleRow("Show Mobile Reopen Button", "Restore access after minimizing", function()
                 return self.ReopenButton ~= nil and self.ReopenButton.Visible ~= false
             end, function(enabled)
                 if not self.ReopenButton and enabled then
@@ -9500,8 +9633,11 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
                     self.ReopenButton:SetVisible(enabled and not self.Visible)
                 end
             end, "panel-top-open")
-            addRow("Reset interface layout", "Restore the target-derived window and widget positions", function()
-                self:ResetPositions()
+            addRow("Reset widget positions", "Restore independent floating-widget anchors", function()
+                self:ResetWidgetPositions()
+            end, "locate-fixed")
+            addRow("Reset interface layout", "Restore target-derived window geometry and navigation", function()
+                self:ResetInterfaceLayout()
             end, "rotate-ccw")
         elseif kind == "Settings" and pageName == "Widgets" then
             addHeading("Floating widgets", "Each panel is draggable and independently hideable")
@@ -9527,8 +9663,8 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
                     end))
                 end
             end
-            addRow("Reset positions", "Center the window and restore widget anchors", function()
-                self:ResetPositions()
+            addRow("Reset widget positions", "Restore default viewport anchors", function()
+                self:ResetWidgetPositions()
             end, "locate-fixed")
         elseif kind == "Presets" then
             addHeading("Configuration presets", "Stored for the current execution")
@@ -9939,17 +10075,27 @@ function FloatingWidgetController:Create(window: AnyTable, config: FloatingWidge
         return self
     end
     function widget:SetVisible(visible: boolean): AnyTable
+        self.VisibilityGeneration = (self.VisibilityGeneration or 0) + 1
+        local generation = self.VisibilityGeneration
         self.Visible = visible ~= false
         if self.Visible then
+            local wasVisible = root.Visible
             root.Visible = true
-            root.GroupTransparency = 1
-            tween(root, { GroupTransparency = 0 }, Motion.Widget)
+            if not wasVisible then
+                root.GroupTransparency = 1
+            end
+            tween(root, { GroupTransparency = 0 }, Motion.WidgetEnter)
         else
             DragController:Cancel(root)
             ScrollbarController:Cancel()
-            tween(root, { GroupTransparency = 1 }, Motion.Widget)
-            task.delay(AnimationController:Duration(Motion.Widget), function()
-                if not self.Visible and root.Parent then
+            tween(root, { GroupTransparency = 1 }, Motion.WidgetExit)
+            task.delay(AnimationController:Duration(Motion.WidgetExit), function()
+                if
+                    self.Alive
+                    and self.VisibilityGeneration == generation
+                    and not self.Visible
+                    and root.Parent
+                then
                     root.Visible = false
                 end
             end)
@@ -10068,7 +10214,7 @@ function Window:CreateTargetList(config: FloatingWidgetOptions?): AnyTable
         IconSize = config.IconSize,
         IconColor = config.IconColor,
         IconTransparency = config.IconTransparency,
-        Size = config.Size or UDim2.fromOffset(286, 88),
+        Size = config.Size or UDim2.fromOffset(248, 76),
         Position = config.Position or UDim2.fromOffset(12, 12),
         CustomPosition = config.Position ~= nil,
         Visible = config.Visible ~= false,
@@ -10189,7 +10335,7 @@ function Window:CreateKeybindList(config: FloatingWidgetOptions?): AnyTable
         IconSize = config.IconSize,
         IconColor = config.IconColor,
         IconTransparency = config.IconTransparency,
-        Size = config.Size or UDim2.fromOffset(276, 72),
+        Size = config.Size or UDim2.fromOffset(244, 66),
         Position = config.Position or UDim2.new(0.54, -150, 0, 12),
         CustomPosition = config.Position ~= nil,
         Visible = config.Visible ~= false,
@@ -10308,9 +10454,9 @@ function Window:CreateKeybindList(config: FloatingWidgetOptions?): AnyTable
                 tween(row, { BackgroundTransparency = 0.55 }, Motion.KeybindRow)
             end
         end
-        local bodyHeight = 21 + math.max(count, 1) * 21
-        local finalHeight = math.clamp(bodyHeight + 24, 66, 158)
-        widget:Resize(276, finalHeight)
+        local bodyHeight = 19 + math.max(count, 1) * 19
+        local finalHeight = math.clamp(bodyHeight + 22, 60, 138)
+        widget:Resize(244, finalHeight)
         rows.Visible = true
         columnHeader.Visible = count > 0
         if count == 0 then
@@ -10329,8 +10475,8 @@ function Window:CreateStatusStrip(config: FloatingWidgetOptions?): AnyTable
     config = config or {}
     local configuredFields = type(config.Fields) == "table" and config.Fields or {}
     local density = self.Density or ResponsiveController:GetDensity()
-    local designWidth = math.max(finiteNumber(config.Width, 206), 96)
-    local designHeight = math.max(finiteNumber(config.Height, 28), 24)
+    local designWidth = math.max(finiteNumber(config.Width, 188), 96)
+    local designHeight = math.max(finiteNumber(config.Height, 26), 22)
     local widget: AnyTable = {
         Window = self,
         Connections = {},
@@ -10443,11 +10589,30 @@ function Window:CreateStatusStrip(config: FloatingWidgetOptions?): AnyTable
     end
     widget.Root = root
     function widget:SetVisible(visible: boolean): AnyTable
+        self.VisibilityGeneration = (self.VisibilityGeneration or 0) + 1
+        local generation = self.VisibilityGeneration
         self.Visible = visible ~= false
-        if not self.Visible then
+        if self.Visible then
+            local wasVisible = root.Visible
+            root.Visible = true
+            if not wasVisible then
+                root.GroupTransparency = 1
+            end
+            tween(root, { GroupTransparency = 0 }, Motion.WidgetEnter)
+        else
             DragController:Cancel(root)
+            tween(root, { GroupTransparency = 1 }, Motion.WidgetExit)
+            task.delay(AnimationController:Duration(Motion.WidgetExit), function()
+                if
+                    self.Alive
+                    and self.VisibilityGeneration == generation
+                    and not self.Visible
+                    and root.Parent
+                then
+                    root.Visible = false
+                end
+            end)
         end
-        root.Visible = self.Visible
         return self
     end
     function widget:Clamp()
@@ -10567,19 +10732,32 @@ function Window:CreateStatusStrip(config: FloatingWidgetOptions?): AnyTable
     table.insert(self.Widgets, widget)
     table.insert(Kronos.Widgets, widget)
     layoutFields()
+    local sampledFrames = 0
+    local sampleStartedAt = os.clock()
+    addConnection(
+        widget,
+        RunService.Heartbeat:Connect(function()
+            if widget.Alive and widget.Visible and root.Visible then
+                sampledFrames += 1
+            end
+        end)
+    )
     task.spawn(function()
         while widget.Alive and root.Parent do
-            if not widget.Visible or not root.Visible then
-                task.wait(0.75)
-                continue
-            end
-            local started = os.clock()
-            RunService.Heartbeat:Wait()
+            task.wait(0.75)
             if not widget.Alive or not root.Parent then
                 break
             end
-            local elapsed = math.max(os.clock() - started, 1 / 240)
-            local fps = math.clamp(math.floor(1 / elapsed + 0.5), 0, 999)
+            if not widget.Visible or not root.Visible then
+                sampledFrames = 0
+                sampleStartedAt = os.clock()
+                continue
+            end
+            local now = os.clock()
+            local elapsed = math.max(now - sampleStartedAt, 1 / 240)
+            local fps = math.clamp(math.floor(sampledFrames / elapsed + 0.5), 0, 999)
+            sampledFrames = 0
+            sampleStartedAt = now
             local ping = "—"
             pcall(function()
                 local network = (Stats :: any).Network
@@ -10592,7 +10770,6 @@ function Window:CreateStatusStrip(config: FloatingWidgetOptions?): AnyTable
             labels.FPS.Text = tostring(fps) .. " FPS"
             labels.Ping.Text = ping
             labels.Time.Text = os.date("%H:%M")
-            task.wait(0.75)
         end
     end)
     self.StatusStrip = widget
@@ -10603,7 +10780,7 @@ function Window:CreateReopenButton(config: FloatingWidgetOptions?): AnyTable
     config = config or {}
     local density = self.Density or ResponsiveController:GetDensity()
     local configuredSize = typeof(config.Size) == "UDim2" and config.Size.X.Offset or config.Size
-    local designSize = math.max(finiteNumber(configuredSize, 40), 28)
+    local designSize = math.max(finiteNumber(configuredSize, 36), 28)
     local widget: AnyTable = {
         Window = self,
         Connections = {},
@@ -10661,14 +10838,29 @@ function Window:CreateReopenButton(config: FloatingWidgetOptions?): AnyTable
     end
     widget.Root = root
     function widget:SetVisible(visible: boolean): AnyTable
+        self.VisibilityGeneration = (self.VisibilityGeneration or 0) + 1
+        local generation = self.VisibilityGeneration
         self.Visible = visible ~= false
-        if not self.Visible then
-            DragController:Cancel(root)
-        end
-        root.Visible = self.Visible
         if self.Visible then
-            root.GroupTransparency = 1
-            tween(root, { GroupTransparency = 0 }, Motion.Window)
+            local wasVisible = root.Visible
+            root.Visible = true
+            if not wasVisible then
+                root.GroupTransparency = 1
+            end
+            tween(root, { GroupTransparency = 0 }, Motion.Restore)
+        else
+            DragController:Cancel(root)
+            tween(root, { GroupTransparency = 1 }, Motion.Minimize)
+            task.delay(AnimationController:Duration(Motion.Minimize), function()
+                if
+                    self.Alive
+                    and self.VisibilityGeneration == generation
+                    and not self.Visible
+                    and root.Parent
+                then
+                    root.Visible = false
+                end
+            end)
         end
         return self
     end
@@ -10952,6 +11144,10 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
         Destroyed = false,
         ToggleKey = config.ToggleKey or Enum.KeyCode.RightShift,
         ForceCompactNavigation = config.CompactNavigation == true,
+        SearchBehavior = (
+            string.gsub(string.lower(tostring(config.SearchBehavior or "")), "[%s_%-]", "")
+                == "clearonnavigation"
+        ) and "ClearOnNavigation" or "Live",
         TwoColumn = layoutMode ~= "Portrait" and initialWidth >= 730 * density and initialHeight >= 340 * density,
         Presets = {},
         ProfileName = config.ProfileName,
@@ -10966,8 +11162,8 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
     }, Window)
     local usableWidth = viewport.X - topLeftInset.X - bottomRightInset.X
     local usableHeight = viewport.Y - topLeftInset.Y - bottomRightInset.Y
-    local centerX = topLeftInset.X + usableWidth * 0.455
-    local centerY = topLeftInset.Y + usableHeight * 0.49
+    local centerX = topLeftInset.X + usableWidth * 0.56
+    local centerY = topLeftInset.Y + usableHeight * 0.54
     local root = create("CanvasGroup", {
         Name = "Window",
         BackgroundTransparency = 1,
@@ -11421,6 +11617,42 @@ function Kronos:GetAnimationIntensity(): number
     return self.AnimationIntensity
 end
 
+function Kronos:SetAnimationsEnabled(enabled: boolean): AnyTable
+    self.AnimationsEnabled = enabled == true
+    if not self.AnimationsEnabled then
+        local instances = {}
+        for instance in pairs(self.ActiveTweens) do
+            table.insert(instances, instance)
+        end
+        for _, instance in ipairs(instances) do
+            AnimationController:Cancel(instance, true)
+        end
+    end
+    return self
+end
+
+function Kronos:GetAnimationsEnabled(): boolean
+    return self.AnimationsEnabled ~= false
+end
+
+function Kronos:SetNotificationMotion(enabled: boolean): AnyTable
+    self.NotificationMotion = enabled == true
+    return self
+end
+
+function Kronos:GetNotificationMotion(): boolean
+    return self.NotificationMotion ~= false
+end
+
+function Kronos:SetPageTransitions(enabled: boolean): AnyTable
+    self.PageTransitions = enabled == true
+    return self
+end
+
+function Kronos:GetPageTransitions(): boolean
+    return self.PageTransitions ~= false
+end
+
 function Kronos:SetDimStrength(value: number): AnyTable
     self.DimStrength = math.clamp(finiteNumber(value, self.DimStrength), 0, 0.9)
     for _, window in ipairs(self.Windows) do
@@ -11435,6 +11667,9 @@ function Kronos:GetDimStrength(): number
     return self.DimStrength
 end
 
+Kronos.SetBackgroundDim = Kronos.SetDimStrength
+Kronos.GetBackgroundDim = Kronos.GetDimStrength
+
 function Kronos:ResetAppearance(): AnyTable
     self.SurfaceTransparency = 0.04
     self.AcrylicEnabled = true
@@ -11443,6 +11678,9 @@ function Kronos:ResetAppearance(): AnyTable
     self.SurfaceContrast = 1.08
     self.ReducedMotion = false
     self.AnimationIntensity = 1
+    self.AnimationsEnabled = true
+    self.NotificationMotion = true
+    self.PageTransitions = true
     self.DimStrength = 0.64
     AppearanceController:Refresh()
     BorderController:Refresh()
