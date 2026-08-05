@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-    KronosV1.10.lua
+    KronosV1.11.lua
     Cumulative native Roblox UI library refined against the supplied
     2340x1080 reference video. All controllers and the optional showcase live
     in this file; no remote modules or external UI libraries are required.
@@ -74,7 +74,7 @@ type WindowConfig = {
 }
 
 local Kronos: AnyTable = {}
-Kronos.Version = "1.10.0"
+Kronos.Version = "1.11.0"
 Kronos.Options = {} :: AnyTable
 Kronos.Windows = {} :: { AnyTable }
 Kronos.Connections = {} :: { RBXScriptConnection }
@@ -210,6 +210,7 @@ local Motion = {
     TooltipEnter = 0.095,
     TooltipExit = 0.08,
     DragClamp = 0.09,
+    Navigation = 0.15,
 
     -- Backward-compatible internal aliases used by mature component code.
     Hover = 0.08,
@@ -233,7 +234,7 @@ local Motion = {
     Scrollbar = 0.085,
 }
 
--- V1.10 keeps objective capture measurements separate from runtime logical
+-- V1.11 keeps objective capture measurements separate from runtime logical
 -- measurements. The supplied mobile capture renders Roblox GUI coordinates at
 -- roughly 1.286 physical pixels per logical pixel; calibrating the artboard and
 -- descendant density independently prevents uniform oversizing while floating
@@ -8137,6 +8138,8 @@ function Window:_openHeaderContext()
     local popupStroke = stroke(popup, Theme.Border, nil, 1, "Popup")
     ThemeController:Bind(popupStroke, "Color", "Border")
 
+    local hasOverflow = #entries > maximumVisibleRows
+    local scrollbarGutter = hasOverflow and (TargetDesign.Scrollbar.ActiveWidth + 4) or 0
     local scroll = create("ScrollingFrame", {
         Name = "ContextItems",
         BackgroundTransparency = 1,
@@ -8145,15 +8148,31 @@ function Window:_openHeaderContext()
         Size = UDim2.new(1, -outerPadding * 2, 1, -outerPadding * 2),
         CanvasSize = UDim2.fromOffset(0, fullListHeight),
         CanvasPosition = Vector2.new(0, 0),
+        AutomaticCanvasSize = Enum.AutomaticSize.None,
         ScrollBarThickness = 0,
         ScrollingDirection = Enum.ScrollingDirection.Y,
-        ScrollingEnabled = #entries > maximumVisibleRows,
+        ScrollingEnabled = hasOverflow,
         ElasticBehavior = Enum.ElasticBehavior.Never,
+        Active = true,
         ClipsDescendants = true,
         ZIndex = 781,
         Parent = popup,
     }) :: ScrollingFrame
-    local rowLayout = list(scroll, Enum.FillDirection.Vertical, rowGap)
+
+    -- Keep the list layout inside a dedicated canvas child. A UIListLayout
+    -- directly under the ScrollingFrame also captures the custom scrollbar
+    -- track and lays it out as another option, which caused the reversed
+    -- left-side bar, the large blank region, and unusable scrolling.
+    local itemCanvas = create("Frame", {
+        Name = "ContextItemCanvas",
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Position = UDim2.fromOffset(0, 0),
+        Size = UDim2.new(1, -scrollbarGutter, 0, fullListHeight),
+        ZIndex = 781,
+        Parent = scroll,
+    }) :: Frame
+    local rowLayout = list(itemCanvas, Enum.FillDirection.Vertical, rowGap)
     rowLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
     local rowRecords: { AnyTable } = {}
@@ -8181,7 +8200,7 @@ function Window:_openHeaderContext()
             Size = UDim2.new(1, 0, 0, rowHeight),
             LayoutOrder = index,
             ZIndex = 782,
-            Parent = scroll,
+            Parent = itemCanvas,
         }) :: TextButton
         corner(row, 4)
 
@@ -8227,7 +8246,7 @@ function Window:_openHeaderContext()
     end
 
     local popupMaid = PopupController:Open(self, popup, anchor, 4)
-    if #entries > maximumVisibleRows then
+    if hasOverflow then
         ScrollbarController:Attach(scroll)
     end
 
@@ -8265,7 +8284,7 @@ function Window:_openHeaderContext()
         if not popup.Parent or not self.ActivePopup or self.ActivePopup.Frame ~= popup then
             return
         end
-        if #entries > maximumVisibleRows then
+        if hasOverflow then
             local firstVisibleIndex = math.clamp(
                 selectedIndex - math.floor(maximumVisibleRows * 0.5),
                 1,
@@ -8600,7 +8619,7 @@ function Window:EnsureVisible(instance: GuiObject)
     end)
 end
 
-function Window:ApplyResponsive()
+function Window:ApplyResponsive(animateNavigation: boolean?)
     if not self.Root or not self.Root.Parent then
         return
     end
@@ -8674,23 +8693,74 @@ function Window:ApplyResponsive()
         maximumHeader
     )
     self.ExpandedNavigation = expanded
-    self.Sidebar.Size = UDim2.new(0, sidebarWidth, 1, -headerHeight)
-    self.Content.Position = UDim2.fromOffset(sidebarWidth, headerHeight)
-    self.Content.Size = UDim2.new(1, -sidebarWidth, 1, -headerHeight)
+    local animateLayout = animateNavigation == true and self.Visible ~= false and self.Destroyed ~= true
+    local sidebarTarget = UDim2.new(0, sidebarWidth, 1, -headerHeight)
+    local contentPositionTarget = UDim2.fromOffset(sidebarWidth, headerHeight)
+    local contentSizeTarget = UDim2.new(1, -sidebarWidth, 1, -headerHeight)
+    if animateLayout then
+        tween(
+            self.Sidebar,
+            { Size = sidebarTarget },
+            Motion.Navigation,
+            Enum.EasingStyle.Quart,
+            Enum.EasingDirection.Out
+        )
+        tween(
+            self.Content,
+            {
+                Position = contentPositionTarget,
+                Size = contentSizeTarget,
+            },
+            Motion.Navigation,
+            Enum.EasingStyle.Quart,
+            Enum.EasingDirection.Out
+        )
+    else
+        self.Sidebar.Size = sidebarTarget
+        self.Content.Position = contentPositionTarget
+        self.Content.Size = contentSizeTarget
+    end
     self.Header.Size = UDim2.new(1, 0, 0, headerHeight)
     if self.HeaderContext then
         local headerContentWidth = math.max(width - sidebarWidth - d(48), 1)
         local desiredContextWidth = math.min(d(Metrics.HeaderContextWidth), math.max(headerContentWidth - d(90), d(126)))
-        self.HeaderContext.Size = UDim2.fromOffset(desiredContextWidth, d(Metrics.HeaderContextHeight))
-        self.HeaderContext.Position = UDim2.fromOffset(
+        local contextSizeTarget = UDim2.fromOffset(desiredContextWidth, d(Metrics.HeaderContextHeight))
+        local contextPositionTarget = UDim2.fromOffset(
             math.floor(sidebarWidth + d(28) + desiredContextWidth * 0.5 + 0.5),
             math.floor(headerHeight * 0.5 + 0.5)
         )
+        if animateLayout then
+            tween(
+                self.HeaderContext,
+                {
+                    Size = contextSizeTarget,
+                    Position = contextPositionTarget,
+                },
+                Motion.Navigation,
+                Enum.EasingStyle.Quart,
+                Enum.EasingDirection.Out
+            )
+        else
+            self.HeaderContext.Size = contextSizeTarget
+            self.HeaderContext.Position = contextPositionTarget
+        end
         self.HeaderContext.Visible = self.HeaderContextEnabled ~= false
             and layoutMode ~= "Portrait"
             and headerContentWidth >= d(220)
         if self.NavigationButton then
-            self.NavigationButton.Position = UDim2.fromOffset(sidebarWidth + d(4), math.floor(headerHeight * 0.5 + 0.5))
+            local navigationPositionTarget =
+                UDim2.fromOffset(sidebarWidth + d(4), math.floor(headerHeight * 0.5 + 0.5))
+            if animateLayout then
+                tween(
+                    self.NavigationButton,
+                    { Position = navigationPositionTarget },
+                    Motion.Navigation,
+                    Enum.EasingStyle.Quart,
+                    Enum.EasingDirection.Out
+                )
+            else
+                self.NavigationButton.Position = navigationPositionTarget
+            end
             self.NavigationButton.Visible = layoutMode ~= "Portrait"
         end
     end
@@ -8751,12 +8821,32 @@ function Window:ApplyResponsive()
     self.TwoColumn = layoutMode ~= "Portrait"
         and contentWidth >= d(twoColumnThreshold)
         and height - headerHeight >= d(minimumContentHeight)
-    for _, tab in ipairs(self.Tabs) do
-        tab:ApplyColumns(self.TwoColumn)
-        SubtabController:Refresh(tab)
-        if tab.ActiveSubTab then
-            SubtabController:Reveal(tab, tab.ActiveSubTab)
+    local function applyPageReflow()
+        for _, tab in ipairs(self.Tabs) do
+            tab:ApplyColumns(self.TwoColumn)
+            SubtabController:Refresh(tab)
+            if tab.ActiveSubTab then
+                SubtabController:Reveal(tab, tab.ActiveSubTab)
+            end
         end
+    end
+    if animateLayout then
+        self.NavigationTransitionGeneration = (self.NavigationTransitionGeneration or 0) + 1
+        local transitionGeneration = self.NavigationTransitionGeneration
+        task.delay(AnimationController:Duration(Motion.Navigation), function()
+            if
+                self.Destroyed
+                or self.NavigationTransitionGeneration ~= transitionGeneration
+                or not self.Root
+                or not self.Root.Parent
+            then
+                return
+            end
+            applyPageReflow()
+        end)
+    else
+        self.NavigationTransitionGeneration = (self.NavigationTransitionGeneration or 0) + 1
+        applyPageReflow()
     end
     if self.SidePanel and self.SidePanel.Parent then
         local isPresets = self.SidePanelKind == "Presets"
@@ -9083,8 +9173,14 @@ function Window:ResetAppearance(): AnyTable
 end
 
 function Window:SetCompactNavigation(compact: boolean): AnyTable
-    self.ForceCompactNavigation = compact == true
-    self:ApplyResponsive()
+    local nextCompact = compact == true
+    if self.ForceCompactNavigation == nextCompact then
+        return self
+    end
+    dismissTooltip(self)
+    PopupController:Close(self)
+    self.ForceCompactNavigation = nextCompact
+    self:ApplyResponsive(true)
     return self
 end
 
@@ -12075,13 +12171,49 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
     }) :: Frame
     ThemeController:Bind(main, "BackgroundColor3", "Background")
     corner(main, Metrics.ShellRadius)
-    local mainStroke = stroke(main, Theme.Border, nil, 1, "MainShellOuter")
+    local mainStroke = stroke(main, Theme.Border, 0.34, 1, "MainShellOuter")
     ThemeController:Bind(mainStroke, "Color", "Border")
-    local innerStroke = stroke(main, Theme.InnerHighlight, nil, 1, "MainShellInner")
+    local innerStroke = stroke(main, Theme.InnerHighlight, 0.72, 1, "MainShellInner")
     ThemeController:Bind(innerStroke, "Color", "InnerHighlight")
     AcrylicController:Register(main, "MainWindow")
+
+    -- A true inset shell border is rendered above every header/sidebar/content
+    -- surface. The old strokes belonged to Main and could be covered by its
+    -- higher-Z descendants, leaving only the shadow silhouette visible.
+    local shellBorder = create("Frame", {
+        Name = "WindowBorder",
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Active = false,
+        Selectable = false,
+        Position = UDim2.fromOffset(1, 1),
+        Size = UDim2.new(1, -2, 1, -2),
+        ZIndex = 220,
+        Parent = root,
+    }) :: Frame
+    corner(shellBorder, math.max(Metrics.ShellRadius - 1, 1))
+    local shellBorderStroke = stroke(shellBorder, Theme.Border, 0.16, 1.15, "MainShellOuter")
+    ThemeController:Bind(shellBorderStroke, "Color", "Border")
+
+    local shellInnerBorder = create("Frame", {
+        Name = "WindowInnerBorder",
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Active = false,
+        Selectable = false,
+        Position = UDim2.fromOffset(2, 2),
+        Size = UDim2.new(1, -4, 1, -4),
+        ZIndex = 219,
+        Parent = root,
+    }) :: Frame
+    corner(shellInnerBorder, math.max(Metrics.ShellRadius - 2, 1))
+    local shellInnerStroke = stroke(shellInnerBorder, Theme.InnerHighlight, 0.62, 1, "MainShellInner")
+    ThemeController:Bind(shellInnerStroke, "Color", "InnerHighlight")
+
     window.Root = root
     window.Main = main
+    window.WindowBorder = shellBorder
+    window.WindowInnerBorder = shellInnerBorder
     window.ShadowHost = shadowHost
     window.OuterShadow = outerShadow
     window.InnerShadow = shadow
@@ -13406,7 +13538,7 @@ if startupOk then
 end
 if startupOk then
     startupOk = startupStage("PublicAPICompatibility", function()
-        assert(Kronos.Version == "1.10.0", "Unexpected Kronos version")
+        assert(Kronos.Version == "1.11.0", "Unexpected Kronos version")
         assert(
             type(Kronos.CreateWindow) == "function"
                 and type(Kronos.Notify) == "function"
