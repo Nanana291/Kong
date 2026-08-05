@@ -1,11 +1,11 @@
 --!strict
 
 --[[
-    KronosV2.1.lua
-    Reference-locked native Roblox UI library reconstructed around a taller,
-    application-like dashboard composition. All controllers and the optional
-    showcase remain self-contained; no remote modules or external UI libraries
-    are required.
+    KronosV2.2.lua
+    Reference-locked native Roblox UI library reconstructed around target-like
+    viewport occupancy, a stable two-column dashboard, and a layered semantic
+    surface system. All controllers and the optional showcase remain self-contained;
+    no remote modules or external UI libraries are required.
 ]]
 
 type AnyTable = { [any]: any }
@@ -66,6 +66,7 @@ type WindowConfig = {
     DimStrength: number?,
     HeaderContext: boolean?,
     ProfilePanel: boolean?,
+    ShowSidebarContext: boolean?,
     ProfileName: string?,
     ProfileSubtitle: string?,
     ShowSidebarProfile: boolean?,
@@ -75,7 +76,7 @@ type WindowConfig = {
 }
 
 local Kronos: AnyTable = {}
-Kronos.Version = "2.1.0"
+Kronos.Version = "2.2.0"
 Kronos.Options = {} :: AnyTable
 Kronos.Windows = {} :: { AnyTable }
 Kronos.Connections = {} :: { RBXScriptConnection }
@@ -92,17 +93,32 @@ Kronos.SurfaceBindings = setmetatable({}, { __mode = "k" }) :: AnyTable
 Kronos.BorderBindings = setmetatable({}, { __mode = "k" }) :: AnyTable
 Kronos.AcrylicBindings = setmetatable({}, { __mode = "k" }) :: AnyTable
 Kronos.Scrollbars = setmetatable({}, { __mode = "k" }) :: AnyTable
-Kronos.SurfaceTransparency = 0.055
-Kronos.AcrylicEnabled = true
-Kronos.AcrylicIntensity = 0.46
-Kronos.BorderIntensity = 0.96
-Kronos.SurfaceContrast = 1.14
-Kronos.ReducedMotion = false
-Kronos.AnimationIntensity = 1
-Kronos.AnimationsEnabled = true
-Kronos.NotificationMotion = true
-Kronos.PageTransitions = true
-Kronos.DimStrength = 0.46
+
+local DefaultAppearance = {
+    SurfaceTransparency = 0.085,
+    AcrylicEnabled = true,
+    AcrylicIntensity = 0.62,
+    BorderIntensity = 1.04,
+    SurfaceContrast = 1.18,
+    ReducedMotion = false,
+    AnimationIntensity = 1,
+    AnimationsEnabled = true,
+    NotificationMotion = true,
+    PageTransitions = true,
+    DimStrength = 0.39,
+}
+
+Kronos.SurfaceTransparency = DefaultAppearance.SurfaceTransparency
+Kronos.AcrylicEnabled = DefaultAppearance.AcrylicEnabled
+Kronos.AcrylicIntensity = DefaultAppearance.AcrylicIntensity
+Kronos.BorderIntensity = DefaultAppearance.BorderIntensity
+Kronos.SurfaceContrast = DefaultAppearance.SurfaceContrast
+Kronos.ReducedMotion = DefaultAppearance.ReducedMotion
+Kronos.AnimationIntensity = DefaultAppearance.AnimationIntensity
+Kronos.AnimationsEnabled = DefaultAppearance.AnimationsEnabled
+Kronos.NotificationMotion = DefaultAppearance.NotificationMotion
+Kronos.PageTransitions = DefaultAppearance.PageTransitions
+Kronos.DimStrength = DefaultAppearance.DimStrength
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -137,42 +153,43 @@ end
 Environment.__KRONOS_ACTIVE = nil
 
 local Theme: ThemeMap = {
-    -- V2.1 uses a deliberate luminance ladder. Each region reads as a distinct
-    -- physical layer without drifting into a neon or washed-out aesthetic.
-    Background = Color3.fromRGB(10, 10, 12),
-    BackgroundSoft = Color3.fromRGB(14, 14, 17),
-    Surface = Color3.fromRGB(17, 17, 20),
-    Surface2 = Color3.fromRGB(21, 21, 25),
-    Surface3 = Color3.fromRGB(27, 27, 32),
-    ElevatedSurface = Color3.fromRGB(24, 24, 29),
-    SurfaceHover = Color3.fromRGB(31, 30, 37),
-    HoverSurface = Color3.fromRGB(31, 30, 37),
-    PressedSurface = Color3.fromRGB(34, 31, 43),
-    Stroke = Color3.fromRGB(57, 55, 66),
-    StrokeSoft = Color3.fromRGB(39, 38, 46),
-    Border = Color3.fromRGB(55, 53, 64),
-    Divider = Color3.fromRGB(36, 35, 42),
-    Text = Color3.fromRGB(239, 238, 243),
-    PrimaryText = Color3.fromRGB(239, 238, 243),
-    SubText = Color3.fromRGB(177, 174, 187),
-    SecondaryText = Color3.fromRGB(177, 174, 187),
-    Muted = Color3.fromRGB(108, 105, 119),
-    Disabled = Color3.fromRGB(61, 60, 68),
-    DisabledText = Color3.fromRGB(112, 109, 121),
-    Accent = Color3.fromRGB(134, 115, 255),
-    AccentDark = Color3.fromRGB(84, 70, 188),
-    AccentSoft = Color3.fromRGB(176, 160, 255),
-    AccentHover = Color3.fromRGB(151, 133, 255),
-    AccentPressed = Color3.fromRGB(111, 92, 230),
+    -- V2.2 separates adjacent layers with controlled violet-tinted luminance.
+    -- The palette stays dark, but cards and controls no longer disappear into
+    -- one uniform black plane at normal gameplay scale.
+    Background = Color3.fromRGB(11, 11, 15),
+    BackgroundSoft = Color3.fromRGB(15, 15, 21),
+    Surface = Color3.fromRGB(19, 18, 25),
+    Surface2 = Color3.fromRGB(24, 23, 32),
+    Surface3 = Color3.fromRGB(30, 28, 40),
+    ElevatedSurface = Color3.fromRGB(27, 25, 36),
+    SurfaceHover = Color3.fromRGB(36, 33, 48),
+    HoverSurface = Color3.fromRGB(36, 33, 48),
+    PressedSurface = Color3.fromRGB(40, 35, 55),
+    Stroke = Color3.fromRGB(67, 62, 82),
+    StrokeSoft = Color3.fromRGB(47, 43, 59),
+    Border = Color3.fromRGB(63, 58, 78),
+    Divider = Color3.fromRGB(44, 40, 55),
+    Text = Color3.fromRGB(239, 237, 245),
+    PrimaryText = Color3.fromRGB(239, 237, 245),
+    SubText = Color3.fromRGB(169, 165, 181),
+    SecondaryText = Color3.fromRGB(169, 165, 181),
+    Muted = Color3.fromRGB(104, 100, 117),
+    Disabled = Color3.fromRGB(63, 60, 73),
+    DisabledText = Color3.fromRGB(112, 108, 123),
+    Accent = Color3.fromRGB(143, 105, 255),
+    AccentDark = Color3.fromRGB(91, 68, 194),
+    AccentSoft = Color3.fromRGB(186, 164, 255),
+    AccentHover = Color3.fromRGB(158, 124, 255),
+    AccentPressed = Color3.fromRGB(119, 86, 235),
     White = Color3.fromRGB(255, 255, 255),
     Success = Color3.fromRGB(92, 194, 139),
     Warning = Color3.fromRGB(226, 174, 89),
     Error = Color3.fromRGB(224, 91, 108),
     Shadow = Color3.fromRGB(0, 0, 0),
-    Overlay = Color3.fromRGB(5, 5, 7),
-    InnerHighlight = Color3.fromRGB(82, 78, 96),
-    ScrollTrack = Color3.fromRGB(24, 23, 29),
-    AcrylicTint = Color3.fromRGB(18, 17, 22),
+    Overlay = Color3.fromRGB(5, 4, 8),
+    InnerHighlight = Color3.fromRGB(99, 88, 127),
+    ScrollTrack = Color3.fromRGB(29, 25, 39),
+    AcrylicTint = Color3.fromRGB(24, 20, 33),
 }
 
 local Motion = {
@@ -235,114 +252,115 @@ local Motion = {
     Scrollbar = 0.085,
 }
 
--- V2.1 keeps target geometry separate from runtime density so the shell can
--- become taller without shrinking labels, controls, or touch targets.
+-- V2.2 treats the objective viewport ratios as structural constraints rather
+-- than a maximum artboard. The shell grows with safe viewport bounds while
+-- descendant density remains independently controlled.
 local TargetDesign = {
     Calibration = {
-        -- Keep touch legibility without shrinking the entire shell into a strip.
-        TouchContentScale = 0.97,
+        TouchContentScale = 1,
     },
     Window = {
-        -- Image 2 uses a stable application-like silhouette near 5:3. V2.1
-        -- treats custom width/height as a requested bounding box, then normalizes
-        -- extreme panoramic ratios back into this target family.
-        LogicalSize = Vector2.new(840, 506),
-        DesktopLogicalSize = Vector2.new(1080, 650),
+        LogicalSize = Vector2.new(960, 578),
+        DesktopLogicalSize = Vector2.new(1320, 795),
         Aspect = 1.662,
-        MinimumAspect = 1.46,
-        MaximumAspect = 1.78,
-        Center = Vector2.new(0.5, 0.52),
-        Radius = 12,
-        WideHeightRatio = 0.82,
-        MediumHeightRatio = 0.86,
-        CompactHeightRatio = 0.9,
-        LandscapeHeightRatio = 0.92,
+        MinimumAspect = 1.48,
+        MaximumAspect = 1.76,
+        Center = Vector2.new(0.5, 0.515),
+        Radius = 11,
+        WideHeightRatio = 0.88,
+        MediumHeightRatio = 0.9,
+        CompactHeightRatio = 0.92,
+        LandscapeHeightRatio = 0.94,
+        WideWidthRatio = 0.985,
+        MediumWidthRatio = 0.97,
+        CompactWidthRatio = 0.965,
+        LandscapeWidthRatio = 0.975,
         MobileLandscapeScale = 1,
         CompactScale = 1,
         MediumScale = 1,
         PortraitWidthRatio = 0.95,
-        PortraitHeightRatio = 0.92,
+        PortraitHeightRatio = 0.93,
     },
     Header = {
-        Height = 64,
-        BrandSize = 21,
-        ContextHeight = 38,
-        ContextWidth = 252,
-        UtilitySize = 32,
+        Height = 70,
+        BrandSize = 24,
+        ContextHeight = 42,
+        ContextWidth = 304,
+        UtilitySize = 36,
     },
     Navigation = {
-        ExpandedRatio = 0.286,
-        CompactRatio = 0.071,
-        CompactWidth = 54,
-        SearchHeight = 36,
-        TabHeight = 40,
-        CompactTabHeight = 42,
-        FooterHeight = 40,
-        HorizontalPadding = 14,
+        ExpandedRatio = 0.265,
+        CompactRatio = 0.066,
+        CompactWidth = 56,
+        SearchHeight = 38,
+        TabHeight = 42,
+        CompactTabHeight = 44,
+        FooterHeight = 42,
+        HorizontalPadding = 15,
         RowGap = 5,
-        ContextHeight = 76,
-        ContextGap = 10,
+        ContextHeight = 0,
+        ContextGap = 0,
     },
     Content = {
-        MaximumWidth = 920,
-        SingleColumnMaximum = 560,
-        MinimumSection = 254,
-        ColumnGap = 18,
-        SectionGap = 16,
-        HorizontalPadding = 20,
-        VerticalPadding = 14,
-        PageContextHeight = 46,
+        MaximumWidth = 1280,
+        SingleColumnMaximum = 620,
+        MinimumSection = 244,
+        ColumnGap = 16,
+        SectionGap = 13,
+        HorizontalPadding = 17,
+        VerticalPadding = 12,
+        PageContextHeight = 52,
         SubtabInset = 0,
     },
     Control = {
-        RowHeight = 46,
-        Row = 34,
-        DescriptionHeight = 60,
+        RowHeight = 43,
+        Row = 35,
+        DescriptionHeight = 58,
         Radius = 4,
-        ToggleSize = 17,
-        Toggle = 17,
-        InputHeight = 34,
+        ToggleSize = 18,
+        Toggle = 18,
+        InputHeight = 35,
         SliderTrack = 4,
-        SliderThumb = 11,
-        HorizontalPadding = 12,
-        HolderRatio = 0.44,
+        SliderThumb = 12,
+        HorizontalPadding = 13,
+        HolderRatio = 0.43,
     },
     Typography = {
-        Brand = 15,
+        Brand = 17,
         HeaderContext = 12,
-        Breadcrumb = 10,
-        PageTitle = 13,
+        Breadcrumb = 11,
+        PageTitle = 14,
         Sidebar = 12,
-        Section = 11,
+        Section = 12,
         Control = 11,
         Description = 10,
         Value = 11,
-        Metadata = 9,
+        Metadata = 10,
     },
     Scrollbar = {
-        IdleThickness = 7,
-        IdleWidth = 7,
-        ActiveThickness = 9,
-        ActiveWidth = 9,
-        MinimumThumb = 56,
-        HorizontalMinimumThumb = 62,
+        IdleThickness = 9,
+        IdleWidth = 9,
+        ActiveThickness = 11,
+        ActiveWidth = 11,
+        MinimumThumb = 70,
+        HorizontalMinimumThumb = 72,
         TrackInset = 2,
-        Margin = 8,
-        HorizontalMargin = 8,
-        IdleTransparency = 0.06,
+        Margin = 7,
+        HorizontalMargin = 7,
+        IdleTransparency = 0.02,
         ActiveTransparency = 0,
-        TrackIdleTransparency = 0.76,
-        TrackActiveTransparency = 0.56,
-        FadeDelay = 1.15,
-        IdleDelay = 1.15,
-        WheelStep = 52,
+        TrackIdleTransparency = 0.78,
+        TrackActiveTransparency = 0.58,
+        FadeDelay = 1.05,
+        IdleDelay = 1.05,
+        WheelStep = 54,
     },
     Popup = {
         Radius = 6,
-        DropdownWidth = 236,
-        ColorWidth = 258,
-        SearchHeight = 32,
-        OptionHeight = 34,
+        DropdownWidth = 250,
+        ColorWidth = 270,
+        SearchHeight = 34,
+        OptionHeight = 36,
         Padding = 8,
         MaximumVisibleOptions = 7,
     },
@@ -358,7 +376,6 @@ local TargetDesign = {
         ReopenSize = 44,
     },
 }
-
 -- Metrics dereference these groups during module evaluation, so validate the
 -- design token shape before constructing any dependent tables.
 assert(
@@ -384,14 +401,14 @@ local Metrics = {
     MinimumWindow = Vector2.new(344, 222),
     MaximumWindow = TargetDesign.Window.LogicalSize,
     Header = TargetDesign.Header.Height,
-    Sidebar = 320,
+    Sidebar = 280,
     SidebarRatio = TargetDesign.Navigation.ExpandedRatio,
     CompactSidebar = TargetDesign.Navigation.CompactWidth,
     CompactSidebarRatio = TargetDesign.Navigation.CompactRatio,
     HeaderRatio = 0.114,
     HeaderContextWidth = TargetDesign.Header.ContextWidth,
     HeaderContextHeight = TargetDesign.Header.ContextHeight,
-    PreferredContent = 820,
+    PreferredContent = 1120,
     MaximumContent = TargetDesign.Content.MaximumWidth,
     SingleColumnMaximum = TargetDesign.Content.SingleColumnMaximum,
     MinimumSection = TargetDesign.Content.MinimumSection,
@@ -2214,9 +2231,9 @@ local BorderController: AnyTable = { Records = Kronos.BorderBindings }
 
 local SurfaceDepth = {
     Background = 0,
-    BackgroundSoft = 0.38,
-    Surface = 0.62,
-    Surface2 = 0.62,
+    BackgroundSoft = 0.34,
+    Surface = 0.56,
+    Surface2 = 0.78,
     Surface3 = 0.94,
     ElevatedSurface = 0.98,
     SurfaceHover = 1,
@@ -2226,11 +2243,11 @@ local SurfaceDepth = {
 }
 
 local SurfaceTransparencyWeight = {
-    Background = 0.38,
-    BackgroundSoft = 0.5,
-    Surface = 0.7,
-    Surface2 = 0.62,
-    Surface3 = 0.52,
+    Background = 0.36,
+    BackgroundSoft = 0.46,
+    Surface = 0.64,
+    Surface2 = 0.54,
+    Surface3 = 0.46,
     ElevatedSurface = 0.48,
     SurfaceHover = 0.76,
     HoverSurface = 0.76,
@@ -2247,8 +2264,8 @@ local BorderRoleStrength = {
     HeaderDivider = 0.72,
     SidebarDivider = 0.76,
     ContentDivider = 0.64,
-    Section = 0.68,
-    Control = 0.58,
+    Section = 0.78,
+    Control = 0.62,
     Hover = 0.8,
     ControlHover = 0.8,
     Focus = 1.06,
@@ -2279,8 +2296,8 @@ local BorderStyles = {
     HeaderDivider = { Transparency = 0.58, Thickness = 1 },
     SidebarDivider = { Transparency = 0.56, Thickness = 1 },
     ContentDivider = { Transparency = 0.72, Thickness = 1 },
-    Section = { Transparency = 0.74, Thickness = 1 },
-    Control = { Transparency = 0.88, Thickness = 1 },
+    Section = { Transparency = 0.62, Thickness = 1 },
+    Control = { Transparency = 0.84, Thickness = 1 },
     Hover = { Transparency = 0.52, Thickness = 1 },
     ControlHover = { Transparency = 0.52, Thickness = 1 },
     Focus = { Transparency = 0.24, Thickness = 1 },
@@ -3275,7 +3292,7 @@ function ResponsiveController:GetRawDensity(viewport: Vector2?): number
     local size = viewport or viewportSize()
     local portrait = size.X < size.Y
 
-    -- V2.1 protects legibility first. The previous density ladder compressed
+    -- V2.2 protects legibility independently from shell occupancy. The previous density ladder compressed
     -- 9px labels into a prototype-like 6-7px range on common desktop captures.
     if portrait then
         if size.X <= 390 then
@@ -3360,62 +3377,51 @@ function ResponsiveController:CalculateWindowSize(
     local height: number
 
     if mode == "Portrait" and not window.HasExplicitWidth and not window.HasExplicitHeight then
-        width = math.min(baseWidth, safeWidth * TargetDesign.Window.PortraitWidthRatio)
-        local portraitTarget = math.max(width * 1.34, math.min(430, safeHeight))
+        width = safeWidth * TargetDesign.Window.PortraitWidthRatio
+        local portraitTarget = math.max(width * 1.34, math.min(520, safeHeight))
         height = math.min(safeHeight * TargetDesign.Window.PortraitHeightRatio, portraitTarget)
     else
         local heightRatio = TargetDesign.Window.WideHeightRatio
-        local designScale = 1
-        local widthRatio = 0.78
+        local widthRatio = TargetDesign.Window.WideWidthRatio
         if mode == "MobileLandscape" then
             heightRatio = TargetDesign.Window.LandscapeHeightRatio
-            -- The artboard is already calibrated to the supplied high-DPI
-            -- capture. Mobile landscape receives only a restrained structural
-            -- reduction rather than a second destructive half-scale.
-            designScale = TargetDesign.Window.MobileLandscapeScale
-            widthRatio = 0.97
+            widthRatio = TargetDesign.Window.LandscapeWidthRatio
         elseif mode == "Compact" then
             heightRatio = TargetDesign.Window.CompactHeightRatio
-            designScale = TargetDesign.Window.CompactScale
-            widthRatio = 0.98
+            widthRatio = TargetDesign.Window.CompactWidthRatio
         elseif mode == "Medium" then
             heightRatio = TargetDesign.Window.MediumHeightRatio
-            designScale = TargetDesign.Window.MediumScale
-            widthRatio = 0.88
+            widthRatio = TargetDesign.Window.MediumWidthRatio
         end
 
-        height = math.min(baseHeight * designScale, safeHeight * heightRatio)
-        width = height * aspect
+        -- Viewport occupancy is the primary constraint. Base dimensions remain
+        -- compatibility inputs for explicit sizes, not a ceiling that turns the
+        -- interface into a small centered modal on large screens.
+        local maximumHeight = safeHeight * heightRatio
         local maximumWidth = safeWidth * widthRatio
-        if width > maximumWidth then
-            width = maximumWidth
-            height = width / aspect
-        end
+        height = math.min(maximumHeight, maximumWidth / aspect)
+        width = height * aspect
 
         if window.HasExplicitWidth then
-            width = baseWidth
+            width = math.min(baseWidth, safeWidth)
             if not window.HasExplicitHeight then
                 height = width / aspect
             end
         end
         if window.HasExplicitHeight then
-            height = baseHeight
+            height = math.min(baseHeight, safeHeight)
             if not window.HasExplicitWidth then
                 width = height * aspect
             end
         end
     end
 
-    local minimumWidth = math.min(mode == "Portrait" and 280 or 320, safeWidth)
-    local minimumHeight = math.min(mode == "Portrait" and 380 or 300, safeHeight)
+    local minimumWidth = math.min(mode == "Portrait" and 300 or 360, safeWidth)
+    local minimumHeight = math.min(mode == "Portrait" and 420 or 320, safeHeight)
     width = math.clamp(width, minimumWidth, safeWidth)
     height = math.clamp(height, minimumHeight, safeHeight)
 
     if mode ~= "Portrait" then
-        -- Preserve the requested horizontal presence whenever possible and use
-        -- available vertical room to correct panoramic configurations. This is
-        -- the opposite of V2's strip-like behavior, which solved a bad ratio by
-        -- shrinking width and leaving the lower viewport empty.
         local currentAspect = width / math.max(height, 1)
         if currentAspect > aspect then
             local targetHeight = width / aspect
@@ -3434,10 +3440,10 @@ function ResponsiveController:CalculateWindowSize(
                 height = width / aspect
             end
         end
-        width = math.min(width, safeWidth)
-        height = math.min(height, safeHeight)
     end
 
+    width = math.min(width, safeWidth)
+    height = math.min(height, safeHeight)
     return math.floor(width + 0.5), math.floor(height + 0.5), mode
 end
 
@@ -4803,15 +4809,15 @@ local function makeControlRow(section, titleText, description, height, iconOptio
     local row = create("Frame", {
         Name = "ControlRow",
         BackgroundColor3 = Theme.Surface2,
-        BackgroundTransparency = 1,
+        BackgroundTransparency = 0.94,
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, rowHeight),
         ClipsDescendants = true,
         Parent = section.Content,
     })
     row:SetAttribute("KronosSearch", string.lower(tostring(titleText or "") .. " " .. tostring(description or "")))
-    corner(row, 2)
-    local rowStroke = stroke(row, Theme.StrokeSoft, 1, 1, "Quiet")
+    corner(row, 3)
+    local rowStroke = stroke(row, Theme.StrokeSoft, 0.96, 1, "Quiet")
     ThemeController:Bind(row, "BackgroundColor3", "Surface2")
     ThemeController:Bind(rowStroke, "Color", "StrokeSoft")
     local rowDivider = create("Frame", {
@@ -4872,16 +4878,16 @@ local function makeControlRow(section, titleText, description, height, iconOptio
         rowOwner,
         hover.MouseEnter:Connect(function()
             if not row:GetAttribute("KronosDisabled") then
-                tween(row, { BackgroundTransparency = 0.88 }, Motion.HoverIn)
-                tween(rowStroke, { Transparency = BorderController:Resolve(0.94, "ControlHover") }, Motion.HoverIn)
+                tween(row, { BackgroundTransparency = 0.78 }, Motion.HoverIn)
+                tween(rowStroke, { Transparency = BorderController:Resolve(0.82, "ControlHover") }, Motion.HoverIn)
             end
         end)
     )
     addConnection(
         rowOwner,
         hover.MouseLeave:Connect(function()
-            tween(row, { BackgroundTransparency = 1 }, Motion.HoverOut)
-            tween(rowStroke, { Transparency = BorderController:Resolve(1, "Quiet") }, Motion.HoverOut)
+            tween(row, { BackgroundTransparency = 0.94 }, Motion.HoverOut)
+            tween(rowStroke, { Transparency = BorderController:Resolve(0.96, "Quiet") }, Motion.HoverOut)
         end)
     )
 
@@ -7554,7 +7560,7 @@ function Tab:CreateSection(config: (NavigationOptions | string)?): AnyTable
     local frame = create("Frame", {
         Name = "Section",
         BackgroundColor3 = Theme.Surface2,
-        BackgroundTransparency = 0.58,
+        BackgroundTransparency = 0.2,
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
@@ -7562,15 +7568,16 @@ function Tab:CreateSection(config: (NavigationOptions | string)?): AnyTable
         Parent = parent,
     }) :: Frame
     frame:SetAttribute("KronosSearch", section.SearchText)
-    corner(frame, 5)
-    local frameStroke = stroke(frame, Theme.Border, 0.9, 1, "Section")
+    ThemeController:Bind(frame, "BackgroundColor3", "Surface2")
+    corner(frame, 7)
+    local frameStroke = stroke(frame, Theme.Border, 0.76, 1, "Section")
     ThemeController:Bind(frameStroke, "Color", "Border")
-    padding(frame, 12, 10, 12, 12)
+    padding(frame, 14, 12, 14, 14)
     local frameLayout = list(frame, Enum.FillDirection.Vertical, 0)
 
     local heading = create("Frame", {
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, config.Description and 44 or 31),
+        Size = UDim2.new(1, 0, 0, config.Description and 48 or 34),
         LayoutOrder = 1,
         Parent = frame,
     }) :: Frame
@@ -7578,9 +7585,9 @@ function Tab:CreateSection(config: (NavigationOptions | string)?): AnyTable
     if config.Icon then
         local icon = makeIcon(heading, config, "Accent")
         if icon then
-            icon.Position = UDim2.fromOffset(0, 6)
+            icon.Position = UDim2.fromOffset(0, 7)
             if config.IconSize == nil then
-                icon.Size = UDim2.fromOffset(15, 15)
+                icon.Size = UDim2.fromOffset(16, 16)
             end
             titleOffset = icon.Size.X.Offset + 9
         end
@@ -7840,11 +7847,11 @@ function Window:_setActiveTabVisual(tab: AnyTable, active: boolean)
     end
     tween(tab.Button, {
         BackgroundColor3 = active and Theme.PressedSurface or Theme.Surface2,
-        BackgroundTransparency = active and 0.62 or 1,
+        BackgroundTransparency = active and 0.46 or 1,
     }, Motion.Tab)
     tween(tab.ActiveBar, {
         BackgroundTransparency = active and 0 or 1,
-        Size = active and UDim2.fromOffset(ResponsiveController:Scale(self, 3), ResponsiveController:Scale(self, 22))
+        Size = active and UDim2.fromOffset(ResponsiveController:Scale(self, 3), ResponsiveController:Scale(self, 24))
             or UDim2.fromOffset(ResponsiveController:Scale(self, 3), ResponsiveController:Scale(self, 8)),
     }, Motion.Tab)
     if tab.IconLabel then
@@ -7970,7 +7977,7 @@ function Window:CreateTab(config: (NavigationOptions | string)?): AnyTable
         icon.AnchorPoint = Vector2.new(0, 0.5)
         icon.Position = UDim2.new(0, 16, 0.5, 0)
         if config.IconSize == nil then
-            icon.Size = UDim2.fromOffset(16, 16)
+            icon.Size = UDim2.fromOffset(17, 17)
         end
     end
     local title = makeText(button, tab.Title, TargetDesign.Typography.Sidebar, Theme.SubText, "medium")
@@ -8071,7 +8078,7 @@ function Window:CreateTab(config: (NavigationOptions | string)?): AnyTable
         tab,
         button.MouseEnter:Connect(function()
             if self.ActiveTab ~= tab then
-                tween(button, { BackgroundTransparency = 0.82 }, Motion.Hover)
+                tween(button, { BackgroundTransparency = 0.72 }, Motion.Hover)
             end
         end)
     )
@@ -8417,7 +8424,7 @@ function Window:_makeHeader(config: WindowConfig)
     local header = create("Frame", {
         Name = "Header",
         BackgroundColor3 = Theme.BackgroundSoft,
-        BackgroundTransparency = 0.025,
+        BackgroundTransparency = 0.08,
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, Metrics.Header),
         ZIndex = 25,
@@ -8451,7 +8458,7 @@ function Window:_makeHeader(config: WindowConfig)
     local logo = create("Frame", {
         Name = "BrandMark",
         BackgroundColor3 = Theme.Accent,
-        BackgroundTransparency = 1,
+        BackgroundTransparency = 0.76,
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(20, math.floor((Metrics.Header - TargetDesign.Header.BrandSize) * 0.5)),
         Size = UDim2.fromOffset(TargetDesign.Header.BrandSize, TargetDesign.Header.BrandSize),
@@ -8465,7 +8472,7 @@ function Window:_makeHeader(config: WindowConfig)
     ThemeController:Bind(logoStroke, "Color", "AccentSoft")
     local logoIcon = hasLogo and makeIcon(logo, {
         Icon = config.Icon,
-        IconSize = math.min(config.IconSize or 16, 17),
+        IconSize = math.min(config.IconSize or 18, 20),
         IconColor = config.IconColor,
         IconTransparency = config.IconTransparency,
     }, "Accent") or nil
@@ -8475,7 +8482,7 @@ function Window:_makeHeader(config: WindowConfig)
         logoIcon.ZIndex = 30
     end
 
-    local titleOffset = hasLogo and 52 or 20
+    local titleOffset = hasLogo and 58 or 20
     local title = makeText(header, tostring(config.Title or "Kronos"), TargetDesign.Typography.Brand, Theme.Text, "bold")
     title.Position = UDim2.fromOffset(titleOffset, 0)
     title.Size = UDim2.fromOffset(math.max(Metrics.Sidebar - titleOffset - 16, 120), Metrics.Header)
@@ -8494,7 +8501,7 @@ function Window:_makeHeader(config: WindowConfig)
     local contextButton = create("TextButton", {
         Name = "HeaderContext",
         BackgroundColor3 = Theme.Surface2,
-        BackgroundTransparency = 0.56,
+        BackgroundTransparency = 0.32,
         BorderSizePixel = 0,
         Text = "",
         AutoButtonColor = false,
@@ -8505,8 +8512,8 @@ function Window:_makeHeader(config: WindowConfig)
         ZIndex = 31,
         Parent = header,
     }) :: TextButton
-    corner(contextButton, 5)
-    local contextStroke = stroke(contextButton, Theme.Border, 0.82, 1, "Control")
+    corner(contextButton, 6)
+    local contextStroke = stroke(contextButton, Theme.Border, 0.7, 1, "Control")
     ThemeController:Bind(contextButton, "BackgroundColor3", "Surface2")
     ThemeController:Bind(contextStroke, "Color", "Border")
     local contextLabel = makeText(contextButton, "Overview", TargetDesign.Typography.HeaderContext, Theme.SubText, "medium")
@@ -8966,8 +8973,8 @@ function Window:ApplyResponsive(animateNavigation: boolean?)
         )
     end
     local contentWidth = width - sidebarWidth
-    local twoColumnThreshold = layoutMode == "MobileLandscape" and 520 or 610
-    local minimumContentHeight = layoutMode == "MobileLandscape" and 280 or 330
+    local twoColumnThreshold = layoutMode == "MobileLandscape" and 430 or 500
+    local minimumContentHeight = layoutMode == "MobileLandscape" and 250 or 285
     self.TwoColumn = layoutMode ~= "Portrait"
         and contentWidth >= d(twoColumnThreshold)
         and height - headerHeight >= d(minimumContentHeight)
@@ -12080,7 +12087,7 @@ function Window:RefreshTheme()
         self:_setActiveTabVisual(tab, self.ActiveTab == tab)
         local function refreshSections(owner: AnyTable)
             for _, section in ipairs(owner.Sections) do
-                section.Instance.BackgroundColor3 = Theme.Surface
+                section.Instance.BackgroundColor3 = Theme.Surface2
                 for _, control in ipairs(section.Controls) do
                     if type(control.RefreshView) == "function" then
                         control:RefreshView()
@@ -12234,14 +12241,17 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
             string.gsub(string.lower(tostring(config.SearchBehavior or "")), "[%s_%-]", "")
                 == "clearonnavigation"
         ) and "ClearOnNavigation" or "Live",
-        TwoColumn = layoutMode ~= "Portrait" and initialWidth >= 650 * density and initialHeight >= 350 * density,
+        TwoColumn = layoutMode ~= "Portrait" and initialWidth >= 560 * density and initialHeight >= 290 * density,
         Presets = {},
         Title = tostring(config.Title or "Kronos"),
         Subtitle = tostring(config.Subtitle or config.SubTitle or ""),
         ProfileName = config.ProfileName,
         ProfileSubtitle = config.ProfileSubtitle,
         ShowSidebarProfile = config.ShowSidebarProfile == true,
-        ShowSidebarContext = config.ProfilePanel ~= false,
+        -- The V2.1 CURRENT VIEW card was a current-only invention. V2.2 keeps
+        -- the compatibility surface opt-in instead of consuming the default
+        -- sidebar's vertical navigation space.
+        ShowSidebarContext = config.ShowSidebarContext == true,
         SearchEnabled = config.SearchBar ~= false,
         DragOptions = {
             DragBounds = config.DragBounds or "Viewport",
@@ -12396,7 +12406,7 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
     local sidebar = create("Frame", {
         Name = "Sidebar",
         BackgroundColor3 = Theme.BackgroundSoft,
-        BackgroundTransparency = 0.035,
+        BackgroundTransparency = 0.1,
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(0, Metrics.Header),
         Size = UDim2.new(0, Metrics.Sidebar, 1, -Metrics.Header),
@@ -12419,7 +12429,7 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
     local searchBox = create("TextBox", {
         Name = "Search",
         BackgroundColor3 = Theme.Surface2,
-        BackgroundTransparency = 0.34,
+        BackgroundTransparency = 0.22,
         BorderSizePixel = 0,
         ClearTextOnFocus = false,
         Text = "",
@@ -12436,9 +12446,9 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
     }) :: TextBox
     ThemeController:Bind(searchBox, "BackgroundColor3", "Surface2")
     corner(searchBox, 5)
-    local searchStroke = stroke(searchBox, Theme.Border, 0.78, 1, "Control")
+    local searchStroke = stroke(searchBox, Theme.Border, 0.7, 1, "Control")
     padding(searchBox, 34, 0, 11, 0)
-    local searchIcon = makeIcon(searchBox, { Icon = "search", IconSize = 14 }, "Muted")
+    local searchIcon = makeIcon(searchBox, { Icon = "search", IconSize = 15 }, "Muted")
     assert(searchIcon, "Required Lucide search icon is unavailable")
     searchIcon.AnchorPoint = Vector2.new(0, 0.5)
     searchIcon.Position = UDim2.new(0, -23, 0.5, 0)
@@ -12594,7 +12604,7 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
     local content = create("Frame", {
         Name = "Content",
         BackgroundColor3 = Theme.Surface,
-        BackgroundTransparency = 0.085,
+        BackgroundTransparency = 0.16,
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(Metrics.Sidebar, Metrics.Header),
         Size = UDim2.new(1, -Metrics.Sidebar, 1, -Metrics.Header),
@@ -12606,7 +12616,7 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
     local pageContext = create("Frame", {
         Name = "PageContext",
         BackgroundColor3 = Theme.BackgroundSoft,
-        BackgroundTransparency = 0.72,
+        BackgroundTransparency = 0.48,
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, TargetDesign.Content.PageContextHeight),
         ZIndex = 14,
@@ -13034,17 +13044,17 @@ Kronos.SetBackgroundDim = Kronos.SetDimStrength
 Kronos.GetBackgroundDim = Kronos.GetDimStrength
 
 function Kronos:ResetAppearance(): AnyTable
-    self.SurfaceTransparency = 0.055
-    self.AcrylicEnabled = true
-    self.AcrylicIntensity = 0.46
-    self.BorderIntensity = 0.96
-    self.SurfaceContrast = 1.14
-    self.ReducedMotion = false
-    self.AnimationIntensity = 1
-    self.AnimationsEnabled = true
-    self.NotificationMotion = true
-    self.PageTransitions = true
-    self.DimStrength = 0.46
+    self.SurfaceTransparency = DefaultAppearance.SurfaceTransparency
+    self.AcrylicEnabled = DefaultAppearance.AcrylicEnabled
+    self.AcrylicIntensity = DefaultAppearance.AcrylicIntensity
+    self.BorderIntensity = DefaultAppearance.BorderIntensity
+    self.SurfaceContrast = DefaultAppearance.SurfaceContrast
+    self.ReducedMotion = DefaultAppearance.ReducedMotion
+    self.AnimationIntensity = DefaultAppearance.AnimationIntensity
+    self.AnimationsEnabled = DefaultAppearance.AnimationsEnabled
+    self.NotificationMotion = DefaultAppearance.NotificationMotion
+    self.PageTransitions = DefaultAppearance.PageTransitions
+    self.DimStrength = DefaultAppearance.DimStrength
     AppearanceController:Refresh()
     BorderController:Refresh()
     AcrylicController:Refresh()
@@ -13121,6 +13131,7 @@ local function buildShowcase(): AnyTable
         ProfileSubtitle = "Tue 15 Jan 2026",
         ShowSidebarProfile = false,
         ProfilePanel = true,
+        ShowSidebarContext = false,
         SearchBar = true,
         Accent = Theme.Accent,
         ToggleKey = Enum.KeyCode.RightShift,
@@ -13135,11 +13146,11 @@ local function buildShowcase(): AnyTable
         },
         KeybindListActiveOnly = false,
         KeybindListEmptyMessage = false,
-        Transparency = 0.055,
+        Transparency = 0.085,
         Acrylic = true,
-        AcrylicIntensity = 0.46,
-        BorderIntensity = 0.96,
-        SurfaceContrast = 1.14,
+        AcrylicIntensity = 0.62,
+        BorderIntensity = 1.04,
+        SurfaceContrast = 1.18,
     })
 
     local overview = window:AddTab({ Name = "General", Icon = "house" })
@@ -13193,6 +13204,12 @@ local function buildShowcase(): AnyTable
         Id = "ObjectiveNoClip",
         Title = "Enable no-clip",
         Default = true,
+    })
+    movement:AddDropdown({
+        Id = "ObjectiveMovementPreset",
+        Title = "Movement preset",
+        Values = { "Normal", "Assisted", "Free" },
+        Default = "Normal",
     })
 
     local coordinates = mainSubTab:AddSection({
@@ -13748,7 +13765,11 @@ if startupOk then
                 and TargetDesign.Window.MinimumAspect > 1
                 and TargetDesign.Window.MaximumAspect >= TargetDesign.Window.MinimumAspect
                 and TargetDesign.Window.MobileLandscapeScale > 0
-                and TargetDesign.Window.MobileLandscapeScale <= 1,
+                and TargetDesign.Window.MobileLandscapeScale <= 1
+                and TargetDesign.Window.WideWidthRatio > 0
+                and TargetDesign.Window.MediumWidthRatio > 0
+                and TargetDesign.Window.CompactWidthRatio > 0
+                and TargetDesign.Window.LandscapeWidthRatio > 0,
             "Target window geometry is invalid"
         )
         assert(TargetDesign.Control.Row > 0 and TargetDesign.Control.InputHeight > 0, "Control geometry tokens are invalid")
@@ -13835,7 +13856,7 @@ if startupOk then
 end
 if startupOk then
     startupOk = startupStage("PublicAPICompatibility", function()
-        assert(Kronos.Version == "2.1.0", "Unexpected Kronos version")
+        assert(Kronos.Version == "2.2.0", "Unexpected Kronos version")
         assert(
             type(Kronos.CreateWindow) == "function"
                 and type(Kronos.Notify) == "function"
