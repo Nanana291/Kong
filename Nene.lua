@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-    KronosV1.8.lua
+    KronosV1.9.lua
     Cumulative native Roblox UI library refined against the supplied
     2340x1080 reference video. All controllers and the optional showcase live
     in this file; no remote modules or external UI libraries are required.
@@ -74,7 +74,7 @@ type WindowConfig = {
 }
 
 local Kronos: AnyTable = {}
-Kronos.Version = "1.8.0"
+Kronos.Version = "1.9.0"
 Kronos.Options = {} :: AnyTable
 Kronos.Windows = {} :: { AnyTable }
 Kronos.Connections = {} :: { RBXScriptConnection }
@@ -91,17 +91,17 @@ Kronos.SurfaceBindings = setmetatable({}, { __mode = "k" }) :: AnyTable
 Kronos.BorderBindings = setmetatable({}, { __mode = "k" }) :: AnyTable
 Kronos.AcrylicBindings = setmetatable({}, { __mode = "k" }) :: AnyTable
 Kronos.Scrollbars = setmetatable({}, { __mode = "k" }) :: AnyTable
-Kronos.SurfaceTransparency = 0.16
+Kronos.SurfaceTransparency = 0.2
 Kronos.AcrylicEnabled = true
-Kronos.AcrylicIntensity = 0.62
-Kronos.BorderIntensity = 1
-Kronos.SurfaceContrast = 0.98
+Kronos.AcrylicIntensity = 0.7
+Kronos.BorderIntensity = 1.08
+Kronos.SurfaceContrast = 1.02
 Kronos.ReducedMotion = false
 Kronos.AnimationIntensity = 1
 Kronos.AnimationsEnabled = true
 Kronos.NotificationMotion = true
 Kronos.PageTransitions = true
-Kronos.DimStrength = 0.36
+Kronos.DimStrength = 0.42
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -233,14 +233,21 @@ local Motion = {
     Scrollbar = 0.085,
 }
 
--- V1.8 target-derived design decisions. These tokens centralize measurements
--- that were previously scattered through individual components.
+-- V1.9 keeps objective capture measurements separate from runtime logical
+-- measurements. The supplied mobile capture renders Roblox GUI coordinates at
+-- roughly 1.286 physical pixels per logical pixel; calibrating the artboard and
+-- descendant density independently prevents uniform oversizing while floating
+-- widgets retain their target scale.
 local TargetDesign = {
+    Calibration = {
+        TouchContentScale = 0.84,
+    },
     Window = {
-        -- The objective shell measures roughly 906x584 in the supplied
-        -- 2340x1080 capture. Mobile landscape uses a logical viewport, so it
-        -- needs a separate artboard scale instead of inflating the whole UI.
-        LogicalSize = Vector2.new(906, 584),
+        -- 906x584 is the measured objective silhouette in the 2340x1080 video.
+        -- High-DPI touch captures use a calibrated 704x454 logical artboard;
+        -- non-touch desktop runtimes retain the measured reference artboard.
+        LogicalSize = Vector2.new(704, 454),
+        DesktopLogicalSize = Vector2.new(906, 584),
         Aspect = 906 / 584,
         Center = Vector2.new(0.453, 0.548),
         Radius = 8,
@@ -248,7 +255,9 @@ local TargetDesign = {
         MediumHeightRatio = 0.56,
         CompactHeightRatio = 0.76,
         LandscapeHeightRatio = 0.84,
-        MobileLandscapeScale = 0.476,
+        MobileLandscapeScale = 0.94,
+        CompactScale = 0.94,
+        MediumScale = 1,
         PortraitWidthRatio = 0.94,
         PortraitHeightRatio = 0.84,
     },
@@ -332,7 +341,8 @@ local TargetDesign = {
 -- Metrics dereference these groups during module evaluation, so validate the
 -- design token shape before constructing any dependent tables.
 assert(
-    type(TargetDesign.Window) == "table"
+    type(TargetDesign.Calibration) == "table"
+        and type(TargetDesign.Window) == "table"
         and type(TargetDesign.Header) == "table"
         and type(TargetDesign.Navigation) == "table"
         and type(TargetDesign.Content) == "table"
@@ -349,8 +359,8 @@ local Metrics = {
     ReferenceWindow = Vector2.new(906, 584),
     ReferenceAspect = 906 / 584,
     Window = TargetDesign.Window.LogicalSize,
-    MinimumWindow = Vector2.new(440, 284),
-    MaximumWindow = Vector2.new(906, 584),
+    MinimumWindow = Vector2.new(344, 222),
+    MaximumWindow = TargetDesign.Window.LogicalSize,
     Header = TargetDesign.Header.Height,
     Sidebar = 250,
     SidebarRatio = TargetDesign.Navigation.ExpandedRatio,
@@ -2239,35 +2249,35 @@ local BorderRoleStrength = {
 }
 
 local BorderStyles = {
-    Quiet = { Transparency = 0.9, Thickness = 1 },
-    Shell = { Transparency = 0.62, Thickness = 1 },
-    MainShellOuter = { Transparency = 0.56, Thickness = 1 },
-    InnerHighlight = { Transparency = 0.91, Thickness = 1 },
-    MainShellInner = { Transparency = 0.88, Thickness = 1 },
-    HeaderDivider = { Transparency = 0.72, Thickness = 1 },
-    SidebarDivider = { Transparency = 0.7, Thickness = 1 },
-    ContentDivider = { Transparency = 0.78, Thickness = 1 },
-    Section = { Transparency = 0.84, Thickness = 1 },
-    Control = { Transparency = 0.88, Thickness = 1 },
-    Hover = { Transparency = 0.68, Thickness = 1 },
-    ControlHover = { Transparency = 0.68, Thickness = 1 },
-    Focus = { Transparency = 0.4, Thickness = 1 },
-    ControlFocused = { Transparency = 0.4, Thickness = 1 },
-    Disabled = { Transparency = 0.92, Thickness = 1 },
-    ControlDisabled = { Transparency = 0.92, Thickness = 1 },
-    Dropdown = { Transparency = 0.66, Thickness = 1 },
-    Popup = { Transparency = 0.56, Thickness = 1 },
-    ColorPicker = { Transparency = 0.54, Thickness = 1 },
-    Settings = { Transparency = 0.58, Thickness = 1 },
-    Notification = { Transparency = 0.62, Thickness = 1 },
-    Floating = { Transparency = 0.6, Thickness = 1 },
-    FloatingWidget = { Transparency = 0.58, Thickness = 1 },
-    ScrollTrack = { Transparency = 0.9, Thickness = 1 },
-    Reopen = { Transparency = 0.58, Thickness = 1 },
-    ReopenButton = { Transparency = 0.58, Thickness = 1 },
-    AcrylicHighlight = { Transparency = 0.91, Thickness = 1 },
-    Error = { Transparency = 0.44, Thickness = 1 },
-    Accent = { Transparency = 0.48, Thickness = 1 },
+    Quiet = { Transparency = 0.88, Thickness = 1 },
+    Shell = { Transparency = 0.56, Thickness = 1 },
+    MainShellOuter = { Transparency = 0.48, Thickness = 1 },
+    InnerHighlight = { Transparency = 0.88, Thickness = 1 },
+    MainShellInner = { Transparency = 0.82, Thickness = 1 },
+    HeaderDivider = { Transparency = 0.66, Thickness = 1 },
+    SidebarDivider = { Transparency = 0.64, Thickness = 1 },
+    ContentDivider = { Transparency = 0.72, Thickness = 1 },
+    Section = { Transparency = 0.78, Thickness = 1 },
+    Control = { Transparency = 0.82, Thickness = 1 },
+    Hover = { Transparency = 0.62, Thickness = 1 },
+    ControlHover = { Transparency = 0.62, Thickness = 1 },
+    Focus = { Transparency = 0.34, Thickness = 1 },
+    ControlFocused = { Transparency = 0.34, Thickness = 1 },
+    Disabled = { Transparency = 0.9, Thickness = 1 },
+    ControlDisabled = { Transparency = 0.9, Thickness = 1 },
+    Dropdown = { Transparency = 0.58, Thickness = 1 },
+    Popup = { Transparency = 0.48, Thickness = 1 },
+    ColorPicker = { Transparency = 0.46, Thickness = 1 },
+    Settings = { Transparency = 0.5, Thickness = 1 },
+    Notification = { Transparency = 0.54, Thickness = 1 },
+    Floating = { Transparency = 0.52, Thickness = 1 },
+    FloatingWidget = { Transparency = 0.5, Thickness = 1 },
+    ScrollTrack = { Transparency = 0.86, Thickness = 1 },
+    Reopen = { Transparency = 0.5, Thickness = 1 },
+    ReopenButton = { Transparency = 0.5, Thickness = 1 },
+    AcrylicHighlight = { Transparency = 0.88, Thickness = 1 },
+    Error = { Transparency = 0.4, Thickness = 1 },
+    Accent = { Transparency = 0.42, Thickness = 1 },
 }
 
 local AcrylicRoleStrength = {
@@ -3239,12 +3249,12 @@ local function scaledUDim2(value: UDim2, density: number): UDim2
     )
 end
 
-function ResponsiveController:GetDensity(viewport: Vector2?): number
+function ResponsiveController:GetRawDensity(viewport: Vector2?): number
     local size = viewport or viewportSize()
     local portrait = size.X < size.Y
 
-    -- Density follows usable visual height instead of physical capture pixels.
-    -- This prevents high-DPI landscape recordings from inflating every row.
+    -- Raw density describes device readability. Application content applies a
+    -- separate reference calibration; floating widgets deliberately do not.
     if portrait then
         if size.X <= 390 then
             return 0.8
@@ -3267,6 +3277,13 @@ function ResponsiveController:GetDensity(viewport: Vector2?): number
     return 0.92
 end
 
+function ResponsiveController:GetDensity(viewport: Vector2?): number
+    local calibration = UserInputService.TouchEnabled
+        and TargetDesign.Calibration.TouchContentScale
+        or 1
+    return self:GetRawDensity(viewport) * calibration
+end
+
 function ResponsiveController:GetFloatingDensity(viewport: Vector2?): number
     local size = viewport or viewportSize()
     if
@@ -3274,11 +3291,9 @@ function ResponsiveController:GetFloatingDensity(viewport: Vector2?): number
         and size.X > size.Y
         and size.Y <= 620
     then
-        -- Floating widgets in the objective retain a larger independent scale
-        -- than the dense mobile-landscape application shell.
         return 0.68
     end
-    return self:GetDensity(size)
+    return self:GetRawDensity(size)
 end
 
 function ResponsiveController:GetMinimumTextSize(viewport: Vector2?): number
@@ -3330,19 +3345,18 @@ function ResponsiveController:CalculateWindowSize(
         local widthRatio = 0.78
         if mode == "MobileLandscape" then
             heightRatio = TargetDesign.Window.LandscapeHeightRatio
-            -- The supplied 2340x1080 mobile capture renders a 1170x540
-            -- logical viewport. A 0.476 artboard scale reproduces the
-            -- objective's measured compact shell without affecting desktop
-            -- sizing or child-density rules.
+            -- The artboard is already calibrated to the supplied high-DPI
+            -- capture. Mobile landscape receives only a restrained structural
+            -- reduction rather than a second destructive half-scale.
             designScale = TargetDesign.Window.MobileLandscapeScale
             widthRatio = 0.9
         elseif mode == "Compact" then
             heightRatio = TargetDesign.Window.CompactHeightRatio
-            designScale = 0.86
+            designScale = TargetDesign.Window.CompactScale
             widthRatio = 0.9
         elseif mode == "Medium" then
             heightRatio = TargetDesign.Window.MediumHeightRatio
-            designScale = 0.96
+            designScale = TargetDesign.Window.MediumScale
             widthRatio = 0.74
         end
 
@@ -8673,6 +8687,7 @@ function Window:ApplyResponsive()
     if self.SidePanel and self.SidePanel.Parent then
         local isPresets = self.SidePanelKind == "Presets"
         local isProfile = self.SidePanelKind == "Profile"
+        local isSettings = self.SidePanelKind == "Settings"
         local designPanelWidth = isPresets and 198 or (isProfile and 206 or 218)
         local panelWidth = math.min(d(designPanelWidth), math.max(width - d(70), d(184)))
         local openPosition: UDim2
@@ -8686,8 +8701,8 @@ function Window:ApplyResponsive()
             closedPosition = UDim2.new(1, d(5), 0, headerHeight + d(6))
         end
         local availablePanelHeight = math.max(height - headerHeight - d(12), d(150))
-        if isProfile or isPresets then
-            local desiredHeight = d(isProfile and 220 or 236)
+        if isProfile or isPresets or isSettings then
+            local desiredHeight = d(isProfile and 196 or (isPresets and 228 or 292))
             self.SidePanel.Size = UDim2.fromOffset(
                 panelWidth,
                 math.min(desiredHeight, availablePanelHeight)
@@ -9234,11 +9249,15 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
         closedPosition = UDim2.fromOffset(x, headerHeight - d(3))
     else
         openPosition = UDim2.new(1, -panelWidth - d(7), 0, headerHeight + d(6))
-        closedPosition = UDim2.new(1, -panelWidth + d(5), 0, headerHeight + d(6))
+        if kind == "Profile" then
+            closedPosition = openPosition + UDim2.fromOffset(0, -d(4))
+        else
+            closedPosition = UDim2.new(1, -panelWidth + d(5), 0, headerHeight + d(6))
+        end
     end
     local availablePanelHeight = math.max(self.Height - headerHeight - d(12), d(150))
-    local compactPanelHeight = kind == "Profile" and d(220)
-        or (kind == "Presets" and d(236) or nil)
+    local compactPanelHeight = kind == "Profile" and d(196)
+        or (kind == "Presets" and d(228) or (kind == "Settings" and d(292) or nil))
     local panelSize = compactPanelHeight
         and UDim2.fromOffset(panelWidth, math.min(compactPanelHeight, availablePanelHeight))
         or UDim2.new(0, panelWidth, 1, -(headerHeight + d(12)))
@@ -9632,6 +9651,247 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
         return row
     end
 
+    local function openProfileStylePopup(anchor: GuiObject)
+        if self.ActivePopup and self.ActivePopup.Anchor == anchor then
+            PopupController:Close(self)
+            return
+        end
+
+        local popup = create("CanvasGroup", {
+            Name = "ProfileStylePopup",
+            BackgroundColor3 = Theme.ElevatedSurface,
+            BackgroundTransparency = 0.04,
+            BorderSizePixel = 0,
+            GroupTransparency = 1,
+            Size = UDim2.fromOffset(174, 136),
+            Visible = false,
+            ZIndex = 740,
+        }) :: CanvasGroup
+        corner(popup, Metrics.PopupRadius)
+        local popupStroke = stroke(popup, Theme.Border, nil, 1, "ColorPicker")
+        ThemeController:Bind(popup, "BackgroundColor3", "ElevatedSurface")
+        ThemeController:Bind(popupStroke, "Color", "Border")
+        padding(popup, 7, 7, 7, 7)
+
+        local popupMaid = PopupController:Open(self, popup, anchor, 5, "Side")
+        local hueValue, saturation, brightness = Theme.Accent:ToHSV()
+        local pointerOwner = {}
+        popupMaid:Give(function()
+            InputController:CancelPointer(pointerOwner)
+        end)
+
+        local titleLabel = makeText(popup, "Styles", 9, Theme.Text, "bold")
+        titleLabel.Size = UDim2.new(1, 0, 0, 16)
+        titleLabel.ZIndex = 742
+
+        local saturationFrame = create("Frame", {
+            BackgroundColor3 = Color3.fromHSV(hueValue, 1, 1),
+            BorderSizePixel = 0,
+            Position = UDim2.fromOffset(0, 20),
+            Size = UDim2.fromOffset(126, 72),
+            ClipsDescendants = true,
+            ZIndex = 742,
+            Parent = popup,
+        }) :: Frame
+        corner(saturationFrame, 4)
+        stroke(saturationFrame, Theme.Border, 0.4, 1, "ColorPicker")
+
+        local whiteLayer = create("Frame", {
+            BackgroundColor3 = Theme.White,
+            BorderSizePixel = 0,
+            Size = UDim2.fromScale(1, 1),
+            ZIndex = 743,
+            Parent = saturationFrame,
+        }) :: Frame
+        create("UIGradient", {
+            Rotation = 0,
+            Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0),
+                NumberSequenceKeypoint.new(1, 1),
+            }),
+            Parent = whiteLayer,
+        })
+        local blackLayer = create("Frame", {
+            BackgroundColor3 = Color3.new(0, 0, 0),
+            BorderSizePixel = 0,
+            Size = UDim2.fromScale(1, 1),
+            ZIndex = 744,
+            Parent = saturationFrame,
+        }) :: Frame
+        create("UIGradient", {
+            Rotation = 90,
+            Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 1),
+                NumberSequenceKeypoint.new(1, 0),
+            }),
+            Parent = blackLayer,
+        })
+        local saturationDot = create("Frame", {
+            BackgroundColor3 = Theme.White,
+            BorderSizePixel = 0,
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.fromScale(saturation, 1 - brightness),
+            Size = UDim2.fromOffset(7, 7),
+            ZIndex = 746,
+            Parent = saturationFrame,
+        }) :: Frame
+        corner(saturationDot, 4)
+        stroke(saturationDot, Color3.new(0, 0, 0), 0.2, 1)
+        local saturationHit = makeHitbox(saturationFrame)
+        saturationHit.ZIndex = 745
+
+        local hueFrame = create("Frame", {
+            BackgroundColor3 = Theme.White,
+            BorderSizePixel = 0,
+            Position = UDim2.fromOffset(132, 20),
+            Size = UDim2.fromOffset(12, 72),
+            ClipsDescendants = true,
+            ZIndex = 742,
+            Parent = popup,
+        }) :: Frame
+        corner(hueFrame, 4)
+        stroke(hueFrame, Theme.Border, 0.4, 1, "ColorPicker")
+        create("UIGradient", {
+            Rotation = 90,
+            Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
+                ColorSequenceKeypoint.new(0.167, Color3.fromRGB(255, 255, 0)),
+                ColorSequenceKeypoint.new(0.333, Color3.fromRGB(0, 255, 0)),
+                ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 255, 255)),
+                ColorSequenceKeypoint.new(0.667, Color3.fromRGB(0, 0, 255)),
+                ColorSequenceKeypoint.new(0.833, Color3.fromRGB(255, 0, 255)),
+                ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 0)),
+            }),
+            Parent = hueFrame,
+        })
+        local hueMarker = create("Frame", {
+            BackgroundColor3 = Theme.White,
+            BorderSizePixel = 0,
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.fromScale(0.5, hueValue),
+            Size = UDim2.fromOffset(14, 2),
+            ZIndex = 746,
+            Parent = hueFrame,
+        }) :: Frame
+        corner(hueMarker, 2)
+        local hueHit = makeHitbox(hueFrame)
+        hueHit.ZIndex = 745
+
+        local accentPreview = create("Frame", {
+            BackgroundColor3 = Theme.Accent,
+            BorderSizePixel = 0,
+            Position = UDim2.fromOffset(0, 99),
+            Size = UDim2.fromOffset(24, 22),
+            ZIndex = 742,
+            Parent = popup,
+        }) :: Frame
+        corner(accentPreview, 4)
+        stroke(accentPreview, Theme.Border, 0.32, 1, "ColorPicker")
+
+        local valueLabel = makeText(popup, rgbToHex(Theme.Accent), 8, Theme.SubText, "bold")
+        valueLabel.Position = UDim2.fromOffset(30, 99)
+        valueLabel.Size = UDim2.fromOffset(54, 22)
+        valueLabel.ZIndex = 742
+
+        local presetFrame = create("Frame", {
+            BackgroundTransparency = 1,
+            Position = UDim2.fromOffset(88, 99),
+            Size = UDim2.fromOffset(56, 22),
+            ZIndex = 742,
+            Parent = popup,
+        }) :: Frame
+        local presetLayout = list(presetFrame, Enum.FillDirection.Horizontal, 3)
+        presetLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+
+        local function applyAccent()
+            local candidate = Color3.fromHSV(hueValue, saturation, brightness)
+            saturationFrame.BackgroundColor3 = Color3.fromHSV(hueValue, 1, 1)
+            saturationDot.Position = UDim2.fromScale(saturation, 1 - brightness)
+            hueMarker.Position = UDim2.fromScale(0.5, hueValue)
+            accentPreview.BackgroundColor3 = candidate
+            valueLabel.Text = rgbToHex(candidate)
+            Kronos:SetAccent(candidate)
+        end
+
+        local presetColors = {
+            Color3.fromRGB(145, 98, 255),
+            Color3.fromRGB(104, 139, 255),
+            Color3.fromRGB(89, 199, 158),
+        }
+        for _, color in ipairs(presetColors) do
+            local chip = create("TextButton", {
+                BackgroundColor3 = color,
+                BorderSizePixel = 0,
+                Text = "",
+                AutoButtonColor = false,
+                Size = UDim2.fromOffset(16, 16),
+                ZIndex = 743,
+                Parent = presetFrame,
+            }) :: TextButton
+            corner(chip, 4)
+            stroke(chip, Theme.White, 0.62, 1)
+            popupMaid:Give(chip.Activated:Connect(function()
+                hueValue, saturation, brightness = color:ToHSV()
+                applyAccent()
+            end))
+        end
+
+        local function updateSaturation(position: Vector3)
+            saturation = math.clamp(
+                (position.X - saturationFrame.AbsolutePosition.X)
+                    / math.max(saturationFrame.AbsoluteSize.X, 1),
+                0,
+                1
+            )
+            brightness = 1 - math.clamp(
+                (position.Y - saturationFrame.AbsolutePosition.Y)
+                    / math.max(saturationFrame.AbsoluteSize.Y, 1),
+                0,
+                1
+            )
+            applyAccent()
+        end
+        local function updateHue(position: Vector3)
+            hueValue = math.clamp(
+                (position.Y - hueFrame.AbsolutePosition.Y)
+                    / math.max(hueFrame.AbsoluteSize.Y, 1),
+                0,
+                1
+            )
+            applyAccent()
+        end
+        local function beginDrag(input: InputObject, updater: (Vector3) -> ())
+            if
+                input.UserInputType ~= Enum.UserInputType.MouseButton1
+                and input.UserInputType ~= Enum.UserInputType.Touch
+            then
+                return
+            end
+            if InputController:BeginPointer(pointerOwner, input, function(changedInput)
+                updater(changedInput.Position)
+            end) then
+                updater(input.Position)
+            end
+        end
+        popupMaid:Give(saturationHit.InputBegan:Connect(function(input)
+            beginDrag(input, updateSaturation)
+        end))
+        popupMaid:Give(hueHit.InputBegan:Connect(function(input)
+            beginDrag(input, updateHue)
+        end))
+
+        task.defer(function()
+            if popup.Parent and self.ActivePopup and self.ActivePopup.Frame == popup then
+                local resting = popup.Position
+                popup.Position = resting + UDim2.fromOffset(4, 0)
+                tween(popup, {
+                    GroupTransparency = 0,
+                    Position = resting,
+                }, Motion.Popup)
+            end
+        end)
+    end
+
     local showPage: (string) -> ()
     showPage = function(pageName: string)
         clearPage()
@@ -9737,12 +9997,33 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
             addRow("DPI Menu", nil, function()
                 self:_openSidePanel("Settings", "Interface")
             end, "monitor-cog")
-            addRow("Styles", nil, function()
-                self:OpenPresets()
-            end, "palette")
-            addRow("Settings", nil, function()
-                self:OpenSettings()
-            end, "settings")
+            local stylesRow = addRow("Styles", nil, nil, "palette")
+            local styleTrack = create("Frame", {
+                BackgroundColor3 = Theme.Accent,
+                BackgroundTransparency = 0.08,
+                BorderSizePixel = 0,
+                AnchorPoint = Vector2.new(1, 0.5),
+                Position = UDim2.new(1, -8, 0.5, 0),
+                Size = UDim2.fromOffset(23, 12),
+                ZIndex = 180,
+                Parent = stylesRow,
+            }) :: Frame
+            ThemeController:Bind(styleTrack, "BackgroundColor3", "Accent")
+            corner(styleTrack, 6)
+            local styleKnob = create("Frame", {
+                BackgroundColor3 = Theme.White,
+                BorderSizePixel = 0,
+                AnchorPoint = Vector2.new(1, 0.5),
+                Position = UDim2.new(1, -2, 0.5, 0),
+                Size = UDim2.fromOffset(8, 8),
+                ZIndex = 181,
+                Parent = styleTrack,
+            }) :: Frame
+            ThemeController:Bind(styleKnob, "BackgroundColor3", "White")
+            corner(styleKnob, 4)
+            pageMaid:Give(stylesRow.Activated:Connect(function()
+                openProfileStylePopup(stylesRow)
+            end))
         elseif kind == "Settings" and pageName == "root" then
             local profile = create("Frame", {
                 BackgroundColor3 = Theme.Surface2,
@@ -10045,7 +10326,7 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
         elseif kind == "Presets" then
             local toolbar = create("Frame", {
                 BackgroundTransparency = 1,
-                Size = UDim2.new(1, 0, 0, 31),
+                Size = UDim2.new(1, 0, 0, 29),
                 ZIndex = 178,
                 Parent = page,
             }) :: Frame
@@ -10121,7 +10402,7 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
                             BorderSizePixel = 0,
                             Text = "",
                             AutoButtonColor = false,
-                            Size = UDim2.new(1, 0, 0, 36),
+                            Size = UDim2.new(1, 0, 0, 32),
                             LayoutOrder = index,
                             ZIndex = 178,
                             Parent = presetList,
@@ -11590,10 +11871,13 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
         or (config.Size and config.Size.X.Offset > 0 and config.Size.X.Offset)
     local configuredHeight = tonumber(config.Height)
         or (config.Size and config.Size.Y.Offset > 0 and config.Size.Y.Offset)
-    local baseWidth = configuredWidth or Metrics.Window.X
-    local baseHeight = configuredHeight or Metrics.Window.Y
-    baseWidth = math.max(finiteNumber(baseWidth, Metrics.Window.X), 280)
-    baseHeight = math.max(finiteNumber(baseHeight, Metrics.Window.Y), 300)
+    local defaultWindowSize = UserInputService.TouchEnabled
+        and TargetDesign.Window.LogicalSize
+        or TargetDesign.Window.DesktopLogicalSize
+    local baseWidth = configuredWidth or defaultWindowSize.X
+    local baseHeight = configuredHeight or defaultWindowSize.Y
+    baseWidth = math.max(finiteNumber(baseWidth, defaultWindowSize.X), 280)
+    baseHeight = math.max(finiteNumber(baseHeight, defaultWindowSize.Y), 300)
     local viewport = viewportSize()
     local density = ResponsiveController:GetDensity(viewport)
     local topLeftInset, bottomRightInset = guiInsets()
@@ -12250,17 +12534,17 @@ Kronos.SetBackgroundDim = Kronos.SetDimStrength
 Kronos.GetBackgroundDim = Kronos.GetDimStrength
 
 function Kronos:ResetAppearance(): AnyTable
-    self.SurfaceTransparency = 0.1
+    self.SurfaceTransparency = 0.2
     self.AcrylicEnabled = true
-    self.AcrylicIntensity = 0.58
-    self.BorderIntensity = 1
+    self.AcrylicIntensity = 0.7
+    self.BorderIntensity = 1.08
     self.SurfaceContrast = 1.02
     self.ReducedMotion = false
     self.AnimationIntensity = 1
     self.AnimationsEnabled = true
     self.NotificationMotion = true
     self.PageTransitions = true
-    self.DimStrength = 0.5
+    self.DimStrength = 0.42
     AppearanceController:Refresh()
     BorderController:Refresh()
     AcrylicController:Refresh()
@@ -12350,11 +12634,11 @@ local function buildShowcase(): AnyTable
         },
         KeybindListActiveOnly = false,
         KeybindListEmptyMessage = false,
-        Transparency = 0.18,
+        Transparency = 0.2,
         Acrylic = true,
-        AcrylicIntensity = 0.62,
-        BorderIntensity = 1,
-        SurfaceContrast = 0.98,
+        AcrylicIntensity = 0.7,
+        BorderIntensity = 1.08,
+        SurfaceContrast = 1.02,
     })
 
     local overview = window:AddTab({ Name = "General", Icon = "house" })
@@ -13048,7 +13332,7 @@ if startupOk then
 end
 if startupOk then
     startupOk = startupStage("PublicAPICompatibility", function()
-        assert(Kronos.Version == "1.8.0", "Unexpected Kronos version")
+        assert(Kronos.Version == "1.9.0", "Unexpected Kronos version")
         assert(
             type(Kronos.CreateWindow) == "function"
                 and type(Kronos.Notify) == "function"
