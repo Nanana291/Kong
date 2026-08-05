@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-    KronosV1.6.lua
+    KronosV1.7.lua
     Cumulative native Roblox UI library refined against the supplied
     2340x1080 reference video. All controllers and the optional showcase live
     in this file; no remote modules or external UI libraries are required.
@@ -38,8 +38,11 @@ type WindowConfig = {
     MobileToggle: boolean?,
     FloatingWidgets: boolean?,
     StatusStrip: boolean?,
+    StatusFields: { [string]: boolean }?,
     TargetList: boolean?,
     KeybindList: boolean?,
+    KeybindListActiveOnly: boolean?,
+    KeybindListEmptyMessage: boolean?,
     Size: UDim2?,
     Width: number?,
     Height: number?,
@@ -70,7 +73,7 @@ type WindowConfig = {
 }
 
 local Kronos: AnyTable = {}
-Kronos.Version = "1.6.0"
+Kronos.Version = "1.7.0"
 Kronos.Options = {} :: AnyTable
 Kronos.Windows = {} :: { AnyTable }
 Kronos.Connections = {} :: { RBXScriptConnection }
@@ -229,41 +232,43 @@ local Motion = {
     Scrollbar = 0.085,
 }
 
--- V1.6 target-derived design decisions. These tokens centralize measurements
+-- V1.7 target-derived design decisions. These tokens centralize measurements
 -- that were previously scattered through individual components.
 local TargetDesign = {
     Window = {
-        LogicalSize = Vector2.new(744, 445),
+        LogicalSize = Vector2.new(906, 542),
         Aspect = 906 / 542,
-        Center = Vector2.new(0.456, 0.515),
+        Center = Vector2.new(0.453, 0.534),
         WideHeightRatio = 0.56,
         MediumHeightRatio = 0.52,
         CompactHeightRatio = 0.72,
         LandscapeHeightRatio = 0.8,
+        MobileLandscapeScale = 0.59,
         PortraitWidthRatio = 0.94,
         PortraitHeightRatio = 0.82,
     },
     Header = {
-        Height = 40,
-        BrandSize = 20,
+        Height = 50,
+        BrandSize = 14,
         ContextHeight = 26,
         ContextWidth = 190,
         UtilitySize = 22,
     },
     Navigation = {
-        ExpandedRatio = 0.296,
+        ExpandedRatio = 0.276,
         CompactRatio = 0.062,
+        CompactWidth = 44,
         SearchHeight = 24,
-        TabHeight = 27,
-        CompactTabHeight = 31,
+        TabHeight = 23,
+        CompactTabHeight = 28,
         FooterHeight = 24,
     },
     Content = {
-        MaximumWidth = 532,
-        SingleColumnMaximum = 360,
-        MinimumSection = 218,
-        ColumnGap = 7,
-        SectionGap = 4,
+        MaximumWidth = 626,
+        SingleColumnMaximum = 420,
+        MinimumSection = 240,
+        ColumnGap = 8,
+        SectionGap = 5,
         SubtabInset = 31,
     },
     Control = {
@@ -271,8 +276,8 @@ local TargetDesign = {
         Row = 26,
         DescriptionHeight = 34,
         Radius = 4,
-        ToggleSize = 14,
-        Toggle = 14,
+        ToggleSize = 11,
+        Toggle = 11,
         InputHeight = 22,
         SliderTrack = 3,
         SliderThumb = 8,
@@ -295,23 +300,23 @@ local TargetDesign = {
     },
     Popup = {
         Radius = 6,
-        DropdownWidth = 172,
-        ColorWidth = 184,
-        SearchHeight = 22,
-        OptionHeight = 22,
+        DropdownWidth = 190,
+        ColorWidth = 210,
+        SearchHeight = 24,
+        OptionHeight = 24,
         Padding = 5,
         MaximumVisibleOptions = 6,
     },
     Widget = {
-        Target = Vector2.new(218, 66),
-        TargetWidth = 218,
-        TargetHeight = 66,
-        Keybind = Vector2.new(224, 62),
-        KeybindWidth = 224,
-        KeybindHeight = 62,
-        StatusWidth = 140,
-        StatusHeight = 25,
-        ReopenSize = 32,
+        Target = Vector2.new(258, 84),
+        TargetWidth = 258,
+        TargetHeight = 84,
+        Keybind = Vector2.new(264, 45),
+        KeybindWidth = 264,
+        KeybindHeight = 45,
+        StatusWidth = 166,
+        StatusHeight = 32,
+        ReopenSize = 34,
     },
 }
 
@@ -338,14 +343,14 @@ local Metrics = {
     MinimumWindow = Vector2.new(440, 264),
     MaximumWindow = Vector2.new(906, 542),
     Header = TargetDesign.Header.Height,
-    Sidebar = 220,
+    Sidebar = 250,
     SidebarRatio = TargetDesign.Navigation.ExpandedRatio,
-    CompactSidebar = 42,
+    CompactSidebar = TargetDesign.Navigation.CompactWidth,
     CompactSidebarRatio = TargetDesign.Navigation.CompactRatio,
-    HeaderRatio = 0.07,
+    HeaderRatio = 0.092,
     HeaderContextWidth = TargetDesign.Header.ContextWidth,
     HeaderContextHeight = TargetDesign.Header.ContextHeight,
-    PreferredContent = 512,
+    PreferredContent = 600,
     MaximumContent = TargetDesign.Content.MaximumWidth,
     SingleColumnMaximum = TargetDesign.Content.SingleColumnMaximum,
     MinimumSection = TargetDesign.Content.MinimumSection,
@@ -2944,12 +2949,17 @@ local function tween(
     return AnimationController:Tween(instance, properties, duration, style, direction)
 end
 
-local function clamp(value, min, max)
-    if value < min then
-        return min
+local function boundedClamp(value: number, minimum: number, maximum: number): number
+    local low = minimum
+    local high = maximum
+    if high < low then
+        low, high = high, low
     end
-    if value > max then
-        return max
+    if value < low then
+        return low
+    end
+    if value > high then
+        return high
     end
     return value
 end
@@ -3244,6 +3254,28 @@ function ResponsiveController:GetDensity(viewport: Vector2?): number
     return 0.92
 end
 
+function ResponsiveController:GetFloatingDensity(viewport: Vector2?): number
+    local size = viewport or viewportSize()
+    if
+        UserInputService.TouchEnabled
+        and size.X > size.Y
+        and size.Y <= 620
+    then
+        -- Floating widgets in the objective retain a larger independent scale
+        -- than the dense mobile-landscape application shell.
+        return 0.68
+    end
+    return self:GetDensity(size)
+end
+
+function ResponsiveController:GetMinimumTextSize(viewport: Vector2?): number
+    local size = viewport or viewportSize()
+    if UserInputService.TouchEnabled and size.X > size.Y and size.Y <= 620 then
+        return 6
+    end
+    return 8
+end
+
 function ResponsiveController:GetLayoutMode(viewport: Vector2, safeWidth: number, safeHeight: number): string
     if viewport.X < viewport.Y or safeWidth < safeHeight * 0.82 or safeWidth <= 520 then
         return "Portrait"
@@ -3285,7 +3317,11 @@ function ResponsiveController:CalculateWindowSize(
         local widthRatio = 0.78
         if mode == "MobileLandscape" then
             heightRatio = TargetDesign.Window.LandscapeHeightRatio
-            designScale = 0.78
+            -- The supplied 2340x1080 mobile capture renders a 1170x540
+            -- logical viewport. A 0.59 artboard scale reproduces the
+            -- objective's measured 906x542 physical shell without affecting
+            -- desktop sizing.
+            designScale = TargetDesign.Window.MobileLandscapeScale
             widthRatio = 0.9
         elseif mode == "Compact" then
             heightRatio = TargetDesign.Window.CompactHeightRatio
@@ -3391,7 +3427,10 @@ function ResponsiveController:_applyRecord(instance: Instance, record: AnyTable,
                 and scaledUDim2(guiObject.Position, ratio)
             or scaledUDim2(record.Position, density)
         if record.TextSize then
-            (instance :: any).TextSize = math.max(record.TextSize * density, 8)
+            (instance :: any).TextSize = math.max(
+                record.TextSize * density,
+                self:GetMinimumTextSize()
+            )
         end
         if record.ScrollBarThickness then
             local scrollingFrame = instance :: ScrollingFrame
@@ -8346,6 +8385,44 @@ function Window:_makeHeader(config: WindowConfig)
     self:_refreshHeaderContext()
 end
 
+function Window:SetTitle(value: any): AnyTable
+    self.Title = tostring(value or "Kronos")
+    if self.HeaderTitle and self.HeaderTitle.Parent then
+        self.HeaderTitle.Text = self.Title
+    end
+    if self.StatusStrip and type(self.StatusStrip.Refresh) == "function" then
+        self.StatusStrip:Refresh()
+    end
+    return self
+end
+
+function Window:SetSubtitle(value: any): AnyTable
+    self.Subtitle = tostring(value or "")
+    local subtitle = self.HeaderSubtitle
+    local title = self.HeaderTitle
+    if subtitle and subtitle.Parent then
+        subtitle.Text = self.Subtitle
+        subtitle.Visible = self.Subtitle ~= ""
+    end
+    if title and title.Parent then
+        local xScale = title.Position.X.Scale
+        local xOffset = title.Position.X.Offset
+        local widthScale = title.Size.X.Scale
+        local widthOffset = title.Size.X.Offset
+        if self.Subtitle ~= "" then
+            title.Position = UDim2.new(xScale, xOffset, 0, 6)
+            title.Size = UDim2.new(widthScale, widthOffset, 0, 18)
+        else
+            title.Position = UDim2.new(xScale, xOffset, 0, 0)
+            title.Size = UDim2.new(widthScale, widthOffset, 1, 0)
+        end
+    end
+    if self.StatusStrip and type(self.StatusStrip.Refresh) == "function" then
+        self.StatusStrip:Refresh()
+    end
+    return self
+end
+
 function Window:QueueSearch(value: string)
     self.SearchGeneration = (self.SearchGeneration or 0) + 1
     local generation = self.SearchGeneration
@@ -8438,13 +8515,13 @@ function Window:ApplyResponsive()
         self.Root.Position = position
     else
         self.Root.Size = UDim2.fromOffset(width, height)
-        local usableLeft = topLeftInset.X
-        local usableTop = topLeftInset.Y
-        local usableWidth = viewport.X - topLeftInset.X - bottomRightInset.X
-        local usableHeight = viewport.Y - topLeftInset.Y - bottomRightInset.Y
+        -- The objective positions the shell against the full captured
+        -- viewport. Safe-area ownership belongs to DragController:Clamp;
+        -- folding the top inset into the center calculation pushed the shell
+        -- visibly too low on mobile.
         self.Root.Position = UDim2.fromOffset(
-            math.floor(usableLeft + usableWidth * TargetDesign.Window.Center.X + 0.5),
-            math.floor(usableTop + usableHeight * TargetDesign.Window.Center.Y + 0.5)
+            math.floor(viewport.X * TargetDesign.Window.Center.X + 0.5),
+            math.floor(viewport.Y * TargetDesign.Window.Center.Y + 0.5)
         )
     end
     DragController:Clamp(self.Root, self.DragOptions)
@@ -8458,22 +8535,31 @@ function Window:ApplyResponsive()
         and self.ForceCompactNavigation ~= true
     local sidebarWidth: number
     if expanded then
-        sidebarWidth = math.clamp(
+        local minimumSidebar = math.max(d(142), 72)
+        local maximumSidebar = math.max(d(Metrics.Sidebar), minimumSidebar)
+        sidebarWidth = boundedClamp(
             math.floor(width * Metrics.SidebarRatio + 0.5),
-            math.max(d(142), 72),
-            d(Metrics.Sidebar)
+            minimumSidebar,
+            maximumSidebar
         )
     else
-        sidebarWidth = math.clamp(
+        -- V1.6 could call math.clamp with a 44px minimum and a 42px maximum
+        -- at compact densities, aborting ApplyResponsive. Keep the bounds
+        -- ordered for every viewport and custom density.
+        local minimumSidebar = math.max(d(34), 28)
+        local maximumSidebar = math.max(d(Metrics.CompactSidebar), minimumSidebar)
+        sidebarWidth = boundedClamp(
             math.floor(width * Metrics.CompactSidebarRatio + 0.5),
-            math.max(d(44), 28),
-            d(Metrics.CompactSidebar)
+            minimumSidebar,
+            maximumSidebar
         )
     end
-    local headerHeight = math.clamp(
+    local minimumHeader = 18
+    local maximumHeader = math.max(d(Metrics.Header), minimumHeader)
+    local headerHeight = boundedClamp(
         math.floor(height * Metrics.HeaderRatio + 0.5),
-        18,
-        d(Metrics.Header)
+        minimumHeader,
+        maximumHeader
     )
     self.ExpandedNavigation = expanded
     self.Sidebar.Size = UDim2.new(0, sidebarWidth, 1, -headerHeight)
@@ -8499,9 +8585,17 @@ function Window:ApplyResponsive()
     self.SearchBox.PlaceholderText = expanded and "Search" or ""
     self.SearchBox.TextXAlignment = Enum.TextXAlignment.Left
     if not expanded and self.SearchExpanded then
-        self.SearchBox.Size = UDim2.fromOffset(math.min(d(180), width - d(64)), d(26))
+        self.SearchBox.Size = UDim2.fromOffset(
+            math.min(d(180), width - d(64)),
+            d(TargetDesign.Navigation.SearchHeight)
+        )
     else
-        self.SearchBox.Size = UDim2.new(1, -d(16), 0, d(26))
+        self.SearchBox.Size = UDim2.new(
+            1,
+            -d(16),
+            0,
+            d(TargetDesign.Navigation.SearchHeight)
+        )
     end
     self.SearchBox.Position = UDim2.fromOffset(d(8), d(8))
     self.SearchIcon.Visible = true
@@ -8514,7 +8608,13 @@ function Window:ApplyResponsive()
                 tab.IconLabel.AnchorPoint = Vector2.new(0.5, 0.5)
             end
         end
-        tab.Button.Size = UDim2.new(1, 0, 0, expanded and d(30) or d(34))
+        tab.Button.Size = UDim2.new(
+            1,
+            0,
+            0,
+            expanded and d(TargetDesign.Navigation.TabHeight)
+                or d(TargetDesign.Navigation.CompactTabHeight)
+        )
     end
     if self.SidebarFooterLabel then
         self.SidebarFooterLabel.Visible = expanded
@@ -8552,8 +8652,11 @@ function Window:ApplyResponsive()
         self.SidePanelOpenPosition = openPosition
         self.SidePanelClosedPosition = closedPosition
     end
+    local floatingDensity = ResponsiveController:GetFloatingDensity(viewport)
     for _, widget in ipairs(self.Widgets) do
-        if densityChanged and widget.Reflow then
+        local widgetDensityChanged = widget.Density ~= nil
+            and math.abs(finiteNumber(widget.Density, floatingDensity) - floatingDensity) > 0.001
+        if widget.Reflow and (densityChanged or widgetDensityChanged) then
             widget:Reflow()
         elseif widget.Clamp then
             widget:Clamp()
@@ -8627,7 +8730,7 @@ function Window:ApplyResponsive()
         local minimum, maximumEdge = viewportBounds(self.Root, self.DragOptions)
         local centeredTop = minimum.Y + math.max(maximumEdge.Y - minimum.Y - self.Root.AbsoluteSize.Y, 0) * 0.54
         local maximumTop = maximumEdge.Y - self.Root.AbsoluteSize.Y
-        local top = math.clamp(math.max(centeredTop, defaultWidgetBottom + d(8)), minimum.Y, maximumTop)
+        local top = boundedClamp(math.max(centeredTop, defaultWidgetBottom + d(8)), minimum.Y, maximumTop)
         local horizontalTravel = math.max(maximumEdge.X - minimum.X - self.Root.AbsoluteSize.X, 0)
         local left = minimum.X + horizontalTravel * 0.5
         setAbsoluteTopLeft(self.Root, Vector2.new(left, top))
@@ -8644,29 +8747,67 @@ function Window:SetVisible(visible: boolean): AnyTable
     if self.Visible == nextVisible or self.Destroyed then
         return self
     end
+
+    self.VisibilityGeneration = (self.VisibilityGeneration or 0) + 1
+    local generation = self.VisibilityGeneration
     self.Visible = nextVisible
     dismissTooltip(self)
     PopupController:Close(self)
     self:_closeSidePanel(true)
+
+    local scale = self.WindowScale
+    local shadowHost = self.ShadowHost
+    local outerShadow = self.OuterShadow
+    local innerShadow = self.InnerShadow
+
     if nextVisible then
         self.Root.Visible = true
+        if shadowHost and shadowHost.Parent then
+            shadowHost.Visible = true
+        end
         self.Root.GroupTransparency = 1
-        self.Root.Size = UDim2.fromOffset(self.Width * 0.996, self.Height * 0.996)
+        if scale and scale.Parent then
+            scale.Scale = 0.992
+            tween(scale, { Scale = 1 }, Motion.Restore, Enum.EasingStyle.Quart)
+        end
+        if outerShadow and outerShadow.Parent then
+            outerShadow.BackgroundTransparency = 1
+            tween(outerShadow, { BackgroundTransparency = self.ShadowOuterTransparency or 0.9 }, Motion.Restore)
+        end
+        if innerShadow and innerShadow.Parent then
+            innerShadow.BackgroundTransparency = 1
+            tween(innerShadow, { BackgroundTransparency = self.ShadowInnerTransparency or 0.8 }, Motion.Restore)
+        end
         tween(self.Root, {
             GroupTransparency = 0,
-            Size = UDim2.fromOffset(self.Width, self.Height),
         }, Motion.Restore, Enum.EasingStyle.Quart)
     else
         InputController:CancelPointer()
         DragController:Cancel(self.Root)
         ScrollbarController:Cancel()
+        if scale and scale.Parent then
+            tween(scale, { Scale = 0.992 }, Motion.Minimize, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
+        end
+        if outerShadow and outerShadow.Parent then
+            tween(outerShadow, { BackgroundTransparency = 1 }, Motion.Minimize)
+        end
+        if innerShadow and innerShadow.Parent then
+            tween(innerShadow, { BackgroundTransparency = 1 }, Motion.Minimize)
+        end
         tween(self.Root, {
             GroupTransparency = 1,
-            Size = UDim2.fromOffset(self.Width * 0.996, self.Height * 0.996),
         }, Motion.Minimize, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
         task.delay(AnimationController:Duration(Motion.Minimize), function()
-            if not self.Visible and self.Root and self.Root.Parent then
+            if
+                self.VisibilityGeneration == generation
+                and not self.Visible
+                and self.Root
+                and self.Root.Parent
+            then
                 self.Root.Visible = false
+                if shadowHost and shadowHost.Parent then
+                    shadowHost.Visible = false
+                end
             end
         end)
     end
@@ -10103,7 +10244,7 @@ function Window:OpenPresets(): AnyTable
 end
 
 function FloatingWidgetController:Create(window: AnyTable, config: FloatingWidgetOptions): AnyTable
-    local density = window.Density or ResponsiveController:GetDensity()
+    local density = ResponsiveController:GetFloatingDensity()
     local designWidth = math.max(finiteNumber(config.Width or (config.Size and config.Size.X.Offset), 246), 40)
     local designHeight = math.max(finiteNumber(config.Height or (config.Size and config.Size.Y.Offset), 120), 40)
     local widget: AnyTable = {
@@ -10116,6 +10257,7 @@ function FloatingWidgetController:Create(window: AnyTable, config: FloatingWidge
         CustomPosition = if config.CustomPosition ~= nil then config.CustomPosition == true else config.Position ~= nil,
         DesignWidth = designWidth,
         DesignHeight = designHeight,
+        Density = density,
         DesiredWidth = math.floor(designWidth * density + 0.5),
         DesiredHeight = math.floor(designHeight * density + 0.5),
         DragOptions = {
@@ -10274,8 +10416,9 @@ function FloatingWidgetController:Create(window: AnyTable, config: FloatingWidge
     function widget:Resize(width: number, height: number)
         self.DesignWidth = math.max(finiteNumber(width, self.DesignWidth), 40)
         self.DesignHeight = math.max(finiteNumber(height, self.DesignHeight), 40)
-        self.DesiredWidth = ResponsiveController:Scale(self.Window, self.DesignWidth)
-        self.DesiredHeight = ResponsiveController:Scale(self.Window, self.DesignHeight)
+        self.Density = ResponsiveController:GetFloatingDensity()
+        self.DesiredWidth = math.floor(self.DesignWidth * self.Density + 0.5)
+        self.DesiredHeight = math.floor(self.DesignHeight * self.Density + 0.5)
         self.ResizeGeneration = (self.ResizeGeneration or 0) + 1
         local generation = self.ResizeGeneration
         local size, position =
@@ -10294,8 +10437,9 @@ function FloatingWidgetController:Create(window: AnyTable, config: FloatingWidge
         end)
     end
     function widget:Reflow()
-        self.DesiredWidth = ResponsiveController:Scale(self.Window, self.DesignWidth)
-        self.DesiredHeight = ResponsiveController:Scale(self.Window, self.DesignHeight)
+        self.Density = ResponsiveController:GetFloatingDensity()
+        self.DesiredWidth = math.floor(self.DesignWidth * self.Density + 0.5)
+        self.DesiredHeight = math.floor(self.DesignHeight * self.Density + 0.5)
         self:Clamp()
     end
     function widget:Destroy()
@@ -10455,7 +10599,7 @@ function Window:CreateTargetList(config: FloatingWidgetOptions?): AnyTable
         local numericUserId = math.max(math.floor(finiteNumber(userId, 0)), 0)
         local ratio = math.clamp(current / maximum, 0, 1)
         nameLabel.Text = tostring(name)
-        healthLabel.Text = string.format("%d / %d", math.floor(current + 0.5), math.floor(maximum + 0.5))
+        healthLabel.Text = string.format("%d/%d HP", math.floor(current + 0.5), math.floor(maximum + 0.5))
         fallback.Text = string.upper(string.sub(tostring(name), 1, 1))
         fallback.Visible = true
         avatar.Image = ""
@@ -10509,6 +10653,8 @@ function Window:CreateKeybindList(config: FloatingWidgetOptions?): AnyTable
         Pinnable = config.Pinnable ~= false,
         Hideable = config.Hideable == true,
     })
+    widget.ActiveOnly = config.ActiveOnly == true
+    widget.ShowEmptyMessage = config.ShowEmptyMessage ~= false
     local columnHeader = create("Frame", {
         BackgroundTransparency = 1,
         Position = UDim2.fromOffset(7, 3),
@@ -10566,6 +10712,7 @@ function Window:CreateKeybindList(config: FloatingWidgetOptions?): AnyTable
                 and keybind.Instance.Parent
                 and keybind.Value ~= "NONE"
                 and keybind.ShowInList ~= false
+                and (not widget.ActiveOnly or keybind.Active == true)
             then
                 count += 1
                 local row = create("Frame", {
@@ -10616,12 +10763,12 @@ function Window:CreateKeybindList(config: FloatingWidgetOptions?): AnyTable
                 tween(row, { BackgroundTransparency = 0.64 }, Motion.KeybindRow)
             end
         end
-        local bodyHeight = 15 + math.max(count, 1) * 16
+        local bodyHeight = 15 + count * 16
         local finalHeight = math.clamp(bodyHeight + 18, TargetDesign.Widget.KeybindHeight, 112)
         widget:Resize(widget.DesignWidth, finalHeight)
         rows.Visible = true
-        columnHeader.Visible = count > 0
-        if count == 0 then
+        columnHeader.Visible = true
+        if count == 0 and widget.ShowEmptyMessage then
             local empty = makeText(rowHolder, "No active bindings", 9, Theme.Muted)
             empty.Name = "Empty"
             empty.Size = UDim2.new(1, 0, 0, 24)
@@ -10636,7 +10783,7 @@ end
 function Window:CreateStatusStrip(config: FloatingWidgetOptions?): AnyTable
     config = config or {}
     local configuredFields = type(config.Fields) == "table" and config.Fields or {}
-    local density = self.Density or ResponsiveController:GetDensity()
+    local density = ResponsiveController:GetFloatingDensity()
     local designWidth = math.max(finiteNumber(config.Width, TargetDesign.Widget.StatusWidth), 92)
     local designHeight = math.max(finiteNumber(config.Height, TargetDesign.Widget.StatusHeight), 22)
     local widget: AnyTable = {
@@ -10648,12 +10795,14 @@ function Window:CreateStatusStrip(config: FloatingWidgetOptions?): AnyTable
         CustomPosition = config.Position ~= nil,
         Fields = {
             Kronos = configuredFields.Kronos ~= false,
+            Context = configuredFields.Context == true,
             FPS = configuredFields.FPS ~= false,
             Ping = configuredFields.Ping == true,
             Time = configuredFields.Time ~= false,
         },
         DesignWidth = designWidth,
         DesignHeight = designHeight,
+        Density = density,
         DesiredWidth = math.floor(designWidth * density + 0.5),
         DesiredHeight = math.floor(designHeight * density + 0.5),
         DragOptions = {
@@ -10719,6 +10868,8 @@ function Window:CreateStatusStrip(config: FloatingWidgetOptions?): AnyTable
     local fieldLayout = list(fieldHolder, Enum.FillDirection.Horizontal, 0)
     fieldLayout.VerticalAlignment = Enum.VerticalAlignment.Center
     local labels: AnyTable = {}
+    local fieldDividers: AnyTable = {}
+    local fieldOrder = { "Kronos", "Context", "FPS", "Ping", "Time" }
     local function addField(name: string, width: number, color: Color3)
         local label = makeText(fieldHolder, "", 9, color, "bold")
         label.Name = name
@@ -10726,9 +10877,24 @@ function Window:CreateStatusStrip(config: FloatingWidgetOptions?): AnyTable
         label.TextXAlignment = Enum.TextXAlignment.Center
         label.ZIndex = 543
         labels[name] = label
+        if name ~= "Kronos" then
+            local divider = create("Frame", {
+                BackgroundColor3 = Theme.Divider,
+                BackgroundTransparency = 0.48,
+                BorderSizePixel = 0,
+                AnchorPoint = Vector2.new(0, 0.5),
+                Position = UDim2.new(0, 0, 0.5, 0),
+                Size = UDim2.fromOffset(1, 10),
+                ZIndex = 544,
+                Parent = label,
+            }) :: Frame
+            ThemeController:Bind(divider, "BackgroundColor3", "Divider")
+            fieldDividers[name] = divider
+        end
     end
-    local fieldWidths = { Kronos = 46, FPS = 34, Ping = 44, Time = 36 }
+    local fieldWidths = { Kronos = 34, Context = 42, FPS = 30, Ping = 30, Time = 30 }
     addField("Kronos", fieldWidths.Kronos, Theme.Text)
+    addField("Context", fieldWidths.Context, Theme.SubText)
     addField("FPS", fieldWidths.FPS, Theme.SubText)
     addField("Ping", fieldWidths.Ping, Theme.SubText)
     addField("Time", fieldWidths.Time, Theme.SubText)
@@ -10787,8 +10953,9 @@ function Window:CreateStatusStrip(config: FloatingWidgetOptions?): AnyTable
     function widget:Resize(width: number, height: number)
         self.DesignWidth = math.max(finiteNumber(width, self.DesignWidth), 80)
         self.DesignHeight = math.max(finiteNumber(height, self.DesignHeight), 24)
-        self.DesiredWidth = ResponsiveController:Scale(self.Window, self.DesignWidth)
-        self.DesiredHeight = ResponsiveController:Scale(self.Window, self.DesignHeight)
+        self.Density = ResponsiveController:GetFloatingDensity()
+        self.DesiredWidth = math.floor(self.DesignWidth * self.Density + 0.5)
+        self.DesiredHeight = math.floor(self.DesignHeight * self.Density + 0.5)
         local size, position =
             nearestEdgeLayout(root, Vector2.new(self.DesiredWidth, self.DesiredHeight), self.DragOptions)
         if DragController:IsDragging(root) then
@@ -10800,12 +10967,17 @@ function Window:CreateStatusStrip(config: FloatingWidgetOptions?): AnyTable
         end
     end
     function widget:Reflow()
-        self.DesiredWidth = ResponsiveController:Scale(self.Window, self.DesignWidth)
-        self.DesiredHeight = ResponsiveController:Scale(self.Window, self.DesignHeight)
+        self.Density = ResponsiveController:GetFloatingDensity()
+        self.DesiredWidth = math.floor(self.DesignWidth * self.Density + 0.5)
+        self.DesiredHeight = math.floor(self.DesignHeight * self.Density + 0.5)
         self:Clamp()
     end
     function widget:Refresh()
         marker.BackgroundColor3 = Theme.Accent
+        local brand = tostring(self.Window.Title or "Kronos")
+        labels.Kronos.Text = string.upper(string.sub(brand, 1, 10))
+        local context = tostring(self.Window.Subtitle or self.Window.ProfileSubtitle or "Lobby [1]")
+        labels.Context.Text = string.sub(context, 1, 16)
     end
     function widget:Destroy()
         self.Alive = false
@@ -10820,9 +10992,15 @@ function Window:CreateStatusStrip(config: FloatingWidgetOptions?): AnyTable
     end
     local function layoutFields()
         local width = 30
-        for name, label in pairs(labels) do
+        local hasVisibleField = false
+        for _, name in ipairs(fieldOrder) do
+            local label = labels[name]
             label.Visible = widget.Fields[name] == true
+            if fieldDividers[name] then
+                fieldDividers[name].Visible = label.Visible and hasVisibleField
+            end
             if label.Visible then
+                hasVisibleField = true
                 width += fieldWidths[name]
             end
         end
@@ -10837,7 +11015,7 @@ function Window:CreateStatusStrip(config: FloatingWidgetOptions?): AnyTable
                 BackgroundTransparency = 0.02,
                 BorderSizePixel = 0,
                 GroupTransparency = 1,
-                Size = UDim2.fromOffset(142, 128),
+                Size = UDim2.fromOffset(142, 158),
                 Visible = false,
                 ZIndex = 760,
             }) :: CanvasGroup
@@ -10846,7 +11024,7 @@ function Window:CreateStatusStrip(config: FloatingWidgetOptions?): AnyTable
             padding(popup, 6, 6, 6, 6)
             local popupLayout = list(popup, Enum.FillDirection.Vertical, 3)
             local popupMaid = PopupController:Open(self, popup, menu, 5)
-            for _, name in ipairs({ "Kronos", "FPS", "Ping", "Time" }) do
+            for _, name in ipairs({ "Kronos", "Context", "FPS", "Ping", "Time" }) do
                 local choice = create("TextButton", {
                     BackgroundColor3 = Theme.Surface2,
                     BackgroundTransparency = 0.42,
@@ -10894,6 +11072,7 @@ function Window:CreateStatusStrip(config: FloatingWidgetOptions?): AnyTable
     table.insert(self.Widgets, widget)
     table.insert(Kronos.Widgets, widget)
     layoutFields()
+    widget:Refresh()
     local sampledFrames = 0
     local sampleStartedAt = os.clock()
     addConnection(
@@ -10924,18 +11103,28 @@ function Window:CreateStatusStrip(config: FloatingWidgetOptions?): AnyTable
             if widget.Fields.FPS then
                 local elapsed = math.max(now - sampleStartedAt, 1 / 240)
                 local fps = math.clamp(math.floor(sampledFrames / elapsed + 0.5), 0, 999)
-                labels.FPS.Text = tostring(fps) .. " FPS"
+                labels.FPS.Text = tostring(fps) .. "FPS"
             end
             sampledFrames = 0
             sampleStartedAt = now
-            labels.Kronos.Text = "KRONOS"
+            local brand = tostring(self.Title or "Kronos")
+            labels.Kronos.Text = string.upper(string.sub(brand, 1, 10))
+            if widget.Fields.Context then
+                local context = tostring(self.Subtitle or self.ProfileSubtitle or "Lobby [1]")
+                labels.Context.Text = string.sub(context, 1, 16)
+            end
             if widget.Fields.Ping then
                 local ping = "—"
                 pcall(function()
                     local network = (Stats :: any).Network
                     local item = network and network.ServerStatsItem and network.ServerStatsItem["Data Ping"]
                     if item then
-                        ping = item:GetValueString()
+                        local numericPing = tonumber(item:GetValue())
+                        if numericPing then
+                            ping = tostring(math.clamp(math.floor(numericPing + 0.5), 0, 999)) .. "PING"
+                        else
+                            ping = tostring(item:GetValueString())
+                        end
                     end
                 end)
                 labels.Ping.Text = ping
@@ -11224,6 +11413,7 @@ function Window:Destroy()
         return
     end
     self.Destroyed = true
+    self.VisibilityGeneration = (self.VisibilityGeneration or 0) + 1
     self.SearchGeneration = (self.SearchGeneration or 0) + 1
     self.PendingSearch = nil
     self.CapturingToggleKey = nil
@@ -11233,6 +11423,15 @@ function Window:Destroy()
     self.ListeningKeybind = nil
     DragController:Cancel(self.Root)
     AnimationController:Cancel(self.Root)
+    if self.WindowScale then
+        AnimationController:Cancel(self.WindowScale)
+    end
+    if self.OuterShadow then
+        AnimationController:Cancel(self.OuterShadow)
+    end
+    if self.InnerShadow then
+        AnimationController:Cancel(self.InnerShadow)
+    end
     dismissTooltip(self)
     PopupController:Close(self)
     self:_closeSidePanel(true)
@@ -11252,6 +11451,10 @@ function Window:Destroy()
     if self.Root and self.Root.Parent then
         ThemeController:UnbindTree(self.Root)
         self.Root:Destroy()
+    end
+    if self.ShadowHost and self.ShadowHost.Parent then
+        ThemeController:UnbindTree(self.ShadowHost)
+        self.ShadowHost:Destroy()
     end
     removeArrayValue(Kronos.Windows, self)
 end
@@ -11331,6 +11534,8 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
         ) and "ClearOnNavigation" or "Live",
         TwoColumn = layoutMode ~= "Portrait" and initialWidth >= 730 * density and initialHeight >= 340 * density,
         Presets = {},
+        Title = tostring(config.Title or "Kronos"),
+        Subtitle = tostring(config.Subtitle or config.SubTitle or ""),
         ProfileName = config.ProfileName,
         ProfileSubtitle = config.ProfileSubtitle,
         DragOptions = {
@@ -11341,46 +11546,66 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
             DragThreshold = 5,
         },
     }, Window)
-    local usableWidth = viewport.X - topLeftInset.X - bottomRightInset.X
-    local usableHeight = viewport.Y - topLeftInset.Y - bottomRightInset.Y
-    -- Objective shell is intentionally left of viewport center so the
-    -- floating status widgets retain independent breathing room.
-    local centerX = topLeftInset.X + usableWidth * TargetDesign.Window.Center.X
-    local centerY = topLeftInset.Y + usableHeight * TargetDesign.Window.Center.Y
+    -- Match the objective's normalized full-viewport center. The subsequent
+    -- drag clamp is still authoritative for device safe areas.
+    local centerX = viewport.X * TargetDesign.Window.Center.X
+    local centerY = viewport.Y * TargetDesign.Window.Center.Y
+    local initialPosition = UDim2.fromOffset(math.floor(centerX + 0.5), math.floor(centerY + 0.5))
+    local initialSize = UDim2.fromOffset(initialWidth, initialHeight)
+
+    -- CanvasGroup always clips descendants in Roblox. V1.6 attempted to
+    -- disable clipping on the root, which emitted a runtime warning and cut
+    -- off the exterior shadow. A sibling host now owns all out-of-bounds depth
+    -- while the CanvasGroup remains the animation and content owner.
+    local shadowHost = create("Frame", {
+        Name = "WindowShadowHost",
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = initialPosition,
+        Size = initialSize,
+        ClipsDescendants = false,
+        ZIndex = 8,
+        Parent = library.Layers.Main,
+    }) :: Frame
+    shadowHost:SetAttribute("KronosNoDensity", true)
+
     local root = create("CanvasGroup", {
         Name = "Window",
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         GroupTransparency = 1,
         AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromOffset(math.floor(centerX + 0.5), math.floor(centerY + 0.5)),
-        Size = UDim2.fromOffset(initialWidth, initialHeight),
-        ClipsDescendants = false,
+        Position = initialPosition,
+        Size = initialSize,
+        ClipsDescendants = true,
         ZIndex = 10,
         Parent = library.Layers.Main,
     }) :: CanvasGroup
     root:SetAttribute("KronosNoDensity", true)
+
     local outerShadow = create("Frame", {
         Name = "OuterShadow",
         BackgroundColor3 = Theme.Shadow,
-        BackgroundTransparency = 0.92,
+        BackgroundTransparency = 0.9,
         BorderSizePixel = 0,
-        Position = UDim2.fromOffset(-5, 0),
-        Size = UDim2.new(1, 10, 1, 12),
-        ZIndex = 7,
-        Parent = root,
-    }) :: Frame
-    corner(outerShadow, Metrics.Radius + 4)
-    local shadow = create("Frame", {
-        BackgroundColor3 = Theme.Shadow,
-        BackgroundTransparency = 0.82,
-        BorderSizePixel = 0,
-        Position = UDim2.fromOffset(0, 4),
-        Size = UDim2.fromScale(1, 1),
+        Position = UDim2.fromOffset(-7, -2),
+        Size = UDim2.new(1, 14, 1, 16),
         ZIndex = 8,
-        Parent = root,
+        Parent = shadowHost,
     }) :: Frame
-    corner(shadow, Metrics.Radius + 1)
+    corner(outerShadow, Metrics.Radius + 5)
+    local shadow = create("Frame", {
+        Name = "InnerShadow",
+        BackgroundColor3 = Theme.Shadow,
+        BackgroundTransparency = 0.8,
+        BorderSizePixel = 0,
+        Position = UDim2.fromOffset(-2, 3),
+        Size = UDim2.new(1, 4, 1, 7),
+        ZIndex = 9,
+        Parent = shadowHost,
+    }) :: Frame
+    corner(shadow, Metrics.Radius + 2)
     local main = create("Frame", {
         Name = "Main",
         BackgroundColor3 = Theme.Background,
@@ -11400,7 +11625,31 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
     AcrylicController:Register(main, "MainWindow")
     window.Root = root
     window.Main = main
+    window.ShadowHost = shadowHost
+    window.OuterShadow = outerShadow
+    window.InnerShadow = shadow
+    window.ShadowOuterTransparency = 0.9
+    window.ShadowInnerTransparency = 0.8
+    window.WindowScale = create("UIScale", {
+        Name = "WindowMotionScale",
+        Scale = 1,
+        Parent = root,
+    })
     window.PopupLayer = library.GlobalPopupLayer
+
+    local function syncShadowHost()
+        if not shadowHost.Parent or not root.Parent then
+            return
+        end
+        shadowHost.AnchorPoint = root.AnchorPoint
+        shadowHost.Position = root.Position
+        shadowHost.Size = root.Size
+        shadowHost.Visible = root.Visible
+    end
+    addConnection(window, root:GetPropertyChangedSignal("Position"):Connect(syncShadowHost))
+    addConnection(window, root:GetPropertyChangedSignal("Size"):Connect(syncShadowHost))
+    addConnection(window, root:GetPropertyChangedSignal("AnchorPoint"):Connect(syncShadowHost))
+    syncShadowHost()
     window:_makeHeader(config)
 
     local sidebar = create("Frame", {
@@ -11621,15 +11870,36 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
         window:CreateReopenButton({})
     end
     if config.FloatingWidgets ~= false then
-        window:CreateStatusStrip({ Visible = config.StatusStrip ~= false })
+        window:CreateStatusStrip({
+            Visible = config.StatusStrip ~= false,
+            Fields = config.StatusFields,
+        })
         window:CreateTargetList({ Visible = config.TargetList ~= false })
-        window:CreateKeybindList({ Visible = config.KeybindList ~= false })
+        window:CreateKeybindList({
+            Visible = config.KeybindList ~= false,
+            ActiveOnly = config.KeybindListActiveOnly == true,
+            ShowEmptyMessage = config.KeybindListEmptyMessage ~= false,
+        })
     end
     window:ApplyResponsive()
-    root.Size = UDim2.fromOffset(window.Width * 0.996, window.Height * 0.996)
+    if window.WindowScale then
+        window.WindowScale.Scale = 0.992
+        tween(window.WindowScale, { Scale = 1 }, Motion.Window, Enum.EasingStyle.Quart)
+    end
+    if window.OuterShadow then
+        window.OuterShadow.BackgroundTransparency = 1
+        tween(window.OuterShadow, {
+            BackgroundTransparency = window.ShadowOuterTransparency or 0.9,
+        }, Motion.Window)
+    end
+    if window.InnerShadow then
+        window.InnerShadow.BackgroundTransparency = 1
+        tween(window.InnerShadow, {
+            BackgroundTransparency = window.ShadowInnerTransparency or 0.8,
+        }, Motion.Window)
+    end
     tween(root, {
         GroupTransparency = 0,
-        Size = UDim2.fromOffset(window.Width, window.Height),
     }, Motion.Window, Enum.EasingStyle.Quart)
     return window
 end
@@ -11956,6 +12226,7 @@ end
 local function buildShowcase(): AnyTable
     local window = Kronos:CreateWindow({
         Title = "Kronos",
+        Subtitle = "Lobby [1]",
         Icon = "orbit",
         ProfileName = "Kronos Operator",
         ProfileSubtitle = "Local interface profile",
@@ -11964,6 +12235,15 @@ local function buildShowcase(): AnyTable
         ToggleKey = Enum.KeyCode.RightShift,
         MobileToggle = true,
         FloatingWidgets = true,
+        StatusFields = {
+            Kronos = true,
+            Context = true,
+            FPS = true,
+            Ping = true,
+            Time = false,
+        },
+        KeybindListActiveOnly = true,
+        KeybindListEmptyMessage = false,
         Transparency = 0.1,
         Acrylic = true,
         AcrylicIntensity = 0.58,
@@ -11971,9 +12251,9 @@ local function buildShowcase(): AnyTable
         SurfaceContrast = 1.02,
     })
 
-    local overview = window:AddTab({ Name = "Overview", Icon = "house" })
-    local mainSubTab = overview:AddSubTab({ Name = "Main", Icon = "layout-dashboard" })
-    local statesSubTab = overview:AddSubTab({ Name = "States", Icon = "toggle-right" })
+    local overview = window:AddTab({ Name = "General", Icon = "house" })
+    local mainSubTab = overview:AddSubTab({ Name = "General", Icon = "layout-dashboard" })
+    local statesSubTab = overview:AddSubTab({ Name = "Combat", Icon = "crosshair" })
     local general = mainSubTab:AddSection({
         Title = "General",
         Side = "Left",
@@ -12185,11 +12465,11 @@ local function buildShowcase(): AnyTable
         Suffix = "%",
     })
 
-    local components = window:AddTab({ Name = "Components", Icon = "component" })
-    local inputsSubTab = components:AddSubTab({ Name = "Inputs", Icon = "keyboard" })
-    local selectionSubTab = components:AddSubTab({ Name = "Selection", Icon = "list-checks" })
-    local feedbackSubTab = components:AddSubTab({ Name = "Feedback", Icon = "bell-ring" })
-    local typographySubTab = components:AddSubTab({ Name = "Typography", Icon = "type" })
+    local components = window:AddTab({ Name = "Visuals", Icon = "eye" })
+    local inputsSubTab = components:AddSubTab({ Name = "Player", Icon = "user-round" })
+    local selectionSubTab = components:AddSubTab({ Name = "World", Icon = "globe-2" })
+    local feedbackSubTab = components:AddSubTab({ Name = "Notifications", Icon = "bell-ring" })
+    local typographySubTab = components:AddSubTab({ Name = "Appearance", Icon = "palette" })
     local inputs = inputsSubTab:AddSection({
         Title = "Inputs",
         Side = "Left",
@@ -12316,8 +12596,77 @@ local function buildShowcase(): AnyTable
     })
     typography:AddDivider({ Title = "Secondary" })
 
-    local advanced = window:AddTab({ Name = "Advanced", Icon = "settings" })
-    local panelsSubTab = advanced:AddSubTab({ Name = "Panels", Icon = "panels-top-left" })
+    local weapon = window:AddTab({ Name = "Weapon", Icon = "crosshair" })
+    local weaponGeneral = weapon:AddSubTab({ Name = "General", Icon = "sliders-horizontal" })
+    local weaponHandling = weapon:AddSubTab({ Name = "Handling", Icon = "gauge" })
+    local weaponOptions = weaponGeneral:AddSection({ Title = "Weapon options", Icon = "crosshair", Side = "Left" })
+    weaponOptions:AddToggle({
+        Id = "ShowcaseWeaponEnabled",
+        Title = "Enable weapon profile",
+        Icon = "circle-check",
+        Default = true,
+    })
+    weaponOptions:AddToggle({
+        Id = "ShowcaseAutoReload",
+        Title = "Automatic reload",
+        Icon = "refresh-cw",
+        Default = false,
+    })
+    weaponOptions:AddDropdown({
+        Id = "ShowcaseWeaponPreset",
+        Title = "Selected weapon",
+        Icon = "list-filter",
+        Values = { "Primary", "Secondary", "Utility" },
+        Default = "Primary",
+    })
+    local handling = weaponHandling:AddSection({ Title = "Handling", Icon = "gauge", Side = "Left" })
+    handling:AddSlider({
+        Id = "ShowcaseWeaponResponse",
+        Title = "Response",
+        Icon = "activity",
+        Min = 0,
+        Max = 100,
+        Default = 72,
+        Suffix = "%",
+    })
+    handling:AddSlider({
+        Id = "ShowcaseWeaponOffset",
+        Title = "Vertical offset",
+        Icon = "move-vertical",
+        Min = -1,
+        Max = 1,
+        Default = 0,
+        Step = 0.05,
+        Precision = 2,
+    })
+
+    local vehicle = window:AddTab({ Name = "Vehicle", Icon = "car-front" })
+    local vehicleGeneral = vehicle:AddSubTab({ Name = "General", Icon = "car-front" })
+    local vehicleOptions = vehicleGeneral:AddSection({ Title = "Vehicle options", Icon = "car-front", Side = "Left" })
+    vehicleOptions:AddToggle({
+        Id = "ShowcaseVehicleAssist",
+        Title = "Driving assistance",
+        Icon = "route",
+        Default = true,
+    })
+    vehicleOptions:AddToggle({
+        Id = "ShowcaseVehicleStability",
+        Title = "Stability control",
+        Icon = "shield-check",
+        Default = true,
+    })
+    vehicleOptions:AddSlider({
+        Id = "ShowcaseVehicleResponse",
+        Title = "Steering response",
+        Icon = "rotate-3d",
+        Min = 0,
+        Max = 100,
+        Default = 55,
+        Suffix = "%",
+    })
+
+    local advanced = window:AddTab({ Name = "Server", Icon = "server" })
+    local panelsSubTab = advanced:AddSubTab({ Name = "Interface", Icon = "panels-top-left" })
     local widgetsSubTab = advanced:AddSubTab({ Name = "Widgets", Icon = "move" })
     local responsiveSubTab =
         advanced:AddSubTab({ Name = "Responsive & Accessibility", Icon = "smartphone" })
@@ -12436,6 +12785,80 @@ local function buildShowcase(): AnyTable
         end,
     })
 
+    local playerTab = window:AddTab({ Name = "Player", Icon = "user-round" })
+    local playerGeneral = playerTab:AddSubTab({ Name = "General", Icon = "user-round" })
+    local playerOptions = playerGeneral:AddSection({ Title = "Player options", Icon = "user-cog", Side = "Left" })
+    playerOptions:AddToggle({
+        Id = "ShowcasePlayerStatus",
+        Title = "Show player status",
+        Icon = "badge-info",
+        Default = true,
+    })
+    playerOptions:AddDropdown({
+        Id = "ShowcasePlayerMode",
+        Title = "Movement mode",
+        Icon = "footprints",
+        Values = { "Normal", "Assisted", "Free" },
+        Default = "Normal",
+    })
+    playerOptions:AddButton({
+        Id = "ShowcasePlayerReset",
+        Title = "Reset local state",
+        Icon = "rotate-ccw",
+        ButtonText = "Reset",
+        Callback = function()
+            window:Notify({
+                Title = "Local state reset",
+                Content = "Showcase values were restored.",
+                Icon = "rotate-ccw",
+                Duration = 2,
+            })
+        end,
+    })
+
+    local miscTab = window:AddTab({ Name = "Misc", Icon = "wrench" })
+    local miscGeneral = miscTab:AddSubTab({ Name = "Interface", Icon = "settings-2" })
+    local miscOptions = miscGeneral:AddSection({ Title = "Interface utilities", Icon = "wrench", Side = "Left" })
+    miscOptions:AddToggle({
+        Id = "ShowcaseSearchEnabled",
+        Title = "Live search",
+        Icon = "search",
+        Default = true,
+        Callback = function(value)
+            window:SetSearchBehavior(value and "Live" or "ClearOnNavigation")
+        end,
+    })
+    miscOptions:AddButton({
+        Id = "ShowcaseResetWidgets",
+        Title = "Reset widget positions",
+        Icon = "locate-fixed",
+        ButtonText = "Reset",
+        Callback = function()
+            window:ResetWidgetPositions()
+        end,
+    })
+
+    local luaTab = window:AddTab({ Name = "Lua system", Icon = "file-code-2" })
+    local luaGeneral = luaTab:AddSubTab({ Name = "Runtime", Icon = "braces" })
+    local luaOptions = luaGeneral:AddSection({ Title = "Runtime information", Icon = "file-code-2", Side = "Left" })
+    luaOptions:AddLabel({ Text = "Kronos " .. tostring(Kronos.Version), Icon = "badge-check", Bold = true })
+    luaOptions:AddParagraph({
+        Title = "Lifecycle",
+        Content = "Initialization, re-execution, and cleanup share one owned runtime.",
+        Icon = "refresh-cw",
+    })
+
+    local executorTab = window:AddTab({ Name = "Executor", Icon = "terminal" })
+    local executorGeneral = executorTab:AddSubTab({ Name = "Compatibility", Icon = "terminal" })
+    local executorOptions =
+        executorGeneral:AddSection({ Title = "Runtime compatibility", Icon = "shield-check", Side = "Left" })
+    executorOptions:AddLabel({ Text = "Native Roblox UI path active", Icon = "circle-check" })
+    executorOptions:AddParagraph({
+        Title = "Fallback behavior",
+        Content = "Optional capabilities degrade without disabling the main interface.",
+        Icon = "info",
+    })
+
     if window.TargetList then
         window.TargetList:SetTarget({
             Name = LocalPlayer and LocalPlayer.DisplayName or "Local Player",
@@ -12492,11 +12915,23 @@ if startupOk then
 end
 if startupOk then
     startupOk = startupStage("TargetDesignValidation", function()
-        assert(TargetDesign.Window.LogicalSize.X > 0 and TargetDesign.Window.LogicalSize.Y > 0, "Target window geometry is invalid")
+        assert(
+            TargetDesign.Window.LogicalSize.X > 0
+                and TargetDesign.Window.LogicalSize.Y > 0
+                and TargetDesign.Window.MobileLandscapeScale > 0
+                and TargetDesign.Window.MobileLandscapeScale <= 1,
+            "Target window geometry is invalid"
+        )
         assert(TargetDesign.Control.Row > 0 and TargetDesign.Control.InputHeight > 0, "Control geometry tokens are invalid")
         assert(TargetDesign.Popup.DropdownWidth > 0 and TargetDesign.Popup.ColorWidth > 0, "Popup geometry tokens are invalid")
         assert(TargetDesign.Scrollbar.MinimumThumb > 0 and TargetDesign.Scrollbar.ActiveWidth >= TargetDesign.Scrollbar.IdleWidth, "Scrollbar tokens are invalid")
         assert(TargetDesign.Widget.TargetWidth > 0 and TargetDesign.Widget.KeybindWidth > 0, "Widget geometry tokens are invalid")
+        assert(
+            TargetDesign.Navigation.CompactWidth >= 28
+                and Metrics.Sidebar > TargetDesign.Navigation.CompactWidth,
+            "Navigation geometry tokens are invalid"
+        )
+        assert(boundedClamp(1, 2, 0) == 1, "Ordered clamp helper is invalid")
         assert(type(Window.QueueSearch) == "function", "Search coalescing API is unavailable")
     end)
 end
@@ -12571,7 +13006,7 @@ if startupOk then
 end
 if startupOk then
     startupOk = startupStage("PublicAPICompatibility", function()
-        assert(Kronos.Version == "1.6.0", "Unexpected Kronos version")
+        assert(Kronos.Version == "1.7.0", "Unexpected Kronos version")
         assert(
             type(Kronos.CreateWindow) == "function"
                 and type(Kronos.Notify) == "function"
@@ -12583,7 +13018,9 @@ if startupOk then
                 and type(Window.SetTransparency) == "function"
                 and type(Window.SetAcrylic) == "function"
                 and type(Window.SetBorderIntensity) == "function"
-                and type(Window.OpenSettings) == "function",
+                and type(Window.OpenSettings) == "function"
+                and type(Window.SetTitle) == "function"
+                and type(Window.SetSubtitle) == "function",
             "Window compatibility API is incomplete"
         )
         assert(
