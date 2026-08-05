@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-    KronosV1.5.lua
+    KronosV1.6.lua
     Cumulative native Roblox UI library refined against the supplied
     2340x1080 reference video. All controllers and the optional showcase live
     in this file; no remote modules or external UI libraries are required.
@@ -70,7 +70,7 @@ type WindowConfig = {
 }
 
 local Kronos: AnyTable = {}
-Kronos.Version = "1.5.0"
+Kronos.Version = "1.6.0"
 Kronos.Options = {} :: AnyTable
 Kronos.Windows = {} :: { AnyTable }
 Kronos.Connections = {} :: { RBXScriptConnection }
@@ -229,44 +229,7 @@ local Motion = {
     Scrollbar = 0.085,
 }
 
-local Metrics = {
-    -- Target-derived measurements from the 2340x1080 objective capture.
-    ReferenceViewport = Vector2.new(2340, 1080),
-    ReferenceWindow = Vector2.new(906, 542),
-    ReferenceAspect = 906 / 542,
-    Window = Vector2.new(744, 445),
-    MinimumWindow = Vector2.new(440, 264),
-    MaximumWindow = Vector2.new(906, 542),
-    Header = 40,
-    Sidebar = 220,
-    SidebarRatio = TargetDesign.Navigation.ExpandedRatio,
-    CompactSidebar = 42,
-    CompactSidebarRatio = TargetDesign.Navigation.CompactRatio,
-    HeaderRatio = 0.07,
-    HeaderContextWidth = TargetDesign.Header.ContextWidth,
-    HeaderContextHeight = TargetDesign.Header.ContextHeight,
-    PreferredContent = 512,
-    MaximumContent = TargetDesign.Content.MaximumWidth,
-    SingleColumnMaximum = TargetDesign.Content.SingleColumnMaximum,
-    MinimumSection = TargetDesign.Content.MinimumSection,
-    ColumnGap = TargetDesign.Content.ColumnGap,
-    Row = TargetDesign.Control.RowHeight,
-    DescriptionRow = TargetDesign.Control.DescriptionHeight,
-    SectionGap = TargetDesign.Content.SectionGap,
-    Radius = 7,
-    PopupRadius = TargetDesign.Popup.Radius,
-}
-
-local LayerZ = {
-    Main = 10,
-    Floating = 500,
-    Popup = 700,
-    Notification = 1000,
-    Modal = 1200,
-    Mobile = 1400,
-}
-
--- V1.5 target-derived design decisions. These tokens centralize measurements
+-- V1.6 target-derived design decisions. These tokens centralize measurements
 -- that were previously scattered through individual components.
 local TargetDesign = {
     Window = {
@@ -351,6 +314,58 @@ local TargetDesign = {
         ReopenSize = 32,
     },
 }
+
+-- Metrics dereference these groups during module evaluation, so validate the
+-- design token shape before constructing any dependent tables.
+assert(
+    type(TargetDesign.Window) == "table"
+        and type(TargetDesign.Header) == "table"
+        and type(TargetDesign.Navigation) == "table"
+        and type(TargetDesign.Content) == "table"
+        and type(TargetDesign.Control) == "table"
+        and type(TargetDesign.Scrollbar) == "table"
+        and type(TargetDesign.Popup) == "table"
+        and type(TargetDesign.Widget) == "table",
+    "[Kronos] TargetDesign is incomplete"
+)
+
+local Metrics = {
+    -- Target-derived measurements from the 2340x1080 objective capture.
+    ReferenceViewport = Vector2.new(2340, 1080),
+    ReferenceWindow = Vector2.new(906, 542),
+    ReferenceAspect = 906 / 542,
+    Window = TargetDesign.Window.LogicalSize,
+    MinimumWindow = Vector2.new(440, 264),
+    MaximumWindow = Vector2.new(906, 542),
+    Header = TargetDesign.Header.Height,
+    Sidebar = 220,
+    SidebarRatio = TargetDesign.Navigation.ExpandedRatio,
+    CompactSidebar = 42,
+    CompactSidebarRatio = TargetDesign.Navigation.CompactRatio,
+    HeaderRatio = 0.07,
+    HeaderContextWidth = TargetDesign.Header.ContextWidth,
+    HeaderContextHeight = TargetDesign.Header.ContextHeight,
+    PreferredContent = 512,
+    MaximumContent = TargetDesign.Content.MaximumWidth,
+    SingleColumnMaximum = TargetDesign.Content.SingleColumnMaximum,
+    MinimumSection = TargetDesign.Content.MinimumSection,
+    ColumnGap = TargetDesign.Content.ColumnGap,
+    Row = TargetDesign.Control.RowHeight,
+    DescriptionRow = TargetDesign.Control.DescriptionHeight,
+    SectionGap = TargetDesign.Content.SectionGap,
+    Radius = TargetDesign.Control.Radius,
+    PopupRadius = TargetDesign.Popup.Radius,
+}
+
+local LayerZ = {
+    Main = 10,
+    Floating = 500,
+    Popup = 700,
+    Notification = 1000,
+    Modal = 1200,
+    Mobile = 1400,
+}
+
 
 -- Generated Lucide name-to-asset table, embedded so icon resolution is offline and deterministic.
 local LucideAssets: { [string]: string } = {
@@ -12556,7 +12571,7 @@ if startupOk then
 end
 if startupOk then
     startupOk = startupStage("PublicAPICompatibility", function()
-        assert(Kronos.Version == "1.5.0", "Unexpected Kronos version")
+        assert(Kronos.Version == "1.6.0", "Unexpected Kronos version")
         assert(
             type(Kronos.CreateWindow) == "function"
                 and type(Kronos.Notify) == "function"
