@@ -1,7 +1,7 @@
 --!strict
 
 --[[
-    KronosV1.3.lua
+    KronosV1.4.lua
     Cumulative native Roblox UI library refined against the supplied
     2340x1080 reference video. All controllers and the optional showcase live
     in this file; no remote modules or external UI libraries are required.
@@ -70,7 +70,7 @@ type WindowConfig = {
 }
 
 local Kronos: AnyTable = {}
-Kronos.Version = "1.3.0"
+Kronos.Version = "1.4.0"
 Kronos.Options = {} :: AnyTable
 Kronos.Windows = {} :: { AnyTable }
 Kronos.Connections = {} :: { RBXScriptConnection }
@@ -87,17 +87,17 @@ Kronos.SurfaceBindings = setmetatable({}, { __mode = "k" }) :: AnyTable
 Kronos.BorderBindings = setmetatable({}, { __mode = "k" }) :: AnyTable
 Kronos.AcrylicBindings = setmetatable({}, { __mode = "k" }) :: AnyTable
 Kronos.Scrollbars = setmetatable({}, { __mode = "k" }) :: AnyTable
-Kronos.SurfaceTransparency = 0.04
+Kronos.SurfaceTransparency = 0.1
 Kronos.AcrylicEnabled = true
-Kronos.AcrylicIntensity = 0.52
+Kronos.AcrylicIntensity = 0.58
 Kronos.BorderIntensity = 1
-Kronos.SurfaceContrast = 1.08
+Kronos.SurfaceContrast = 1.02
 Kronos.ReducedMotion = false
 Kronos.AnimationIntensity = 1
 Kronos.AnimationsEnabled = true
 Kronos.NotificationMotion = true
 Kronos.PageTransitions = true
-Kronos.DimStrength = 0.64
+Kronos.DimStrength = 0.5
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -135,14 +135,14 @@ local Theme: ThemeMap = {
     -- The objective uses a narrow dark ladder: layers are distinguishable,
     -- but no surface becomes a bright card against the shell.
     Background = Color3.fromRGB(9, 9, 12),
-    BackgroundSoft = Color3.fromRGB(12, 12, 16),
-    Surface = Color3.fromRGB(15, 15, 19),
-    Surface2 = Color3.fromRGB(19, 19, 24),
-    Surface3 = Color3.fromRGB(24, 24, 30),
-    ElevatedSurface = Color3.fromRGB(21, 21, 27),
-    SurfaceHover = Color3.fromRGB(28, 28, 35),
-    HoverSurface = Color3.fromRGB(28, 28, 35),
-    PressedSurface = Color3.fromRGB(31, 28, 41),
+    BackgroundSoft = Color3.fromRGB(11, 11, 15),
+    Surface = Color3.fromRGB(14, 14, 18),
+    Surface2 = Color3.fromRGB(18, 18, 23),
+    Surface3 = Color3.fromRGB(22, 22, 28),
+    ElevatedSurface = Color3.fromRGB(20, 20, 26),
+    SurfaceHover = Color3.fromRGB(26, 26, 33),
+    HoverSurface = Color3.fromRGB(26, 26, 33),
+    PressedSurface = Color3.fromRGB(27, 24, 37),
     Stroke = Color3.fromRGB(56, 56, 68),
     StrokeSoft = Color3.fromRGB(39, 39, 48),
     Border = Color3.fromRGB(58, 58, 70),
@@ -154,11 +154,11 @@ local Theme: ThemeMap = {
     Muted = Color3.fromRGB(91, 91, 104),
     Disabled = Color3.fromRGB(64, 64, 74),
     DisabledText = Color3.fromRGB(96, 96, 108),
-    Accent = Color3.fromRGB(143, 104, 255),
-    AccentDark = Color3.fromRGB(96, 69, 184),
-    AccentSoft = Color3.fromRGB(174, 137, 255),
-    AccentHover = Color3.fromRGB(160, 120, 255),
-    AccentPressed = Color3.fromRGB(121, 84, 218),
+    Accent = Color3.fromRGB(151, 111, 255),
+    AccentDark = Color3.fromRGB(101, 74, 184),
+    AccentSoft = Color3.fromRGB(181, 145, 255),
+    AccentHover = Color3.fromRGB(166, 126, 255),
+    AccentPressed = Color3.fromRGB(126, 89, 220),
     White = Color3.fromRGB(255, 255, 255),
     Success = Color3.fromRGB(91, 196, 139),
     Warning = Color3.fromRGB(222, 173, 88),
@@ -182,16 +182,16 @@ local Motion = {
     ToggleOff = 0.12,
     SliderActive = 0.065,
     SliderIdle = 0.09,
-    TabSelect = 0.145,
-    SubtabSelect = 0.135,
-    PageEnter = 0.13,
-    PageExit = 0.085,
-    PopupEnter = 0.13,
+    TabSelect = 0.13,
+    SubtabSelect = 0.12,
+    PageEnter = 0.115,
+    PageExit = 0.075,
+    PopupEnter = 0.115,
     PopupExit = 0.09,
-    SettingsEnter = 0.16,
+    SettingsEnter = 0.145,
     SettingsExit = 0.115,
-    NotificationEnter = 0.17,
-    NotificationMove = 0.15,
+    NotificationEnter = 0.145,
+    NotificationMove = 0.135,
     NotificationExit = 0.13,
     ScrollbarActivate = 0.075,
     ScrollbarIdle = 0.14,
@@ -200,7 +200,7 @@ local Motion = {
     RowInsert = 0.115,
     RowRemove = 0.1,
     Minimize = 0.165,
-    Restore = 0.18,
+    Restore = 0.165,
     SearchFilter = 0.11,
     DependentReveal = 0.14,
     TooltipEnter = 0.11,
@@ -214,15 +214,15 @@ local Motion = {
     Toggle = 0.14,
     Dropdown = 0.13,
     PopupClose = 0.09,
-    Tab = 0.13,
-    SubTab = 0.12,
+    Tab = 0.115,
+    SubTab = 0.11,
     TabExit = 0.085,
     Search = 0.1,
-    Settings = 0.16,
+    Settings = 0.145,
     Widget = 0.15,
     DragRelease = 0.085,
     Window = 0.18,
-    Notification = 0.17,
+    Notification = 0.145,
     Tooltip = 0.1,
     Health = 0.14,
     KeybindRow = 0.115,
@@ -230,33 +230,31 @@ local Motion = {
 }
 
 local Metrics = {
-    -- Measured from the 2340x1080 target-reference capture.
+    -- Target-derived measurements from the 2340x1080 objective capture.
     ReferenceViewport = Vector2.new(2340, 1080),
-    -- V1.3 uses the objective capture rather than the physical size of the
-    -- current build. The current recording rendered about ten percent larger.
-    ReferenceWindow = Vector2.new(824, 492),
-    ReferenceAspect = 824 / 492,
-    Window = Vector2.new(824, 492),
-    MinimumWindow = Vector2.new(520, 310),
-    MaximumWindow = Vector2.new(930, 556),
-    Header = 44,
-    Sidebar = 184,
-    SidebarRatio = 0.223,
-    CompactSidebar = 46,
-    CompactSidebarRatio = 0.064,
-    HeaderRatio = 0.083,
-    HeaderContextWidth = 184,
-    HeaderContextHeight = 24,
-    PreferredContent = 622,
-    MaximumContent = 670,
-    SingleColumnMaximum = 420,
-    MinimumSection = 236,
-    ColumnGap = 9,
-    Row = 30,
-    DescriptionRow = 38,
-    SectionGap = 6,
-    Radius = 7,
-    PopupRadius = 7,
+    ReferenceWindow = Vector2.new(906, 542),
+    ReferenceAspect = 906 / 542,
+    Window = Vector2.new(906, 542),
+    MinimumWindow = Vector2.new(500, 300),
+    MaximumWindow = Vector2.new(980, 586),
+    Header = 38,
+    Sidebar = 268,
+    SidebarRatio = 0.296,
+    CompactSidebar = 48,
+    CompactSidebarRatio = 0.068,
+    HeaderRatio = 0.07,
+    HeaderContextWidth = 204,
+    HeaderContextHeight = 28,
+    PreferredContent = 620,
+    MaximumContent = 648,
+    SingleColumnMaximum = 404,
+    MinimumSection = 246,
+    ColumnGap = 8,
+    Row = 28,
+    DescriptionRow = 36,
+    SectionGap = 5,
+    Radius = 6,
+    PopupRadius = 6,
 }
 
 local LayerZ = {
@@ -2093,67 +2091,67 @@ local SurfaceTransparencyWeight = {
 }
 
 local BorderRoleStrength = {
-    Quiet = 0.64,
-    Shell = 1.18,
-    MainShellOuter = 1.2,
-    InnerHighlight = 0.68,
-    MainShellInner = 0.7,
-    HeaderDivider = 0.9,
-    SidebarDivider = 0.96,
-    ContentDivider = 0.9,
-    Section = 0.88,
-    Control = 0.86,
-    Hover = 1.05,
-    ControlHover = 1.05,
-    Focus = 1.22,
-    ControlFocused = 1.22,
-    Disabled = 0.56,
-    ControlDisabled = 0.56,
-    Dropdown = 1.04,
-    Popup = 1.13,
-    ColorPicker = 1.12,
-    Settings = 1.14,
-    Notification = 1.1,
-    Floating = 1.08,
-    FloatingWidget = 1.08,
-    ScrollTrack = 0.74,
-    Reopen = 1.14,
-    ReopenButton = 1.14,
-    AcrylicHighlight = 0.64,
-    Error = 1.2,
-    Accent = 1.16,
+    Quiet = 0.58,
+    Shell = 1,
+    MainShellOuter = 1.04,
+    InnerHighlight = 0.54,
+    MainShellInner = 0.56,
+    HeaderDivider = 0.78,
+    SidebarDivider = 0.82,
+    ContentDivider = 0.76,
+    Section = 0.72,
+    Control = 0.74,
+    Hover = 0.96,
+    ControlHover = 0.96,
+    Focus = 1.1,
+    ControlFocused = 1.1,
+    Disabled = 0.46,
+    ControlDisabled = 0.46,
+    Dropdown = 1,
+    Popup = 1.05,
+    ColorPicker = 1.05,
+    Settings = 1.04,
+    Notification = 1,
+    Floating = 1.02,
+    FloatingWidget = 1.02,
+    ScrollTrack = 0.62,
+    Reopen = 1.06,
+    ReopenButton = 1.06,
+    AcrylicHighlight = 0.5,
+    Error = 1.12,
+    Accent = 1.08,
 }
 
 local BorderStyles = {
-    Quiet = { Transparency = 0.74, Thickness = 1 },
-    Shell = { Transparency = 0.18, Thickness = 1 },
-    MainShellOuter = { Transparency = 0.18, Thickness = 1 },
-    InnerHighlight = { Transparency = 0.72, Thickness = 1 },
-    MainShellInner = { Transparency = 0.72, Thickness = 1 },
-    HeaderDivider = { Transparency = 0.42, Thickness = 1 },
-    SidebarDivider = { Transparency = 0.39, Thickness = 1 },
-    ContentDivider = { Transparency = 0.46, Thickness = 1 },
-    Section = { Transparency = 0.58, Thickness = 1 },
-    Control = { Transparency = 0.64, Thickness = 1 },
-    Hover = { Transparency = 0.46, Thickness = 1 },
-    ControlHover = { Transparency = 0.46, Thickness = 1 },
-    Focus = { Transparency = 0.28, Thickness = 1 },
-    ControlFocused = { Transparency = 0.28, Thickness = 1 },
-    Disabled = { Transparency = 0.8, Thickness = 1 },
-    ControlDisabled = { Transparency = 0.8, Thickness = 1 },
-    Dropdown = { Transparency = 0.31, Thickness = 1 },
-    Popup = { Transparency = 0.22, Thickness = 1 },
-    ColorPicker = { Transparency = 0.2, Thickness = 1 },
-    Settings = { Transparency = 0.22, Thickness = 1 },
-    Notification = { Transparency = 0.27, Thickness = 1 },
-    Floating = { Transparency = 0.29, Thickness = 1 },
-    FloatingWidget = { Transparency = 0.29, Thickness = 1 },
-    ScrollTrack = { Transparency = 0.56, Thickness = 1 },
-    Reopen = { Transparency = 0.27, Thickness = 1 },
-    ReopenButton = { Transparency = 0.27, Thickness = 1 },
-    AcrylicHighlight = { Transparency = 0.76, Thickness = 1 },
-    Error = { Transparency = 0.3, Thickness = 1 },
-    Accent = { Transparency = 0.26, Thickness = 1 },
+    Quiet = { Transparency = 0.82, Thickness = 1 },
+    Shell = { Transparency = 0.52, Thickness = 1 },
+    MainShellOuter = { Transparency = 0.52, Thickness = 1 },
+    InnerHighlight = { Transparency = 0.84, Thickness = 1 },
+    MainShellInner = { Transparency = 0.84, Thickness = 1 },
+    HeaderDivider = { Transparency = 0.68, Thickness = 1 },
+    SidebarDivider = { Transparency = 0.66, Thickness = 1 },
+    ContentDivider = { Transparency = 0.7, Thickness = 1 },
+    Section = { Transparency = 0.76, Thickness = 1 },
+    Control = { Transparency = 0.74, Thickness = 1 },
+    Hover = { Transparency = 0.58, Thickness = 1 },
+    ControlHover = { Transparency = 0.58, Thickness = 1 },
+    Focus = { Transparency = 0.38, Thickness = 1 },
+    ControlFocused = { Transparency = 0.38, Thickness = 1 },
+    Disabled = { Transparency = 0.86, Thickness = 1 },
+    ControlDisabled = { Transparency = 0.86, Thickness = 1 },
+    Dropdown = { Transparency = 0.56, Thickness = 1 },
+    Popup = { Transparency = 0.48, Thickness = 1 },
+    ColorPicker = { Transparency = 0.46, Thickness = 1 },
+    Settings = { Transparency = 0.48, Thickness = 1 },
+    Notification = { Transparency = 0.54, Thickness = 1 },
+    Floating = { Transparency = 0.5, Thickness = 1 },
+    FloatingWidget = { Transparency = 0.5, Thickness = 1 },
+    ScrollTrack = { Transparency = 0.82, Thickness = 1 },
+    Reopen = { Transparency = 0.46, Thickness = 1 },
+    ReopenButton = { Transparency = 0.46, Thickness = 1 },
+    AcrylicHighlight = { Transparency = 0.86, Thickness = 1 },
+    Error = { Transparency = 0.42, Thickness = 1 },
+    Accent = { Transparency = 0.44, Thickness = 1 },
 }
 
 local AcrylicRoleStrength = {
@@ -2996,9 +2994,9 @@ function AcrylicController:RefreshRecord(record: AnyTable)
     record.Tint.Visible = enabled
     record.Depth.Visible = enabled
     record.Sheen.Visible = enabled
-    record.Tint.BackgroundTransparency = enabled and (0.948 - 0.205 * intensity) or 1
-    record.Depth.BackgroundTransparency = enabled and (0.984 - 0.105 * intensity) or 1
-    record.Sheen.BackgroundTransparency = enabled and (0.94 - 0.22 * intensity) or 1
+    record.Tint.BackgroundTransparency = enabled and (0.958 - 0.155 * intensity) or 1
+    record.Depth.BackgroundTransparency = enabled and (0.992 - 0.07 * intensity) or 1
+    record.Sheen.BackgroundTransparency = enabled and (0.97 - 0.12 * intensity) or 1
     record.Gradient.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0, Theme.AcrylicTint:Lerp(Theme.Accent, 0.045 + 0.07 * intensity)),
         ColorSequenceKeypoint.new(0.55, Theme.AcrylicTint),
@@ -3119,24 +3117,27 @@ end
 
 function ResponsiveController:GetDensity(viewport: Vector2?): number
     local size = viewport or viewportSize()
-    if UserInputService.TouchEnabled and size.X > size.Y and size.Y <= 650 then
-        if size.Y < 400 then
-            return 0.72
-        elseif size.Y < 500 then
-            return 0.82
+    local portrait = size.X < size.Y
+
+    -- Density follows usable visual height instead of physical capture pixels.
+    -- This prevents high-DPI landscape recordings from inflating every row.
+    if portrait then
+        if size.X <= 420 then
+            return 0.78
+        elseif size.X <= 560 then
+            return 0.84
         end
-        return 0.88
+        return 0.9
     end
-    if size.X < 800 then
+    if size.Y <= 430 then
+        return 0.64
+    elseif size.Y <= 560 then
+        return 0.68
+    elseif size.Y <= 760 then
         return 0.72
-    end
-    if size.X < 900 then
-        return 0.78
-    end
-    if size.X < 1000 then
+    elseif size.X < 1200 or size.Y < 820 then
         return 0.82
-    end
-    if size.X < 1400 or size.Y < 760 then
+    elseif size.X < 1800 or size.Y < 980 then
         return 0.9
     end
     return 1
@@ -3178,28 +3179,30 @@ function ResponsiveController:CalculateWindowSize(
         width = safeWidth * 0.92
         height = math.min(safeHeight * 0.78, math.max(width * 1.42, math.min(440, safeHeight)))
     else
-        local heightRatio = 0.72
-        local widthRatio = 0.78
-        local preferredHeight = baseHeight
+        local heightRatio = 0.76
+        local widthRatio = 0.72
+        local preferredHeight = math.min(baseHeight, safeHeight * heightRatio)
 
         if mode == "MobileLandscape" then
-            -- Preserve a readable target-derived shell on touch landscape.
-            -- Structural adaptation handles density; the window itself should
-            -- not collapse into a tiny panoramic thumbnail.
-            heightRatio = 0.82
-            widthRatio = 0.8
-            preferredHeight = math.min(baseHeight * 0.72, safeHeight * heightRatio)
+            -- Landscape touch uses a structurally compact shell, not a large
+            -- desktop shell multiplied by display density.
+            heightRatio = 0.78
+            widthRatio = 0.86
+            preferredHeight = math.min(baseHeight * 0.78, safeHeight * heightRatio)
         elseif mode == "Compact" then
-            heightRatio = 0.72
-            widthRatio = 0.84
-            preferredHeight = math.min(baseHeight, safeHeight * heightRatio)
+            heightRatio = 0.7
+            widthRatio = 0.86
+            preferredHeight = math.min(baseHeight * 0.86, safeHeight * heightRatio)
         elseif mode == "Medium" then
-            heightRatio = 0.72
-            widthRatio = 0.72
+            -- The recorded Roblox client exposes a 1560x720 logical
+            -- viewport for the 2340x1080 capture. Half-height reproduces the
+            -- objective's ~906x542 physical silhouette after device scaling.
+            heightRatio = 0.5
+            widthRatio = 0.55
             preferredHeight = math.min(baseHeight, safeHeight * heightRatio)
         else
-            heightRatio = 0.72
-            widthRatio = 0.64
+            heightRatio = 0.76
+            widthRatio = 0.72
             preferredHeight = math.min(baseHeight, safeHeight * heightRatio)
         end
 
@@ -3629,13 +3632,17 @@ function DragController:Bind(
                 end
             end
             local pointer = Vector2.new(input.Position.X, input.Position.Y)
+            local baseThreshold = math.max(finiteNumber(options.DragThreshold, 5), 0)
+            local pointerThreshold = input.UserInputType == Enum.UserInputType.Touch
+                    and math.max(baseThreshold, 7)
+                or baseThreshold
             local active = {
                 Input = input,
                 Target = target,
                 StartPointer = pointer,
                 LastPointer = pointer,
                 StartTopLeft = target.AbsolutePosition,
-                Threshold = math.max(finiteNumber(options.DragThreshold, 5), 0),
+                Threshold = pointerThreshold,
                 Options = options,
                 MovedCallback = movedCallback,
                 EndedCallback = options.Ended,
@@ -3783,15 +3790,15 @@ function ScrollbarController:Wake(entry: AnyTable, hold: boolean?)
     end
     entry.IdleGeneration = (entry.IdleGeneration or 0) + 1
     local generation = entry.IdleGeneration
-    tween(entry.Track, { BackgroundTransparency = 0.9 }, Motion.ScrollbarActivate)
-    tween(entry.Thumb, { BackgroundTransparency = 0.08 }, Motion.ScrollbarActivate)
+    tween(entry.Track, { BackgroundTransparency = 0.88 }, Motion.ScrollbarActivate)
+    tween(entry.Thumb, { BackgroundTransparency = 0.04 }, Motion.ScrollbarActivate)
     if hold then
         return
     end
-    task.delay(1.05, function()
+    task.delay(1.2, function()
         if entry.IdleGeneration == generation and not entry.Hovered and not entry.Dragging and entry.Track.Parent then
-            tween(entry.Track, { BackgroundTransparency = 1 }, Motion.ScrollbarIdle)
-            tween(entry.Thumb, { BackgroundTransparency = 0.66 }, Motion.ScrollbarIdle)
+            tween(entry.Track, { BackgroundTransparency = 0.98 }, Motion.ScrollbarIdle)
+            tween(entry.Thumb, { BackgroundTransparency = 0.42 }, Motion.ScrollbarIdle)
         end
     end)
 end
@@ -3834,17 +3841,17 @@ function ScrollbarController:Attach(scroller: ScrollingFrame): AnyTable?
         Scroller = scroller,
         Connections = {},
         Horizontal = horizontal,
-        Margin = 4,
-        IdleWidth = 2,
-        ActiveWidth = 4,
-        MinimumThumb = horizontal and 24 or 28,
+        Margin = 3,
+        IdleWidth = 3,
+        ActiveWidth = 5,
+        MinimumThumb = horizontal and 26 or 30,
         Hovered = false,
         Dragging = false,
     }
     local track = create("Frame", {
         Name = "KronosScrollTrack",
         BackgroundColor3 = Theme.ScrollTrack,
-        BackgroundTransparency = 0.98,
+        BackgroundTransparency = 0.96,
         BorderSizePixel = 0,
         Active = true,
         ClipsDescendants = true,
@@ -3855,7 +3862,7 @@ function ScrollbarController:Attach(scroller: ScrollingFrame): AnyTable?
     local thumb = create("Frame", {
         Name = "KronosScrollThumb",
         BackgroundColor3 = Theme.Accent,
-        BackgroundTransparency = 0.58,
+        BackgroundTransparency = 0.42,
         BorderSizePixel = 0,
         Active = false,
         ZIndex = track.ZIndex + 1,
@@ -3892,6 +3899,7 @@ function ScrollbarController:Attach(scroller: ScrollingFrame): AnyTable?
                 if propertyName == "ScrollingDirection" then
                     entry.Horizontal = scroller.ScrollingDirection == Enum.ScrollingDirection.X
                     entry.MinimumThumb = entry.Horizontal and 26 or 30
+                    entry.Margin = entry.Horizontal and 4 or 3
                 end
                 refresh()
                 if propertyName == "CanvasPosition" then
@@ -4231,23 +4239,29 @@ function Kronos:Notify(config: NotificationOptions?): AnyTable
         self.ToastHolder = makeToastHolder(self.Layers.Notification)
     end
 
-    local duration = math.max(finiteNumber(config.Duration, 4), 0.5)
+    local requestedDuration = finiteNumber(config.Duration, 4)
+    local persistent = requestedDuration <= 0
+    local duration = persistent and 0 or math.max(requestedDuration, 0.5)
     local notificationMotion = self.NotificationMotion ~= false and Motion.Notification or 0
     local message = tostring(config.Content or config.Message or config.Subtitle or "")
-    local height = message ~= "" and 54 or 40
-    local width = 204
+    local height = message ~= "" and 52 or 38
+    local width = 216
     local kind = string.lower(tostring(config.Type or "info"))
     local accent = Theme.Accent
     local accentToken = "Accent"
+    local defaultIcon = "info"
     if kind == "success" then
         accent = Theme.Success
         accentToken = "Success"
+        defaultIcon = "circle-check"
     elseif kind == "warning" then
         accent = Theme.Warning
         accentToken = "Warning"
+        defaultIcon = "triangle-alert"
     elseif kind == "error" then
         accent = Theme.Error
         accentToken = "Error"
+        defaultIcon = "circle-x"
     end
 
     local slot = create("Frame", {
@@ -4287,26 +4301,26 @@ function Kronos:Notify(config: NotificationOptions?): AnyTable
     ThemeController:Bind(accentBar, "BackgroundColor3", accentToken)
 
     local icon = makeIcon(toast, {
-        Icon = config.Icon,
-        IconSize = config.IconSize or 12,
+        Icon = config.Icon or defaultIcon,
+        IconSize = config.IconSize or 11,
         IconColor = config.IconColor,
         IconTransparency = config.IconTransparency,
     }, accentToken)
     if icon then
-        icon.Position = UDim2.fromOffset(13, 11)
+        icon.Position = UDim2.fromOffset(12, message ~= "" and 10 or 13)
         icon.ZIndex = 1002
     end
 
-    local textOffset = icon and 33 or 13
-    local title = makeText(toast, tostring(config.Title or "Kronos"), 10, Theme.Text, "bold")
-    title.Position = UDim2.fromOffset(textOffset, 5)
+    local textOffset = icon and 31 or 12
+    local title = makeText(toast, tostring(config.Title or "Kronos"), 9, Theme.Text, "bold")
+    title.Position = UDim2.fromOffset(textOffset, 4)
     title.Size = UDim2.new(1, -textOffset - 9, 0, 19)
     title.ZIndex = 1002
 
     if message ~= "" then
-        local content = makeText(toast, message, 9, Theme.SubText)
-        content.Position = UDim2.fromOffset(textOffset, 23)
-        content.Size = UDim2.new(1, -textOffset - 9, 0, 26)
+        local content = makeText(toast, message, 8, Theme.SubText)
+        content.Position = UDim2.fromOffset(textOffset, 21)
+        content.Size = UDim2.new(1, -textOffset - 9, 0, 24)
         content.TextWrapped = true
         content.TextYAlignment = Enum.TextYAlignment.Top
         content.ZIndex = 1002
@@ -4320,6 +4334,7 @@ function Kronos:Notify(config: NotificationOptions?): AnyTable
         Size = UDim2.new(1, -14, 0, 1),
         Parent = toast,
         ZIndex = 1002,
+        Visible = not persistent,
     }) :: Frame
     corner(progress, 1)
     ThemeController:Bind(progress, "BackgroundColor3", accentToken)
@@ -4371,13 +4386,16 @@ function Kronos:Notify(config: NotificationOptions?): AnyTable
         end
     end
 
+    handle.Close = handle.Destroy
     table.insert(self.NotificationHandles, handle)
     tween(toast, { GroupTransparency = 0, Position = UDim2.fromOffset(0, 0) }, notificationMotion)
-    tween(progress, { Size = UDim2.fromOffset(0, d(1)) }, duration, Enum.EasingStyle.Linear)
-    timerThread = task.delay(duration, function()
-        timerThread = nil
-        handle:Destroy()
-    end)
+    if not persistent then
+        tween(progress, { Size = UDim2.fromOffset(0, d(1)) }, duration, Enum.EasingStyle.Linear)
+        timerThread = task.delay(duration, function()
+            timerThread = nil
+            handle:Destroy()
+        end)
+    end
     return handle
 end
 
@@ -4582,7 +4600,7 @@ local function makeControlRow(section, titleText, description, height, iconOptio
     local row = create("Frame", {
         Name = "ControlRow",
         BackgroundColor3 = Theme.Surface2,
-        BackgroundTransparency = 0.82,
+        BackgroundTransparency = 0.9,
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, rowHeight),
         ClipsDescendants = true,
@@ -4596,7 +4614,7 @@ local function makeControlRow(section, titleText, description, height, iconOptio
     local rowDivider = create("Frame", {
         Name = "RowDivider",
         BackgroundColor3 = Theme.Divider,
-        BackgroundTransparency = 0.44,
+        BackgroundTransparency = 0.66,
         BorderSizePixel = 0,
         AnchorPoint = Vector2.new(0, 1),
         Position = UDim2.new(0, 6, 1, 0),
@@ -4606,40 +4624,40 @@ local function makeControlRow(section, titleText, description, height, iconOptio
     }) :: Frame
     ThemeController:Bind(rowDivider, "BackgroundColor3", "Divider")
 
-    local titleOffset = 9
+    local titleOffset = 8
     local rowIcon: ImageLabel? = nil
     if iconOptions and iconOptions.Icon then
         rowIcon = makeIcon(row, iconOptions, "SubText")
         if rowIcon then
             rowIcon.AnchorPoint = Vector2.new(0, 0.5)
-            rowIcon.Position = UDim2.new(0, 9, 0.5, 0)
+            rowIcon.Position = UDim2.new(0, 8, 0.5, 0)
             rowIcon.ZIndex = 2
-            titleOffset = 28
+            titleOffset = 26
         end
     end
-    local title = makeText(row, titleText or "Control", 10, Theme.Text, "bold")
+    local title = makeText(row, titleText or "Control", 9, Theme.Text, "bold")
     title.Name = "ControlTitle"
     title.Position = UDim2.fromOffset(titleOffset, description and 4 or 0)
-    title.Size = UDim2.new(0.56, -titleOffset - 3, 0, 18)
+    title.Size = UDim2.new(0.58, -titleOffset - 3, 0, 17)
     if not description then
         title.AnchorPoint = Vector2.new(0, 0.5)
         title.Position = UDim2.new(0, titleOffset, 0.5, 0)
-        title.Size = UDim2.new(0.56, -titleOffset - 3, 0, 18)
+        title.Size = UDim2.new(0.58, -titleOffset - 3, 0, 17)
     end
 
     local descLabel
     if description then
         descLabel = makeText(row, description, 8, Theme.Muted)
-        descLabel.Position = UDim2.fromOffset(titleOffset, 21)
-        descLabel.Size = UDim2.new(0.61, -titleOffset - 5, 0, 15)
+        descLabel.Position = UDim2.fromOffset(titleOffset, 19)
+        descLabel.Size = UDim2.new(0.62, -titleOffset - 5, 0, 14)
     end
 
     local holder = create("Frame", {
         Name = "ControlHolder",
         BackgroundTransparency = 1,
         AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, -8, 0.5, 0),
-        Size = UDim2.new(0.43, -6, 1, -8),
+        Position = UDim2.new(1, -7, 0.5, 0),
+        Size = UDim2.new(0.4, -5, 1, -8),
         Parent = row,
     })
 
@@ -4649,7 +4667,7 @@ local function makeControlRow(section, titleText, description, height, iconOptio
         rowOwner,
         hover.MouseEnter:Connect(function()
             if not row:GetAttribute("KronosDisabled") then
-                tween(row, { BackgroundTransparency = 0.61 }, Motion.HoverIn)
+                tween(row, { BackgroundTransparency = 0.74 }, Motion.HoverIn)
                 tween(rowStroke, { Transparency = BorderController:Resolve(0.52, "ControlHover") }, Motion.HoverIn)
             end
         end)
@@ -4657,7 +4675,7 @@ local function makeControlRow(section, titleText, description, height, iconOptio
     addConnection(
         rowOwner,
         hover.MouseLeave:Connect(function()
-            tween(row, { BackgroundTransparency = 0.82 }, Motion.HoverOut)
+            tween(row, { BackgroundTransparency = 0.9 }, Motion.HoverOut)
             tween(rowStroke, { Transparency = BorderController:Resolve(0.72, "Control") }, Motion.HoverOut)
         end)
     )
@@ -4725,13 +4743,13 @@ function Section:CreateToggle(id: any, config: ComponentOptions?): AnyTable
         AutoButtonColor = false,
         AnchorPoint = Vector2.new(1, 0.5),
         Position = UDim2.new(1, -2, 0.5, 0),
-        Size = UDim2.fromOffset(16, 16),
+        Size = UDim2.fromOffset(14, 14),
         Parent = holder,
         ZIndex = 6,
     }) :: TextButton
     corner(box, 3)
     local boxStroke = stroke(box, toggle.Value and Theme.Accent or Theme.Stroke, toggle.Value and 0.08 or 0.5, 1)
-    local check = makeIcon(box, { Icon = "check", IconSize = 10 }, "White")
+    local check = makeIcon(box, { Icon = "check", IconSize = 9 }, "White")
     if check then
         check.AnchorPoint = Vector2.new(0.5, 0.5)
         check.Position = UDim2.fromScale(0.5, 0.5)
@@ -4849,7 +4867,7 @@ function Section:CreateSlider(id: any, config: ComponentOptions?): AnyTable
         self,
         config.Name or config.Title or id or "Slider",
         config.Description,
-        config.Description and 46 or 38,
+        config.Description and 42 or 34,
         config
     )
     holder.Size = UDim2.new(0.45, -6, 1, -8)
@@ -4862,7 +4880,7 @@ function Section:CreateSlider(id: any, config: ComponentOptions?): AnyTable
         TitleLabel = titleLabel,
         Disabled = false,
     }, BaseControl)
-    local valueLabel = makeText(holder, "", 10, Theme.SubText, "bold")
+    local valueLabel = makeText(holder, "", 9, Theme.SubText, "bold")
     valueLabel.AnchorPoint = Vector2.new(1, 0)
     valueLabel.Position = UDim2.new(1, 0, 0, -1)
     valueLabel.Size = UDim2.fromOffset(70, 14)
@@ -4872,8 +4890,8 @@ function Section:CreateSlider(id: any, config: ComponentOptions?): AnyTable
         BackgroundColor3 = Theme.Surface3,
         BorderSizePixel = 0,
         AnchorPoint = Vector2.new(0, 1),
-        Position = UDim2.new(0, 0, 1, -4),
-        Size = UDim2.new(1, 0, 0, 3),
+        Position = UDim2.new(0, 0, 1, -3),
+        Size = UDim2.new(1, 0, 0, 2),
         Parent = holder,
     }) :: Frame
     corner(track, 2)
@@ -4888,7 +4906,7 @@ function Section:CreateSlider(id: any, config: ComponentOptions?): AnyTable
     local knob = create("Frame", {
         BackgroundColor3 = Theme.White,
         BorderSizePixel = 0,
-        Size = UDim2.fromOffset(8, 8),
+        Size = UDim2.fromOffset(6, 6),
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0, 0.5),
         Parent = track,
@@ -5016,7 +5034,7 @@ function Section:CreateInput(id: any, config: ComponentOptions?): AnyTable
         BorderSizePixel = 0,
         ClearTextOnFocus = config.ClearOnFocus == true,
         Font = Enum.Font.GothamMedium,
-        TextSize = 10,
+        TextSize = 9,
         TextColor3 = Theme.Text,
         PlaceholderText = tostring(config.Placeholder or "Type..."),
         PlaceholderColor3 = Theme.Muted,
@@ -5026,12 +5044,12 @@ function Section:CreateInput(id: any, config: ComponentOptions?): AnyTable
         ClipsDescendants = true,
         AnchorPoint = Vector2.new(1, 0.5),
         Position = UDim2.new(1, 0, 0.5, 0),
-        Size = UDim2.new(1, 0, 0, 26),
+        Size = UDim2.new(1, 0, 0, 24),
         Parent = holder,
     }) :: TextBox
-    corner(box, 5)
+    corner(box, 4)
     local boxStroke = stroke(box, Theme.Stroke, nil, 1, "Control")
-    padding(box, 9, 0, 9, 0)
+    padding(box, 8, 0, 8, 0)
 
     local changing = false
     local maximumLength = math.floor(math.clamp(finiteNumber(config.MaxLength, 1024), 0, 16384))
@@ -5296,17 +5314,17 @@ function Section:CreateDropdown(id: any, config: ComponentOptions?): AnyTable
         AutoButtonColor = false,
         AnchorPoint = Vector2.new(1, 0.5),
         Position = UDim2.new(1, 0, 0.5, 0),
-        Size = UDim2.new(1, 0, 0, 26),
+        Size = UDim2.new(1, 0, 0, 24),
         Parent = holder,
         ZIndex = 6,
     }) :: TextButton
-    corner(button, 5)
+    corner(button, 4)
     local buttonStroke = stroke(button, Theme.Border, nil, 1, "Control")
-    local label = makeText(button, "", 10, Theme.SubText, "bold")
+    local label = makeText(button, "", 9, Theme.SubText, "bold")
     label.Position = UDim2.fromOffset(9, 0)
     label.Size = UDim2.new(1, -29, 1, 0)
     label.ZIndex = 7
-    local arrow = makeIcon(button, { Icon = "chevron-down", IconSize = 12 }, "Muted")
+    local arrow = makeIcon(button, { Icon = "chevron-down", IconSize = 10 }, "Muted")
     if arrow then
         arrow.AnchorPoint = Vector2.new(1, 0.5)
         arrow.Position = UDim2.new(1, -7, 0.5, 0)
@@ -5386,21 +5404,21 @@ function Section:CreateDropdown(id: any, config: ComponentOptions?): AnyTable
 
         local searchable = config.Search == true or #options > 8
         local visibleRows = math.clamp(#options, 1, 7)
-        local popupHeight = visibleRows * 26 + math.max(visibleRows - 1, 0) * 2 + 14 + (searchable and 34 or 0)
-        popupHeight = math.clamp(popupHeight, 50, searchable and 246 or 208)
+        local popupHeight = visibleRows * 24 + math.max(visibleRows - 1, 0) + 12 + (searchable and 30 or 0)
+        popupHeight = math.clamp(popupHeight, 48, searchable and 224 or 190)
         local popup = create("CanvasGroup", {
             Name = "DropdownPopup",
             BackgroundColor3 = Theme.ElevatedSurface,
             BackgroundTransparency = 0.03,
             BorderSizePixel = 0,
             GroupTransparency = 1,
-            Size = UDim2.fromOffset(math.max(button.AbsoluteSize.X, 208), popupHeight),
+            Size = UDim2.fromOffset(math.max(button.AbsoluteSize.X, 184), popupHeight),
             Visible = false,
             ZIndex = 700,
         }) :: CanvasGroup
         corner(popup, Metrics.PopupRadius)
         stroke(popup, Theme.Border, nil, 1, "Dropdown")
-        padding(popup, 7, 7, 7, 7)
+        padding(popup, 6, 6, 6, 6)
         local popupMaid = PopupController:Open(self.Window, popup, button, 5)
         popupMaid:Give(function()
             if arrow and arrow.Parent then
@@ -5429,17 +5447,17 @@ function Section:CreateDropdown(id: any, config: ComponentOptions?): AnyTable
                 PlaceholderColor3 = Theme.Muted,
                 TextColor3 = Theme.Text,
                 Font = Enum.Font.GothamMedium,
-                TextSize = 10,
+                TextSize = 9,
                 TextXAlignment = Enum.TextXAlignment.Left,
                 Position = UDim2.fromOffset(0, 0),
-                Size = UDim2.new(1, 0, 0, 29),
+                Size = UDim2.new(1, 0, 0, 26),
                 ZIndex = 702,
                 Parent = popup,
             }) :: TextBox
-            corner(searchBox, 5)
+            corner(searchBox, 4)
             stroke(searchBox, Theme.Border, 0.56, 1)
             padding(searchBox, 8, 0, 8, 0)
-            topOffset = 35
+            topOffset = 30
         end
 
         local scroll = create("ScrollingFrame", {
@@ -5465,11 +5483,11 @@ function Section:CreateDropdown(id: any, config: ComponentOptions?): AnyTable
             ZIndex = 703,
             Parent = scroll,
         }) :: Frame
-        local optionLayout = list(listFrame, Enum.FillDirection.Vertical, 3)
+        local optionLayout = list(listFrame, Enum.FillDirection.Vertical, 1)
         popupMaid:Give(optionLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
             scroll.CanvasSize = UDim2.fromOffset(0, optionLayout.AbsoluteContentSize.Y)
         end))
-        local empty = makeText(scroll, "No options found", 10, Theme.Muted)
+        local empty = makeText(scroll, "No options found", 9, Theme.Muted)
         empty.Size = UDim2.new(1, -8, 0, 34)
         empty.TextXAlignment = Enum.TextXAlignment.Center
         empty.Visible = false
@@ -5501,21 +5519,21 @@ function Section:CreateDropdown(id: any, config: ComponentOptions?): AnyTable
                         or dropdown.Value == option
                     local item = create("TextButton", {
                         BackgroundColor3 = selected and Theme.PressedSurface or Theme.Surface2,
-                        BackgroundTransparency = selected and 0.05 or 0.44,
+                        BackgroundTransparency = selected and 0.58 or 0.72,
                         BorderSizePixel = 0,
                         Text = "",
                         AutoButtonColor = false,
-                        Size = UDim2.new(1, 0, 0, 26),
+                        Size = UDim2.new(1, 0, 0, 24),
                         ZIndex = 704,
                         Parent = listFrame,
                     }) :: TextButton
-                    corner(item, 5)
+                    corner(item, 4)
                     local indicator = create("Frame", {
                         BackgroundColor3 = Theme.Accent,
                         BackgroundTransparency = selected and 0 or 1,
                         BorderSizePixel = 0,
                         Position = UDim2.fromOffset(0, 6),
-                        Size = UDim2.fromOffset(2, 16),
+                        Size = UDim2.fromOffset(2, 12),
                         ZIndex = 705,
                         Parent = item,
                     }) :: Frame
@@ -5525,7 +5543,7 @@ function Section:CreateDropdown(id: any, config: ComponentOptions?): AnyTable
                         or nil
                     local optionOffset = 9
                     local optionIcon =
-                        makeIcon(item, { Icon = optionIconName, IconSize = 11 }, selected and "Accent" or "Muted")
+                        makeIcon(item, { Icon = optionIconName, IconSize = 10 }, selected and "Accent" or "Muted")
                     if optionIcon then
                         optionIcon.AnchorPoint = Vector2.new(0, 0.5)
                         optionIcon.Position = UDim2.new(0, 9, 0.5, 0)
@@ -5535,7 +5553,7 @@ function Section:CreateDropdown(id: any, config: ComponentOptions?): AnyTable
                     local optionLabel = makeText(
                         item,
                         optionText,
-                        10,
+                        9,
                         selected and Theme.Text or Theme.SubText,
                         selected and "bold" or nil
                     )
@@ -5549,7 +5567,7 @@ function Section:CreateDropdown(id: any, config: ComponentOptions?): AnyTable
                             BorderSizePixel = 0,
                             AnchorPoint = Vector2.new(1, 0.5),
                             Position = UDim2.new(1, -7, 0.5, 0),
-                            Size = UDim2.fromOffset(14, 14),
+                            Size = UDim2.fromOffset(12, 12),
                             ZIndex = 705,
                             Parent = item,
                         }) :: Frame
@@ -5561,7 +5579,7 @@ function Section:CreateDropdown(id: any, config: ComponentOptions?): AnyTable
                             ThemeController:Bind(checkStroke, "Color", "Accent")
                         end
                         if selected then
-                            local check = makeIcon(checkBox, { Icon = "check", IconSize = 9 }, "White")
+                            local check = makeIcon(checkBox, { Icon = "check", IconSize = 8 }, "White")
                             if check then
                                 check.AnchorPoint = Vector2.new(0.5, 0.5)
                                 check.Position = UDim2.fromScale(0.5, 0.5)
@@ -5572,13 +5590,13 @@ function Section:CreateDropdown(id: any, config: ComponentOptions?): AnyTable
                     table.insert(
                         optionConnections,
                         item.MouseEnter:Connect(function()
-                            tween(item, { BackgroundTransparency = selected and 0.02 or 0.22 }, Motion.Hover)
+                            tween(item, { BackgroundTransparency = selected and 0.48 or 0.62 }, Motion.Hover)
                         end)
                     )
                     table.insert(
                         optionConnections,
                         item.MouseLeave:Connect(function()
-                            tween(item, { BackgroundTransparency = selected and 0.05 or 0.44 }, Motion.Hover)
+                            tween(item, { BackgroundTransparency = selected and 0.58 or 0.72 }, Motion.Hover)
                         end)
                     )
                     table.insert(
@@ -6295,11 +6313,11 @@ function Section:CreateColorpicker(id: any, config: ComponentOptions?): AnyTable
         AutoButtonColor = false,
         AnchorPoint = Vector2.new(1, 0.5),
         Position = UDim2.new(1, 0, 0.5, 0),
-        Size = UDim2.new(1, 0, 0, 26),
+        Size = UDim2.new(1, 0, 0, 24),
         ZIndex = 6,
         Parent = holder,
     }) :: TextButton
-    corner(preview, 5)
+    corner(preview, 4)
     local previewStroke = stroke(preview, Theme.Border, nil, 1, "ColorPicker")
     local previewLabel = makeText(preview, rgbToHex(initial), 9, Theme.White, "bold")
     previewLabel.Size = UDim2.fromScale(1, 1)
@@ -6338,9 +6356,9 @@ function Section:CreateColorpicker(id: any, config: ComponentOptions?): AnyTable
         end
         local alphaEnabled = config.EnableAlpha == true or config.Alpha ~= nil or config.Transparency ~= nil
         local continuous = config.Continuous ~= false
-        local popupHeight = alphaEnabled and 242 or 214
+        local popupHeight = alphaEnabled and 226 or 200
         if not continuous then
-            popupHeight += 29
+            popupHeight += 27
         end
         local popup = create("CanvasGroup", {
             Name = "ColorPickerPopup",
@@ -6348,13 +6366,13 @@ function Section:CreateColorpicker(id: any, config: ComponentOptions?): AnyTable
             BackgroundTransparency = 0.02,
             BorderSizePixel = 0,
             GroupTransparency = 1,
-            Size = UDim2.fromOffset(200, popupHeight),
+            Size = UDim2.fromOffset(194, popupHeight),
             Visible = false,
             ZIndex = 740,
         }) :: CanvasGroup
         corner(popup, Metrics.PopupRadius)
         stroke(popup, Theme.Border, nil, 1, "ColorPicker")
-        padding(popup, 9, 9, 9, 9)
+        padding(popup, 8, 8, 8, 8)
         local popupMaid = PopupController:Open(self.Window, popup, preview, 5)
         local hueValue, saturation, brightness = picker.Value:ToHSV()
         local alphaValue = picker.Transparency
@@ -6368,13 +6386,14 @@ function Section:CreateColorpicker(id: any, config: ComponentOptions?): AnyTable
         local saturationFrame = create("Frame", {
             BackgroundColor3 = Color3.fromHSV(hueValue, 1, 1),
             BorderSizePixel = 0,
-            Position = UDim2.fromOffset(0, 24),
-            Size = UDim2.fromOffset(154, 100),
+            Position = UDim2.fromOffset(0, 22),
+            Size = UDim2.fromOffset(150, 92),
             ClipsDescendants = true,
             ZIndex = 742,
             Parent = popup,
         }) :: Frame
-        corner(saturationFrame, 5)
+        corner(saturationFrame, 4)
+        stroke(saturationFrame, Theme.Border, 0.38, 1, "ColorPicker")
         local whiteLayer = create("Frame", {
             BackgroundColor3 = Theme.White,
             BorderSizePixel = 0,
@@ -6410,11 +6429,11 @@ function Section:CreateColorpicker(id: any, config: ComponentOptions?): AnyTable
             BorderSizePixel = 0,
             AnchorPoint = Vector2.new(0.5, 0.5),
             Position = UDim2.fromScale(saturation, 1 - brightness),
-            Size = UDim2.fromOffset(9, 9),
+            Size = UDim2.fromOffset(8, 8),
             ZIndex = 746,
             Parent = saturationFrame,
         }) :: Frame
-        corner(saturationDot, 5)
+        corner(saturationDot, 4)
         stroke(saturationDot, Color3.new(0, 0, 0), 0.22, 1)
         local saturationHit = makeHitbox(saturationFrame)
         saturationHit.ZIndex = 745
@@ -6422,13 +6441,14 @@ function Section:CreateColorpicker(id: any, config: ComponentOptions?): AnyTable
         local hueFrame = create("Frame", {
             BackgroundColor3 = Theme.White,
             BorderSizePixel = 0,
-            Position = UDim2.fromOffset(160, 24),
-            Size = UDim2.fromOffset(18, 100),
+            Position = UDim2.fromOffset(156, 22),
+            Size = UDim2.fromOffset(16, 92),
             ClipsDescendants = true,
             ZIndex = 742,
             Parent = popup,
         }) :: Frame
-        corner(hueFrame, 5)
+        corner(hueFrame, 4)
+        stroke(hueFrame, Theme.Border, 0.4, 1, "ColorPicker")
         create("UIGradient", {
             Rotation = 90,
             Color = ColorSequence.new({
@@ -6447,7 +6467,7 @@ function Section:CreateColorpicker(id: any, config: ComponentOptions?): AnyTable
             BorderSizePixel = 0,
             AnchorPoint = Vector2.new(0.5, 0.5),
             Position = UDim2.fromScale(0.5, hueValue),
-            Size = UDim2.fromOffset(20, 3),
+            Size = UDim2.fromOffset(18, 2),
             ZIndex = 746,
             Parent = hueFrame,
         }) :: Frame
@@ -6458,12 +6478,12 @@ function Section:CreateColorpicker(id: any, config: ComponentOptions?): AnyTable
         local previewChip = create("Frame", {
             BackgroundColor3 = candidate,
             BorderSizePixel = 0,
-            Position = UDim2.fromOffset(0, 132),
-            Size = UDim2.fromOffset(28, 27),
+            Position = UDim2.fromOffset(0, 121),
+            Size = UDim2.fromOffset(26, 24),
             ZIndex = 742,
             Parent = popup,
         }) :: Frame
-        corner(previewChip, 5)
+        corner(previewChip, 4)
         stroke(previewChip, Theme.Border, 0.25, 1)
 
         local hexBox = create("TextBox", {
@@ -6477,12 +6497,12 @@ function Section:CreateColorpicker(id: any, config: ComponentOptions?): AnyTable
             PlaceholderColor3 = Theme.Muted,
             Font = Enum.Font.GothamMedium,
             TextSize = 10,
-            Position = UDim2.fromOffset(34, 132),
-            Size = UDim2.fromOffset(64, 27),
+            Position = UDim2.fromOffset(32, 121),
+            Size = UDim2.fromOffset(62, 24),
             ZIndex = 742,
             Parent = popup,
         }) :: TextBox
-        corner(hexBox, 5)
+        corner(hexBox, 4)
         stroke(hexBox, Theme.Border, 0.56, 1)
         local rgbBox = create("TextBox", {
             BackgroundColor3 = Theme.Surface3,
@@ -6500,18 +6520,18 @@ function Section:CreateColorpicker(id: any, config: ComponentOptions?): AnyTable
             PlaceholderColor3 = Theme.Muted,
             Font = Enum.Font.GothamMedium,
             TextSize = 9,
-            Position = UDim2.fromOffset(104, 132),
-            Size = UDim2.fromOffset(74, 27),
+            Position = UDim2.fromOffset(100, 121),
+            Size = UDim2.fromOffset(72, 24),
             ZIndex = 742,
             Parent = popup,
         }) :: TextBox
-        corner(rgbBox, 5)
+        corner(rgbBox, 4)
         stroke(rgbBox, Theme.Border, 0.56, 1)
 
         local alphaTrack: Frame? = nil
         local alphaFill: Frame? = nil
         local alphaLabel: TextLabel? = nil
-        local controlsY = 166
+        local controlsY = 151
         if alphaEnabled then
             alphaLabel = makeText(
                 popup,
@@ -6527,12 +6547,13 @@ function Section:CreateColorpicker(id: any, config: ComponentOptions?): AnyTable
                 BackgroundColor3 = Theme.Surface3,
                 BorderSizePixel = 0,
                 Active = true,
-                Position = UDim2.fromOffset(0, controlsY + 19),
-                Size = UDim2.new(1, 0, 0, 7),
+                Position = UDim2.fromOffset(0, controlsY + 18),
+                Size = UDim2.new(1, 0, 0, 5),
                 ZIndex = 742,
                 Parent = popup,
             }) :: Frame
-            corner(alphaTrack, 4)
+            corner(alphaTrack, 3)
+            stroke(alphaTrack, Theme.Border, 0.52, 1, "ColorPicker")
             alphaFill = create("Frame", {
                 BackgroundColor3 = Theme.Accent,
                 BorderSizePixel = 0,
@@ -6542,17 +6563,17 @@ function Section:CreateColorpicker(id: any, config: ComponentOptions?): AnyTable
             }) :: Frame
             corner(alphaFill, 4)
             ThemeController:Bind(alphaFill, "BackgroundColor3", "Accent")
-            controlsY += 30
+            controlsY += 27
         end
 
         local presetFrame = create("Frame", {
             BackgroundTransparency = 1,
             Position = UDim2.fromOffset(0, controlsY),
-            Size = UDim2.new(1, 0, 0, 25),
+            Size = UDim2.new(1, 0, 0, 23),
             ZIndex = 742,
             Parent = popup,
         }) :: Frame
-        local presetLayout = list(presetFrame, Enum.FillDirection.Horizontal, 5)
+        local presetLayout = list(presetFrame, Enum.FillDirection.Horizontal, 4)
         presetLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 
         local function updateFields(fire: boolean)
@@ -6594,7 +6615,7 @@ function Section:CreateColorpicker(id: any, config: ComponentOptions?): AnyTable
                 BorderSizePixel = 0,
                 Text = "",
                 AutoButtonColor = false,
-                Size = UDim2.fromOffset(24, 24),
+                Size = UDim2.fromOffset(21, 21),
                 ZIndex = 743,
                 Parent = presetFrame,
             }) :: TextButton
@@ -6713,12 +6734,12 @@ function Section:CreateColorpicker(id: any, config: ComponentOptions?): AnyTable
                 Font = Enum.Font.GothamBold,
                 TextSize = 10,
                 AutoButtonColor = false,
-                Position = UDim2.fromOffset(0, controlsY + 29),
-                Size = UDim2.new(1, 0, 0, 25),
+                Position = UDim2.fromOffset(0, controlsY + 26),
+                Size = UDim2.new(1, 0, 0, 23),
                 ZIndex = 742,
                 Parent = popup,
             }) :: TextButton
-            corner(applyButton, 5)
+            corner(applyButton, 4)
             popupMaid:Give(applyButton.Activated:Connect(function()
                 picker:SetValue(candidate, alphaValue)
                 PopupController:Close(self.Window)
@@ -6830,7 +6851,7 @@ local function applySubTabInset(owner: AnyTable, enabled: boolean)
     if not owner.Scroll then
         return
     end
-    local inset = ResponsiveController:Scale(owner.Window, 36)
+    local inset = ResponsiveController:Scale(owner.Window, 32)
     owner.Scroll.Position = enabled and UDim2.fromOffset(0, inset) or UDim2.fromOffset(0, 0)
     owner.Scroll.Size = enabled and UDim2.new(1, 0, 1, -inset) or UDim2.fromScale(1, 1)
 end
@@ -6973,13 +6994,13 @@ function Tab:_setSubTabVisual(owner: AnyTable, active: boolean)
     end
     tween(selector.Button, {
         BackgroundColor3 = active and Theme.PressedSurface or Theme.Surface2,
-        BackgroundTransparency = active and 0.46 or 0.88,
+        BackgroundTransparency = active and 0.68 or 1,
     }, Motion.SubTab)
     tween(selector.Marker, {
         BackgroundTransparency = active and 0 or 1,
         Size = active
                 and UDim2.fromOffset(
-                    ResponsiveController:Scale(self.Window, 18),
+                    ResponsiveController:Scale(self.Window, 14),
                     ResponsiveController:Scale(self.Window, 2)
                 )
             or UDim2.fromOffset(
@@ -7002,20 +7023,20 @@ function Tab:_createSubTabSelector(owner: AnyTable, config: AnyTable): AnyTable
     local titleText = tostring(config.Name or config.Title or "General")
     local iconSize = IconController:Normalize(config.Icon) and math.clamp(finiteNumber(config.IconSize, 12), 8, 32) or 0
     local textSize = TextService:GetTextSize(titleText, 9, Enum.Font.GothamBold, Vector2.new(640, 24))
-    local horizontalPadding = iconSize > 0 and iconSize + 19 or 20
-    local width = math.clamp(textSize.X + horizontalPadding, 48, 320)
+    local horizontalPadding = iconSize > 0 and iconSize + 17 or 18
+    local width = math.clamp(textSize.X + horizontalPadding, 44, 260)
     local button = create("TextButton", {
         Name = "SubTabButton",
         BackgroundColor3 = Theme.Surface2,
-        BackgroundTransparency = 0.88,
+        BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Text = "",
         AutoButtonColor = false,
         Selectable = true,
-        Size = UDim2.fromOffset(width, 28),
+        Size = UDim2.fromOffset(width, 24),
         Parent = self.SubTabBar,
     }) :: TextButton
-    corner(button, 5)
+    corner(button, 4)
     local selectorStroke = stroke(button, Theme.Border, nil, 1, "Quiet")
     ThemeController:Bind(selectorStroke, "Color", "Border")
     local offset = 9
@@ -7054,7 +7075,7 @@ function Tab:_createSubTabSelector(owner: AnyTable, config: AnyTable): AnyTable
         owner,
         button.MouseEnter:Connect(function()
             if self.ActiveSubTab ~= owner then
-                tween(button, { BackgroundTransparency = 0.65 }, Motion.HoverIn)
+                tween(button, { BackgroundTransparency = 0.78 }, Motion.HoverIn)
                 tween(selectorStroke, { Transparency = BorderController:Resolve(0.52, "ControlHover") }, Motion.HoverIn)
             end
         end)
@@ -7063,7 +7084,7 @@ function Tab:_createSubTabSelector(owner: AnyTable, config: AnyTable): AnyTable
         owner,
         button.MouseLeave:Connect(function()
             if self.ActiveSubTab ~= owner then
-                tween(button, { BackgroundTransparency = 0.88 }, Motion.HoverOut)
+                tween(button, { BackgroundTransparency = 1 }, Motion.HoverOut)
                 tween(selectorStroke, { Transparency = BorderController:Resolve(0.74, "Quiet") }, Motion.HoverOut)
             end
         end)
@@ -7122,6 +7143,7 @@ function Tab:SelectSubTab(owner: AnyTable): AnyTable
         end
         self:_setSubTabVisual(candidate, active)
     end
+    self.SubtabTransitionGeneration = (self.SubtabTransitionGeneration or 0) + 1
     self.ActiveSubTab = owner
     if self.Window and type(self.Window._refreshHeaderContext) == "function" then
         self.Window:_refreshHeaderContext()
@@ -7130,13 +7152,13 @@ function Tab:SelectSubTab(owner: AnyTable): AnyTable
     owner.Columns.AnchorPoint = Vector2.new(0.5, 0)
     owner.Columns.Position = UDim2.new(
         0.5,
-        ResponsiveController:Scale(self.Window, 4),
+        ResponsiveController:Scale(self.Window, 3),
         0,
         ResponsiveController:Scale(self.Window, 7)
     )
     tween(owner.Columns, {
         Position = UDim2.new(0.5, 0, 0, ResponsiveController:Scale(self.Window, 7)),
-    }, Motion.SubTab)
+    }, Motion.SubtabSelect)
     SubtabController:Reveal(self, owner)
     owner:ApplyColumns(self.Window.TwoColumn)
     return self
@@ -7162,11 +7184,11 @@ function Tab:_applyContentWidth()
     local function d(value: number): number
         return ResponsiveController:Scale(self.Window, value)
     end
-    local available = math.max(self.Scroll.AbsoluteSize.X - d(16), 1)
+    local available = math.max(self.Scroll.AbsoluteSize.X - d(12), 1)
     local preferredMinimum = math.min(d(Metrics.MinimumSection), available)
     local contentWidth = math.clamp(math.min(available, d(Metrics.MaximumContent)), preferredMinimum, available)
     self.Columns.AnchorPoint = Vector2.new(0.5, 0)
-    self.Columns.Position = UDim2.new(0.5, 0, 0, d(7))
+    self.Columns.Position = UDim2.new(0.5, 0, 0, d(5))
     self.Columns.Size = UDim2.fromOffset(contentWidth, self.Columns.Size.Y.Offset)
 
     if self.TwoColumn then
@@ -7290,7 +7312,7 @@ function Tab:CreateSection(config: (NavigationOptions | string)?): AnyTable
     local frame = create("Frame", {
         Name = "Section",
         BackgroundColor3 = Theme.Surface,
-        BackgroundTransparency = 0.75,
+        BackgroundTransparency = 0.9,
         BorderSizePixel = 0,
         Size = UDim2.new(1, 0, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
@@ -7298,15 +7320,15 @@ function Tab:CreateSection(config: (NavigationOptions | string)?): AnyTable
         Parent = parent,
     }) :: Frame
     frame:SetAttribute("KronosSearch", section.SearchText)
-    corner(frame, 6)
+    corner(frame, 5)
     local frameStroke = stroke(frame, Theme.Border, nil, 1, "Section")
     ThemeController:Bind(frameStroke, "Color", "Border")
-    padding(frame, 8, 6, 8, 6)
-    local frameLayout = list(frame, Enum.FillDirection.Vertical, 1)
+    padding(frame, 6, 5, 6, 5)
+    local frameLayout = list(frame, Enum.FillDirection.Vertical, 0)
 
     local heading = create("Frame", {
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, config.Description and 26 or 18),
+        Size = UDim2.new(1, 0, 0, config.Description and 24 or 16),
         LayoutOrder = 1,
         Parent = frame,
     }) :: Frame
@@ -7318,13 +7340,13 @@ function Tab:CreateSection(config: (NavigationOptions | string)?): AnyTable
             titleOffset = icon.Size.X.Offset + 6
         end
     end
-    local title = makeText(heading, section.Title, 10, Theme.SubText, "bold")
+    local title = makeText(heading, section.Title, 9, Theme.SubText, "bold")
     title.Position = UDim2.fromOffset(titleOffset, 0)
-    title.Size = UDim2.new(1, -titleOffset, 0, 18)
+    title.Size = UDim2.new(1, -titleOffset, 0, 16)
     if config.Description then
         local description = makeText(heading, tostring(config.Description), 8, Theme.Muted)
-        description.Position = UDim2.fromOffset(titleOffset, 15)
-        description.Size = UDim2.new(1, -titleOffset, 0, 13)
+        description.Position = UDim2.fromOffset(titleOffset, 13)
+        description.Size = UDim2.new(1, -titleOffset, 0, 12)
     end
 
     local content = create("Frame", {
@@ -7335,7 +7357,7 @@ function Tab:CreateSection(config: (NavigationOptions | string)?): AnyTable
         LayoutOrder = 2,
         Parent = frame,
     }) :: Frame
-    local contentLayout = list(content, Enum.FillDirection.Vertical, 1)
+    local contentLayout = list(content, Enum.FillDirection.Vertical, 0)
     section.Instance = frame
     section.Content = content
     section.ContentLayout = contentLayout
@@ -7459,8 +7481,8 @@ function Tab:CreateSubTab(config: (NavigationOptions | string)?): AnyTable
         Name = "SubTabContent",
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        Position = UDim2.fromOffset(0, 36),
-        Size = UDim2.new(1, 0, 1, -36),
+        Position = UDim2.fromOffset(0, 32),
+        Size = UDim2.new(1, 0, 1, -32),
         CanvasSize = UDim2.fromOffset(0, 0),
         ScrollBarThickness = 2,
         ScrollBarImageColor3 = Theme.Accent,
@@ -7563,12 +7585,12 @@ function Window:_setActiveTabVisual(tab: AnyTable, active: boolean)
     end
     tween(tab.Button, {
         BackgroundColor3 = active and Theme.PressedSurface or Theme.Surface2,
-        BackgroundTransparency = active and 0.36 or 1,
+        BackgroundTransparency = active and 0.62 or 1,
     }, Motion.Tab)
     tween(tab.ActiveBar, {
         BackgroundTransparency = active and 0 or 1,
-        Size = active and UDim2.fromOffset(ResponsiveController:Scale(self, 2), ResponsiveController:Scale(self, 14))
-            or UDim2.fromOffset(ResponsiveController:Scale(self, 2), ResponsiveController:Scale(self, 6)),
+        Size = active and UDim2.fromOffset(ResponsiveController:Scale(self, 2), ResponsiveController:Scale(self, 12))
+            or UDim2.fromOffset(ResponsiveController:Scale(self, 2), ResponsiveController:Scale(self, 5)),
     }, Motion.Tab)
     if tab.IconLabel then
         tween(tab.IconLabel, { ImageColor3 = active and Theme.Accent or Theme.Muted }, Motion.Tab)
@@ -7599,14 +7621,20 @@ function Window:SelectTab(tab: any)
     end
     dismissTooltip(self)
     PopupController:Close(self)
-    local pageEnterMotion = self.Kronos.PageTransitions ~= false and Motion.Tab or 0
-    local pageExitMotion = self.Kronos.PageTransitions ~= false and Motion.TabExit or 0
+    self.PageTransitionGeneration = (self.PageTransitionGeneration or 0) + 1
+    local transitionGeneration = self.PageTransitionGeneration
+    local pageEnterMotion = self.Kronos.PageTransitions ~= false and Motion.PageEnter or 0
+    local pageExitMotion = self.Kronos.PageTransitions ~= false and Motion.PageExit or 0
     if self.ActiveTab then
         local previousTab = self.ActiveTab
         self:_setActiveTabVisual(previousTab, false)
         tween(previousTab.Page, { GroupTransparency = 1, Position = UDim2.fromOffset(-3, 0) }, pageExitMotion)
         task.delay(AnimationController:Duration(pageExitMotion), function()
-            if self.ActiveTab ~= previousTab and previousTab.Page.Parent then
+            if
+                self.PageTransitionGeneration == transitionGeneration
+                and self.ActiveTab ~= previousTab
+                and previousTab.Page.Parent
+            then
                 previousTab.Page.Visible = false
             end
         end)
@@ -7705,15 +7733,15 @@ function Window:CreateTab(config: (NavigationOptions | string)?): AnyTable
         Name = "SubTabBar",
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        Position = UDim2.fromOffset(7, 5),
-        Size = UDim2.new(1, -14, 0, 28),
+        Position = UDim2.fromOffset(7, 4),
+        Size = UDim2.new(1, -14, 0, 24),
         CanvasSize = UDim2.fromOffset(0, 0),
         ScrollBarThickness = 0,
         ScrollingDirection = Enum.ScrollingDirection.X,
         Visible = false,
         Parent = page,
     }) :: ScrollingFrame
-    local subTabBarLayout = list(subTabBar, Enum.FillDirection.Horizontal, 5)
+    local subTabBarLayout = list(subTabBar, Enum.FillDirection.Horizontal, 3)
     subTabBarLayout.VerticalAlignment = Enum.VerticalAlignment.Center
     local scroll = create("ScrollingFrame", {
         Name = "ContentScroll",
@@ -7861,7 +7889,7 @@ function Window:_refreshHeaderContext()
 
     local activeSubTab = activeTab.ActiveSubTab
     if activeSubTab and activeSubTab ~= activeTab then
-        label.Text = tostring(activeTab.Title) .. "  /  " .. tostring(activeSubTab.Title)
+        label.Text = tostring(activeTab.Title) .. "  ›  " .. tostring(activeSubTab.Title)
     else
         label.Text = tostring(activeTab.Title)
     end
@@ -8100,15 +8128,9 @@ function Window:_makeHeader(config: WindowConfig)
     local contextStroke = stroke(contextButton, Theme.Border, nil, 1, "Control")
     ThemeController:Bind(contextButton, "BackgroundColor3", "Surface2")
     ThemeController:Bind(contextStroke, "Color", "Border")
-    local contextIcon = makeIcon(contextButton, { Icon = "panel-top", IconSize = 11 }, "Muted")
-    if contextIcon then
-        contextIcon.AnchorPoint = Vector2.new(0, 0.5)
-        contextIcon.Position = UDim2.new(0, 9, 0.5, 0)
-        contextIcon.ZIndex = 32
-    end
     local contextLabel = makeText(contextButton, "Overview", 9, Theme.SubText, "bold")
-    contextLabel.Position = UDim2.fromOffset(contextIcon and 27 or 9, 0)
-    contextLabel.Size = UDim2.new(1, -(contextIcon and 51 or 33), 1, 0)
+    contextLabel.Position = UDim2.fromOffset(10, 0)
+    contextLabel.Size = UDim2.new(1, -34, 1, 0)
     contextLabel.ZIndex = 32
     local contextChevron = makeIcon(contextButton, { Icon = "chevron-down", IconSize = 11 }, "Muted")
     if contextChevron then
@@ -8117,17 +8139,37 @@ function Window:_makeHeader(config: WindowConfig)
         contextChevron.ZIndex = 32
     end
 
-    local profileButton = makeUtilityButton(header, "user-round", 1)
-    profileButton.Name = "ProfileButton"
-    profileButton:SetAttribute("KronosAccentUtility", true)
-    profileButton.BackgroundColor3 = Theme.Accent
-    profileButton.BackgroundTransparency = 0.08
-    ThemeController:Bind(profileButton, "BackgroundColor3", "Accent")
-    local profileUtilityIcon = profileButton:FindFirstChild("UtilityIcon")
-    if profileUtilityIcon and profileUtilityIcon:IsA("ImageLabel") then
-        profileUtilityIcon.ImageColor3 = Theme.White
-        ThemeController:Bind(profileUtilityIcon, "ImageColor3", "White")
+    local profileButton = makeUtilityButton(header, "settings", 1)
+    profileButton.Name = "SettingsButton"
+    profileButton.BackgroundColor3 = Theme.Surface2
+    profileButton.BackgroundTransparency = 0.44
+    ThemeController:Bind(profileButton, "BackgroundColor3", "Surface2")
+
+    -- The objective separates a compact navigation utility from the page
+    -- selector. It remains a compatibility-safe visual affordance.
+    local navigationButton = create("TextButton", {
+        Name = "NavigationUtility",
+        BackgroundColor3 = Theme.Surface2,
+        BackgroundTransparency = 0.58,
+        BorderSizePixel = 0,
+        Text = "",
+        AutoButtonColor = false,
+        AnchorPoint = Vector2.new(0, 0.5),
+        Position = UDim2.fromOffset(Metrics.Sidebar + 8, math.floor(Metrics.Header * 0.5)),
+        Size = UDim2.fromOffset(23, 23),
+        ZIndex = 32,
+        Parent = header,
+    }) :: TextButton
+    corner(navigationButton, 5)
+    stroke(navigationButton, Theme.Border, nil, 1, "Control")
+    ThemeController:Bind(navigationButton, "BackgroundColor3", "Surface2")
+    local navigationIcon = makeIcon(navigationButton, { Icon = "panel-left", IconSize = 11 }, "Muted")
+    if navigationIcon then
+        navigationIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+        navigationIcon.Position = UDim2.fromScale(0.5, 0.5)
+        navigationIcon.ZIndex = 33
     end
+
     local presetsButton = makeUtilityButton(header, "save", 2)
     presetsButton.Name = "PresetsButton"
     presetsButton.Visible = config.ShowPresetsButton == true
@@ -8140,6 +8182,7 @@ function Window:_makeHeader(config: WindowConfig)
 
     self.ProfileButton = profileButton
     self.SettingsButton = profileButton
+    self.NavigationButton = navigationButton
     self.PresetsButton = presetsButton
     self.HeaderTitle = title
     self.HeaderSubtitle = subtitle
@@ -8191,11 +8234,10 @@ function Window:_makeHeader(config: WindowConfig)
         self:_openHeaderContext()
     end))
     addConnection(self, profileButton.Activated:Connect(function()
-        if config.ProfilePanel == false then
-            self:OpenSettings()
-        else
-            self:OpenProfile()
-        end
+        self:OpenSettings()
+    end))
+    addConnection(self, navigationButton.Activated:Connect(function()
+        self:SetCompactNavigation(self.ExpandedNavigation)
     end))
     addConnection(self, presetsButton.Activated:Connect(function()
         self:OpenPresets()
@@ -8292,8 +8334,8 @@ function Window:ApplyResponsive()
         local usableWidth = viewport.X - topLeftInset.X - bottomRightInset.X
         local usableHeight = viewport.Y - topLeftInset.Y - bottomRightInset.Y
         self.Root.Position = UDim2.fromOffset(
-            math.floor(usableLeft + usableWidth * 0.56 + 0.5),
-            math.floor(usableTop + usableHeight * 0.54 + 0.5)
+            math.floor(usableLeft + usableWidth * 0.456 + 0.5),
+            math.floor(usableTop + usableHeight * 0.532 + 0.5)
         )
     end
     DragController:Clamp(self.Root, self.DragOptions)
@@ -8334,12 +8376,16 @@ function Window:ApplyResponsive()
         local desiredContextWidth = math.min(d(Metrics.HeaderContextWidth), math.max(headerContentWidth - d(90), d(126)))
         self.HeaderContext.Size = UDim2.fromOffset(desiredContextWidth, d(Metrics.HeaderContextHeight))
         self.HeaderContext.Position = UDim2.fromOffset(
-            math.floor(sidebarWidth + headerContentWidth * 0.5 + 0.5),
+            math.floor(sidebarWidth + d(28) + desiredContextWidth * 0.5 + 0.5),
             math.floor(headerHeight * 0.5 + 0.5)
         )
         self.HeaderContext.Visible = self.HeaderContextEnabled ~= false
             and layoutMode ~= "Portrait"
             and headerContentWidth >= d(220)
+        if self.NavigationButton then
+            self.NavigationButton.Position = UDim2.fromOffset(sidebarWidth + d(4), math.floor(headerHeight * 0.5 + 0.5))
+            self.NavigationButton.Visible = layoutMode ~= "Portrait"
+        end
     end
     self.SearchBox.PlaceholderText = expanded and "Search" or ""
     self.SearchBox.TextXAlignment = Enum.TextXAlignment.Left
@@ -8854,14 +8900,15 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
         ZIndex = 170,
         Parent = self.Main,
     }) :: TextButton
-    local designPanelWidth = kind == "Presets" and 224 or (kind == "Profile" and 242 or 256)
+    local designPanelWidth = kind == "Presets" and 206 or (kind == "Profile" and 218 or 232)
     local panelWidth = math.min(d(designPanelWidth), math.max(self.Width - d(70), d(184)))
-    local headerHeight = d(Metrics.Header)
+    local headerHeight = self.Header and math.max(self.Header.AbsoluteSize.Y, 1) or d(Metrics.Header)
     local openPosition: UDim2
     local closedPosition: UDim2
     if kind == "Presets" then
-        local navigationWidth = self.ExpandedNavigation and Metrics.Sidebar or Metrics.CompactSidebar
-        local x = math.min(d(navigationWidth) + d(9), math.max(self.Width - panelWidth - d(9), d(9)))
+        local navigationWidth = self.Sidebar and math.max(self.Sidebar.AbsoluteSize.X, 1)
+            or d(self.ExpandedNavigation and Metrics.Sidebar or Metrics.CompactSidebar)
+        local x = math.min(navigationWidth + d(9), math.max(self.Width - panelWidth - d(9), d(9)))
         openPosition = UDim2.fromOffset(x, headerHeight + d(6))
         closedPosition = UDim2.fromOffset(x, headerHeight - d(3))
     else
@@ -8900,7 +8947,7 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
         BackgroundColor3 = Theme.Surface2,
         BackgroundTransparency = 0.12,
         BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 42),
+        Size = UDim2.new(1, 0, 0, 36),
         ZIndex = 176,
         Parent = panel,
     }) :: Frame
@@ -8921,21 +8968,21 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
         BorderSizePixel = 0,
         Text = "",
         AutoButtonColor = false,
-        Position = UDim2.fromOffset(9, 10),
-        Size = UDim2.fromOffset(22, 22),
+        Position = UDim2.fromOffset(8, 7),
+        Size = UDim2.fromOffset(21, 21),
         Visible = false,
         ZIndex = 178,
         Parent = header,
     }) :: TextButton
     corner(back, 5)
-    local backIcon = makeIcon(back, { Icon = "chevron-left", IconSize = 13 }, "SubText")
+    local backIcon = makeIcon(back, { Icon = "chevron-left", IconSize = 11 }, "SubText")
     if backIcon then
         backIcon.AnchorPoint = Vector2.new(0.5, 0.5)
         backIcon.Position = UDim2.fromScale(0.5, 0.5)
         backIcon.ZIndex = 179
     end
     local panelRootTitle = kind == "Presets" and "Presets" or (kind == "Profile" and "Profile" or "Settings")
-    local headerTitle = makeText(header, panelRootTitle, 11, Theme.Text, "bold")
+    local headerTitle = makeText(header, panelRootTitle, 10, Theme.Text, "bold")
     headerTitle.Position = UDim2.fromOffset(14, 0)
     headerTitle.Size = UDim2.new(1, -54, 1, 0)
     headerTitle.ZIndex = 177
@@ -8946,11 +8993,11 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
         AutoButtonColor = false,
         AnchorPoint = Vector2.new(1, 0.5),
         Position = UDim2.new(1, -10, 0.5, 0),
-        Size = UDim2.fromOffset(24, 24),
+        Size = UDim2.fromOffset(22, 22),
         ZIndex = 178,
         Parent = header,
     }) :: TextButton
-    local closeIcon = makeIcon(close, { Icon = "x", IconSize = 13 }, "Muted")
+    local closeIcon = makeIcon(close, { Icon = "x", IconSize = 11 }, "Muted")
     if closeIcon then
         closeIcon.AnchorPoint = Vector2.new(0.5, 0.5)
         closeIcon.Position = UDim2.fromScale(0.5, 0.5)
@@ -8961,8 +9008,8 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
         Name = "PanelContent",
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        Position = UDim2.fromOffset(0, 42),
-        Size = UDim2.new(1, 0, 1, -42),
+        Position = UDim2.fromOffset(0, 36),
+        Size = UDim2.new(1, 0, 1, -36),
         CanvasSize = UDim2.fromOffset(0, 0),
         ScrollBarThickness = 2,
         ScrollBarImageColor3 = Theme.Accent,
@@ -8973,13 +9020,13 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
     ThemeController:Bind(content, "ScrollBarImageColor3", "Accent")
     local page = create("Frame", {
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(10, 10),
-        Size = UDim2.new(1, -22, 0, 0),
+        Position = UDim2.fromOffset(8, 8),
+        Size = UDim2.new(1, -18, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
         ZIndex = 177,
         Parent = content,
     }) :: Frame
-    local pageLayout = list(page, Enum.FillDirection.Vertical, 6)
+    local pageLayout = list(page, Enum.FillDirection.Vertical, 4)
     sideMaid:Give(pageLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
         content.CanvasSize = UDim2.fromOffset(0, pageLayout.AbsoluteContentSize.Y + 25)
     end))
@@ -9013,15 +9060,15 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
     local function addHeading(titleText: string, subtitleText: string?)
         local heading = create("Frame", {
             BackgroundTransparency = 1,
-            Size = UDim2.new(1, 0, 0, subtitleText and 36 or 22),
+            Size = UDim2.new(1, 0, 0, subtitleText and 31 or 19),
             ZIndex = 178,
             Parent = page,
         }) :: Frame
-        local titleLabel = makeText(heading, titleText, 11, Theme.Text, "bold")
+        local titleLabel = makeText(heading, titleText, 10, Theme.Text, "bold")
         titleLabel.Size = UDim2.new(1, 0, 0, 20)
         titleLabel.ZIndex = 179
         if subtitleText then
-            local subLabel = makeText(heading, subtitleText, 9, Theme.Muted)
+            local subLabel = makeText(heading, subtitleText, 8, Theme.Muted)
             subLabel.Position = UDim2.fromOffset(0, 19)
             subLabel.Size = UDim2.new(1, 0, 0, 18)
             subLabel.ZIndex = 179
@@ -9034,7 +9081,7 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
         callback: (() -> ())?,
         iconName: string?
     ): TextButton
-        local rowHeight = subtitleText and 40 or 32
+        local rowHeight = subtitleText and 35 or 28
         local row = create("TextButton", {
             BackgroundColor3 = Theme.Surface2,
             BackgroundTransparency = 0.38,
@@ -9045,30 +9092,30 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
             ZIndex = 178,
             Parent = page,
         }) :: TextButton
-        corner(row, 5)
-        stroke(row, Theme.Border, 0.72, 1)
+        corner(row, 4)
+        stroke(row, Theme.Border, 0.76, 1, "Control")
         local textOffset = 10
         if iconName then
-            local rowIcon = makeIcon(row, { Icon = iconName, IconSize = 13 }, "SubText")
+            local rowIcon = makeIcon(row, { Icon = iconName, IconSize = 11 }, "SubText")
             if rowIcon then
                 rowIcon.AnchorPoint = Vector2.new(0, 0.5)
                 rowIcon.Position = UDim2.new(0, 10, 0.5, 0)
                 rowIcon.ZIndex = 179
-                textOffset = 31
+                textOffset = 28
             end
         end
-        local titleLabel = makeText(row, titleText, 10, Theme.Text, "bold")
+        local titleLabel = makeText(row, titleText, 9, Theme.Text, "bold")
         titleLabel.Position = UDim2.fromOffset(textOffset, subtitleText and 4 or 0)
         titleLabel.Size = UDim2.new(1, -textOffset - 26, 0, subtitleText and 20 or rowHeight)
         titleLabel.ZIndex = 179
         if subtitleText then
-            local subtitleLabel = makeText(row, subtitleText, 9, Theme.Muted)
+            local subtitleLabel = makeText(row, subtitleText, 8, Theme.Muted)
             subtitleLabel.Position = UDim2.fromOffset(textOffset, 22)
             subtitleLabel.Size = UDim2.new(1, -textOffset - 26, 0, 16)
             subtitleLabel.ZIndex = 179
         end
         if callback then
-            local chevron = makeIcon(row, { Icon = "chevron-right", IconSize = 12 }, "Muted")
+            local chevron = makeIcon(row, { Icon = "chevron-right", IconSize = 10 }, "Muted")
             if chevron then
                 chevron.AnchorPoint = Vector2.new(1, 0.5)
                 chevron.Position = UDim2.new(1, -10, 0.5, 0)
@@ -9099,12 +9146,12 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
             BorderSizePixel = 0,
             AnchorPoint = Vector2.new(1, 0.5),
             Position = UDim2.new(1, -9, 0.5, 0),
-            Size = UDim2.fromOffset(15, 15),
+            Size = UDim2.fromOffset(14, 14),
             ZIndex = 180,
             Parent = row,
         }) :: Frame
         ThemeController:Bind(toggleBox, "BackgroundColor3", "Surface3")
-        corner(toggleBox, 4)
+        corner(toggleBox, 3)
         local boxStroke = stroke(toggleBox, Theme.Border, nil, 1, "Control")
         ThemeController:Bind(boxStroke, "Color", "Border")
         local selectedFill = create("Frame", {
@@ -9118,7 +9165,7 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
         }) :: Frame
         ThemeController:Bind(selectedFill, "BackgroundColor3", "Accent")
         corner(selectedFill, 3)
-        local check = makeIcon(toggleBox, { Icon = "check", IconSize = 10 }, "White")
+        local check = makeIcon(toggleBox, { Icon = "check", IconSize = 8 }, "White")
         if check then
             check.AnchorPoint = Vector2.new(0.5, 0.5)
             check.Position = UDim2.fromScale(0.5, 0.5)
@@ -9168,7 +9215,7 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
         iconName: string?
     ): TextButton
         local row = addRow(titleText, nil, nil, iconName)
-        row.Size = UDim2.new(1, 0, 0, 43)
+        row.Size = UDim2.new(1, 0, 0, 39)
         local valueLabel = makeText(row, "", 8, Theme.SubText, "bold")
         valueLabel.AnchorPoint = Vector2.new(1, 0)
         valueLabel.Position = UDim2.new(1, -9, 0, 0)
@@ -9179,7 +9226,7 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
             BackgroundColor3 = Theme.Surface3,
             BackgroundTransparency = 0.2,
             BorderSizePixel = 0,
-            Position = UDim2.fromOffset(10, 32),
+            Position = UDim2.fromOffset(10, 29),
             Size = UDim2.new(1, -20, 0, 3),
             ZIndex = 180,
             Parent = row,
@@ -9199,7 +9246,7 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
             BorderSizePixel = 0,
             AnchorPoint = Vector2.new(0.5, 0.5),
             Position = UDim2.fromScale(0, 0.5),
-            Size = UDim2.fromOffset(7, 7),
+            Size = UDim2.fromOffset(6, 6),
             ZIndex = 182,
             Parent = track,
         }) :: Frame
@@ -9210,8 +9257,8 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
             BorderSizePixel = 0,
             Text = "",
             AutoButtonColor = false,
-            Position = UDim2.fromOffset(7, 24),
-            Size = UDim2.new(1, -14, 0, 17),
+            Position = UDim2.fromOffset(7, 21),
+            Size = UDim2.new(1, -14, 0, 16),
             ZIndex = 183,
             Parent = row,
         }) :: TextButton
@@ -9276,11 +9323,11 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
                 BackgroundColor3 = Theme.Surface2,
                 BackgroundTransparency = 0.46,
                 BorderSizePixel = 0,
-                Size = UDim2.new(1, 0, 0, 62),
+                Size = UDim2.new(1, 0, 0, 54),
                 ZIndex = 178,
                 Parent = page,
             }) :: Frame
-            corner(profileCard, 6)
+            corner(profileCard, 5)
             local profileStroke = stroke(profileCard, Theme.Border, nil, 1, "Control")
             ThemeController:Bind(profileCard, "BackgroundColor3", "Surface2")
             ThemeController:Bind(profileStroke, "Color", "Border")
@@ -9291,12 +9338,12 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
                 BackgroundTransparency = 0.08,
                 BorderSizePixel = 0,
                 Image = "",
-                Position = UDim2.fromOffset(10, 11),
-                Size = UDim2.fromOffset(40, 40),
+                Position = UDim2.fromOffset(9, 10),
+                Size = UDim2.fromOffset(34, 34),
                 ZIndex = 179,
                 Parent = profileCard,
             }) :: ImageLabel
-            corner(avatar, 20)
+            corner(avatar, 17)
             local avatarStroke = stroke(avatar, Theme.Border, nil, 1, "Control")
             ThemeController:Bind(avatar, "BackgroundColor3", "Surface3")
             ThemeController:Bind(avatarStroke, "Color", "Border")
@@ -9314,7 +9361,7 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
             local fallback = makeText(
                 avatar,
                 string.upper(string.sub(displayName, 1, 1)),
-                15,
+                13,
                 Theme.Text,
                 "bold"
             )
@@ -9322,13 +9369,13 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
             fallback.TextXAlignment = Enum.TextXAlignment.Center
             fallback.ZIndex = 180
 
-            local displayLabel = makeText(profileCard, displayName, 11, Theme.Text, "bold")
-            displayLabel.Position = UDim2.fromOffset(60, 11)
-            displayLabel.Size = UDim2.new(1, -70, 0, 18)
+            local displayLabel = makeText(profileCard, displayName, 10, Theme.Text, "bold")
+            displayLabel.Position = UDim2.fromOffset(52, 9)
+            displayLabel.Size = UDim2.new(1, -61, 0, 17)
             displayLabel.ZIndex = 179
-            local profileMeta = makeText(profileCard, profileSubtitle, 9, Theme.Muted)
-            profileMeta.Position = UDim2.fromOffset(60, 30)
-            profileMeta.Size = UDim2.new(1, -70, 0, 16)
+            local profileMeta = makeText(profileCard, profileSubtitle, 8, Theme.Muted)
+            profileMeta.Position = UDim2.fromOffset(52, 27)
+            profileMeta.Size = UDim2.new(1, -61, 0, 15)
             profileMeta.ZIndex = 179
 
             if LocalPlayer then
@@ -9391,7 +9438,7 @@ function Window:_openSidePanel(kind: string, initialPage: string?)
             local fallback = makeText(
                 avatar,
                 string.upper(string.sub(LocalPlayer and LocalPlayer.Name or "K", 1, 1)),
-                15,
+                13,
                 Theme.Text,
                 "bold"
             )
@@ -9992,7 +10039,7 @@ function FloatingWidgetController:Create(window: AnyTable, config: FloatingWidge
         BackgroundTransparency = 0.12,
         BorderSizePixel = 0,
         Active = true,
-        Size = UDim2.new(1, 0, 0, 22),
+        Size = UDim2.new(1, 0, 0, 20),
         ZIndex = root.ZIndex + 1,
         Parent = root,
     }) :: Frame
@@ -10000,7 +10047,7 @@ function FloatingWidgetController:Create(window: AnyTable, config: FloatingWidge
         BackgroundColor3 = Theme.Accent,
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(0, 4),
-        Size = UDim2.fromOffset(2, 14),
+        Size = UDim2.fromOffset(2, 12),
         ZIndex = root.ZIndex + 2,
         Parent = header,
     }) :: Frame
@@ -10014,9 +10061,10 @@ function FloatingWidgetController:Create(window: AnyTable, config: FloatingWidge
         widgetIcon.ZIndex = root.ZIndex + 2
         titleOffset = widgetIcon.Size.X.Offset + 16
     end
-    local title = makeText(header, widget.Title, 9, Theme.Text, "bold")
+    local title = makeText(header, widget.Title, 8, Theme.Text, "bold")
     title.Position = UDim2.fromOffset(titleOffset, 0)
-    title.Size = UDim2.new(1, -titleOffset - 50, 1, 0)
+    local utilityWidth = (config.Pinnable == true and 20 or 0) + (config.Hideable == true and 20 or 0)
+    title.Size = UDim2.new(1, -titleOffset - utilityWidth - 8, 1, 0)
     title.ZIndex = root.ZIndex + 2
     local pin = create("TextButton", {
         BackgroundTransparency = 1,
@@ -10026,7 +10074,7 @@ function FloatingWidgetController:Create(window: AnyTable, config: FloatingWidge
         AnchorPoint = Vector2.new(1, 0.5),
         Position = UDim2.new(1, -25, 0.5, 0),
         Size = UDim2.fromOffset(20, 20),
-        Visible = config.Pinnable ~= false,
+        Visible = config.Pinnable == true,
         ZIndex = root.ZIndex + 3,
         Parent = header,
     }) :: TextButton
@@ -10044,6 +10092,7 @@ function FloatingWidgetController:Create(window: AnyTable, config: FloatingWidge
         AnchorPoint = Vector2.new(1, 0.5),
         Position = UDim2.new(1, -5, 0.5, 0),
         Size = UDim2.fromOffset(20, 20),
+        Visible = config.Hideable == true,
         ZIndex = root.ZIndex + 3,
         Parent = header,
     }) :: TextButton
@@ -10056,8 +10105,8 @@ function FloatingWidgetController:Create(window: AnyTable, config: FloatingWidge
     ThemeController:Bind(header, "BackgroundColor3", "Surface2")
     local body = create("Frame", {
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(0, 22),
-        Size = UDim2.new(1, 0, 1, -22),
+        Position = UDim2.fromOffset(0, 20),
+        Size = UDim2.new(1, 0, 1, -20),
         ZIndex = root.ZIndex + 1,
         Parent = root,
     }) :: Frame
@@ -10214,7 +10263,7 @@ function Window:CreateTargetList(config: FloatingWidgetOptions?): AnyTable
         IconSize = config.IconSize,
         IconColor = config.IconColor,
         IconTransparency = config.IconTransparency,
-        Size = config.Size or UDim2.fromOffset(248, 76),
+        Size = config.Size or UDim2.fromOffset(214, 74),
         Position = config.Position or UDim2.fromOffset(12, 12),
         CustomPosition = config.Position ~= nil,
         Visible = config.Visible ~= false,
@@ -10224,36 +10273,37 @@ function Window:CreateTargetList(config: FloatingWidgetOptions?): AnyTable
         DragMargin = config.DragMargin,
         MinimumVisiblePixels = config.MinimumVisiblePixels,
         Pinned = config.Pinned,
-        Pinnable = config.Pinnable,
+        Pinnable = config.Pinnable ~= false,
+        Hideable = config.Hideable == true,
     })
     local avatar = create("ImageLabel", {
         BackgroundColor3 = Theme.Surface3,
         BorderSizePixel = 0,
         Image = "",
-        Position = UDim2.fromOffset(8, 6),
-        Size = UDim2.fromOffset(32, 32),
+        Position = UDim2.fromOffset(7, 6),
+        Size = UDim2.fromOffset(28, 28),
         ZIndex = 503,
         Parent = widget.Body,
     }) :: ImageLabel
-    corner(avatar, 5)
-    local fallback = makeText(avatar, "—", 14, Theme.Muted, "bold")
+    corner(avatar, 4)
+    local fallback = makeText(avatar, "—", 12, Theme.Muted, "bold")
     fallback.Size = UDim2.fromScale(1, 1)
     fallback.TextXAlignment = Enum.TextXAlignment.Center
     fallback.ZIndex = 504
     local nameLabel = makeText(widget.Body, "No target", 9, Theme.Text, "bold")
-    nameLabel.Position = UDim2.fromOffset(47, 4)
-    nameLabel.Size = UDim2.new(1, -55, 0, 17)
+    nameLabel.Position = UDim2.fromOffset(42, 3)
+    nameLabel.Size = UDim2.new(1, -49, 0, 16)
     nameLabel.ZIndex = 503
     local healthLabel = makeText(widget.Body, "Waiting", 8, Theme.Muted)
-    healthLabel.Position = UDim2.fromOffset(47, 20)
-    healthLabel.Size = UDim2.new(1, -55, 0, 14)
+    healthLabel.Position = UDim2.fromOffset(42, 18)
+    healthLabel.Size = UDim2.new(1, -49, 0, 13)
     healthLabel.TextXAlignment = Enum.TextXAlignment.Right
     healthLabel.ZIndex = 503
     local healthTrack = create("Frame", {
         BackgroundColor3 = Theme.Surface3,
         BorderSizePixel = 0,
-        Position = UDim2.fromOffset(47, 39),
-        Size = UDim2.new(1, -55, 0, 3),
+        Position = UDim2.fromOffset(42, 34),
+        Size = UDim2.new(1, -49, 0, 2),
         ZIndex = 503,
         Parent = widget.Body,
     }) :: Frame
@@ -10335,8 +10385,8 @@ function Window:CreateKeybindList(config: FloatingWidgetOptions?): AnyTable
         IconSize = config.IconSize,
         IconColor = config.IconColor,
         IconTransparency = config.IconTransparency,
-        Size = config.Size or UDim2.fromOffset(244, 66),
-        Position = config.Position or UDim2.new(0.54, -150, 0, 12),
+        Size = config.Size or UDim2.fromOffset(228, 60),
+        Position = config.Position or UDim2.new(0.5, -114, 0, 12),
         CustomPosition = config.Position ~= nil,
         Visible = config.Visible ~= false,
         Draggable = config.Draggable,
@@ -10345,12 +10395,13 @@ function Window:CreateKeybindList(config: FloatingWidgetOptions?): AnyTable
         DragMargin = config.DragMargin,
         MinimumVisiblePixels = config.MinimumVisiblePixels,
         Pinned = config.Pinned,
-        Pinnable = config.Pinnable,
+        Pinnable = config.Pinnable ~= false,
+        Hideable = config.Hideable == true,
     })
     local columnHeader = create("Frame", {
         BackgroundTransparency = 1,
         Position = UDim2.fromOffset(8, 4),
-        Size = UDim2.new(1, -16, 0, 19),
+        Size = UDim2.new(1, -16, 0, 17),
         ZIndex = 503,
         Parent = widget.Body,
     }) :: Frame
@@ -10367,8 +10418,8 @@ function Window:CreateKeybindList(config: FloatingWidgetOptions?): AnyTable
     local rows = create("ScrollingFrame", {
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        Position = UDim2.fromOffset(8, 24),
-        Size = UDim2.new(1, -16, 1, -28),
+        Position = UDim2.fromOffset(8, 21),
+        Size = UDim2.new(1, -16, 1, -25),
         CanvasSize = UDim2.fromOffset(0, 0),
         ScrollBarThickness = 1,
         ScrollBarImageColor3 = Theme.Accent,
@@ -10454,9 +10505,9 @@ function Window:CreateKeybindList(config: FloatingWidgetOptions?): AnyTable
                 tween(row, { BackgroundTransparency = 0.55 }, Motion.KeybindRow)
             end
         end
-        local bodyHeight = 19 + math.max(count, 1) * 19
-        local finalHeight = math.clamp(bodyHeight + 22, 60, 138)
-        widget:Resize(244, finalHeight)
+        local bodyHeight = 17 + math.max(count, 1) * 17
+        local finalHeight = math.clamp(bodyHeight + 20, 54, 124)
+        widget:Resize(widget.DesignWidth, finalHeight)
         rows.Visible = true
         columnHeader.Visible = count > 0
         if count == 0 then
@@ -10475,8 +10526,8 @@ function Window:CreateStatusStrip(config: FloatingWidgetOptions?): AnyTable
     config = config or {}
     local configuredFields = type(config.Fields) == "table" and config.Fields or {}
     local density = self.Density or ResponsiveController:GetDensity()
-    local designWidth = math.max(finiteNumber(config.Width, 188), 96)
-    local designHeight = math.max(finiteNumber(config.Height, 26), 22)
+    local designWidth = math.max(finiteNumber(config.Width, 146), 96)
+    local designHeight = math.max(finiteNumber(config.Height, 24), 22)
     local widget: AnyTable = {
         Window = self,
         Connections = {},
@@ -10737,7 +10788,12 @@ function Window:CreateStatusStrip(config: FloatingWidgetOptions?): AnyTable
     addConnection(
         widget,
         RunService.Heartbeat:Connect(function()
-            if widget.Alive and widget.Visible and root.Visible then
+            if
+                widget.Alive
+                and widget.Visible
+                and root.Visible
+                and widget.Fields.FPS
+            then
                 sampledFrames += 1
             end
         end)
@@ -10754,22 +10810,28 @@ function Window:CreateStatusStrip(config: FloatingWidgetOptions?): AnyTable
                 continue
             end
             local now = os.clock()
-            local elapsed = math.max(now - sampleStartedAt, 1 / 240)
-            local fps = math.clamp(math.floor(sampledFrames / elapsed + 0.5), 0, 999)
+            if widget.Fields.FPS then
+                local elapsed = math.max(now - sampleStartedAt, 1 / 240)
+                local fps = math.clamp(math.floor(sampledFrames / elapsed + 0.5), 0, 999)
+                labels.FPS.Text = tostring(fps) .. " FPS"
+            end
             sampledFrames = 0
             sampleStartedAt = now
-            local ping = "—"
-            pcall(function()
-                local network = (Stats :: any).Network
-                local item = network and network.ServerStatsItem and network.ServerStatsItem["Data Ping"]
-                if item then
-                    ping = item:GetValueString()
-                end
-            end)
             labels.Kronos.Text = "KRONOS"
-            labels.FPS.Text = tostring(fps) .. " FPS"
-            labels.Ping.Text = ping
-            labels.Time.Text = os.date("%H:%M")
+            if widget.Fields.Ping then
+                local ping = "—"
+                pcall(function()
+                    local network = (Stats :: any).Network
+                    local item = network and network.ServerStatsItem and network.ServerStatsItem["Data Ping"]
+                    if item then
+                        ping = item:GetValueString()
+                    end
+                end)
+                labels.Ping.Text = ping
+            end
+            if widget.Fields.Time then
+                labels.Time.Text = os.date("%H:%M")
+            end
         end
     end)
     self.StatusStrip = widget
@@ -10780,7 +10842,7 @@ function Window:CreateReopenButton(config: FloatingWidgetOptions?): AnyTable
     config = config or {}
     local density = self.Density or ResponsiveController:GetDensity()
     local configuredSize = typeof(config.Size) == "UDim2" and config.Size.X.Offset or config.Size
-    local designSize = math.max(finiteNumber(configuredSize, 36), 28)
+    local designSize = math.max(finiteNumber(configuredSize, 34), 28)
     local widget: AnyTable = {
         Window = self,
         Connections = {},
@@ -10827,7 +10889,7 @@ function Window:CreateReopenButton(config: FloatingWidgetOptions?): AnyTable
     AcrylicController:Register(button, "ReopenButton")
     local reopenIcon = makeIcon(button, {
         Icon = config.Icon or "orbit",
-        IconSize = config.IconSize or 15,
+        IconSize = config.IconSize or 14,
         IconColor = config.IconColor,
         IconTransparency = config.IconTransparency,
     }, "Accent")
@@ -11162,8 +11224,10 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
     }, Window)
     local usableWidth = viewport.X - topLeftInset.X - bottomRightInset.X
     local usableHeight = viewport.Y - topLeftInset.Y - bottomRightInset.Y
-    local centerX = topLeftInset.X + usableWidth * 0.56
-    local centerY = topLeftInset.Y + usableHeight * 0.54
+    -- Objective shell is intentionally left of viewport center so the
+    -- floating status widgets retain independent breathing room.
+    local centerX = topLeftInset.X + usableWidth * 0.456
+    local centerY = topLeftInset.Y + usableHeight * 0.532
     local root = create("CanvasGroup", {
         Name = "Window",
         BackgroundTransparency = 1,
@@ -11244,7 +11308,7 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
     local searchBox = create("TextBox", {
         Name = "Search",
         BackgroundColor3 = Theme.Surface2,
-        BackgroundTransparency = 0.26,
+        BackgroundTransparency = 0.48,
         BorderSizePixel = 0,
         ClearTextOnFocus = false,
         Text = "",
@@ -11254,8 +11318,8 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
         Font = Enum.Font.GothamMedium,
         TextSize = 10,
         TextXAlignment = Enum.TextXAlignment.Left,
-        Position = UDim2.fromOffset(8, 8),
-        Size = UDim2.new(1, -16, 0, 26),
+        Position = UDim2.fromOffset(8, 7),
+        Size = UDim2.new(1, -16, 0, 25),
         ZIndex = 15,
         Parent = sidebar,
     }) :: TextBox
@@ -11272,8 +11336,8 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
         Name = "Navigation",
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        Position = UDim2.fromOffset(8, 40),
-        Size = UDim2.new(1, -16, 1, -80),
+        Position = UDim2.fromOffset(8, 38),
+        Size = UDim2.new(1, -16, 1, -72),
         CanvasSize = UDim2.fromOffset(0, 0),
         AutomaticCanvasSize = Enum.AutomaticSize.None,
         ScrollBarThickness = 1,
@@ -11289,7 +11353,7 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
         AutomaticSize = Enum.AutomaticSize.Y,
         Parent = navScroll,
     }) :: Frame
-    local sidebarLayout = list(sidebarList, Enum.FillDirection.Vertical, 4)
+    local sidebarLayout = list(sidebarList, Enum.FillDirection.Vertical, 2)
     addConnection(
         window,
         sidebarLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
@@ -11298,12 +11362,12 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
     )
     local footer = create("TextButton", {
         BackgroundColor3 = Theme.Surface2,
-        BackgroundTransparency = 0.48,
+        BackgroundTransparency = 0.7,
         BorderSizePixel = 0,
         Text = "",
         AutoButtonColor = false,
-        Position = UDim2.new(0, 8, 1, -34),
-        Size = UDim2.new(1, -16, 0, 26),
+        Position = UDim2.new(0, 8, 1, -30),
+        Size = UDim2.new(1, -16, 0, 22),
         ZIndex = 15,
         Parent = sidebar,
     }) :: TextButton
@@ -11389,8 +11453,18 @@ local function buildWindow(library: AnyTable, config: WindowConfig): AnyTable
     )
     ResponsiveController:RegisterTree(window, main)
     window:_bindInput()
+    local resizeQueued = false
     local function viewportChanged()
-        window:ApplyResponsive()
+        if resizeQueued or window.Destroyed then
+            return
+        end
+        resizeQueued = true
+        task.defer(function()
+            resizeQueued = false
+            if not window.Destroyed and window.Root and window.Root.Parent then
+                window:ApplyResponsive()
+            end
+        end)
     end
     local cameraMaid = Maid.new()
     window.CameraMaid = cameraMaid
@@ -11671,17 +11745,17 @@ Kronos.SetBackgroundDim = Kronos.SetDimStrength
 Kronos.GetBackgroundDim = Kronos.GetDimStrength
 
 function Kronos:ResetAppearance(): AnyTable
-    self.SurfaceTransparency = 0.04
+    self.SurfaceTransparency = 0.1
     self.AcrylicEnabled = true
-    self.AcrylicIntensity = 0.52
+    self.AcrylicIntensity = 0.58
     self.BorderIntensity = 1
-    self.SurfaceContrast = 1.08
+    self.SurfaceContrast = 1.02
     self.ReducedMotion = false
     self.AnimationIntensity = 1
     self.AnimationsEnabled = true
     self.NotificationMotion = true
     self.PageTransitions = true
-    self.DimStrength = 0.64
+    self.DimStrength = 0.5
     AppearanceController:Refresh()
     BorderController:Refresh()
     AcrylicController:Refresh()
@@ -11720,8 +11794,12 @@ function Kronos:Destroy()
     self.Layers = nil
     self.ActivePopupWindow = nil
     DragController.Active = nil
+    ScrollbarController.Active = nil
     if DragController.Bindings then
         table.clear(DragController.Bindings)
+    end
+    if ScrollbarController.Entries then
+        table.clear(ScrollbarController.Entries)
     end
     table.clear(self.Options)
     table.clear(self.Flags)
@@ -11753,11 +11831,11 @@ local function buildShowcase(): AnyTable
         ToggleKey = Enum.KeyCode.RightShift,
         MobileToggle = true,
         FloatingWidgets = true,
-        Transparency = 0.04,
+        Transparency = 0.1,
         Acrylic = true,
-        AcrylicIntensity = 0.52,
+        AcrylicIntensity = 0.58,
         BorderIntensity = 1,
-        SurfaceContrast = 1.08,
+        SurfaceContrast = 1.02,
     })
 
     local overview = window:AddTab({ Name = "Overview", Icon = "house" })
@@ -11789,6 +11867,26 @@ local function buildShowcase(): AnyTable
                 Type = "success",
                 Duration = 3,
             })
+        end,
+    })
+    general:AddButton({
+        Id = "ShowcasePersistentNotification",
+        Title = "Persistent notification",
+        ButtonText = "Preview",
+        Icon = "message-square-more",
+        Callback = function()
+            local handle = window:Notify({
+                Title = "Pinned notification",
+                Content = "This toast closes through the returned handle.",
+                Icon = "pin",
+                Type = "info",
+                Duration = 0,
+            })
+            task.delay(2.5, function()
+                if type(handle.Close) == "function" then
+                    handle:Close()
+                end
+            end)
         end,
     })
     general:AddButton({
@@ -11850,7 +11948,7 @@ local function buildShowcase(): AnyTable
         Icon = "blend",
         Min = 0,
         Max = 0.45,
-        Default = 0.04,
+        Default = 0.1,
         Step = 0.01,
         Precision = 2,
         Callback = function(value)
@@ -11872,7 +11970,7 @@ local function buildShowcase(): AnyTable
         Icon = "sparkles",
         Min = 0,
         Max = 1,
-        Default = 0.52,
+        Default = 0.58,
         Step = 0.01,
         Precision = 2,
         Callback = function(value)
@@ -11898,7 +11996,7 @@ local function buildShowcase(): AnyTable
         Icon = "contrast",
         Min = 0.65,
         Max = 1.4,
-        Default = 1.08,
+        Default = 1.02,
         Step = 0.01,
         Precision = 2,
         Callback = function(value)
@@ -12325,6 +12423,41 @@ if startupOk then
                 and type(Components.Keybind) == "function"
                 and type(Components.ColorPicker) == "function",
             "A required component constructor is unavailable"
+        )
+    end)
+end
+if startupOk then
+    startupOk = startupStage("PublicAPICompatibility", function()
+        assert(Kronos.Version == "1.4.0", "Unexpected Kronos version")
+        assert(
+            type(Kronos.CreateWindow) == "function"
+                and type(Kronos.Notify) == "function"
+                and type(Kronos.Destroy) == "function",
+            "Core public API is incomplete"
+        )
+        assert(
+            type(Window.AddTab) == "function"
+                and type(Window.SetTransparency) == "function"
+                and type(Window.SetAcrylic) == "function"
+                and type(Window.SetBorderIntensity) == "function"
+                and type(Window.OpenSettings) == "function",
+            "Window compatibility API is incomplete"
+        )
+        assert(
+            type(Tab.AddSubTab) == "function"
+                and type(Tab.AddSection) == "function"
+                and type(SubTab.AddSection) == "function",
+            "Navigation compatibility API is incomplete"
+        )
+        assert(
+            type(Section.AddButton) == "function"
+                and type(Section.AddToggle) == "function"
+                and type(Section.AddSlider) == "function"
+                and type(Section.AddInput) == "function"
+                and type(Section.AddDropdown) == "function"
+                and type(Section.AddKeybind) == "function"
+                and type(Section.AddColorPicker) == "function",
+            "Component compatibility API is incomplete"
         )
     end)
 end
