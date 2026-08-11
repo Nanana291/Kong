@@ -130,26 +130,46 @@ local function gradient(parent, colorSequence, rotation, transparency)
     })
 end
 
+local function canTouchInstance(object)
+    if State.Destroyed or not object then
+        return false
+    end
+    local ok, parent = pcall(function()
+        return object.Parent
+    end)
+    return ok and parent ~= nil
+end
+
+local function setProperty(object, key, value)
+    return pcall(function()
+        object[key] = value
+    end)
+end
+
 local function tween(object, info, properties)
-    if State.Destroyed or not object or not object.Parent then
+    if not canTouchInstance(object) then
         return nil
     end
-    local ok, created = pcall(TweenService.Create, TweenService, object, info, properties)
+
+    local ok, created = pcall(function()
+        return TweenService:Create(object, info, properties)
+    end)
     if ok and created then
         State.Tweens[#State.Tweens + 1] = created
-        created.Completed:Once(function()
-            local index = table.find(State.Tweens, created)
-            if index then
-                table.remove(State.Tweens, index)
-            end
+        pcall(function()
+            created.Completed:Once(function()
+                local index = table.find(State.Tweens, created)
+                if index then
+                    table.remove(State.Tweens, index)
+                end
+            end)
+            created:Play()
         end)
-        created:Play()
         return created
     end
+
     for key, value in pairs(properties) do
-        pcall(function()
-            object[key] = value
-        end)
+        setProperty(object, key, value)
     end
     return nil
 end
@@ -606,8 +626,8 @@ local function setStatus(kind, message)
         color = Color3.fromRGB(205, 198, 224)
         lineTransparency = 0.48
     end
-    UI.StatusText.Text = message or "Status"
-    UI.StatusText.TextColor3 = color
+    setProperty(UI.StatusText, "Text", message or "Status")
+    setProperty(UI.StatusText, "TextColor3", color)
     if UI.StatusLine then
         tween(UI.StatusLine, TweenInfoSet.Soft, { BackgroundColor3 = color, BackgroundTransparency = lineTransparency })
     end
@@ -618,19 +638,19 @@ local function setInputLocked(locked)
         pcall(function()
             UI.KeyBox.TextEditable = not locked
         end)
-        UI.KeyBox.Active = not locked
+        setProperty(UI.KeyBox, "Active", not locked)
     end
     if UI.ValidateButton then
-        UI.ValidateButton.Active = not locked
+        setProperty(UI.ValidateButton, "Active", not locked)
     end
     if UI.GetKeyButton then
-        UI.GetKeyButton.Active = not locked
+        setProperty(UI.GetKeyButton, "Active", not locked)
     end
 end
 
 local function setLoadingMessage(message)
     if UI.ValidationLoadingText then
-        UI.ValidationLoadingText.Text = letterSpaced(message or "Validating Access")
+        setProperty(UI.ValidationLoadingText, "Text", letterSpaced(message or "Validating Access"))
     end
 end
 
@@ -644,27 +664,27 @@ local function startLoadingVisual(message)
         tween(UI.StatusLine, TweenInfoSet.Fast, { BackgroundTransparency = 1 })
     end
     if UI.ValidationOverlay then
-        UI.ValidationOverlay.Visible = true
-        UI.ValidationOverlay.GroupTransparency = 1
+        setProperty(UI.ValidationOverlay, "Visible", true)
+        setProperty(UI.ValidationOverlay, "GroupTransparency", 1)
         tween(UI.ValidationOverlay, TweenInfoSet.Soft, { GroupTransparency = 0 })
     end
     if UI.ValidationOverlayScale then
-        UI.ValidationOverlayScale.Scale = 0.94
+        setProperty(UI.ValidationOverlayScale, "Scale", 0.94)
         tween(UI.ValidationOverlayScale, TweenInfoSet.Soft, { Scale = 1 })
     end
     if UI.ValidateLabel then
-        UI.ValidateLabel.Text = "Validating"
+        setProperty(UI.ValidateLabel, "Text", "Validating")
     end
     disconnect(State.LoadingConnection)
     State.LoadingConnection = connect(RunService.RenderStepped, function(dt)
         State.LoadingTick += dt
         if UI.ValidationSpinner then
-            UI.ValidationSpinner.Rotation = (State.LoadingTick * 178) % 360
+            setProperty(UI.ValidationSpinner, "Rotation", (State.LoadingTick * 178) % 360)
         end
         if UI.SpinnerSegments then
             for index, segment in ipairs(UI.SpinnerSegments) do
                 local wave = (math.sin(State.LoadingTick * 7.2 + index * 0.7) + 1) * 0.5
-                segment.BackgroundTransparency = 0.38 + wave * 0.42
+                setProperty(segment, "BackgroundTransparency", 0.38 + wave * 0.42)
             end
         end
     end)
@@ -676,30 +696,37 @@ local function stopLoadingVisual()
         local overlay = UI.ValidationOverlay
         local outTween = tween(overlay, TweenInfoSet.Fast, { GroupTransparency = 1 })
         if outTween then
-            outTween.Completed:Once(function()
-                if not State.Validating and overlay.Parent then
-                    overlay.Visible = false
-                end
+            pcall(function()
+                outTween.Completed:Once(function()
+                    if not State.Validating and canTouchInstance(overlay) then
+                        setProperty(overlay, "Visible", false)
+                    end
+                end)
             end)
         else
-            overlay.Visible = false
+            setProperty(overlay, "Visible", false)
         end
     end
     if UI.ValidationOverlayScale then
         tween(UI.ValidationOverlayScale, TweenInfoSet.Fast, { Scale = 0.96 })
     end
     if UI.ValidateLabel then
-        UI.ValidateLabel.Text = "Validate"
+        setProperty(UI.ValidateLabel, "Text", "Validate")
     end
 end
 local function shake(object)
     if not object then
         return
     end
-    local original = object.Position
+    local ok, original = pcall(function()
+        return object.Position
+    end)
+    if not ok then
+        return
+    end
     task.spawn(function()
         for _, offset in ipairs({ -8, 8, -5, 5, 0 }) do
-            if State.Destroyed or not object.Parent then
+            if not canTouchInstance(object) then
                 return
             end
             tween(object, TweenInfo.new(0.045, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
@@ -707,8 +734,8 @@ local function shake(object)
             })
             task.wait(0.045)
         end
-        if object.Parent then
-            object.Position = original
+        if canTouchInstance(object) then
+            setProperty(object, "Position", original)
         end
     end)
 end
@@ -2572,26 +2599,30 @@ local function finishValidation(success, message, options, token)
     stopLoadingVisual()
     setInputLocked(false)
     if UI.StatusText then
-        UI.StatusText.TextTransparency = 1
+        setProperty(UI.StatusText, "TextTransparency", 1)
     end
     if UI.StatusLine then
-        UI.StatusLine.BackgroundTransparency = 1
+        setProperty(UI.StatusLine, "BackgroundTransparency", 1)
     end
     showStatusText("error", message or (options.Auto and "Saved key invalid. Enter a new key" or "Validation failed"))
     if UI.FormGroup then
-        local original = UI.FormGroup.Position
-        tween(UI.FormGroup, TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-            Position = original + UDim2.fromOffset(0, 2),
-        })
-        task.delay(0.08, function()
-            if UI.FormGroup and UI.FormGroup.Parent then
-                tween(
-                    UI.FormGroup,
-                    TweenInfo.new(0.16, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-                    { Position = original }
-                )
-            end
+        local ok, original = pcall(function()
+            return UI.FormGroup.Position
         end)
+        if ok then
+            tween(UI.FormGroup, TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                Position = original + UDim2.fromOffset(0, 2),
+            })
+            task.delay(0.08, function()
+                if canTouchInstance(UI.FormGroup) then
+                    tween(
+                        UI.FormGroup,
+                        TweenInfo.new(0.16, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+                        { Position = original }
+                    )
+                end
+            end)
+        end
     end
 end
 
@@ -2616,7 +2647,7 @@ local function beginValidationFlow(key, options)
     setInputLocked(true)
 
     if UI.KeyBox and options.FillInput ~= false then
-        UI.KeyBox.Text = key
+        setProperty(UI.KeyBox, "Text", key)
     end
 
     if options.Auto then
@@ -3578,7 +3609,7 @@ function Loader:Close(callback)
     State.LoadingConnection = nil
 
     if UI.ValidationOverlay then
-        UI.ValidationOverlay.Visible = false
+        setProperty(UI.ValidationOverlay, "Visible", false)
     end
     if UI.Blur then
         tween(UI.Blur, TweenInfoSet.Close, { Size = 0 })
