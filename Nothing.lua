@@ -2422,6 +2422,7 @@ function Library.new(config)
             Config = self.SelectedConfig ~= "" and self.SelectedConfig or nil,
             Theme = ThemeManager:GetThemeName(ThemeManager.ActiveTheme),
             AccentPulse = ThemeManager.AccentPulseEnabled == true,
+            AutoHideUI = WindowTable.AutoHideUI == true,
         })
     end
 
@@ -2776,6 +2777,7 @@ function Library.new(config)
 
         local data = self:ReadJson(self:GetAutoloadPath())
         if type(data) ~= "table" then
+            WindowTable.AutoHideUI = false
             ThemeManager:SetTheme(self.Theme, true)
             self:SyncSettingsUI()
             return false
@@ -2785,6 +2787,7 @@ function Library.new(config)
         self.Theme = ThemeManager:GetThemeName(data.Theme or self.Theme)
         ThemeManager:SetTheme(self.Theme, true)
         ThemeManager:SetAccentPulse(data.AccentPulse == true)
+        WindowTable.AutoHideUI = data.AutoHideUI == true
 
         if IsValidConfigName(data.Config) then
             self.SelectedConfig = NormalizeConfigName(data.Config, true)
@@ -3842,6 +3845,7 @@ function Library.new(config)
             Default = WindowTable.AutoHideUI,
             Callback = function(value)
                 WindowTable.AutoHideUI = value == true
+                ConfigManager:PersistAutoload()
                 if WindowTable.AutoHideUI and WindowTable.WindowToggle then
                     task.delay(0.35, function()
                         if WindowTable.AutoHideUI and WindowTable.WindowToggle and ScreenGui and ScreenGui.Parent then
@@ -4259,6 +4263,13 @@ function Library.new(config)
     end
 
     ConfigManager:LoadAutoload()
+
+    task.delay(0.6, function()
+        if WindowTable.AutoHideUI and WindowTable.WindowToggle and ScreenGui and ScreenGui.Parent then
+            WindowTable.WindowToggle = false
+            Update()
+        end
+    end)
 
     local function NormalizeDropdownValue(values, value, multi)
         if multi then
