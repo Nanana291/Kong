@@ -3862,7 +3862,7 @@ function Library.new(config)
             root.Name = "CloseUIAction"
             root.Parent = SystemSection.Root
             root.BackgroundColor3 = ThemeManager:GetColor("WindowBackground")
-            root.BackgroundTransparency = 0.08
+            root.BackgroundTransparency = 0.02
             root.BorderSizePixel = 0
             root.ClipsDescendants = true
             root.Size = UDim2.new(0.95, 0, 0, 142)
@@ -3880,7 +3880,7 @@ function Library.new(config)
             local header = Instance.new("Frame")
             header.Parent = root
             header.BackgroundColor3 = ThemeManager:GetColor("CardSurface")
-            header.BackgroundTransparency = 0.06
+            header.BackgroundTransparency = 0.02
             header.BorderSizePixel = 0
             header.Position = UDim2.fromOffset(8, 8)
             header.Size = UDim2.new(1, -16, 0, 56)
@@ -3892,29 +3892,11 @@ function Library.new(config)
             headerStroke.Parent = header
             ThemeManager:Bind(headerStroke, "Color", "AccentStroke")
 
-            local icon = Instance.new("TextLabel")
-            icon.Parent = header
-            icon.BackgroundColor3 = ThemeManager:GetColor("Danger")
-            icon.BackgroundTransparency = 0.18
-            icon.Position = UDim2.fromOffset(10, 11)
-            icon.Size = UDim2.fromOffset(34, 34)
-            icon.Text = "×"
-            icon.TextColor3 = Color3.fromRGB(242, 244, 252)
-            icon.TextSize = 20
-            icon.Font = Enum.Font.GothamBold
-            icon.ZIndex = 20
-            Instance.new("UICorner", icon).CornerRadius = UDim.new(0, 10)
-            ThemeManager:Bind(icon, "BackgroundColor3", "Danger")
-            local iconGrad = Instance.new("UIGradient")
-            iconGrad.Rotation = 32
-            iconGrad.Parent = icon
-            ThemeManager:BindGradient(iconGrad, "Danger", "WindowBackground")
-
             local title = Instance.new("TextLabel")
             title.Parent = header
             title.BackgroundTransparency = 1
-            title.Position = UDim2.fromOffset(54, 10)
-            title.Size = UDim2.new(1, -66, 0, 17)
+            title.Position = UDim2.fromOffset(14, 10)
+            title.Size = UDim2.new(1, -28, 0, 17)
             title.Font = Enum.Font.GothamBold
             title.Text = "End UI Session"
             title.TextColor3 = Color3.fromRGB(238, 240, 250)
@@ -3926,8 +3908,8 @@ function Library.new(config)
             local desc = Instance.new("TextLabel")
             desc.Parent = header
             desc.BackgroundTransparency = 1
-            desc.Position = UDim2.fromOffset(54, 30)
-            desc.Size = UDim2.new(1, -66, 0, 14)
+            desc.Position = UDim2.fromOffset(14, 30)
+            desc.Size = UDim2.new(1, -28, 0, 14)
             desc.Font = Enum.Font.GothamMedium
             desc.Text = "Safe close, configs stay untouched."
             desc.TextColor3 = Color3.fromRGB(135, 141, 160)
@@ -4025,7 +4007,7 @@ function Library.new(config)
             root.Name = "DiscordInviteCard"
             root.Parent = CommunitySection.Root
             root.BackgroundColor3 = ThemeManager:GetColor("WindowBackground")
-            root.BackgroundTransparency = 0.08
+            root.BackgroundTransparency = 0.02
             root.BorderSizePixel = 0
             root.ClipsDescendants = true
             root.Size = UDim2.new(0.95, 0, 0, 154)
@@ -4041,7 +4023,7 @@ function Library.new(config)
             local header = Instance.new("Frame")
             header.Parent = root
             header.BackgroundColor3 = ThemeManager:GetColor("CardSurface")
-            header.BackgroundTransparency = 0.06
+            header.BackgroundTransparency = 0.02
             header.BorderSizePixel = 0
             header.Position = UDim2.fromOffset(8, 8)
             header.Size = UDim2.new(1, -16, 0, 58)
@@ -4053,38 +4035,11 @@ function Library.new(config)
             headerStroke.Parent = header
             ThemeManager:Bind(headerStroke, "Color", "AccentStroke")
 
-            local icon = Instance.new("TextLabel")
-            icon.Parent = header
-            icon.BackgroundColor3 = ThemeManager:GetColor("Success")
-            icon.BackgroundTransparency = 0.16
-            icon.Position = UDim2.fromOffset(10, 10)
-            icon.Size = UDim2.fromOffset(38, 38)
-            icon.Text = "K"
-            icon.TextColor3 = Color3.fromRGB(238, 240, 250)
-            icon.TextSize = 17
-            icon.Font = Enum.Font.GothamBold
-            icon.ZIndex = 20
-            Instance.new("UICorner", icon).CornerRadius = UDim.new(0, 11)
-            ThemeManager:Bind(icon, "BackgroundColor3", "Success")
-            local iconGrad = Instance.new("UIGradient")
-            iconGrad.Rotation = 36
-            iconGrad.Parent = icon
-            ThemeManager:BindGradient(iconGrad, "Success", "Accent")
-
-            local iconImage = Instance.new("ImageLabel")
-            iconImage.Parent = icon
-            iconImage.BackgroundTransparency = 1
-            iconImage.Size = UDim2.fromScale(1, 1)
-            iconImage.ImageTransparency = 1
-            iconImage.ScaleType = Enum.ScaleType.Crop
-            iconImage.ZIndex = 21
-            Instance.new("UICorner", iconImage).CornerRadius = UDim.new(0, 11)
-
             local title = Instance.new("TextLabel")
             title.Parent = header
             title.BackgroundTransparency = 1
-            title.Position = UDim2.fromOffset(58, 11)
-            title.Size = UDim2.new(1, -112, 0, 18)
+            title.Position = UDim2.fromOffset(14, 11)
+            title.Size = UDim2.new(1, -68, 0, 18)
             title.Font = Enum.Font.GothamBold
             title.Text = "Kronos"
             title.TextColor3 = Color3.fromRGB(238, 240, 250)
@@ -4096,7 +4051,7 @@ function Library.new(config)
             local subtitle = Instance.new("TextLabel")
             subtitle.Parent = header
             subtitle.BackgroundTransparency = 1
-            subtitle.Position = UDim2.fromOffset(58, 31)
+            subtitle.Position = UDim2.fromOffset(14, 31)
             subtitle.Size = UDim2.new(1, -72, 0, 14)
             subtitle.Font = Enum.Font.GothamMedium
             subtitle.Text = "Fetching live community stats..."
@@ -4136,7 +4091,7 @@ function Library.new(config)
                 local box = Instance.new("Frame")
                 box.Parent = stats
                 box.BackgroundColor3 = ThemeManager:GetColor("CardSurface")
-                box.BackgroundTransparency = 0.18
+                box.BackgroundTransparency = 0.1
                 box.BorderSizePixel = 0
                 box.Size = UDim2.new(0.5, -4, 1, 0)
                 box.ZIndex = 18
@@ -4230,14 +4185,6 @@ function Library.new(config)
                 local data =
                     Compatibility.HTTP.JSONGet("https://discord.com/api/v9/invites/9FT8yAf8MG?with_counts=true")
                 if type(data) == "table" and root.Parent then
-                    local guild = type(data.guild) == "table" and data.guild or nil
-                    if guild and guild.id and guild.icon then
-                        iconImage.Image = ("https://cdn.discordapp.com/icons/%s/%s.png?size=128"):format(
-                            guild.id,
-                            guild.icon
-                        )
-                        iconImage.ImageTransparency = 0
-                    end
                     setMetric(members, data.approximate_member_count)
                     setMetric(online, data.approximate_presence_count)
                     subtitle.Text = "Official server · keys and updates"
