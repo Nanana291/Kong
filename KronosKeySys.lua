@@ -75,7 +75,7 @@ local UI = {}
 local BASE_SIZE = Vector2.new(980, 582)
 local SAFE_PAD = 18
 local DISCORD_CONTACT_URL = "dsc.gg/kronoshub"
-local PURCHASE_ACCESS_URL = "https://funpay.com/lots/offer?id=40879132"
+local PURCHASE_ACCESS_URL = "https://kronoshub.mysellauth.com/"
 
 local function connect(signal, callback)
     local connection = signal:Connect(callback)
