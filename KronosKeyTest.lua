@@ -2008,33 +2008,33 @@ local function createScriptLoader(parent)
     local backdrop = new("Frame", {
         Name = "Backdrop",
         Size = UDim2.fromScale(1, 1),
-        BackgroundColor3 = Color3.fromRGB(4, 6, 11),
+        BackgroundColor3 = Color3.fromRGB(2, 3, 6),
         BorderSizePixel = 0,
         ZIndex = 171,
         Parent = loader,
     })
-    gradient(
+    UI.ScriptLoaderBackdropGradient = gradient(
         backdrop,
         ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(18, 22, 38)),
-            ColorSequenceKeypoint.new(0.46, Color3.fromRGB(7, 9, 16)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(2, 3, 7)),
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(10, 12, 19)),
+            ColorSequenceKeypoint.new(0.46, Color3.fromRGB(4, 5, 9)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(1, 2, 4)),
         }),
-        118,
+        124,
         NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.08),
-            NumberSequenceKeypoint.new(0.55, 0.02),
-            NumberSequenceKeypoint.new(1, 0.12),
+            NumberSequenceKeypoint.new(0, 0.04),
+            NumberSequenceKeypoint.new(0.55, 0),
+            NumberSequenceKeypoint.new(1, 0.06),
         })
     )
 
     local ambientGlow = new("Frame", {
         Name = "AmbientGlow",
-        Size = UDim2.fromOffset(620, 260),
+        Size = UDim2.fromOffset(560, 220),
         AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.25),
-        BackgroundColor3 = Theme.Accent,
-        BackgroundTransparency = 0.9,
+        Position = UDim2.fromScale(0.5, 0.23),
+        BackgroundColor3 = Color3.fromRGB(83, 90, 120),
+        BackgroundTransparency = 0.965,
         BorderSizePixel = 0,
         ZIndex = 172,
         Parent = loader,
@@ -2042,33 +2042,85 @@ local function createScriptLoader(parent)
     corner(ambientGlow, 999)
     gradient(
         ambientGlow,
-        ColorSequence.new(Theme.AccentHot, Theme.AccentDeep),
+        ColorSequence.new(Color3.fromRGB(128, 136, 174), Color3.fromRGB(42, 47, 67)),
         0,
         NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.7),
-            NumberSequenceKeypoint.new(0.5, 0.42),
+            NumberSequenceKeypoint.new(0, 0.82),
+            NumberSequenceKeypoint.new(0.5, 0.58),
+            NumberSequenceKeypoint.new(1, 1),
+        })
+    )
+    UI.ScriptLoaderAmbientGlow = ambientGlow
+
+    local surface = new("Frame", {
+        Name = "LaunchSurface",
+        Size = UDim2.fromOffset(650, 424),
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromOffset(490, 291),
+        BackgroundColor3 = Color3.fromRGB(5, 6, 10),
+        BackgroundTransparency = 0.12,
+        BorderSizePixel = 0,
+        ZIndex = 173,
+        Parent = loader,
+    })
+    corner(surface, 24)
+    gradient(
+        surface,
+        ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(12, 14, 21)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(5, 6, 10)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(2, 3, 6)),
+        }),
+        116,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.08),
+            NumberSequenceKeypoint.new(0.58, 0),
+            NumberSequenceKeypoint.new(1, 0.06),
+        })
+    )
+    UI.ScriptLoaderSurface = surface
+    UI.ScriptLoaderSurfaceStroke = stroke(surface, Color3.fromRGB(42, 46, 60), 1, 0.54)
+
+    local surfaceHighlight = new("Frame", {
+        Name = "SurfaceHighlight",
+        Size = UDim2.new(1, -54, 0, 1),
+        Position = UDim2.fromOffset(27, 1),
+        BackgroundColor3 = Color3.fromRGB(154, 161, 190),
+        BackgroundTransparency = 0.82,
+        BorderSizePixel = 0,
+        ZIndex = 175,
+        Parent = surface,
+    })
+    gradient(
+        surfaceHighlight,
+        ColorSequence.new(Color3.fromRGB(112, 119, 151), Color3.fromRGB(205, 210, 229)),
+        0,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 1),
+            NumberSequenceKeypoint.new(0.5, 0.18),
             NumberSequenceKeypoint.new(1, 1),
         })
     )
 
     local badge = new("TextLabel", {
         Name = "Badge",
-        Size = UDim2.fromOffset(142, 26),
+        Size = UDim2.fromOffset(134, 24),
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromOffset(490, 82),
-        BackgroundColor3 = Color3.fromRGB(29, 35, 60),
-        BackgroundTransparency = 0.42,
+        BackgroundColor3 = Color3.fromRGB(10, 12, 18),
+        BackgroundTransparency = 0.18,
         BorderSizePixel = 0,
         Text = letterSpaced("SECURE SESSION"),
-        TextColor3 = Color3.fromRGB(205, 213, 255),
-        TextTransparency = 0.1,
+        TextColor3 = Color3.fromRGB(153, 159, 181),
+        TextTransparency = 0.08,
         Font = Enum.Font.GothamMedium,
         TextSize = 10,
         ZIndex = 180,
         Parent = loader,
     })
     corner(badge, 999)
-    stroke(badge, Color3.fromRGB(113, 127, 201), 1, 0.6)
+    stroke(badge, Color3.fromRGB(59, 64, 82), 1, 0.48)
+    UI.ScriptLoaderBadge = badge
 
     local wordmark, renderWordmark = buildWordmark(loader, State.Title, {
         Name = "LoaderWordmark",
@@ -2091,25 +2143,25 @@ local function createScriptLoader(parent)
         Position = UDim2.fromOffset(490, 213),
         BackgroundTransparency = 1,
         Text = "Starting Script",
-        TextColor3 = Theme.Text,
-        TextTransparency = 0.02,
+        TextColor3 = Color3.fromRGB(226, 229, 239),
+        TextTransparency = 0.04,
         Font = Enum.Font.GothamSemibold,
-        TextSize = 30,
+        TextSize = 29,
         TextXAlignment = Enum.TextXAlignment.Center,
         TextYAlignment = Enum.TextYAlignment.Center,
         ZIndex = 181,
         Parent = loader,
     })
 
-    new("TextLabel", {
+    UI.ScriptLoaderSubtitle = new("TextLabel", {
         Name = "Subtitle",
         Size = UDim2.fromOffset(560, 24),
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromOffset(490, 250),
         BackgroundTransparency = 1,
         Text = "Preparing your Kronos experience",
-        TextColor3 = Theme.TextDim,
-        TextTransparency = 0.2,
+        TextColor3 = Color3.fromRGB(108, 113, 132),
+        TextTransparency = 0.08,
         Font = Enum.Font.Gotham,
         TextSize = 13,
         TextXAlignment = Enum.TextXAlignment.Center,
@@ -2117,38 +2169,40 @@ local function createScriptLoader(parent)
         Parent = loader,
     })
 
-    local progressGroup = new("Frame", {
+    local progressGroup = new("CanvasGroup", {
         Name = "ProgressGroup",
-        Size = UDim2.fromOffset(560, 82),
+        Size = UDim2.fromOffset(520, 82),
         AnchorPoint = Vector2.new(0.5, 0),
         Position = UDim2.fromOffset(490, 292),
         BackgroundTransparency = 1,
+        GroupTransparency = 0,
         ZIndex = 181,
         Parent = loader,
     })
+    UI.ScriptLoaderProgressGroup = progressGroup
 
-    local statusDot = new("Frame", {
-        Name = "StatusDot",
-        Size = UDim2.fromOffset(6, 6),
+    local statusMark = new("Frame", {
+        Name = "StatusSignal",
+        Size = UDim2.fromOffset(14, 2),
         AnchorPoint = Vector2.new(0, 0.5),
         Position = UDim2.fromOffset(0, 10),
-        BackgroundColor3 = Theme.Accent,
-        BackgroundTransparency = 0.08,
+        BackgroundColor3 = Color3.fromRGB(108, 115, 148),
+        BackgroundTransparency = 0.14,
         BorderSizePixel = 0,
         ZIndex = 184,
         Parent = progressGroup,
     })
-    corner(statusDot, 999)
-    UI.ScriptLoaderStatusDot = statusDot
+    corner(statusMark, 999)
+    UI.ScriptLoaderStatusMark = statusMark
 
     UI.ScriptLoaderStatus = new("TextLabel", {
         Name = "Status",
-        Size = UDim2.fromOffset(430, 20),
-        Position = UDim2.fromOffset(16, 0),
+        Size = UDim2.fromOffset(408, 20),
+        Position = UDim2.fromOffset(24, 0),
         BackgroundTransparency = 1,
         Text = "Preparing secure runtime",
-        TextColor3 = Color3.fromRGB(180, 187, 215),
-        TextTransparency = 0.1,
+        TextColor3 = Color3.fromRGB(139, 145, 166),
+        TextTransparency = 0.06,
         Font = Enum.Font.GothamMedium,
         TextSize = 12,
         TextXAlignment = Enum.TextXAlignment.Left,
@@ -2158,26 +2212,29 @@ local function createScriptLoader(parent)
 
     UI.ScriptLoaderPercent = new("TextLabel", {
         Name = "Percent",
-        Size = UDim2.fromOffset(76, 20),
-        Position = UDim2.fromOffset(484, 0),
-        BackgroundTransparency = 1,
+        Size = UDim2.fromOffset(58, 24),
+        Position = UDim2.fromOffset(462, -2),
+        BackgroundColor3 = Color3.fromRGB(9, 11, 16),
+        BackgroundTransparency = 0.12,
         Text = "0%",
-        TextColor3 = Color3.fromRGB(218, 224, 250),
-        TextTransparency = 0.04,
+        TextColor3 = Color3.fromRGB(176, 181, 201),
+        TextTransparency = 0.03,
         Font = Enum.Font.GothamSemibold,
         TextSize = 12,
-        TextXAlignment = Enum.TextXAlignment.Right,
+        TextXAlignment = Enum.TextXAlignment.Center,
         ZIndex = 184,
         Parent = progressGroup,
     })
+    corner(UI.ScriptLoaderPercent, 8)
+    stroke(UI.ScriptLoaderPercent, Color3.fromRGB(50, 54, 69), 1, 0.5)
 
     local railGlow = new("Frame", {
         Name = "RailGlow",
-        Size = UDim2.new(1, 16, 0, 28),
+        Size = UDim2.new(1, 12, 0, 20),
         AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(0.5, 0, 0, 43),
-        BackgroundColor3 = Theme.Accent,
-        BackgroundTransparency = 0.92,
+        Position = UDim2.new(0.5, 0, 0, 42),
+        BackgroundColor3 = Color3.fromRGB(86, 93, 122),
+        BackgroundTransparency = 0.965,
         BorderSizePixel = 0,
         ZIndex = 181,
         Parent = progressGroup,
@@ -2187,22 +2244,22 @@ local function createScriptLoader(parent)
 
     local rail = new("Frame", {
         Name = "ProgressRail",
-        Size = UDim2.new(1, 0, 0, 12),
-        Position = UDim2.fromOffset(0, 37),
-        BackgroundColor3 = Color3.fromRGB(22, 26, 40),
-        BackgroundTransparency = 0.16,
+        Size = UDim2.new(1, 0, 0, 7),
+        Position = UDim2.fromOffset(0, 39),
+        BackgroundColor3 = Color3.fromRGB(13, 15, 21),
+        BackgroundTransparency = 0.04,
         BorderSizePixel = 0,
         ClipsDescendants = true,
         ZIndex = 182,
         Parent = progressGroup,
     })
     corner(rail, 999)
-    stroke(rail, Color3.fromRGB(87, 96, 133), 1, 0.64)
+    stroke(rail, Color3.fromRGB(43, 47, 61), 1, 0.48)
 
     local fill = new("Frame", {
         Name = "ProgressFill",
         Size = UDim2.new(0, 0, 1, 0),
-        BackgroundColor3 = Theme.Accent,
+        BackgroundColor3 = Color3.fromRGB(111, 118, 150),
         BorderSizePixel = 0,
         ClipsDescendants = true,
         ZIndex = 184,
@@ -2213,63 +2270,62 @@ local function createScriptLoader(parent)
     UI.ScriptLoaderFillGradient = gradient(
         fill,
         ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Theme.AccentDeep),
-            ColorSequenceKeypoint.new(0.48, Theme.Accent),
-            ColorSequenceKeypoint.new(0.72, Color3.fromRGB(236, 240, 255)),
-            ColorSequenceKeypoint.new(1, Theme.AccentHot),
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(61, 67, 89)),
+            ColorSequenceKeypoint.new(0.46, Color3.fromRGB(104, 112, 145)),
+            ColorSequenceKeypoint.new(0.68, Color3.fromRGB(176, 181, 203)),
+            ColorSequenceKeypoint.new(0.78, Color3.fromRGB(112, 120, 154)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(72, 78, 103)),
         }),
         0,
         NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.08),
-            NumberSequenceKeypoint.new(0.56, 0),
-            NumberSequenceKeypoint.new(1, 0.12),
+            NumberSequenceKeypoint.new(0, 0.12),
+            NumberSequenceKeypoint.new(0.58, 0.04),
+            NumberSequenceKeypoint.new(1, 0.16),
         })
     )
 
-    local head = new("Frame", {
-        Name = "ProgressHead",
-        Size = UDim2.fromOffset(16, 16),
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(0, 0, 0, 43),
-        BackgroundColor3 = Color3.fromRGB(238, 242, 255),
-        BackgroundTransparency = 0.08,
+    local fillHighlight = new("Frame", {
+        Name = "FillHighlight",
+        Size = UDim2.new(1, -4, 0, 1),
+        Position = UDim2.fromOffset(2, 1),
+        BackgroundColor3 = Color3.fromRGB(226, 229, 239),
+        BackgroundTransparency = 0.72,
         BorderSizePixel = 0,
-        ZIndex = 186,
-        Parent = progressGroup,
+        ZIndex = 185,
+        Parent = fill,
     })
-    corner(head, 999)
-    stroke(head, Theme.AccentHot, 1, 0.28)
-    UI.ScriptLoaderHead = head
+    corner(fillHighlight, 999)
 
     local supportButton = new("TextButton", {
         Name = "DiscordSupport",
         Size = UDim2.fromOffset(382, 52),
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromOffset(490, 448),
-        BackgroundColor3 = Color3.fromRGB(8, 11, 19),
-        BackgroundTransparency = 0.34,
+        BackgroundColor3 = Color3.fromRGB(4, 5, 8),
+        BackgroundTransparency = 0.12,
         AutoButtonColor = false,
         Text = "",
         ZIndex = 182,
         Parent = loader,
     })
     corner(supportButton, 16)
-    local supportStroke = stroke(supportButton, Color3.fromRGB(72, 81, 116), 1, 0.58)
+    local supportStroke = stroke(supportButton, Color3.fromRGB(40, 44, 57), 1, 0.5)
     local supportScale = new("UIScale", { Scale = 1, Parent = supportButton })
+    UI.ScriptLoaderSupportScale = supportScale
 
     local iconPlate = new("Frame", {
         Name = "DiscordIconPlate",
         Size = UDim2.fromOffset(34, 34),
         AnchorPoint = Vector2.new(0, 0.5),
         Position = UDim2.fromOffset(10, 26),
-        BackgroundColor3 = Color3.fromRGB(87, 101, 188),
-        BackgroundTransparency = 0.7,
+        BackgroundColor3 = Color3.fromRGB(23, 26, 37),
+        BackgroundTransparency = 0.08,
         BorderSizePixel = 0,
         ZIndex = 184,
         Parent = supportButton,
     })
     corner(iconPlate, 12)
-    stroke(iconPlate, Color3.fromRGB(147, 161, 239), 1, 0.62)
+    stroke(iconPlate, Color3.fromRGB(70, 76, 98), 1, 0.48)
 
     local sourceGlyph = UI.ContactDiscordButton and UI.ContactDiscordButton:FindFirstChild("DiscordGlyph", true)
     if sourceGlyph then
@@ -2291,8 +2347,8 @@ local function createScriptLoader(parent)
         Position = UDim2.fromOffset(58, 15),
         BackgroundTransparency = 1,
         Text = "Having issues?",
-        TextColor3 = Theme.TextDim,
-        TextTransparency = 0.12,
+        TextColor3 = Color3.fromRGB(104, 109, 126),
+        TextTransparency = 0.04,
         Font = Enum.Font.Gotham,
         TextSize = 13,
         TextXAlignment = Enum.TextXAlignment.Left,
@@ -2306,8 +2362,8 @@ local function createScriptLoader(parent)
         Position = UDim2.fromOffset(169, 15),
         BackgroundTransparency = 1,
         Text = "Join Discord",
-        TextColor3 = Theme.Accent,
-        TextTransparency = 0.02,
+        TextColor3 = Color3.fromRGB(141, 150, 195),
+        TextTransparency = 0.03,
         Font = Enum.Font.GothamSemibold,
         TextSize = 13,
         TextXAlignment = Enum.TextXAlignment.Left,
@@ -2319,23 +2375,23 @@ local function createScriptLoader(parent)
         Name = "LinkUnderline",
         Size = UDim2.fromOffset(76, 1),
         Position = UDim2.fromOffset(169, 37),
-        BackgroundColor3 = Theme.Accent,
-        BackgroundTransparency = 0.24,
+        BackgroundColor3 = Color3.fromRGB(126, 136, 181),
+        BackgroundTransparency = 0.34,
         BorderSizePixel = 0,
         ZIndex = 184,
         Parent = supportButton,
     })
     corner(underline, 999)
-    gradient(underline, ColorSequence.new(Theme.AccentDeep, Theme.AccentHot), 0)
+    gradient(underline, ColorSequence.new(Color3.fromRGB(77, 84, 115), Color3.fromRGB(158, 166, 204)), 0)
 
-    new("TextLabel", {
+    local arrow = new("TextLabel", {
         Name = "Arrow",
         Size = UDim2.fromOffset(30, 22),
         Position = UDim2.fromOffset(342, 15),
         BackgroundTransparency = 1,
         Text = "↗",
-        TextColor3 = Theme.Accent,
-        TextTransparency = 0.08,
+        TextColor3 = Color3.fromRGB(112, 119, 148),
+        TextTransparency = 0.12,
         Font = Enum.Font.GothamSemibold,
         TextSize = 15,
         TextXAlignment = Enum.TextXAlignment.Center,
@@ -2344,26 +2400,28 @@ local function createScriptLoader(parent)
     })
 
     connect(supportButton.MouseEnter, function()
-        tween(supportScale, TweenInfoSet.Fast, { Scale = 1.015 })
-        tween(supportButton, TweenInfoSet.Fast, { BackgroundTransparency = 0.22 })
-        tween(supportStroke, TweenInfoSet.Fast, { Color = Theme.AccentDeep, Transparency = 0.34 })
-        tween(iconPlate, TweenInfoSet.Fast, { BackgroundTransparency = 0.54 })
-        tween(joinLabel, TweenInfoSet.Fast, { TextColor3 = Theme.AccentHot })
-        tween(underline, TweenInfoSet.Fast, { Size = UDim2.fromOffset(104, 1), BackgroundTransparency = 0.04 })
+        tween(supportScale, TweenInfoSet.Fast, { Scale = 1.012 })
+        tween(supportButton, TweenInfoSet.Fast, { BackgroundColor3 = Color3.fromRGB(8, 9, 14) })
+        tween(supportStroke, TweenInfoSet.Fast, { Color = Color3.fromRGB(73, 79, 101), Transparency = 0.34 })
+        tween(iconPlate, TweenInfoSet.Fast, { BackgroundColor3 = Color3.fromRGB(31, 35, 48) })
+        tween(joinLabel, TweenInfoSet.Fast, { TextColor3 = Color3.fromRGB(174, 181, 211) })
+        tween(underline, TweenInfoSet.Fast, { Size = UDim2.fromOffset(104, 1), BackgroundTransparency = 0.12 })
+        tween(arrow, TweenInfoSet.Fast, { Position = UDim2.fromOffset(345, 12), TextTransparency = 0.02 })
     end)
     connect(supportButton.MouseLeave, function()
         tween(supportScale, TweenInfoSet.Fast, { Scale = 1 })
-        tween(supportButton, TweenInfoSet.Fast, { BackgroundTransparency = 0.34 })
-        tween(supportStroke, TweenInfoSet.Fast, { Color = Color3.fromRGB(72, 81, 116), Transparency = 0.58 })
-        tween(iconPlate, TweenInfoSet.Fast, { BackgroundTransparency = 0.7 })
-        tween(joinLabel, TweenInfoSet.Fast, { TextColor3 = Theme.Accent })
-        tween(underline, TweenInfoSet.Fast, { Size = UDim2.fromOffset(76, 1), BackgroundTransparency = 0.24 })
+        tween(supportButton, TweenInfoSet.Fast, { BackgroundColor3 = Color3.fromRGB(4, 5, 8) })
+        tween(supportStroke, TweenInfoSet.Fast, { Color = Color3.fromRGB(40, 44, 57), Transparency = 0.5 })
+        tween(iconPlate, TweenInfoSet.Fast, { BackgroundColor3 = Color3.fromRGB(23, 26, 37) })
+        tween(joinLabel, TweenInfoSet.Fast, { TextColor3 = Color3.fromRGB(141, 150, 195) })
+        tween(underline, TweenInfoSet.Fast, { Size = UDim2.fromOffset(76, 1), BackgroundTransparency = 0.34 })
+        tween(arrow, TweenInfoSet.Fast, { Position = UDim2.fromOffset(342, 15), TextTransparency = 0.12 })
     end)
     connect(supportButton.MouseButton1Down, function()
         tween(supportScale, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Scale = 0.975 })
     end)
     connect(supportButton.MouseButton1Up, function()
-        tween(supportScale, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1.015 })
+        tween(supportScale, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1.012 })
     end)
     connect(supportButton.MouseButton1Click, openDiscordModal)
 
@@ -2390,24 +2448,69 @@ local function showScriptLoader()
     end
     setProperty(UI.ScriptLoader, "Visible", true)
     setProperty(UI.ScriptLoader, "GroupTransparency", 1)
-    setProperty(UI.ScriptLoaderScale, "Scale", 0.965)
+    setProperty(UI.ScriptLoaderScale, "Scale", 0.975)
     setProperty(UI.ScriptLoaderFill, "Size", UDim2.new(0, 0, 1, 0))
-    setProperty(UI.ScriptLoaderHead, "Position", UDim2.new(0, 0, 0, 43))
     setProperty(UI.ScriptLoaderPercent, "Text", "0%")
     setProperty(UI.ScriptLoaderStatus, "Text", "Preparing secure runtime")
-    setProperty(UI.ScriptLoaderStatusDot, "BackgroundColor3", Theme.Accent)
+    setProperty(UI.ScriptLoaderStatusMark, "BackgroundColor3", Color3.fromRGB(108, 115, 148))
+    setProperty(UI.ScriptLoaderStatusMark, "Size", UDim2.fromOffset(6, 2))
+    setProperty(UI.ScriptLoaderBadge, "Position", UDim2.fromOffset(490, 92))
+    setProperty(UI.ScriptLoaderWordmark, "Position", UDim2.fromOffset(490, 156))
+    setProperty(UI.ScriptLoaderTitle, "Position", UDim2.fromOffset(490, 224))
+    setProperty(UI.ScriptLoaderTitle, "TextTransparency", 1)
+    setProperty(UI.ScriptLoaderSubtitle, "Position", UDim2.fromOffset(490, 262))
+    setProperty(UI.ScriptLoaderSubtitle, "TextTransparency", 1)
+    setProperty(UI.ScriptLoaderProgressGroup, "Position", UDim2.fromOffset(490, 306))
+    setProperty(UI.ScriptLoaderProgressGroup, "GroupTransparency", 1)
+    setProperty(UI.ScriptLoaderSupportButton, "Position", UDim2.fromOffset(490, 462))
+    setProperty(UI.ScriptLoaderSupportScale, "Scale", 0.96)
+    setProperty(UI.ScriptLoaderAmbientGlow, "BackgroundTransparency", 0.985)
+    setProperty(UI.ScriptLoaderSurfaceStroke, "Transparency", 0.82)
 
-    tween(UI.ScriptLoader, TweenInfo.new(0.42, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+    tween(UI.ScriptLoader, TweenInfo.new(0.38, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
         GroupTransparency = 0,
     })
-    tween(UI.ScriptLoaderScale, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Scale = 1 })
+    tween(UI.ScriptLoaderScale, TweenInfo.new(0.58, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Scale = 1 })
+    tween(UI.ScriptLoaderAmbientGlow, TweenInfo.new(0.8, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+        BackgroundTransparency = 0.965,
+    })
+    tween(UI.ScriptLoaderSurfaceStroke, TweenInfo.new(0.64, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+        Transparency = 0.54,
+    })
+    tween(UI.ScriptLoaderBadge, TweenInfo.new(0.46, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+        Position = UDim2.fromOffset(490, 82),
+    })
+    tween(UI.ScriptLoaderWordmark, TweenInfo.new(0.52, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+        Position = UDim2.fromOffset(490, 146),
+    })
+    tween(UI.ScriptLoaderTitle, TweenInfo.new(0.56, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+        Position = UDim2.fromOffset(490, 213),
+        TextTransparency = 0.04,
+    })
+    tween(UI.ScriptLoaderSubtitle, TweenInfo.new(0.62, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+        Position = UDim2.fromOffset(490, 250),
+        TextTransparency = 0.08,
+    })
+    tween(UI.ScriptLoaderProgressGroup, TweenInfo.new(0.66, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+        Position = UDim2.fromOffset(490, 292),
+        GroupTransparency = 0,
+    })
+    tween(UI.ScriptLoaderSupportButton, TweenInfo.new(0.7, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+        Position = UDim2.fromOffset(490, 448),
+    })
+    tween(UI.ScriptLoaderSupportScale, TweenInfo.new(0.7, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+        Scale = 1,
+    })
+    tween(UI.ScriptLoaderStatusMark, TweenInfo.new(0.44, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+        Size = UDim2.fromOffset(14, 2),
+    })
     if UI.WindowScale then
         tween(UI.WindowScale, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
             Scale = State.ScaleTarget,
         })
     end
 
-    local startedAt = os.clock()
+    local startedAt = os.clock() + 0.12
     local duration = 2.7
     local stage = 0
     local finished = false
@@ -2417,19 +2520,50 @@ local function showScriptLoader()
         { 0.84, "Restoring your session" },
         { 1, "Starting Script" },
     }
+    local progressStops = {
+        { 0, 0 },
+        { 0.22, 0.16 },
+        { 0.5, 0.47 },
+        { 0.78, 0.79 },
+        { 1, 1 },
+    }
+
+    local function cinematicProgress(value)
+        for index = 1, #progressStops - 1 do
+            local current = progressStops[index]
+            local following = progressStops[index + 1]
+            if value <= following[1] then
+                local alpha = math.clamp((value - current[1]) / (following[1] - current[1]), 0, 1)
+                alpha = alpha * alpha * (3 - 2 * alpha)
+                return current[2] + (following[2] - current[2]) * alpha
+            end
+        end
+        return 1
+    end
 
     State.ScriptLoaderConnection = connect(RunService.RenderStepped, function()
         if State.Destroyed or not State.ScriptLoaderActive then
             return
         end
 
-        local linear = math.clamp((os.clock() - startedAt) / duration, 0, 1)
-        local progress = 1 - (1 - linear) ^ 1.35
+        local now = os.clock()
+        local linear = math.clamp((now - startedAt) / duration, 0, 1)
+        local progress = cinematicProgress(linear)
         setProperty(UI.ScriptLoaderFill, "Size", UDim2.new(progress, 0, 1, 0))
-        setProperty(UI.ScriptLoaderHead, "Position", UDim2.new(progress, 0, 0, 43))
         setProperty(UI.ScriptLoaderPercent, "Text", string.format("%d%%", math.floor(progress * 100 + 0.5)))
-        setProperty(UI.ScriptLoaderFillGradient, "Offset", Vector2.new((os.clock() * 0.55) % 2 - 1, 0))
-        setProperty(UI.ScriptLoaderRailGlow, "BackgroundTransparency", 0.9 + math.sin(os.clock() * 4.2) * 0.025)
+        setProperty(UI.ScriptLoaderFillGradient, "Offset", Vector2.new((now * 0.38) % 2 - 1, 0))
+        setProperty(UI.ScriptLoaderRailGlow, "BackgroundTransparency", 0.96 + math.sin(now * 3.1) * 0.009)
+        setProperty(
+            UI.ScriptLoaderBackdropGradient,
+            "Offset",
+            Vector2.new(math.sin(now * 0.24) * 0.06, math.cos(now * 0.2) * 0.035)
+        )
+        setProperty(
+            UI.ScriptLoaderAmbientGlow,
+            "Position",
+            UDim2.fromScale(0.5 + math.sin(now * 0.32) * 0.004, 0.23 + math.cos(now * 0.28) * 0.003)
+        )
+        setProperty(UI.ScriptLoaderSurfaceStroke, "Transparency", 0.54 + math.sin(now * 1.7) * 0.018)
 
         local nextStage = stage
         for index, data in ipairs(stages) do
@@ -2441,8 +2575,10 @@ local function showScriptLoader()
         if nextStage ~= stage then
             stage = nextStage
             setProperty(UI.ScriptLoaderStatus, "Text", stages[stage][2])
-            setProperty(UI.ScriptLoaderStatus, "TextTransparency", 0.4)
-            tween(UI.ScriptLoaderStatus, TweenInfoSet.Fast, { TextTransparency = 0.1 })
+            setProperty(UI.ScriptLoaderStatus, "TextTransparency", 0.46)
+            setProperty(UI.ScriptLoaderStatusMark, "Size", UDim2.fromOffset(7, 2))
+            tween(UI.ScriptLoaderStatus, TweenInfoSet.Fast, { TextTransparency = 0.06 })
+            tween(UI.ScriptLoaderStatusMark, TweenInfoSet.Fast, { Size = UDim2.fromOffset(14, 2) })
         end
 
         if linear >= 1 and not finished then
@@ -2450,11 +2586,15 @@ local function showScriptLoader()
             disconnect(State.ScriptLoaderConnection)
             State.ScriptLoaderConnection = nil
             setProperty(UI.ScriptLoaderFill, "Size", UDim2.fromScale(1, 1))
-            setProperty(UI.ScriptLoaderHead, "Position", UDim2.new(1, 0, 0, 43))
             setProperty(UI.ScriptLoaderPercent, "Text", "100%")
             setProperty(UI.ScriptLoaderStatus, "Text", "Kronos is ready")
-            tween(UI.ScriptLoaderStatusDot, TweenInfoSet.Soft, { BackgroundColor3 = Theme.Success })
-            task.delay(0.62, function()
+            tween(UI.ScriptLoaderStatusMark, TweenInfoSet.Soft, {
+                BackgroundColor3 = Color3.fromRGB(156, 163, 191),
+                Size = UDim2.fromOffset(22, 2),
+            })
+            tween(UI.ScriptLoaderPercent, TweenInfoSet.Soft, { TextColor3 = Color3.fromRGB(207, 211, 225) })
+            tween(UI.ScriptLoaderSurfaceStroke, TweenInfoSet.Soft, { Transparency = 0.4 })
+            task.delay(0.72, function()
                 while not State.Destroyed and State.DiscordModalOpen do
                     task.wait(0.12)
                 end
