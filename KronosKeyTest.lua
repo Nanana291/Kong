@@ -55,6 +55,7 @@ local State = {
     WasDragged = false,
     LoadingTick = 0,
     ScriptLoaderActive = false,
+    ScriptLoaderTransitioning = false,
     ScriptLoaderConnection = nil,
     ValidationToken = 0,
     ModalCopyUrl = DISCORD_CONTACT_URL,
@@ -2060,6 +2061,7 @@ local function createScriptLoader(parent)
         BackgroundColor3 = Color3.fromRGB(5, 6, 10),
         BackgroundTransparency = 0.12,
         BorderSizePixel = 0,
+        ClipsDescendants = true,
         ZIndex = 173,
         Parent = loader,
     })
@@ -2101,6 +2103,50 @@ local function createScriptLoader(parent)
             NumberSequenceKeypoint.new(1, 1),
         })
     )
+
+    local scanLine = new("Frame", {
+        Name = "SurfaceScan",
+        Size = UDim2.fromOffset(96, 422),
+        Position = UDim2.fromOffset(-110, 1),
+        BackgroundColor3 = Color3.fromRGB(132, 139, 164),
+        BackgroundTransparency = 0.965,
+        BorderSizePixel = 0,
+        ZIndex = 176,
+        Parent = surface,
+    })
+    gradient(
+        scanLine,
+        ColorSequence.new(Color3.fromRGB(84, 90, 113), Color3.fromRGB(176, 181, 199)),
+        0,
+        NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 1),
+            NumberSequenceKeypoint.new(0.5, 0.54),
+            NumberSequenceKeypoint.new(1, 1),
+        })
+    )
+    UI.ScriptLoaderScanLine = scanLine
+
+    for index, x in ipairs({ 24, 606 }) do
+        local edge = new("Frame", {
+            Name = "CornerDetail" .. index,
+            Size = UDim2.fromOffset(20, 1),
+            Position = UDim2.fromOffset(x, 21),
+            BackgroundColor3 = Color3.fromRGB(88, 94, 116),
+            BackgroundTransparency = 0.58,
+            BorderSizePixel = 0,
+            ZIndex = 177,
+            Parent = surface,
+        })
+        gradient(
+            edge,
+            ColorSequence.new(Color3.fromRGB(56, 61, 78), Color3.fromRGB(122, 128, 150)),
+            index == 1 and 0 or 180,
+            NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 1),
+                NumberSequenceKeypoint.new(1, 0.08),
+            })
+        )
+    end
 
     local badge = new("TextLabel", {
         Name = "Badge",
@@ -2296,6 +2342,22 @@ local function createScriptLoader(parent)
     })
     corner(fillHighlight, 999)
 
+    UI.ScriptLoaderStageSegments = {}
+    for index = 1, 4 do
+        local segment = new("Frame", {
+            Name = "Stage" .. index,
+            Size = UDim2.fromOffset(118, 2),
+            Position = UDim2.fromOffset((index - 1) * 134, 62),
+            BackgroundColor3 = Color3.fromRGB(42, 46, 59),
+            BackgroundTransparency = 0.42,
+            BorderSizePixel = 0,
+            ZIndex = 183,
+            Parent = progressGroup,
+        })
+        corner(segment, 999)
+        UI.ScriptLoaderStageSegments[index] = segment
+    end
+
     local supportButton = new("TextButton", {
         Name = "DiscordSupport",
         Size = UDim2.fromOffset(382, 52),
@@ -2466,6 +2528,11 @@ local function showScriptLoader()
     setProperty(UI.ScriptLoaderSupportScale, "Scale", 0.96)
     setProperty(UI.ScriptLoaderAmbientGlow, "BackgroundTransparency", 0.985)
     setProperty(UI.ScriptLoaderSurfaceStroke, "Transparency", 0.82)
+    setProperty(UI.ScriptLoaderScanLine, "Position", UDim2.fromOffset(-110, 1))
+    for _, segment in ipairs(UI.ScriptLoaderStageSegments or {}) do
+        setProperty(segment, "BackgroundColor3", Color3.fromRGB(42, 46, 59))
+        setProperty(segment, "BackgroundTransparency", 0.42)
+    end
 
     tween(UI.ScriptLoader, TweenInfo.new(0.38, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
         GroupTransparency = 0,
@@ -2564,6 +2631,7 @@ local function showScriptLoader()
             UDim2.fromScale(0.5 + math.sin(now * 0.32) * 0.004, 0.23 + math.cos(now * 0.28) * 0.003)
         )
         setProperty(UI.ScriptLoaderSurfaceStroke, "Transparency", 0.54 + math.sin(now * 1.7) * 0.018)
+        setProperty(UI.ScriptLoaderScanLine, "Position", UDim2.fromOffset(-110 + linear * 870, 1))
 
         local nextStage = stage
         for index, data in ipairs(stages) do
@@ -2579,6 +2647,13 @@ local function showScriptLoader()
             setProperty(UI.ScriptLoaderStatusMark, "Size", UDim2.fromOffset(7, 2))
             tween(UI.ScriptLoaderStatus, TweenInfoSet.Fast, { TextTransparency = 0.06 })
             tween(UI.ScriptLoaderStatusMark, TweenInfoSet.Fast, { Size = UDim2.fromOffset(14, 2) })
+            for index, segment in ipairs(UI.ScriptLoaderStageSegments or {}) do
+                local complete = index <= stage
+                tween(segment, TweenInfoSet.Fast, {
+                    BackgroundColor3 = complete and Color3.fromRGB(103, 110, 139) or Color3.fromRGB(42, 46, 59),
+                    BackgroundTransparency = complete and 0.14 or 0.42,
+                })
+            end
         end
 
         if linear >= 1 and not finished then
@@ -2594,6 +2669,12 @@ local function showScriptLoader()
             })
             tween(UI.ScriptLoaderPercent, TweenInfoSet.Soft, { TextColor3 = Color3.fromRGB(207, 211, 225) })
             tween(UI.ScriptLoaderSurfaceStroke, TweenInfoSet.Soft, { Transparency = 0.4 })
+            for _, segment in ipairs(UI.ScriptLoaderStageSegments or {}) do
+                tween(segment, TweenInfoSet.Soft, {
+                    BackgroundColor3 = Color3.fromRGB(132, 138, 162),
+                    BackgroundTransparency = 0.08,
+                })
+            end
             task.delay(0.72, function()
                 while not State.Destroyed and State.DiscordModalOpen do
                     task.wait(0.12)
@@ -2603,6 +2684,53 @@ local function showScriptLoader()
                 end
             end)
         end
+    end)
+end
+
+local function transitionToScriptLoader()
+    if State.Destroyed or State.ScriptLoaderActive or State.ScriptLoaderTransitioning then
+        return
+    end
+
+    State.ScriptLoaderTransitioning = true
+    setInputLocked(true)
+
+    if UI.LeftPanel then
+        tween(UI.LeftPanel, TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+            GroupTransparency = 1,
+            Position = UDim2.fromOffset(-18, 0),
+        })
+    end
+    if UI.RightPanel then
+        tween(UI.RightPanel, TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+            GroupTransparency = 1,
+            Position = UDim2.fromOffset(508, 0),
+        })
+    end
+    if UI.SplitLine then
+        tween(UI.SplitLine, TweenInfoSet.Close, { BackgroundTransparency = 1 })
+    end
+    if UI.WindowAcrylic and UI.WindowAcrylic.Border then
+        tween(UI.WindowAcrylic.Border, TweenInfoSet.Close, {
+            Color = Color3.fromRGB(48, 52, 68),
+            Transparency = 0.72,
+        })
+    end
+    if UI.WindowScale then
+        tween(UI.WindowScale, TweenInfoSet.Close, {
+            Scale = math.max((State.ScaleTarget or 1) * 0.972, 0.01),
+        })
+    end
+
+    task.delay(0.31, function()
+        if State.Destroyed or not State.ScriptLoaderTransitioning then
+            return
+        end
+        setProperty(UI.LeftPanel, "Visible", false)
+        setProperty(UI.RightPanel, "Visible", false)
+        setProperty(UI.SplitLine, "Visible", false)
+        State.ScriptLoaderTransitioning = false
+        showScriptLoader()
     end)
 end
 
@@ -3217,7 +3345,7 @@ local function finishValidation(success, message, options, token)
         end
         task.delay(options.Auto and 0.5 or 0.18, function()
             if not State.Destroyed and (not token or token == State.ValidationToken) then
-                showScriptLoader()
+                transitionToScriptLoader()
             end
         end)
         return
@@ -3330,7 +3458,13 @@ local function pointInObject(guiObject, point)
 end
 
 local function beginDrag(input)
-    if State.Destroyed or State.Validating or State.ScriptLoaderActive or State.DiscordModalOpen then
+    if
+        State.Destroyed
+        or State.Validating
+        or State.ScriptLoaderActive
+        or State.ScriptLoaderTransitioning
+        or State.DiscordModalOpen
+    then
         return
     end
     local inputType = input.UserInputType
@@ -3743,11 +3877,12 @@ local function buildInterface()
     UI.WindowScale = new("UIScale", { Scale = 1, Parent = UI.WindowHost })
     UI.WindowAcrylic = createAcrylic(UI.Window, 8, 12, Theme.Panel, 0.74)
 
-    UI.LeftPanel = new("Frame", {
+    UI.LeftPanel = new("CanvasGroup", {
         Name = "LeftPanel",
         Size = UDim2.new(0, 490, 1, 0),
         BackgroundColor3 = Theme.InkSoft,
         BackgroundTransparency = 0.74,
+        GroupTransparency = 0,
         BorderSizePixel = 0,
         ClipsDescendants = true,
         ZIndex = 20,
@@ -3766,12 +3901,13 @@ local function buildInterface()
         Parent = UI.Window,
     })
 
-    UI.RightPanel = new("Frame", {
+    UI.RightPanel = new("CanvasGroup", {
         Name = "RightPanel",
         Size = UDim2.new(1, -490, 1, 0),
         Position = UDim2.fromOffset(490, 0),
         BackgroundColor3 = Color3.fromRGB(5, 7, 12),
         BackgroundTransparency = 0.7,
+        GroupTransparency = 0,
         BorderSizePixel = 0,
         ClipsDescendants = true,
         ZIndex = 30,
@@ -3845,7 +3981,7 @@ local function buildInterface()
         AnchorPoint = Vector2.new(0.5, 0),
         Position = UDim2.fromOffset(255, 128),
         BackgroundTransparency = 1,
-        Text = letterSpaced("Secure Access Validation"),
+        Text = letterSpaced("Key System"),
         TextColor3 = Theme.TextDim,
         TextTransparency = 0.48,
         Font = Enum.Font.GothamMedium,
@@ -4243,6 +4379,7 @@ function Loader:Close(callback)
     State.Open = false
     State.Validating = false
     State.ScriptLoaderActive = false
+    State.ScriptLoaderTransitioning = false
     setInputLocked(true)
     disconnect(State.LoadingConnection)
     State.LoadingConnection = nil
