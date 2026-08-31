@@ -217,7 +217,8 @@ local Library = {
 
     Registry = {},
     DPIRegistry = {},
-    
+    BulletElements = {}, -- Track elements with bullet points for theme updates
+
     ImageManager = CustomImageManager,
 }
 
@@ -1050,6 +1051,14 @@ function Library:UpdateColorsUsingRegistry()
             end
         end
     end
+
+    -- Update fog gradient when theme colors change
+    if Library.FogGradientUI and Library.UpdateFogGradient then
+        Library.FogGradientUI.Color = Library.UpdateFogGradient()
+    end
+
+    -- Update bullet colors when theme changes
+    Library:UpdateBulletColors()
 end
 
 function Library:UpdateDPI(Instance, Properties)
@@ -1409,6 +1418,43 @@ function Library:CreateGlowEffect(Element: GuiObject, Color: Color3?, Thickness:
     GlowTween:Play()
 
     return Glow, GlowTween
+end
+
+-- Stylize bullet points with accent color (neon purple effect)
+function Library:StylizeBullets(Text: string): string
+    if not Text or Text == "" then
+        return Text
+    end
+
+    -- Convert bullet points (•) to rich text with accent color
+    local AccentColor = Library.Scheme.AccentColor
+    local ColorHex = string.format("#%02X%02X%02X",
+        math.floor(AccentColor.R * 255),
+        math.floor(AccentColor.G * 255),
+        math.floor(AccentColor.B * 255)
+    )
+
+    -- Replace • with colored version and add subtle glow effect
+    local StylizedText = Text:gsub("•", string.format('<font color="%s"><b>•</b></font>', ColorHex))
+
+    return StylizedText
+end
+
+-- Update bullet colors when theme changes
+function Library:UpdateBulletColors()
+    if Library.Unloaded then
+        return
+    end
+
+    -- This will be called when theme colors change
+    for Element, _ in pairs(Library.BulletElements or {}) do
+        if Element and Element.Parent then
+            local OriginalText = Element:GetAttribute("OriginalText")
+            if OriginalText then
+                Element.Text = Library:StylizeBullets(OriginalText)
+            end
+        end
+    end
 end
 
 -- Ripple click effect
@@ -1808,23 +1854,33 @@ function Library:AddIconButton(IconName: string, Func, Options)
 
     -- Hover animation
     Button.MouseEnter:Connect(function()
-        TweenService:Create(Button, Library.HoverTweenInfo, {
-            BackgroundColor3 = Library:GetLighterColor(Library.Scheme.BackgroundColor),
-        }):Play()
-        TweenService:Create(IconImage, Library.HoverTweenInfo, {
-            ImageColor3 = Library.Scheme.AccentColor,
-            Size = UDim2.fromOffset(Size * 0.55, Size * 0.55),
-        }):Play()
+        -- Safety checks for all elements
+        if Button and Button.Parent then
+            TweenService:Create(Button, Library.HoverTweenInfo, {
+                BackgroundColor3 = Library:GetLighterColor(Library.Scheme.BackgroundColor),
+            }):Play()
+        end
+        if IconImage and IconImage.Parent then
+            TweenService:Create(IconImage, Library.HoverTweenInfo, {
+                ImageColor3 = Library.Scheme.AccentColor,
+                Size = UDim2.fromOffset(Size * 0.55, Size * 0.55),
+            }):Play()
+        end
     end)
 
     Button.MouseLeave:Connect(function()
-        TweenService:Create(Button, Library.HoverTweenInfo, {
-            BackgroundColor3 = Library.Scheme.BackgroundColor,
-        }):Play()
-        TweenService:Create(IconImage, Library.HoverTweenInfo, {
-            ImageColor3 = Table.Toggled and Library.Scheme.AccentColor or Library.Scheme.FontColor,
-            Size = UDim2.fromOffset(Size * 0.5, Size * 0.5),
-        }):Play()
+        -- Safety checks for all elements
+        if Button and Button.Parent then
+            TweenService:Create(Button, Library.HoverTweenInfo, {
+                BackgroundColor3 = Library.Scheme.BackgroundColor,
+            }):Play()
+        end
+        if IconImage and IconImage.Parent then
+            TweenService:Create(IconImage, Library.HoverTweenInfo, {
+                ImageColor3 = Table.Toggled and Library.Scheme.AccentColor or Library.Scheme.FontColor,
+                Size = UDim2.fromOffset(Size * 0.5, Size * 0.5),
+            }):Play()
+        end
     end)
 
     -- Click animation and callback
@@ -1832,22 +1888,28 @@ function Library:AddIconButton(IconName: string, Func, Options)
         if Table.Locked then return end
 
         -- Click bounce effect
-        local BounceDown = TweenService:Create(Button, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-            Size = UDim2.fromOffset(Size * 0.9, Size * 0.9),
-        })
-        local BounceUp = TweenService:Create(Button, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-            Size = UDim2.fromOffset(Size, Size),
-        })
+        if Button and Button.Parent then
+            local BounceDown = TweenService:Create(Button, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                Size = UDim2.fromOffset(Size * 0.9, Size * 0.9),
+            })
+            local BounceUp = TweenService:Create(Button, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+                Size = UDim2.fromOffset(Size, Size),
+            })
 
-        BounceDown:Play()
-        BounceDown.Completed:Connect(function()
-            BounceUp:Play()
-        end)
+            BounceDown:Play()
+            BounceDown.Completed:Connect(function()
+                if Button and Button.Parent then
+                    BounceUp:Play()
+                end
+            end)
+        end
 
         -- Rotate icon animation
-        TweenService:Create(IconImage, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-            Rotation = IconImage.Rotation == 0 and 180 or 0,
-        }):Play()
+        if IconImage and IconImage.Parent then
+            TweenService:Create(IconImage, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+                Rotation = IconImage.Rotation == 0 and 180 or 0,
+            }):Play()
+        end
 
         Library:SafeCallback(Func, Table)
     end)
@@ -1869,9 +1931,13 @@ function Library:AddIconButton(IconName: string, Func, Options)
 
     function Table:SetToggled(Value: boolean)
         Table.Toggled = Value
-        TweenService:Create(IconImage, Library.HoverTweenInfo, {
-            ImageColor3 = Value and Library.Scheme.AccentColor or Library.Scheme.FontColor,
-        }):Play()
+
+        -- Safety check for IconImage
+        if IconImage and IconImage.Parent then
+            TweenService:Create(IconImage, Library.HoverTweenInfo, {
+                ImageColor3 = Value and Library.Scheme.AccentColor or Library.Scheme.FontColor,
+            }):Play()
+        end
 
         if ToggledIcon and Value then
             Table:SetIcon(Options.ToggledIcon)
@@ -2582,20 +2648,30 @@ do
 
         -- Hover effects for KeyPicker button
         Picker.MouseEnter:Connect(function()
-            TweenService:Create(Picker, Library.HoverTweenInfo, {
-                BackgroundColor3 = Library:GetLighterColor(Library.Scheme.MainColor),
-            }):Play()
-            TweenService:Create(PickerStroke, Library.HoverTweenInfo, {
-                Color = Library.Scheme.AccentColor,
-            }):Play()
+            -- Safety checks for all elements
+            if Picker and Picker.Parent then
+                TweenService:Create(Picker, Library.HoverTweenInfo, {
+                    BackgroundColor3 = Library:GetLighterColor(Library.Scheme.MainColor),
+                }):Play()
+            end
+            if PickerStroke and PickerStroke.Parent then
+                TweenService:Create(PickerStroke, Library.HoverTweenInfo, {
+                    Color = Library.Scheme.AccentColor,
+                }):Play()
+            end
         end)
         Picker.MouseLeave:Connect(function()
-            TweenService:Create(Picker, Library.HoverTweenInfo, {
-                BackgroundColor3 = Library.Scheme.MainColor,
-            }):Play()
-            TweenService:Create(PickerStroke, Library.HoverTweenInfo, {
-                Color = Library.Scheme.OutlineColor,
-            }):Play()
+            -- Safety checks for all elements
+            if Picker and Picker.Parent then
+                TweenService:Create(Picker, Library.HoverTweenInfo, {
+                    BackgroundColor3 = Library.Scheme.MainColor,
+                }):Play()
+            end
+            if PickerStroke and PickerStroke.Parent then
+                TweenService:Create(PickerStroke, Library.HoverTweenInfo, {
+                    Color = Library.Scheme.OutlineColor,
+                }):Play()
+            end
         end)
 
         local KeybindsToggle = { Normal = KeyPicker.Mode ~= "Toggle" }
@@ -3143,21 +3219,31 @@ do
 
         -- Hover effects
         Holder.MouseEnter:Connect(function()
-            TweenService:Create(HolderGlow, Library.HoverTweenInfo, {
-                ImageTransparency = 0.6,
-            }):Play()
-            TweenService:Create(Holder, Library.HoverTweenInfo, {
-                Size = UDim2.fromOffset(22, 22),
-            }):Play()
+            -- Safety checks for all elements
+            if HolderGlow and HolderGlow.Parent then
+                TweenService:Create(HolderGlow, Library.HoverTweenInfo, {
+                    ImageTransparency = 0.6,
+                }):Play()
+            end
+            if Holder and Holder.Parent then
+                TweenService:Create(Holder, Library.HoverTweenInfo, {
+                    Size = UDim2.fromOffset(22, 22),
+                }):Play()
+            end
         end)
 
         Holder.MouseLeave:Connect(function()
-            TweenService:Create(HolderGlow, Library.HoverTweenInfo, {
-                ImageTransparency = 1,
-            }):Play()
-            TweenService:Create(Holder, Library.HoverTweenInfo, {
-                Size = UDim2.fromOffset(20, 20),
-            }):Play()
+            -- Safety checks for all elements
+            if HolderGlow and HolderGlow.Parent then
+                TweenService:Create(HolderGlow, Library.HoverTweenInfo, {
+                    ImageTransparency = 1,
+                }):Play()
+            end
+            if Holder and Holder.Parent then
+                TweenService:Create(Holder, Library.HoverTweenInfo, {
+                    Size = UDim2.fromOffset(20, 20),
+                }):Play()
+            end
         end)
 
         --// Color Menu \\--
@@ -3374,37 +3460,51 @@ do
 
             ColorPicker.Value = Color3.fromHSV(ColorPicker.Hue, ColorPicker.Sat, ColorPicker.Vib)
 
-            -- Animated color transitions
-            TweenService:Create(Holder, Library.HoverTweenInfo, {
-                BackgroundColor3 = ColorPicker.Value,
-            }):Play()
-            TweenService:Create(HolderStroke, Library.HoverTweenInfo, {
-                Color = Library:GetDarkerColor(ColorPicker.Value),
-            }):Play()
-            TweenService:Create(HolderGlow, Library.HoverTweenInfo, {
-                ImageColor3 = ColorPicker.Value,
-            }):Play()
-            TweenService:Create(HolderTransparency, Library.HoverTweenInfo, {
-                ImageTransparency = (1 - ColorPicker.Transparency),
-            }):Play()
+            -- Animated color transitions with safety checks
+            if Holder and Holder.Parent then
+                TweenService:Create(Holder, Library.HoverTweenInfo, {
+                    BackgroundColor3 = ColorPicker.Value,
+                }):Play()
+            end
+            if HolderStroke and HolderStroke.Parent then
+                TweenService:Create(HolderStroke, Library.HoverTweenInfo, {
+                    Color = Library:GetDarkerColor(ColorPicker.Value),
+                }):Play()
+            end
+            if HolderGlow and HolderGlow.Parent then
+                TweenService:Create(HolderGlow, Library.HoverTweenInfo, {
+                    ImageColor3 = ColorPicker.Value,
+                }):Play()
+            end
+            if HolderTransparency and HolderTransparency.Parent then
+                TweenService:Create(HolderTransparency, Library.HoverTweenInfo, {
+                    ImageTransparency = (1 - ColorPicker.Transparency),
+                }):Play()
+            end
 
-            TweenService:Create(SatVipMap, Library.HoverTweenInfo, {
-                BackgroundColor3 = Color3.fromHSV(ColorPicker.Hue, 1, 1),
-            }):Play()
-            if TransparencyColor then
+            if SatVipMap and SatVipMap.Parent then
+                TweenService:Create(SatVipMap, Library.HoverTweenInfo, {
+                    BackgroundColor3 = Color3.fromHSV(ColorPicker.Hue, 1, 1),
+                }):Play()
+            end
+            if TransparencyColor and TransparencyColor.Parent then
                 TweenService:Create(TransparencyColor, Library.HoverTweenInfo, {
                     BackgroundColor3 = ColorPicker.Value,
                 }):Play()
             end
 
-            -- Animated cursor positions
-            TweenService:Create(SatVibCursor, Library.ToggleTweenInfo, {
-                Position = UDim2.fromScale(ColorPicker.Sat, 1 - ColorPicker.Vib),
-            }):Play()
-            TweenService:Create(HueCursor, Library.ToggleTweenInfo, {
-                Position = UDim2.fromScale(0.5, ColorPicker.Hue),
-            }):Play()
-            if TransparencyCursor then
+            -- Animated cursor positions with safety checks
+            if SatVibCursor and SatVibCursor.Parent then
+                TweenService:Create(SatVibCursor, Library.ToggleTweenInfo, {
+                    Position = UDim2.fromScale(ColorPicker.Sat, 1 - ColorPicker.Vib),
+                }):Play()
+            end
+            if HueCursor and HueCursor.Parent then
+                TweenService:Create(HueCursor, Library.ToggleTweenInfo, {
+                    Position = UDim2.fromScale(0.5, ColorPicker.Hue),
+                }):Play()
+            end
+            if TransparencyCursor and TransparencyCursor.Parent then
                 TweenService:Create(TransparencyCursor, Library.ToggleTweenInfo, {
                     Position = UDim2.fromScale(0.5, ColorPicker.Transparency),
                 }):Play()
@@ -3636,12 +3736,19 @@ do
             BackgroundTransparency = 1,
             Position = Data.Icon and UDim2.fromOffset(20, 0) or UDim2.fromOffset(0, 0),
             Size = Data.Icon and UDim2.new(1, -20, 1, 0) or UDim2.fromScale(1, 1),
-            Text = Label.Text,
+            Text = Library:StylizeBullets(Label.Text),
+            RichText = true,
             TextSize = Data.Size,
             TextWrapped = Label.DoesWrap,
             TextXAlignment = Groupbox.IsKeyTab and Enum.TextXAlignment.Center or Enum.TextXAlignment.Left,
             Parent = Holder,
         })
+
+        -- Track for theme updates
+        if Label.Text:find("•") then
+            TextLabel:SetAttribute("OriginalText", Label.Text)
+            Library.BulletElements[TextLabel] = true
+        end
 
         -- Add icon if specified
         local IconImage
@@ -4071,7 +4178,8 @@ do
             BackgroundTransparency = 1,
             Position = Data.Icon and UDim2.fromOffset(28, 0) or UDim2.fromOffset(0, 0),
             Size = Data.Icon and UDim2.new(1, -28, 0, 0) or UDim2.fromScale(1, 1),
-            Text = Paragraph.Text,
+            Text = Library:StylizeBullets(Paragraph.Text),
+            RichText = true,
             TextColor3 = Color3.fromRGB(180, 180, 190),
             FontFace = Font.new("rbxasset://fonts/families/GothamSSm.json", Enum.FontWeight.Regular),
             TextSize = Data.Size,
@@ -4081,6 +4189,12 @@ do
             Parent = ContentFrame,
         })
         Paragraph.TextLabel = TextLabel
+
+        -- Track for theme updates
+        if Paragraph.Text:find("•") then
+            TextLabel:SetAttribute("OriginalText", Paragraph.Text)
+            Library.BulletElements[TextLabel] = true
+        end
 
         -- Apply color if specified
         local function ApplyParagraphColor(ColorOption)
@@ -5013,10 +5127,70 @@ do
         end
 
         local function InitEvents(Button)
+            -- State tracking for proper cleanup
+            local hoverState = {
+                isHovering = false,
+                tweens = {},
+            }
+
+            -- Clean up function to cancel all active tweens
+            local function CleanupTweens()
+                for _, tween in pairs(hoverState.tweens) do
+                    if tween then
+                        tween:Cancel()
+                    end
+                end
+                hoverState.tweens = {}
+            end
+
+            -- Reset button to default state
+            local function ResetButtonState()
+                CleanupTweens()
+
+                local VariantStyle = Button.VariantStyle or VariantColors.Default
+                local bgColor = VariantStyle.bg
+                local textColor = VariantStyle.text
+
+                -- Get actual colors
+                local targetBgColor = typeof(bgColor) == "string" and (Library.Scheme[bgColor] or Library.Scheme.MainColor) or bgColor
+                local targetTextColor = typeof(textColor) == "string" and (Library.Scheme[textColor] or Library.Scheme.FontColor) or textColor
+
+                -- Reset background
+                Button.Base.BackgroundColor3 = Button.Disabled and Library.Scheme.BackgroundColor or targetBgColor
+
+                -- Reset text transparency
+                if Button.Variant == "Default" or not Button.Variant then
+                    Button.Base.TextTransparency = Button.Disabled and 0.8 or 0.4
+                    if Button.TextLabel then
+                        Button.TextLabel.TextTransparency = Button.Disabled and 0.8 or 0.4
+                    end
+                end
+
+                -- Reset icon size
+                if Button.IconImage then
+                    Button.IconImage.Size = UDim2.fromOffset(14, 14)
+                end
+
+                -- Reset glow
+                if Button.Glow then
+                    Button.Glow.ImageTransparency = 1
+                end
+
+                -- Reset stroke
+                if Button.Stroke then
+                    local strokeColor = Button.Variant == "Default" and Library.Scheme.OutlineColor or (typeof(bgColor) == "Color3" and bgColor or Library.Scheme.AccentColor)
+                    Button.Stroke.Transparency = Button.Disabled and 0.5 or (Button.Variant == "Default" and 0 or 0.5)
+                    Button.Stroke.Color = strokeColor
+                end
+            end
+
             Button.Base.MouseEnter:Connect(function()
                 if Button.Disabled or Button.Loading then
                     return
                 end
+
+                hoverState.isHovering = true
+                CleanupTweens()
 
                 local VariantStyle = Button.VariantStyle or VariantColors.Default
                 local bgColor = VariantStyle.bg
@@ -5032,95 +5206,84 @@ do
                     targetBgColor = Library:GetLighterColor(bgColor)
                 end
 
-                local tweenProps = {
+                -- Background color tween
+                local bgTween = TweenService:Create(Button.Base, Library.HoverTweenInfo, {
                     BackgroundColor3 = targetBgColor,
-                }
+                })
+                bgTween:Play()
+                table.insert(hoverState.tweens, bgTween)
 
-                -- Only animate text transparency for default variant
+                -- Text transparency (only for default variant)
                 if Button.Variant == "Default" or not Button.Variant then
-                    tweenProps.TextTransparency = 0
+                    local textTween = TweenService:Create(Button.Base, Library.HoverTweenInfo, {
+                        TextTransparency = 0,
+                    })
+                    textTween:Play()
+                    table.insert(hoverState.tweens, textTween)
+
                     if Button.TextLabel then
-                        TweenService:Create(Button.TextLabel, Library.HoverTweenInfo, { TextTransparency = 0 }):Play()
+                        local labelTween = TweenService:Create(Button.TextLabel, Library.HoverTweenInfo, {
+                            TextTransparency = 0,
+                        })
+                        labelTween:Play()
+                        table.insert(hoverState.tweens, labelTween)
                     end
                 end
 
-                -- Scale up icon slightly on hover
+                -- Icon scale animation with spring effect
                 if Button.IconImage then
-                    TweenService:Create(Button.IconImage, Library.HoverTweenInfo, {
-                        Size = UDim2.fromOffset(16, 16),
-                    }):Play()
+                    local iconTween = TweenService:Create(Button.IconImage,
+                        TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                        { Size = UDim2.fromOffset(16, 16) }
+                    )
+                    iconTween:Play()
+                    table.insert(hoverState.tweens, iconTween)
                 end
 
-                -- Show glow effect
+                -- Glow effect
                 if Button.Glow then
-                    TweenService:Create(Button.Glow, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
-                        ImageTransparency = 0.85,
-                    }):Play()
+                    local glowTween = TweenService:Create(Button.Glow,
+                        TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+                        { ImageTransparency = 0.85 }
+                    )
+                    glowTween:Play()
+                    table.insert(hoverState.tweens, glowTween)
                 end
 
-                -- Animate stroke
+                -- Stroke animation
                 if Button.Stroke then
-                    TweenService:Create(Button.Stroke, Library.HoverTweenInfo, {
+                    local strokeTween = TweenService:Create(Button.Stroke, Library.HoverTweenInfo, {
                         Transparency = 0,
                         Color = Library.Scheme.AccentColor,
-                    }):Play()
+                    })
+                    strokeTween:Play()
+                    table.insert(hoverState.tweens, strokeTween)
                 end
-
-                Button.Tween = TweenService:Create(Button.Base, Library.HoverTweenInfo, tweenProps)
-                Button.Tween:Play()
             end)
+
             Button.Base.MouseLeave:Connect(function()
-                if Button.Disabled or Button.Loading then
+                hoverState.isHovering = false
+
+                -- Small delay to ensure we're truly leaving (prevents flicker)
+                task.wait(0.05)
+                if hoverState.isHovering then
                     return
                 end
 
-                local VariantStyle = Button.VariantStyle or VariantColors.Default
-                local bgColor = VariantStyle.bg
+                ResetButtonState()
+            end)
 
-                local targetBgColor
-                if typeof(bgColor) == "string" then
-                    targetBgColor = Library.Scheme[bgColor] or Library.Scheme.MainColor
-                else
-                    targetBgColor = bgColor
+            -- Also reset on InputEnded to ensure state is correct
+            Button.Base.InputEnded:Connect(function(Input)
+                if not IsMouseInput(Input) then
+                    return
                 end
 
-                local tweenProps = {
-                    BackgroundColor3 = targetBgColor,
-                }
-
-                -- Only animate text transparency for default variant
-                if Button.Variant == "Default" or not Button.Variant then
-                    tweenProps.TextTransparency = 0.4
-                    if Button.TextLabel then
-                        TweenService:Create(Button.TextLabel, Library.HoverTweenInfo, { TextTransparency = 0.4 }):Play()
-                    end
+                -- If not hovering anymore, ensure clean state
+                task.wait(0.05)
+                if not hoverState.isHovering then
+                    ResetButtonState()
                 end
-
-                -- Scale icon back down
-                if Button.IconImage then
-                    TweenService:Create(Button.IconImage, Library.HoverTweenInfo, {
-                        Size = UDim2.fromOffset(14, 14),
-                    }):Play()
-                end
-
-                -- Hide glow effect
-                if Button.Glow then
-                    TweenService:Create(Button.Glow, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
-                        ImageTransparency = 1,
-                    }):Play()
-                end
-
-                -- Reset stroke
-                if Button.Stroke then
-                    local strokeColor = Button.Variant == "Default" and Library.Scheme.OutlineColor or Library.Scheme.AccentColor
-                    TweenService:Create(Button.Stroke, Library.HoverTweenInfo, {
-                        Transparency = Button.Variant == "Default" and 0 or 0.5,
-                        Color = strokeColor,
-                    }):Play()
-                end
-
-                Button.Tween = TweenService:Create(Button.Base, Library.HoverTweenInfo, tweenProps)
-                Button.Tween:Play()
             end)
 
             Button.Base.MouseButton1Click:Connect(function()
@@ -5481,16 +5644,23 @@ do
                 return
             end
 
-            TweenService:Create(Label, Library.HoverTweenInfo, {
-                TextTransparency = Toggle.Value and 0 or 0.4,
-            }):Play()
-            TweenService:Create(CheckImage, Library.ToggleTweenInfo, {
-                ImageTransparency = Toggle.Value and 0 or 1,
-                ImageColor3 = Toggle.Value and Library.Scheme.AccentColor or Library.Scheme.FontColor,
-            }):Play()
-            TweenService:Create(Checkbox, Library.HoverTweenInfo, {
-                BackgroundColor3 = Toggle.Value and Library:GetLighterColor(Library.Scheme.MainColor) or Library.Scheme.MainColor,
-            }):Play()
+            -- Safety checks for all elements
+            if Label and Label.Parent then
+                TweenService:Create(Label, Library.HoverTweenInfo, {
+                    TextTransparency = Toggle.Value and 0 or 0.4,
+                }):Play()
+            end
+            if CheckImage and CheckImage.Parent then
+                TweenService:Create(CheckImage, Library.ToggleTweenInfo, {
+                    ImageTransparency = Toggle.Value and 0 or 1,
+                    ImageColor3 = Toggle.Value and Library.Scheme.AccentColor or Library.Scheme.FontColor,
+                }):Play()
+            end
+            if Checkbox and Checkbox.Parent then
+                TweenService:Create(Checkbox, Library.HoverTweenInfo, {
+                    BackgroundColor3 = Toggle.Value and Library:GetLighterColor(Library.Scheme.MainColor) or Library.Scheme.MainColor,
+                }):Play()
+            end
 
             Checkbox.BackgroundColor3 = Library.Scheme.MainColor
             Library.Registry[Checkbox].BackgroundColor3 = "MainColor"
@@ -5552,6 +5722,81 @@ do
         Button.MouseButton1Click:Connect(function()
             if Toggle.Disabled then
                 return
+            end
+
+            -- Safety check: ensure elements exist
+            if not Switch or not Ball or not SwitchGlow then
+                Toggle:SetValue(not Toggle.Value)
+                return
+            end
+
+            -- Click feedback: Punch animation on switch
+            local punchTween = TweenService:Create(Switch,
+                TweenInfo.new(0.1, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                { Size = UDim2.fromOffset(34, 18) }
+            )
+            punchTween:Play()
+            punchTween.Completed:Connect(function()
+                if Switch and Switch.Parent then
+                    TweenService:Create(Switch,
+                        TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                        { Size = UDim2.fromOffset(36, 20) }
+                    ):Play()
+                end
+            end)
+
+            -- Ripple effect on switch background
+            if Switch and Switch.Parent then
+                local ripple = New("Frame", {
+                    AnchorPoint = Vector2.new(0.5, 0.5),
+                    BackgroundColor3 = Library.Scheme.AccentColor,
+                    BackgroundTransparency = 0.5,
+                    Position = UDim2.fromScale(0.5, 0.5),
+                    Size = UDim2.fromOffset(0, 0),
+                    ZIndex = 0,
+                    Parent = Switch,
+                })
+                New("UICorner", { CornerRadius = UDim.new(1, 0), Parent = ripple })
+
+                local rippleTween = TweenService:Create(ripple,
+                    TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+                    {
+                        Size = UDim2.fromOffset(40, 40),
+                        BackgroundTransparency = 1,
+                    }
+                )
+                rippleTween:Play()
+                rippleTween.Completed:Connect(function()
+                    if ripple and ripple.Parent then
+                        ripple:Destroy()
+                    end
+                end)
+            end
+
+            -- Ball punch animation
+            if Ball and Ball.Parent then
+                local ballPunch = TweenService:Create(Ball,
+                    TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                    { Size = UDim2.new(1.15, 0, 1.15, 0) }
+                )
+                ballPunch:Play()
+                ballPunch.Completed:Connect(function()
+                    if Ball and Ball.Parent then
+                        TweenService:Create(Ball,
+                            TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                            { Size = UDim2.fromScale(1, 1) }
+                        ):Play()
+                    end
+                end)
+            end
+
+            -- Celebration animation when toggling ON
+            if not Toggle.Value and SwitchGlow and SwitchGlow.Parent then
+                local celebrationGlow = TweenService:Create(SwitchGlow,
+                    TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+                    { ImageTransparency = 0.4 }
+                )
+                celebrationGlow:Play()
             end
 
             Toggle:SetValue(not Toggle.Value)
@@ -5706,37 +5951,57 @@ do
         Button.MouseEnter:Connect(function()
             if Toggle.Disabled then return end
             isHovering = true
-            TweenService:Create(Label, Library.HoverTweenInfo, {
-                TextTransparency = Toggle.Value and 0 or 0.2,
-            }):Play()
-            TweenService:Create(Switch, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-                Size = UDim2.fromOffset(38, 22),
-            }):Play()
-            TweenService:Create(SwitchStroke, Library.HoverTweenInfo, {
-                Color = Library.Scheme.AccentColor,
-                Transparency = 0,
-            }):Play()
-            TweenService:Create(SwitchGlow, Library.HoverTweenInfo, {
-                ImageTransparency = Toggle.Value and 0.6 or 0.85,
-            }):Play()
+
+            -- Safety checks for all elements
+            if Label and Label.Parent then
+                TweenService:Create(Label, Library.HoverTweenInfo, {
+                    TextTransparency = Toggle.Value and 0 or 0.2,
+                }):Play()
+            end
+            if Switch and Switch.Parent then
+                TweenService:Create(Switch, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+                    Size = UDim2.fromOffset(38, 22),
+                }):Play()
+            end
+            if SwitchStroke and SwitchStroke.Parent then
+                TweenService:Create(SwitchStroke, Library.HoverTweenInfo, {
+                    Color = Library.Scheme.AccentColor,
+                    Transparency = 0,
+                }):Play()
+            end
+            if SwitchGlow and SwitchGlow.Parent then
+                TweenService:Create(SwitchGlow, Library.HoverTweenInfo, {
+                    ImageTransparency = Toggle.Value and 0.6 or 0.85,
+                }):Play()
+            end
         end)
 
         Button.MouseLeave:Connect(function()
             if Toggle.Disabled then return end
             isHovering = false
-            TweenService:Create(Label, Library.HoverTweenInfo, {
-                TextTransparency = Toggle.Value and 0 or 0.4,
-            }):Play()
-            TweenService:Create(Switch, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
-                Size = UDim2.fromOffset(36, 20),
-            }):Play()
-            TweenService:Create(SwitchStroke, Library.HoverTweenInfo, {
-                Color = Toggle.Value and Library.Scheme.AccentColor or Library.Scheme.OutlineColor,
-                Transparency = 0,
-            }):Play()
-            TweenService:Create(SwitchGlow, Library.HoverTweenInfo, {
-                ImageTransparency = Toggle.Value and 0.7 or 1,
-            }):Play()
+
+            -- Safety checks for all elements
+            if Label and Label.Parent then
+                TweenService:Create(Label, Library.HoverTweenInfo, {
+                    TextTransparency = Toggle.Value and 0 or 0.4,
+                }):Play()
+            end
+            if Switch and Switch.Parent then
+                TweenService:Create(Switch, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+                    Size = UDim2.fromOffset(36, 20),
+                }):Play()
+            end
+            if SwitchStroke and SwitchStroke.Parent then
+                TweenService:Create(SwitchStroke, Library.HoverTweenInfo, {
+                    Color = Toggle.Value and Library.Scheme.AccentColor or Library.Scheme.OutlineColor,
+                    Transparency = 0,
+                }):Play()
+            end
+            if SwitchGlow and SwitchGlow.Parent then
+                TweenService:Create(SwitchGlow, Library.HoverTweenInfo, {
+                    ImageTransparency = Toggle.Value and 0.7 or 1,
+                }):Play()
+            end
         end)
 
         function Toggle:UpdateColors()
@@ -5760,35 +6025,47 @@ do
             Library.Registry[SwitchStroke].Color = Toggle.Value and "AccentColor" or "OutlineColor"
 
             -- Animate glow effect
-            TweenService:Create(SwitchGlow, Library.ToggleTweenInfo, {
-                ImageTransparency = Toggle.Value and 0.7 or 1,
-            }):Play()
+            if SwitchGlow and SwitchGlow.Parent then
+                TweenService:Create(SwitchGlow, Library.ToggleTweenInfo, {
+                    ImageTransparency = Toggle.Value and 0.7 or 1,
+                }):Play()
+            end
 
             if Toggle.Disabled then
-                Label.TextTransparency = 0.8
-                Ball.AnchorPoint = Vector2.new(Offset, 0)
-                Ball.Position = UDim2.fromScale(Offset, 0)
-                SwitchGlow.ImageTransparency = 1
+                if Label then Label.TextTransparency = 0.8 end
+                if Ball then
+                    Ball.AnchorPoint = Vector2.new(Offset, 0)
+                    Ball.Position = UDim2.fromScale(Offset, 0)
+                end
+                if SwitchGlow then SwitchGlow.ImageTransparency = 1 end
 
-                Ball.BackgroundColor3 = Library:GetDarkerColor(Library.Scheme.FontColor)
-                Library.Registry[Ball].BackgroundColor3 = function()
-                    return Library:GetDarkerColor(Library.Scheme.FontColor)
+                if Ball then
+                    Ball.BackgroundColor3 = Library:GetDarkerColor(Library.Scheme.FontColor)
+                    Library.Registry[Ball].BackgroundColor3 = function()
+                        return Library:GetDarkerColor(Library.Scheme.FontColor)
+                    end
                 end
 
                 return
             end
 
-            TweenService:Create(Label, Library.HoverTweenInfo, {
-                TextTransparency = Toggle.Value and 0 or 0.4,
-            }):Play()
-            TweenService:Create(Ball, Library.ToggleTweenInfo, {
-                AnchorPoint = Vector2.new(Offset, 0),
-                Position = UDim2.fromScale(Offset, 0),
-                Size = Toggle.Value and UDim2.new(1, -2, 1, -2) or UDim2.new(0.85, -2, 0.85, -2),
-            }):Play()
-            TweenService:Create(Switch, Library.HoverTweenInfo, {
-                BackgroundColor3 = Toggle.Value and Library.Scheme.AccentColor or Library.Scheme.MainColor,
-            }):Play()
+            if Label and Label.Parent then
+                TweenService:Create(Label, Library.HoverTweenInfo, {
+                    TextTransparency = Toggle.Value and 0 or 0.4,
+                }):Play()
+            end
+            if Ball and Ball.Parent then
+                TweenService:Create(Ball, Library.ToggleTweenInfo, {
+                    AnchorPoint = Vector2.new(Offset, 0),
+                    Position = UDim2.fromScale(Offset, 0),
+                    Size = Toggle.Value and UDim2.new(1, -2, 1, -2) or UDim2.new(0.85, -2, 0.85, -2),
+                }):Play()
+            end
+            if Switch and Switch.Parent then
+                TweenService:Create(Switch, Library.HoverTweenInfo, {
+                    BackgroundColor3 = Toggle.Value and Library.Scheme.AccentColor or Library.Scheme.MainColor,
+                }):Play()
+            end
 
             Ball.BackgroundColor3 = Library.Scheme.FontColor
             Library.Registry[Ball].BackgroundColor3 = "FontColor"
@@ -5850,6 +6127,81 @@ do
         Button.MouseButton1Click:Connect(function()
             if Toggle.Disabled then
                 return
+            end
+
+            -- Safety check: ensure elements exist
+            if not Switch or not Ball or not SwitchGlow then
+                Toggle:SetValue(not Toggle.Value)
+                return
+            end
+
+            -- Click feedback: Punch animation on switch
+            local punchTween = TweenService:Create(Switch,
+                TweenInfo.new(0.1, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                { Size = UDim2.fromOffset(34, 18) }
+            )
+            punchTween:Play()
+            punchTween.Completed:Connect(function()
+                if Switch and Switch.Parent then
+                    TweenService:Create(Switch,
+                        TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                        { Size = UDim2.fromOffset(36, 20) }
+                    ):Play()
+                end
+            end)
+
+            -- Ripple effect on switch background
+            if Switch and Switch.Parent then
+                local ripple = New("Frame", {
+                    AnchorPoint = Vector2.new(0.5, 0.5),
+                    BackgroundColor3 = Library.Scheme.AccentColor,
+                    BackgroundTransparency = 0.5,
+                    Position = UDim2.fromScale(0.5, 0.5),
+                    Size = UDim2.fromOffset(0, 0),
+                    ZIndex = 0,
+                    Parent = Switch,
+                })
+                New("UICorner", { CornerRadius = UDim.new(1, 0), Parent = ripple })
+
+                local rippleTween = TweenService:Create(ripple,
+                    TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+                    {
+                        Size = UDim2.fromOffset(40, 40),
+                        BackgroundTransparency = 1,
+                    }
+                )
+                rippleTween:Play()
+                rippleTween.Completed:Connect(function()
+                    if ripple and ripple.Parent then
+                        ripple:Destroy()
+                    end
+                end)
+            end
+
+            -- Ball punch animation
+            if Ball and Ball.Parent then
+                local ballPunch = TweenService:Create(Ball,
+                    TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                    { Size = UDim2.new(1.15, 0, 1.15, 0) }
+                )
+                ballPunch:Play()
+                ballPunch.Completed:Connect(function()
+                    if Ball and Ball.Parent then
+                        TweenService:Create(Ball,
+                            TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                            { Size = UDim2.fromScale(1, 1) }
+                        ):Play()
+                    end
+                end)
+            end
+
+            -- Celebration animation when toggling ON
+            if not Toggle.Value and SwitchGlow and SwitchGlow.Parent then
+                local celebrationGlow = TweenService:Create(SwitchGlow,
+                    TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+                    { ImageTransparency = 0.4 }
+                )
+                celebrationGlow:Play()
             end
 
             Toggle:SetValue(not Toggle.Value)
@@ -6746,22 +7098,34 @@ do
 
         Bar.MouseEnter:Connect(function()
             if Slider.Disabled then return end
-            TweenService:Create(Thumb, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-                Size = UDim2.fromOffset(20, 20),
-            }):Play()
-            TweenService:Create(ThumbDot, Library.HoverTweenInfo, {
-                Size = UDim2.fromOffset(8, 8),
-            }):Play()
-            TweenService:Create(ThumbGlow, Library.HoverTweenInfo, {
-                ImageTransparency = 0.7,
-            }):Play()
-            TweenService:Create(ThumbStroke, Library.HoverTweenInfo, {
-                Transparency = 0,
-            }):Play()
-            TweenService:Create(BarStroke, Library.HoverTweenInfo, {
-                Color = Library.Scheme.AccentColor,
-            }):Play()
-            if SliderLabel then
+
+            -- Safety checks for all elements
+            if Thumb and Thumb.Parent then
+                TweenService:Create(Thumb, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+                    Size = UDim2.fromOffset(20, 20),
+                }):Play()
+            end
+            if ThumbDot and ThumbDot.Parent then
+                TweenService:Create(ThumbDot, Library.HoverTweenInfo, {
+                    Size = UDim2.fromOffset(8, 8),
+                }):Play()
+            end
+            if ThumbGlow and ThumbGlow.Parent then
+                TweenService:Create(ThumbGlow, Library.HoverTweenInfo, {
+                    ImageTransparency = 0.7,
+                }):Play()
+            end
+            if ThumbStroke and ThumbStroke.Parent then
+                TweenService:Create(ThumbStroke, Library.HoverTweenInfo, {
+                    Transparency = 0,
+                }):Play()
+            end
+            if BarStroke and BarStroke.Parent then
+                TweenService:Create(BarStroke, Library.HoverTweenInfo, {
+                    Color = Library.Scheme.AccentColor,
+                }):Play()
+            end
+            if SliderLabel and SliderLabel.Parent then
                 TweenService:Create(SliderLabel, Library.HoverTweenInfo, {
                     TextTransparency = 0,
                 }):Play()
@@ -6770,22 +7134,34 @@ do
 
         Bar.MouseLeave:Connect(function()
             if Slider.Disabled or isDragging then return end
-            TweenService:Create(Thumb, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
-                Size = UDim2.fromOffset(16, 16),
-            }):Play()
-            TweenService:Create(ThumbDot, Library.HoverTweenInfo, {
-                Size = UDim2.fromOffset(6, 6),
-            }):Play()
-            TweenService:Create(ThumbGlow, Library.HoverTweenInfo, {
-                ImageTransparency = 1,
-            }):Play()
-            TweenService:Create(ThumbStroke, Library.HoverTweenInfo, {
-                Transparency = 0.5,
-            }):Play()
-            TweenService:Create(BarStroke, Library.HoverTweenInfo, {
-                Color = Library.Scheme.OutlineColor,
-            }):Play()
-            if SliderLabel then
+
+            -- Safety checks for all elements
+            if Thumb and Thumb.Parent then
+                TweenService:Create(Thumb, TweenInfo.new(0.2, Enum.EasingStyle.Quint), {
+                    Size = UDim2.fromOffset(16, 16),
+                }):Play()
+            end
+            if ThumbDot and ThumbDot.Parent then
+                TweenService:Create(ThumbDot, Library.HoverTweenInfo, {
+                    Size = UDim2.fromOffset(6, 6),
+                }):Play()
+            end
+            if ThumbGlow and ThumbGlow.Parent then
+                TweenService:Create(ThumbGlow, Library.HoverTweenInfo, {
+                    ImageTransparency = 1,
+                }):Play()
+            end
+            if ThumbStroke and ThumbStroke.Parent then
+                TweenService:Create(ThumbStroke, Library.HoverTweenInfo, {
+                    Transparency = 0.5,
+                }):Play()
+            end
+            if BarStroke and BarStroke.Parent then
+                TweenService:Create(BarStroke, Library.HoverTweenInfo, {
+                    Color = Library.Scheme.OutlineColor,
+                }):Play()
+            end
+            if SliderLabel and SliderLabel.Parent then
                 TweenService:Create(SliderLabel, Library.HoverTweenInfo, {
                     TextTransparency = Slider.Disabled and 0.8 or 0,
                 }):Play()
@@ -6839,19 +7215,27 @@ do
             end
 
             local X = (Slider.Value - Slider.Min) / (Slider.Max - Slider.Min)
-            TweenService:Create(Fill, Library.HoverTweenInfo, {
-                Size = UDim2.fromScale(X, 1),
-            }):Play()
+
+            -- Safety checks for all elements
+            if Fill and Fill.Parent then
+                TweenService:Create(Fill, Library.HoverTweenInfo, {
+                    Size = UDim2.fromScale(X, 1),
+                }):Play()
+            end
 
             -- Animate thumb position
-            TweenService:Create(Thumb, Library.HoverTweenInfo, {
-                Position = UDim2.new(X, 0, 0.5, 0),
-            }):Play()
+            if Thumb and Thumb.Parent then
+                TweenService:Create(Thumb, Library.HoverTweenInfo, {
+                    Position = UDim2.new(X, 0, 0.5, 0),
+                }):Play()
+            end
 
             -- Animate fill glow
-            TweenService:Create(FillGlow, Library.HoverTweenInfo, {
-                Size = UDim2.new(X, 0, 1, 6),
-            }):Play()
+            if FillGlow and FillGlow.Parent then
+                TweenService:Create(FillGlow, Library.HoverTweenInfo, {
+                    Size = UDim2.new(X, 0, 1, 6),
+                }):Play()
+            end
         end
 
         function Slider:OnChanged(Func)
@@ -6938,6 +7322,42 @@ do
             end
 
             IsDraggingSlider = true
+            isDragging = true
+
+            -- Grab effect: Scale up thumb dramatically
+            if Thumb and Thumb.Parent then
+                TweenService:Create(Thumb,
+                    TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                    { Size = UDim2.fromOffset(24, 24) }
+                ):Play()
+            end
+
+            -- Enlarge dot for emphasis
+            if ThumbDot and ThumbDot.Parent then
+                TweenService:Create(ThumbDot,
+                    TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                    { Size = UDim2.fromOffset(10, 10) }
+                ):Play()
+            end
+
+            -- Brighten glow significantly
+            if ThumbGlow and ThumbGlow.Parent then
+                TweenService:Create(ThumbGlow,
+                    TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+                    {
+                        ImageTransparency = 0.5,
+                        Size = UDim2.fromOffset(36, 36)
+                    }
+                ):Play()
+            end
+
+            -- Pulse the fill for feedback
+            if FillGlow and FillGlow.Parent then
+                TweenService:Create(FillGlow,
+                    TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                    { BackgroundTransparency = 0.3 }
+                ):Play()
+            end
 
             for _, Side in pairs(Library.ActiveTab.Sides) do
                 Side.ScrollingEnabled = false
@@ -6968,7 +7388,26 @@ do
             Slider.Value = Round(Slider.Min + ((Slider.Max - Slider.Min) * Scale), Slider.Rounding)
 
             Slider:Display()
+
+            -- Value change feedback
             if Slider.Value ~= OldValue then
+                -- Subtle pulse on value change
+                if ThumbDot and ThumbDot.Parent then
+                    local pulseTween = TweenService:Create(ThumbDot,
+                        TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                        { Size = UDim2.fromOffset(11, 11) }
+                    )
+                    pulseTween:Play()
+                    pulseTween.Completed:Connect(function()
+                        if ThumbDot and ThumbDot.Parent then
+                            TweenService:Create(ThumbDot,
+                                TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+                                { Size = UDim2.fromOffset(10, 10) }
+                            ):Play()
+                        end
+                    end)
+                end
+
                 Library:SafeCallback(Slider.Callback, Slider.Value)
                 Library:SafeCallback(Slider.Changed, Slider.Value)
             end
@@ -6977,6 +7416,39 @@ do
         Library:GiveSignal(UserInputService.InputEnded:Connect(function(Input: InputObject)
             if IsMouseInput(Input) then
                 IsDraggingSlider = false
+                isDragging = false
+
+                -- Release animation: Return to normal size
+                if Thumb and Thumb.Parent then
+                    TweenService:Create(Thumb,
+                        TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                        { Size = UDim2.fromOffset(16, 16) }
+                    ):Play()
+                end
+
+                if ThumbDot and ThumbDot.Parent then
+                    TweenService:Create(ThumbDot,
+                        TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                        { Size = UDim2.fromOffset(6, 6) }
+                    ):Play()
+                end
+
+                if ThumbGlow and ThumbGlow.Parent then
+                    TweenService:Create(ThumbGlow,
+                        TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+                        {
+                            ImageTransparency = 1,
+                            Size = UDim2.fromOffset(28, 28)
+                        }
+                    ):Play()
+                end
+
+                if FillGlow and FillGlow.Parent then
+                    TweenService:Create(FillGlow,
+                        TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                        { BackgroundTransparency = 0.5 }
+                    ):Play()
+                end
 
                 for _, Side in pairs(Library.ActiveTab.Sides) do
                     Side.ScrollingEnabled = true
@@ -7116,28 +7588,44 @@ do
         -- Hover effects
         Display.MouseEnter:Connect(function()
             if Dropdown.Disabled then return end
-            TweenService:Create(DisplayStroke, Library.HoverTweenInfo, {
-                Color = Library:GetLighterColor(Library.Scheme.OutlineColor),
-            }):Play()
-            TweenService:Create(ArrowContainer, Library.HoverTweenInfo, {
-                BackgroundTransparency = 0.6,
-            }):Play()
-            TweenService:Create(Label, Library.HoverTweenInfo, {
-                TextTransparency = 0,
-            }):Play()
+
+            -- Safety checks for all elements
+            if DisplayStroke and DisplayStroke.Parent then
+                TweenService:Create(DisplayStroke, Library.HoverTweenInfo, {
+                    Color = Library:GetLighterColor(Library.Scheme.OutlineColor),
+                }):Play()
+            end
+            if ArrowContainer and ArrowContainer.Parent then
+                TweenService:Create(ArrowContainer, Library.HoverTweenInfo, {
+                    BackgroundTransparency = 0.6,
+                }):Play()
+            end
+            if Label and Label.Parent then
+                TweenService:Create(Label, Library.HoverTweenInfo, {
+                    TextTransparency = 0,
+                }):Play()
+            end
         end)
 
         Display.MouseLeave:Connect(function()
             if Dropdown.Disabled then return end
-            TweenService:Create(DisplayStroke, Library.HoverTweenInfo, {
-                Color = Library.Scheme.OutlineColor,
-            }):Play()
-            TweenService:Create(ArrowContainer, Library.HoverTweenInfo, {
-                BackgroundTransparency = 0.8,
-            }):Play()
-            TweenService:Create(Label, Library.HoverTweenInfo, {
-                TextTransparency = Dropdown.Disabled and 0.8 or 0,
-            }):Play()
+
+            -- Safety checks for all elements
+            if DisplayStroke and DisplayStroke.Parent then
+                TweenService:Create(DisplayStroke, Library.HoverTweenInfo, {
+                    Color = Library.Scheme.OutlineColor,
+                }):Play()
+            end
+            if ArrowContainer and ArrowContainer.Parent then
+                TweenService:Create(ArrowContainer, Library.HoverTweenInfo, {
+                    BackgroundTransparency = 0.8,
+                }):Play()
+            end
+            if Label and Label.Parent then
+                TweenService:Create(Label, Library.HoverTweenInfo, {
+                    TextTransparency = Dropdown.Disabled and 0.8 or 0,
+                }):Play()
+            end
         end)
 
         local SearchBox
@@ -7331,18 +7819,21 @@ do
                         Selected = Dropdown.Value == Value
                     end
 
-                    TweenService:Create(Button, Library.HoverTweenInfo, {
-                        BackgroundTransparency = Selected and 0 or 1,
-                        TextTransparency = IsDisabled and 0.8 or Selected and 0 or 0.5,
-                        BackgroundColor3 = Selected and Library.Scheme.AccentColor or Library.Scheme.MainColor,
-                        TextColor3 = Selected and Library.Scheme.BackgroundColor or Library.Scheme.FontColor,
-                    }):Play()
+                    -- Safety check for Button
+                    if Button and Button.Parent then
+                        TweenService:Create(Button, Library.HoverTweenInfo, {
+                            BackgroundTransparency = Selected and 0 or 1,
+                            TextTransparency = IsDisabled and 0.8 or Selected and 0 or 0.5,
+                            BackgroundColor3 = Selected and Library.Scheme.AccentColor or Library.Scheme.MainColor,
+                            TextColor3 = Selected and Library.Scheme.BackgroundColor or Library.Scheme.FontColor,
+                        }):Play()
+                    end
                 end
 
                 -- Hover effects for dropdown items
                 if not IsDisabled then
                     Button.MouseEnter:Connect(function()
-                        if not Selected then
+                        if not Selected and Button and Button.Parent then
                             TweenService:Create(Button, Library.HoverTweenInfo, {
                                 BackgroundTransparency = 0.7,
                                 TextTransparency = 0.2,
@@ -7350,7 +7841,7 @@ do
                         end
                     end)
                     Button.MouseLeave:Connect(function()
-                        if not Selected then
+                        if not Selected and Button and Button.Parent then
                             TweenService:Create(Button, Library.HoverTweenInfo, {
                                 BackgroundTransparency = 1,
                                 TextTransparency = 0.5,
@@ -9259,6 +9750,149 @@ function Library:CreateWindow(WindowInfo)
             CornerRadius = UDim.new(0, WindowInfo.CornerRadius - 1),
             Parent = MainFrame,
         })
+
+        -- Modern blur effect with dark purple fog/mist (uses theme colors)
+        local BackgroundBlur = New("Frame", {
+            Name = "BlurBackground",
+            BackgroundTransparency = 0.12,
+            BackgroundColor3 = "BackgroundColor",
+            BorderSizePixel = 0,
+            Position = UDim2.fromOffset(0, 0),
+            Size = UDim2.fromScale(1, 1),
+            ZIndex = -20,
+            Parent = MainFrame,
+        })
+        New("UICorner", {
+            CornerRadius = UDim.new(0, WindowInfo.CornerRadius - 1),
+            Parent = BackgroundBlur,
+        })
+
+        -- Gradient fog overlay (combines theme background + accent for mist)
+        local FogGradient = New("Frame", {
+            Name = "FogGradient",
+            BackgroundColor3 = "AccentColor",
+            BackgroundTransparency = 0.92,
+            Size = UDim2.fromScale(1, 1),
+            ZIndex = -19,
+            Parent = BackgroundBlur,
+        })
+        New("UICorner", {
+            CornerRadius = UDim.new(0, WindowInfo.CornerRadius - 1),
+            Parent = FogGradient,
+        })
+
+        -- Dynamic gradient that blends with theme colors
+        local function UpdateFogGradient()
+            local bgColor = Library.Scheme.BackgroundColor
+            local accentColor = Library.Scheme.AccentColor
+
+            -- Mix colors for fog effect
+            local function MixColors(c1, c2, amount)
+                return Color3.new(
+                    c1.R * (1 - amount) + c2.R * amount,
+                    c1.G * (1 - amount) + c2.G * amount,
+                    c1.B * (1 - amount) + c2.B * amount
+                )
+            end
+
+            local fogColor1 = MixColors(bgColor, accentColor, 0.15)
+            local fogColor2 = MixColors(bgColor, accentColor, 0.08)
+            local fogColor3 = MixColors(bgColor, accentColor, 0.12)
+
+            return ColorSequence.new({
+                ColorSequenceKeypoint.new(0, fogColor1),
+                ColorSequenceKeypoint.new(0.5, fogColor2),
+                ColorSequenceKeypoint.new(1, fogColor3),
+            })
+        end
+
+        local FogGradientUI = New("UIGradient", {
+            Color = UpdateFogGradient(),
+            Rotation = 45,
+            Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0.3),
+                NumberSequenceKeypoint.new(0.5, 0.5),
+                NumberSequenceKeypoint.new(1, 0.3),
+            }),
+            Parent = FogGradient,
+        })
+
+        -- Store reference for theme updates
+        Library.FogGradientUI = FogGradientUI
+        Library.UpdateFogGradient = UpdateFogGradient
+
+        -- Animated mist particles (subtle purple glow orbs)
+        local MistParticles = {}
+        for i = 1, 6 do
+            local particle = New("Frame", {
+                Name = "MistParticle" .. i,
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                BackgroundColor3 = Library.Scheme.AccentColor,
+                BackgroundTransparency = 0.85,
+                BorderSizePixel = 0,
+                Position = UDim2.fromScale(math.random(), math.random()),
+                Size = UDim2.fromOffset(math.random(40, 80), math.random(40, 80)),
+                ZIndex = -18,
+                Parent = BackgroundBlur,
+            })
+            New("UICorner", {
+                CornerRadius = UDim.new(1, 0),
+                Parent = particle,
+            })
+
+            -- Add subtle glow to each particle
+            local particleGlow = New("ImageLabel", {
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                BackgroundTransparency = 1,
+                Image = "rbxassetid://6015897843",
+                ImageColor3 = Library.Scheme.AccentColor,
+                ImageTransparency = 0.7,
+                Position = UDim2.fromScale(0.5, 0.5),
+                ScaleType = Enum.ScaleType.Slice,
+                SliceCenter = Rect.new(49, 49, 450, 450),
+                Size = UDim2.fromOffset(120, 120),
+                ZIndex = -19,
+                Parent = particle,
+            })
+
+            table.insert(MistParticles, particle)
+
+            -- Animate particles (floating effect)
+            local duration = math.random(15, 25)
+            local targetPos = UDim2.fromScale(math.random(), math.random())
+
+            local moveTween = TweenService:Create(particle,
+                TweenInfo.new(duration, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+                { Position = targetPos }
+            )
+            moveTween:Play()
+
+            -- Pulse transparency
+            local pulseTween = TweenService:Create(particle,
+                TweenInfo.new(math.random(3, 6), Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+                { BackgroundTransparency = math.random(92, 96) / 100 }
+            )
+            pulseTween:Play()
+        end
+
+        -- Subtle vignette effect
+        local Vignette = New("ImageLabel", {
+            Name = "Vignette",
+            BackgroundTransparency = 1,
+            Image = "rbxassetid://6015897843",
+            ImageColor3 = Color3.fromRGB(10, 5, 15),
+            ImageTransparency = 0.6,
+            ScaleType = Enum.ScaleType.Slice,
+            SliceCenter = Rect.new(49, 49, 450, 450),
+            Size = UDim2.fromScale(1, 1),
+            ZIndex = -17,
+            Parent = BackgroundBlur,
+        })
+        New("UICorner", {
+            CornerRadius = UDim.new(0, WindowInfo.CornerRadius - 1),
+            Parent = Vignette,
+        })
+
         local InitialSidebarWidth = GetSidebarWidth()
         LayoutRefs.DividerLine = Library:MakeLine(MainFrame, {
             Position = UDim2.new(0, InitialSidebarWidth, 0, 0),
@@ -10294,9 +10928,14 @@ function Library:CreateWindow(WindowInfo)
 
             local GroupboxHolder
             local GroupboxLabel
+            local GroupboxDescription
+            local CollapseArrow
 
             local GroupboxContainer
             local GroupboxList
+
+            local isCollapsed = false
+            local headerHeight = Info.Description and 50 or 34
 
             do
                 GroupboxHolder = New("Frame", {
@@ -10310,7 +10949,7 @@ function Library:CreateWindow(WindowInfo)
                     Parent = GroupboxHolder,
                 })
                 Library:MakeLine(GroupboxHolder, {
-                    Position = UDim2.fromOffset(0, 34),
+                    Position = UDim2.fromOffset(0, headerHeight),
                     Size = UDim2.new(1, 0, 0, 1),
                 })
 
@@ -10331,7 +10970,7 @@ function Library:CreateWindow(WindowInfo)
                 GroupboxLabel = New("TextLabel", {
                     BackgroundTransparency = 1,
                     Position = UDim2.fromOffset(BoxIcon and 24 or 0, 0),
-                    Size = UDim2.new(1, 0, 0, 34),
+                    Size = UDim2.new(1, Info.Description and -30 or 0, 0, Info.Description and 18 or 34),
                     Text = Info.Name,
                     TextSize = 15,
                     TextTransparency = 0.1,
@@ -10344,11 +10983,52 @@ function Library:CreateWindow(WindowInfo)
                     Parent = GroupboxLabel,
                 })
 
+                -- Description label (subtle gray with better contrast)
+                if Info.Description then
+                    GroupboxDescription = New("TextLabel", {
+                        BackgroundTransparency = 1,
+                        Position = UDim2.fromOffset(BoxIcon and 24 or 0, 18),
+                        Size = UDim2.new(1, -30, 0, 16),
+                        Text = Library:StylizeBullets(Info.Description),
+                        RichText = true,
+                        TextSize = 12,
+                        TextTransparency = 0.4,
+                        TextColor3 = Color3.fromRGB(160, 160, 170),
+                        TextXAlignment = Enum.TextXAlignment.Left,
+                        Parent = GroupboxHolder,
+                    })
+                    New("UIPadding", {
+                        PaddingLeft = UDim.new(0, 12),
+                        PaddingRight = UDim.new(0, 12),
+                        Parent = GroupboxDescription,
+                    })
+
+                    -- Track for theme updates
+                    if Info.Description:find("•") then
+                        GroupboxDescription:SetAttribute("OriginalText", Info.Description)
+                        Library.BulletElements[GroupboxDescription] = true
+                    end
+                end
+
+                -- Collapse/Expand arrow (modern chevron icon)
+                local ChevronIcon = Library:GetCustomIcon("chevron-down")
+                CollapseArrow = New("ImageLabel", {
+                    BackgroundTransparency = 1,
+                    Position = UDim2.new(1, -28, 0, (headerHeight / 2) - 8),
+                    Size = UDim2.fromOffset(16, 16),
+                    Image = ChevronIcon and ChevronIcon.Url or "",
+                    ImageRectOffset = ChevronIcon and ChevronIcon.ImageRectOffset or Vector2.zero,
+                    ImageRectSize = ChevronIcon and ChevronIcon.ImageRectSize or Vector2.zero,
+                    ImageTransparency = 0.3,
+                    Parent = GroupboxHolder,
+                })
+                Library.Registry[CollapseArrow] = { ImageColor3 = "FontColor" }
+
                 -- Hover effect for groupbox header
                 local HeaderHoverRegion = New("TextButton", {
                     BackgroundTransparency = 1,
                     Position = UDim2.fromOffset(0, 0),
-                    Size = UDim2.new(1, 0, 0, 34),
+                    Size = UDim2.new(1, 0, 0, headerHeight),
                     Text = "",
                     Parent = GroupboxHolder,
                 })
@@ -10357,6 +11037,10 @@ function Library:CreateWindow(WindowInfo)
                     TweenService:Create(GroupboxLabel, Library.HoverTweenInfo, {
                         TextTransparency = 0,
                         TextColor3 = Library.Scheme.AccentColor,
+                    }):Play()
+                    TweenService:Create(CollapseArrow, Library.HoverTweenInfo, {
+                        ImageTransparency = 0,
+                        ImageColor3 = Library.Scheme.AccentColor,
                     }):Play()
                     if BoxIconImage then
                         TweenService:Create(BoxIconImage, Library.HoverTweenInfo, {
@@ -10371,6 +11055,10 @@ function Library:CreateWindow(WindowInfo)
                         TextTransparency = 0.1,
                         TextColor3 = Library.Scheme.FontColor,
                     }):Play()
+                    TweenService:Create(CollapseArrow, Library.HoverTweenInfo, {
+                        ImageTransparency = 0.3,
+                        ImageColor3 = Library.Scheme.FontColor,
+                    }):Play()
                     if BoxIconImage then
                         TweenService:Create(BoxIconImage, Library.HoverTweenInfo, {
                             ImageTransparency = 0,
@@ -10379,10 +11067,51 @@ function Library:CreateWindow(WindowInfo)
                     end
                 end)
 
+                -- Click to collapse/expand
+                HeaderHoverRegion.MouseButton1Click:Connect(function()
+                    isCollapsed = not isCollapsed
+
+                    -- Smooth chevron rotation with spring-like effect
+                    local rotationTween = TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+                    TweenService:Create(CollapseArrow, rotationTween, {
+                        Rotation = isCollapsed and 90 or 0,
+                    }):Play()
+
+                    -- Animate container visibility with smooth transitions
+                    local sizeTween = TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+                    if isCollapsed then
+                        -- Fade out content first, then hide
+                        local fadeOut = TweenService:Create(GroupboxContainer, TweenInfo.new(0.15), {
+                            BackgroundTransparency = 1,
+                        })
+                        fadeOut.Completed:Connect(function()
+                            GroupboxContainer.Visible = false
+                        end)
+                        fadeOut:Play()
+
+                        TweenService:Create(Background, sizeTween, {
+                            Size = UDim2.new(1, 0, 0, headerHeight + 4),
+                        }):Play()
+                    else
+                        -- Show content, then fade in
+                        GroupboxContainer.Visible = true
+                        GroupboxContainer.BackgroundTransparency = 1
+
+                        local targetHeight = GroupboxList.AbsoluteContentSize.Y + headerHeight + 19
+                        TweenService:Create(Background, sizeTween, {
+                            Size = UDim2.new(1, 0, 0, targetHeight * Library.DPIScale),
+                        }):Play()
+
+                        TweenService:Create(GroupboxContainer, TweenInfo.new(0.2), {
+                            BackgroundTransparency = 1,
+                        }):Play()
+                    end
+                end)
+
                 GroupboxContainer = New("Frame", {
                     BackgroundTransparency = 1,
-                    Position = UDim2.fromOffset(0, 35),
-                    Size = UDim2.new(1, 0, 1, -35),
+                    Position = UDim2.fromOffset(0, headerHeight + 1),
+                    Size = UDim2.new(1, 0, 1, -(headerHeight + 1)),
                     Parent = GroupboxHolder,
                 })
 
@@ -10403,6 +11132,8 @@ function Library:CreateWindow(WindowInfo)
                 BoxHolder = BoxHolder,
                 Holder = Background,
                 Container = GroupboxContainer,
+                HeaderHeight = headerHeight,
+                IsCollapsed = isCollapsed,
 
                 Tab = Tab,
                 DependencyBoxes = {},
@@ -10410,7 +11141,10 @@ function Library:CreateWindow(WindowInfo)
             }
 
             function Groupbox:Resize()
-                Background.Size = UDim2.new(1, 0, 0, GroupboxList.AbsoluteContentSize.Y + 53 * Library.DPIScale)
+                if not isCollapsed then
+                    local contentHeight = GroupboxList.AbsoluteContentSize.Y + headerHeight + 19
+                    Background.Size = UDim2.new(1, 0, 0, contentHeight * Library.DPIScale)
+                end
             end
 
             setmetatable(Groupbox, BaseGroupbox)
@@ -10421,12 +11155,12 @@ function Library:CreateWindow(WindowInfo)
             return Groupbox
         end
 
-        function Tab:AddLeftGroupbox(Name, IconName)
-            return Tab:AddGroupbox({ Side = 1, Name = Name, IconName = IconName })
+        function Tab:AddLeftGroupbox(Name, IconName, Description)
+            return Tab:AddGroupbox({ Side = 1, Name = Name, IconName = IconName, Description = Description })
         end
 
-        function Tab:AddRightGroupbox(Name, IconName)
-            return Tab:AddGroupbox({ Side = 2, Name = Name, IconName = IconName })
+        function Tab:AddRightGroupbox(Name, IconName, Description)
+            return Tab:AddGroupbox({ Side = 2, Name = Name, IconName = IconName, Description = Description })
         end
 
         function Tab:AddTabbox(Info)
