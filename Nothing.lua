@@ -352,6 +352,16 @@ Compatibility.GUI.GetParent = function()
 		end
 	end
 
+	-- PlayerGui keeps later input/render callbacks in the caller's capability context.
+	local playerGui = LocalPlayer and LocalPlayer:FindFirstChildOfClass("PlayerGui")
+	if not playerGui and LocalPlayer then
+		local playerGuiOk, resolvedPlayerGui = pcall(function()
+			return LocalPlayer:WaitForChild("PlayerGui", 5)
+		end)
+		playerGui = playerGuiOk and resolvedPlayerGui or nil
+	end
+	AddCandidate(playerGui)
+
 	local getHui = PickFunction(GetGlobal("gethui"))
 	local getHiddenGui = PickFunction(GetGlobal("get_hidden_gui"), GetGlobal("gethui"))
 	local ok, result = SafeCall(getHui)
@@ -363,16 +373,6 @@ Compatibility.GUI.GetParent = function()
 		AddCandidate(result)
 	end
 
-	-- Tabs are added after construction from caller-owned threads. Raw CoreGui can
-	-- accept the ScreenGui and still reject later descendant mutations.
-	local playerGui = LocalPlayer and LocalPlayer:FindFirstChildOfClass("PlayerGui")
-	if not playerGui and LocalPlayer then
-		local playerGuiOk, resolvedPlayerGui = pcall(function()
-			return LocalPlayer:WaitForChild("PlayerGui", 5)
-		end)
-		playerGui = playerGuiOk and resolvedPlayerGui or nil
-	end
-	AddCandidate(playerGui)
 	AddCandidate(Compatibility.Utilities.CloneRef(rawCoreGui))
 
 	for i = 1, #candidates do
