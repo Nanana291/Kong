@@ -345,6 +345,7 @@ end
 Compatibility.GUI = {}
 Compatibility.GUI.GetParent = function()
     local candidates = {}
+    local rawCoreGui = game:FindFirstChild("CoreGui")
     local function AddCandidate(candidate)
         if SafeType(candidate) == "Instance" then
             candidates[#candidates + 1] = candidate
@@ -354,15 +355,25 @@ Compatibility.GUI.GetParent = function()
     local getHui = PickFunction(GetGlobal("gethui"))
     local getHiddenGui = PickFunction(GetGlobal("get_hidden_gui"), GetGlobal("gethui"))
     local ok, result = SafeCall(getHui)
-    if ok then
+    if ok and result ~= rawCoreGui then
         AddCandidate(result)
     end
     ok, result = SafeCall(getHiddenGui)
-    if ok then
+    if ok and result ~= rawCoreGui then
         AddCandidate(result)
     end
-    AddCandidate(Compatibility.Utilities.CloneRef(game:FindFirstChild("CoreGui")))
-    AddCandidate(LocalPlayer and LocalPlayer:FindFirstChildOfClass("PlayerGui"))
+
+    -- Tabs are added after construction from caller-owned threads. Raw CoreGui can
+    -- accept the ScreenGui and still reject later descendant mutations.
+    local playerGui = LocalPlayer and LocalPlayer:FindFirstChildOfClass("PlayerGui")
+    if not playerGui and LocalPlayer then
+        local playerGuiOk, resolvedPlayerGui = pcall(function()
+            return LocalPlayer:WaitForChild("PlayerGui", 5)
+        end)
+        playerGui = playerGuiOk and resolvedPlayerGui or nil
+    end
+    AddCandidate(playerGui)
+    AddCandidate(Compatibility.Utilities.CloneRef(rawCoreGui))
 
     for i = 1, #candidates do
         local candidate = candidates[i]
