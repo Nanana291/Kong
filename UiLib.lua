@@ -45,7 +45,7 @@ local Library = {
     AnimationSpeed = 1,
     CornerStyle = 1,
     Language = "en",
-    Version = "1.0.0",
+    Version = "1.1.0",
 }
 local UI = {}
 UI.S = {
@@ -57,23 +57,25 @@ UI.S = {
 }
 UI.Palette = {
     Base = Color3.fromRGB(20, 23, 28),
-    Panel = Color3.fromRGB(24, 27, 33),
-    Row = Color3.fromRGB(27, 30, 37),
-    Hover = Color3.fromRGB(33, 37, 45),
-    Border = Color3.fromRGB(45, 49, 59),
-    Text = Color3.fromRGB(190, 192, 200),
-    Muted = Color3.fromRGB(111, 115, 127),
-    Faint = Color3.fromRGB(69, 74, 87),
-    Thumb = Color3.fromRGB(223, 225, 232),
-    Accent = Color3.fromRGB(191, 61, 222),
+    Panel = Color3.fromRGB(26, 28, 34),
+    Row = Color3.fromRGB(37, 39, 50),
+    Hover = Color3.fromRGB(42, 44, 58),
+    Border = Color3.fromRGB(47, 49, 61),
+    Text = Color3.fromRGB(194, 196, 206),
+    Muted = Color3.fromRGB(104, 107, 119),
+    Faint = Color3.fromRGB(65, 68, 84),
+    Thumb = Color3.fromRGB(240, 242, 247),
+    Accent = Color3.fromRGB(81, 95, 255),
     Danger = Color3.fromRGB(220, 91, 108),
     Success = Color3.fromRGB(109, 190, 141),
     Warning = Color3.fromRGB(219, 172, 101),
 }
-UI.Radii = { Window = 18, Panel = 10, Control = 6, Popup = 10, Small = 4 }
+UI.Radii = { Window = 20, Panel = 10, Control = 6, Popup = 10, Small = 4 }
+-- Measurements are logical pixels; UIScale is user-selected, never a mobile substitute.
+UI.Metrics = { Header = 56, BodyX = 46, BodyY = 60, Margin = 16, ColumnGap = 16, Row = 42, TouchRow = 44 }
 UI.Font = Font.fromEnum(Enum.Font.BuilderSans)
 UI.Duration =
-    { Hover = 0.1, Press = 0.08, Toggle = 0.14, Slider = 0.09, Popup = 0.16, Color = 0.12, Nav = 0.18, Window = 0.22 }
+    { Hover = 0.10, Press = 0.07, Toggle = 0.14, Slider = 0.10, Popup = 0.14, Color = 0.12, Nav = 0.16, Window = 0.20, Tooltip = 0.12 }
 UI.Window, UI.Tab, UI.Section, UI.Control, UI.Companion = {}, {}, {}, {}, {}
 for _, class in { UI.Window, UI.Tab, UI.Section, UI.Control, UI.Companion } do
     class.__index = class
@@ -209,7 +211,7 @@ function UI.new(class, parent, props)
     end
     if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
         obj.FontFace = UI.Font
-        obj.TextSize = 12
+        obj.TextSize = 11
         obj.TextColor3 = UI.Palette.Text
         obj.TextXAlignment = Enum.TextXAlignment.Left
         obj.Text = ""
@@ -250,7 +252,7 @@ end
 function UI.frame(w, parent, props, token, radius)
     local f = UI.new("Frame", parent, props)
     if token then
-        f.BackgroundTransparency = 0
+        if not props or props.BackgroundTransparency == nil then f.BackgroundTransparency = 0 end
         UI.bind(w, f, "BackgroundColor3", token)
     end
     if radius then
@@ -265,36 +267,52 @@ function UI.text(w, parent, text, props, token)
     end
     return UI.bind(w, UI.new("TextLabel", parent, p), "TextColor3", token or "Text")
 end
-function UI.tween(w, obj, props, category)
-    if not obj.Parent or w.Dead then
+-- Tweens own properties, not whole instances: recoloring cannot cancel a popup's motion.
+function UI.cancelTweens(w, obj, properties)
+    local active = w.Tweens[obj]
+    if not active then return end
+    for record in active do
+        local overlaps = properties == nil
+        if properties then
+            for key in properties do
+                if record.Properties[key] ~= nil then overlaps = true; break end
+            end
+        end
+        if overlaps then
+            record.Connection:Disconnect()
+            record.Tween:Cancel()
+            active[record] = nil
+        end
+    end
+    if next(active) == nil then w.Tweens[obj] = nil end
+end
+function UI.tween(w, obj, props, category, instant)
+    if not obj.Parent or w.Dead then return end
+    UI.cancelTweens(w, obj, props)
+    if instant or w.AnimationSpeed <= 0 then
+        for k, v in props do obj[k] = v end
         return
     end
-    local previous = w.Tweens[obj]
-    if previous then
-        previous:Cancel()
-        w.Tweens[obj] = nil
-    end
-    local speed = w.AnimationSpeed
-    if speed <= 0 then
-        for k, v in props do
-            obj[k] = v
-        end
-        return
-    end
-    local t = UI.S.Tween:Create(
-        obj,
-        TweenInfo.new((UI.Duration[category] or 0.14) / speed, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-        props
-    )
-    w.Tweens[obj] = t
-    local connection
-    connection = t.Completed:Connect(function()
-        connection:Disconnect()
-        if w.Tweens[obj] == t then
-            w.Tweens[obj] = nil
-        end
+    local duration = (UI.Duration[category] or 0.14) / w.AnimationSpeed
+    local easing = (category == "Popup" or category == "Window") and Enum.EasingStyle.Quart or Enum.EasingStyle.Quad
+    local tween = UI.S.Tween:Create(obj, TweenInfo.new(duration, easing, Enum.EasingDirection.Out), props)
+    local active = w.Tweens[obj] or {}
+    w.Tweens[obj] = active
+    local record = { Tween = tween, Properties = props }
+    active[record] = true
+    record.Connection = tween.Completed:Connect(function()
+        record.Connection:Disconnect()
+        active[record] = nil
+        if w.Tweens[obj] == active and next(active) == nil then w.Tweens[obj] = nil end
     end)
-    t:Play()
+    tween:Play()
+    return tween
+end
+-- Stop transitions on deleted subtrees instead of retaining detached GUI objects until completion.
+function UI.cancelTree(w, root)
+    for obj in w.Tweens do
+        if obj == root or obj:IsDescendantOf(root) then UI.cancelTweens(w, obj) end
+    end
 end
 function UI.list(parent, gap, horizontal)
     return UI.new("UIListLayout", parent, {
@@ -314,45 +332,34 @@ end
 function UI.button(owner, parent, text, props, fn)
     local w = owner.Window or owner
     local b = UI.new("TextButton", parent, props or {})
-    local restTransparency = b.BackgroundTransparency
     b.Text = text
     UI.bind(w, b, "TextColor3", "Text")
+    UI.bind(w, b, "BackgroundColor3", "Hover")
+    UI.round(w, b, "Control")
+    -- Feedback never mutates the consumer-owned resting surface (including transparent hitboxes).
+    local feedback = UI.frame(w, b, { Name = "Feedback", Size = UDim2.fromScale(1, 1), ZIndex = 0 }, "Hover", "Control")
+    feedback.BackgroundTransparency = 1
+    local hover, pressed = false, false
+    local function render()
+        UI.tween(w, feedback, { BackgroundTransparency = owner.Disabled and 1 or (pressed and 0.58 or (hover and 0.84 or 1)) }, pressed and "Press" or "Hover")
+    end
     UI.connect(owner, b.Activated, function()
-        if not owner.Dead and not owner.Disabled and (b == w.Restore or w:CanInteract(b)) then
-            UI.call(text, fn)
-        end
+        if not owner.Dead and not owner.Disabled and (b == w.Restore or w:CanInteract(b)) then UI.call(text, fn) end
     end)
-    UI.connect(owner, b.MouseEnter, function()
-        if not owner.Disabled then
-            restTransparency = b.BackgroundTransparency
-            UI.tween(w, b, { BackgroundTransparency = math.min(restTransparency, 0.35) }, "Hover")
-        end
-    end)
-    UI.connect(owner, b.MouseLeave, function()
-        UI.tween(w, b, { BackgroundTransparency = restTransparency }, "Hover")
-    end)
+    UI.connect(owner, b.MouseEnter, function() hover = true; render() end)
+    UI.connect(owner, b.MouseLeave, function() hover = false; pressed = false; render() end)
+    UI.connect(owner, b.SelectionGained, function() hover = true; render() end)
+    UI.connect(owner, b.SelectionLost, function() hover = false; pressed = false; render() end)
     UI.connect(owner, b.InputBegan, function(input)
-        if
-            not owner.Disabled
-            and (
-                input.UserInputType == Enum.UserInputType.MouseButton1
-                or input.UserInputType == Enum.UserInputType.Touch
-            )
-        then
-            restTransparency = b.BackgroundTransparency
-            UI.tween(w, b, { BackgroundTransparency = math.min(restTransparency, 0.15) }, "Press")
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch or input.KeyCode == Enum.KeyCode.ButtonA then
+            if not owner.Disabled and (b == w.Restore or w:CanInteract(b)) then pressed = true; render() end
         end
     end)
     UI.connect(owner, b.InputEnded, function(input)
-        if
-            input.UserInputType == Enum.UserInputType.MouseButton1
-            or input.UserInputType == Enum.UserInputType.Touch
-        then
-            UI.tween(w, b, { BackgroundTransparency = restTransparency }, "Press")
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch or input.KeyCode == Enum.KeyCode.ButtonA then
+            pressed = false; render()
         end
     end)
-    UI.bind(w, b, "BackgroundColor3", "Hover")
-    UI.round(w, b, "Control")
     return b
 end
 -- Asset-free, coherent 16-unit line icons. Custom images retain their vector fallback.
@@ -410,6 +417,20 @@ UI.Paths = {
     ellipsis = { { { 3, 8 }, { 3.5, 8 } }, { { 8, 8 }, { 8.5, 8 } }, { { 13, 8 }, { 13.5, 8 } } },
     resize = { { { 7, 14 }, { 14, 7 } }, { { 11, 14 }, { 14, 11 } } },
 }
+-- Additional chrome uses the same 16-unit monoline grid, never font/emoji glyphs.
+UI.Paths.pause = { { {5, 3}, {5, 13} }, { {11, 3}, {11, 13} } }
+UI.Paths.lock = { { {5, 7}, {5, 4}, {7, 2}, {9, 2}, {11, 4}, {11, 7} }, { {3, 7}, {13, 7}, {13, 14}, {3, 14}, {3, 7} } }
+UI.Paths.scale = { { {2, 6}, {2, 2}, {6, 2} }, { {2, 2}, {6, 6} }, { {10, 14}, {14, 14}, {14, 10} }, { {10, 10}, {14, 14} } }
+UI.Paths.corners = { { {2, 11}, {2, 5}, {3, 3}, {5, 2}, {11, 2} }, { {5, 14}, {11, 14}, {13, 13}, {14, 11}, {14, 5} }, { {6, 10}, {6, 6}, {10, 6}, {10, 10}, {6, 10} } }
+UI.Paths.speed = { { {3, 13}, {1, 9}, {2, 5}, {5, 2}, {10, 2}, {14, 5}, {15, 9}, {13, 13} }, { {8, 9}, {11, 5} }, { {4, 12}, {12, 12} } }
+UI.Paths.palette = { { {4, 2}, {13, 11}, {9, 15}, {1, 7}, {6, 2} }, { {2, 8}, {9, 8} }, { {13, 2}, {15, 5}, {13, 6}, {12, 5}, {13, 2} } }
+UI.Paths.language = { { {3, 3}, {13, 3} }, { {8, 1}, {8, 3} }, { {5, 3}, {6, 7}, {11, 11} }, { {11, 3}, {10, 7}, {3, 12} }, { {10, 15}, {13, 9}, {16, 15} }, { {11, 13}, {15, 13} } }
+UI.Paths.keyboard = { { {1, 4}, {15, 4}, {15, 13}, {1, 13}, {1, 4} }, { {4, 7}, {5, 7} }, { {8, 7}, {9, 7} }, { {12, 7}, {13, 7} }, { {4, 10}, {12, 10} } }
+UI.Paths.info = { { {8, 3}, {8, 4} }, { {8, 7}, {8, 12} } }
+UI.Paths.globe = { { {8, 1}, {12, 2}, {15, 6}, {15, 10}, {12, 14}, {8, 15}, {4, 14}, {1, 10}, {1, 6}, {4, 2}, {8, 1} }, { {1, 8}, {15, 8} }, { {8, 1}, {5, 5}, {5, 11}, {8, 15}, {11, 11}, {11, 5}, {8, 1} } }
+UI.Paths.binoculars = { { {2, 6}, {3, 2}, {6, 2}, {7, 7}, {9, 7}, {10, 2}, {13, 2}, {14, 6}, {15, 13}, {12, 15}, {9, 13}, {9, 9}, {7, 9}, {7, 13}, {4, 15}, {1, 13}, {2, 6} } }
+UI.Paths.folder = { { {1, 5}, {1, 2}, {6, 2}, {8, 5}, {14, 5}, {15, 7}, {13, 14}, {1, 14}, {3, 7}, {15, 7} } }
+UI.Paths.code = { { {1, 2}, {15, 2}, {15, 12}, {10, 12}, {8, 15}, {6, 12}, {1, 12}, {1, 2} }, { {6, 5}, {4, 7}, {6, 9} }, { {10, 5}, {12, 7}, {10, 9} } }
 function UI.line(w, parent, a, b, token, width)
     local d = b - a
     return UI.frame(w, parent, {
@@ -422,17 +443,39 @@ end
 function UI.icon(w, parent, name, props, token)
     local f = UI.frame(w, parent, props or { Size = UDim2.fromOffset(16, 16) })
     local resolved = Library.Icons[name] or name or "grid"
+    -- Content stays on a consistent grid; explicit icon sizes scale the actual paths too.
+    local size = props and props.Size
+    local side = size and math.min(size.X.Offset > 0 and size.X.Offset or 16, size.Y.Offset > 0 and size.Y.Offset or 16) or 16
+    local canvas = UI.frame(w, f, { Name = "Vector", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(16, 16) })
+    UI.new("UIScale", canvas, { Scale = side / 16 })
+    if resolved == "owl" then
+        local disc = UI.frame(w, canvas, { Size = UDim2.fromOffset(16, 16) }, "Thumb")
+        UI.new("UICorner", disc, { CornerRadius = UDim.new(1, 0) })
+        local mask = UI.frame(w, canvas, { Position = UDim2.fromOffset(3, 4), Size = UDim2.fromOffset(10, 9) }, "Base")
+        UI.new("UICorner", mask, { CornerRadius = UDim.new(1, 0) })
+        for _, x in {3.4, 10.2} do
+            UI.frame(w, canvas, { Position = UDim2.fromOffset(x, 3), Size = UDim2.fromOffset(2.4, 4), Rotation = x < 8 and -22 or 22 }, "Base")
+        end
+        for _, pair in { {Vector2.new(4.4, 7.1), Vector2.new(6.9, 8.3)}, {Vector2.new(9.1, 8.3), Vector2.new(11.6, 7.1)} } do
+            local eye = UI.line(w, canvas, pair[1], pair[2], "Thumb", 1.2)
+            UI.new("UICorner", eye, { CornerRadius = UDim.new(1, 0) })
+        end
+        local beak = UI.frame(w, canvas, { Position = UDim2.fromOffset(7.4, 10), Size = UDim2.fromOffset(1.2, 1.4) }, "Thumb")
+        UI.new("UICorner", beak, { CornerRadius = UDim.new(1, 0) })
+        return f
+    end
     local paths = UI.Paths[resolved] or UI.Paths.grid
     for _, path in paths do
         for i = 2, #path do
-            UI.line(w, f, Vector2.new(unpack(path[i - 1])), Vector2.new(unpack(path[i])), token or "Muted", 1)
+            UI.line(w, canvas, Vector2.new(unpack(path[i - 1])), Vector2.new(unpack(path[i])), token or "Muted", 0.9)
         end
     end
+    if resolved == "logo" then
+        local dot = UI.frame(w, canvas, { Position = UDim2.fromOffset(6.3, 6.3), Size = UDim2.fromOffset(3.4, 3.4) }, token or "Accent")
+        UI.new("UICorner", dot, { CornerRadius = UDim.new(1, 0) })
+    end
     if type(resolved) == "number" or (type(resolved) == "string" and string.find(resolved, "rbxasset", 1, true)) then
-        UI.new("ImageLabel", f, {
-            Size = UDim2.fromScale(1, 1),
-            Image = type(resolved) == "number" and ("rbxassetid://" .. resolved) or resolved,
-        })
+        UI.bind(w, UI.new("ImageLabel", f, { Size = UDim2.fromScale(1, 1), Image = type(resolved) == "number" and ("rbxassetid://" .. resolved) or resolved }), "ImageColor3", token or "Text")
     elseif not UI.Paths[resolved] then
         UI.warn("Icon", "Unknown icon " .. tostring(resolved) .. "; using grid")
     end
@@ -534,83 +577,81 @@ end
 function UI.Window:ClosePopups(from)
     for i = #self.Popups, from or 1, -1 do
         local p = table.remove(self.Popups, i)
-        if self.Router.Drag and self.Router.Drag.Owner.Popup == p then
+        if self.Router.Drag and (self.Router.Drag.Owner.Popup == p or self.Router.Drag.Hit and self.Router.Drag.Hit:IsDescendantOf(p.Frame)) then
             UI.releaseDrag(self)
         end
         p.Dead = true
         UI.clean(p.Bag)
+        UI.cancelTree(self, p.Frame)
         p.Frame:Destroy()
-        if p.OnClose then
-            p.OnClose()
-        end
+        if p.Shadow then p.Shadow:Destroy() end
+        if p.OnClose then UI.call("Popover/Close", p.OnClose) end
     end
 end
 function UI.Window:OpenPopover(anchor, size, parentPopup)
+    assert(not self.Dead and typeof(anchor) == "Instance" and anchor:IsA("GuiObject") and anchor:IsDescendantOf(self.Root), "[UiLib] Popover anchor must belong to this window")
+    assert(typeof(size) == "Vector2" and UI.finite(size.X) and UI.finite(size.Y) and size.X > 0 and size.Y > 0, "[UiLib] Invalid popover size")
     local depth = 1
     if parentPopup then
-        for i, p in self.Popups do
-            if p == parentPopup then
-                depth = i + 1
-                break
-            end
-        end
+        local index = table.find(self.Popups, parentPopup)
+        if index then depth = index + 1 end
     end
     self:ClosePopups(depth)
+    self:Tooltip(anchor, nil)
     local p = { Window = self, Bag = UI.bag(), Anchor = anchor, Depth = depth, Size = size }
-    p.Frame = UI.frame(
-        self,
-        self.Overlay,
-        { Size = UDim2.fromOffset(size.X, size.Y), ZIndex = 30 + depth * 10, Active = true },
-        "Panel",
-        "Popup"
-    )
-    UI.stroke(self, p.Frame, "Border", 0.4)
+    p.Shadow = UI.frame(self, self.Overlay, { ZIndex = 30 + depth * 10 - 1, BackgroundColor3 = Color3.new(), BackgroundTransparency = 0.89 }, nil, "Popup")
+    p.Frame = UI.new("CanvasGroup", self.Overlay, {
+        Size = UDim2.fromOffset(size.X, size.Y), ZIndex = 30 + depth * 10,
+        Active = true, BackgroundTransparency = 0, GroupTransparency = 1,
+    })
+    UI.bind(self, p.Frame, "BackgroundColor3", "Panel")
+    UI.round(self, p.Frame, "Popup")
+    UI.stroke(self, p.Frame, "Border", 0.68)
+    p.Scale = UI.new("UIScale", p.Frame, { Scale = self.Scale })
     p.Content = UI.frame(self, p.Frame, { Size = UDim2.fromScale(1, 1), ClipsDescendants = true })
     table.insert(self.Popups, p)
     function p:Place()
-        if self.Dead or not self.Anchor.Parent then
-            return
-        end
-        local root = self.Window.Root
-        local bounds = root.AbsoluteSize
-        local origin = root.AbsolutePosition
-        local a = self.Anchor.AbsolutePosition - origin
-        local s = self.Anchor.AbsoluteSize
-        local width = math.min(self.Size.X, bounds.X - 16)
-        local height = math.min(self.Size.Y, bounds.Y - 16)
+        if self.Dead or not self.Anchor.Parent then return end
+        local w = self.Window
+        local bounds = w.Root.AbsoluteSize
+        local origin = w.Root.AbsolutePosition
+        local a, s = self.Anchor.AbsolutePosition - origin, self.Anchor.AbsoluteSize
+        local scale = w.Touch and math.max(1, w.Scale) or w.Scale
+        local width = math.min(self.Size.X * scale, math.max(1, bounds.X - 16))
+        local height = math.min(self.Size.Y * scale, math.max(1, bounds.Y - 16))
+        self.Scale.Scale = scale
+        self.Frame.Size = UDim2.fromOffset(width / scale, height / scale)
+        local side = self.PreferSide or (self.Depth > 1 and "Right" or "Below")
         local x, y = a.X, a.Y + s.Y + 6
-        if self.Depth > 1 then
-            x = a.X + s.X + 8
-            y = a.Y
+        if side == "Right" or side == "Left" then
+            x = side == "Right" and a.X + s.X + 8 or a.X - width - 8
+            y = self.Align == "End" and a.Y + s.Y - height or a.Y
+            if x + width > bounds.X - 8 then x = a.X - width - 8 end
+            if x < 8 and a.X + s.X + 8 + width <= bounds.X - 8 then x = a.X + s.X + 8 end
+        elseif side == "Above" then
+            y = a.Y - height - 6
+            if y < 8 then y = a.Y + s.Y + 6 end
+        elseif y + height > bounds.Y - 8 then
+            y = a.Y - height - 6
         end
-        if x + width > bounds.X - 8 then
-            x = if self.Depth > 1 then a.X - width - 8 else bounds.X - width - 8
-        end
-        if y + height > bounds.Y - 8 then
-            y = if self.Depth > 1 then bounds.Y - height - 8 else a.Y - height - 6
-        end
-        self.Frame.Size = UDim2.fromOffset(width, height)
-        self.Frame.Position = UDim2.fromOffset(
-            math.clamp(x, 8, math.max(8, bounds.X - width - 8)),
-            math.clamp(y, 8, math.max(8, bounds.Y - height - 8))
-        )
+        self.TargetPosition = UDim2.fromOffset(math.clamp(x, 8, math.max(8, bounds.X - width - 8)), math.clamp(y, 8, math.max(8, bounds.Y - height - 8)))
+        UI.tween(w, self.Frame, { Position = self.TargetPosition }, "Popup", true)
+        self.Shadow.Position = UDim2.fromOffset(self.TargetPosition.X.Offset - 3, self.TargetPosition.Y.Offset + 3)
+        self.Shadow.Size = UDim2.fromOffset(width + 6, height + 3)
     end
     function p:Destroy()
-        if not self.Dead then
-            self.Window:ClosePopups(self.Depth)
-        end
+        if not self.Dead then self.Window:ClosePopups(self.Depth) end
     end
     p:Place()
-    UI.connect(p, anchor:GetPropertyChangedSignal("AbsolutePosition"), function()
-        p:Place()
-    end)
+    UI.connect(p, anchor:GetPropertyChangedSignal("AbsolutePosition"), function() p:Place() end)
+    UI.connect(p, anchor:GetPropertyChangedSignal("AbsoluteSize"), function() p:Place() end)
     UI.connect(p, anchor.AncestryChanged, function()
-        if not anchor:IsDescendantOf(self.Root) then
-            p:Destroy()
-        end
+        if not anchor:IsDescendantOf(self.Root) then p:Destroy() end
     end)
-    p.Frame.BackgroundTransparency = 1
-    UI.tween(self, p.Frame, { BackgroundTransparency = 0 }, "Popup")
+    -- Content and chrome enter together; a background-only fade flashes all the text on frame one.
+    p.Content.Position = UDim2.fromOffset(0, 4)
+    UI.tween(self, p.Content, { Position = UDim2.fromOffset(0, 0) }, "Popup")
+    UI.tween(self, p.Frame, { GroupTransparency = 0 }, "Popup")
     return p
 end
 function UI.Window:Tooltip(anchor, text)
@@ -710,6 +751,9 @@ function Library:CreateWindow(config)
         Window = nil,
         Id = id,
         Title = config.Title or "Interface",
+        ProfileName = config.ProfileName,
+        ProfileDescription = config.ProfileDescription,
+        ProfileIcon = config.ProfileIcon,
         Bag = UI.bag(),
         Theme = UI.copy(self.Theme or UI.Palette),
         Bindings = setmetatable({}, { __mode = "k" }),
@@ -729,7 +773,7 @@ function Library:CreateWindow(config)
         Language = self.Language,
         Draggable = config.Draggable ~= false,
         Resizable = config.Resizable == true,
-        DesiredSize = config.Size or UDim2.fromOffset(800, 540),
+        DesiredSize = config.Size or UDim2.fromOffset(800, 520),
         HideKey = config.HideKey or Enum.KeyCode.RightShift,
         MinSize = config.MinSize or Vector2.new(340, 300),
         MaxSize = config.MaxSize or Vector2.new(1600, 1100),
@@ -762,64 +806,57 @@ function Library:CreateWindow(config)
         "Base",
         "Window"
     )
-    UI.stroke(w, w.Frame, "Border", 0.65)
+    UI.stroke(w, w.Frame, "Border", 0.82)
     w.Shadow = UI.frame(
         w,
         w.Root,
-        { ZIndex = 0, BackgroundColor3 = Color3.new(), BackgroundTransparency = 0.86 },
+        { ZIndex = 0, BackgroundColor3 = Color3.new(), BackgroundTransparency = 0.93 },
         nil,
         "Window"
     )
     w.UIScale = UI.new("UIScale", w.Frame, { Scale = w.Scale })
-    w.Header = UI.frame(w, w.Frame, { Size = UDim2.new(1, -20, 0, 48), Position = UDim2.fromOffset(10, 0) })
-    UI.icon(w, w.Header, "logo", { Position = UDim2.fromOffset(9, 15), Size = UDim2.fromOffset(16, 16) }, "Accent")
-    local searchSurface = UI.frame(
-        w,
-        w.Header,
-        { Position = UDim2.fromOffset(52, 11), Size = UDim2.new(0.56, 0, 0, 28) },
-        "Panel",
-        "Control"
-    )
-    UI.icon(w, searchSurface, "search", { Position = UDim2.fromOffset(9, 6), Size = UDim2.fromOffset(16, 16) })
+    w.Header = UI.frame(w, w.Frame, { Size = UDim2.new(1, 0, 0, UI.Metrics.Header) })
+    UI.icon(w, w.Header, "logo", { Position = UDim2.fromOffset(16, 13), Size = UDim2.fromOffset(34, 34) }, "Accent")
+    UI.frame(w, w.Header, { Position = UDim2.fromOffset(62, 24), Size = UDim2.fromOffset(1, 16), BackgroundTransparency = 0.65 }, "Border")
+    local searchSurface = UI.frame(w, w.Header, {
+        Position = UDim2.fromOffset(76, 15), Size = UDim2.new(0.40, 0, 0, 34),
+    }, "Panel", "Control")
+    w.SearchSurface = searchSurface
+    local focusStroke = UI.stroke(w, searchSurface, "Accent", 1)
+    UI.icon(w, searchSurface, "search", { Position = UDim2.fromOffset(11, 10), Size = UDim2.fromOffset(14, 14) })
     w.Search = UI.new("TextBox", searchSurface, {
-        Position = UDim2.fromOffset(32, 0),
-        Size = UDim2.new(1, -40, 1, 0),
-        PlaceholderText = UI.locale(w, "Search"),
-        PlaceholderColor3 = w.Theme.Muted,
-        ClearTextOnFocus = false,
+        Position = UDim2.fromOffset(36, 0), Size = UDim2.new(1, -48, 1, 0),
+        PlaceholderText = UI.locale(w, "Search"), PlaceholderColor3 = w.Theme.Muted,
+        ClearTextOnFocus = false, TextSize = 11,
     })
     UI.bind(w, w.Search, "TextColor3", "Text")
-    UI.connect(w, w.Search:GetPropertyChangedSignal("Text"), function()
-        w:SearchControls(w.Search.Text)
-    end)
-    local utility = UI.button(
-        w,
-        w.Header,
-        "",
-        { Position = UDim2.new(1, -30, 0, 8), Size = UDim2.fromOffset(30, 32) },
-        function()
-            w:OpenProfile()
-        end
-    )
-    UI.icon(w, utility, "grid", { Position = UDim2.fromOffset(7, 8), Size = UDim2.fromOffset(16, 16) })
+    UI.bind(w, w.Search, "PlaceholderColor3", "Muted")
+    UI.connect(w, w.Search:GetPropertyChangedSignal("Text"), function() w:SearchControls(w.Search.Text) end)
+    UI.connect(w, w.Search.Focused, function() UI.tween(w, focusStroke, { Transparency = 0.72 }, "Hover") end)
+    UI.connect(w, w.Search.FocusLost, function() UI.tween(w, focusStroke, { Transparency = 1 }, "Hover") end)
+    local utility = UI.button(w, w.Header, "", {
+        Position = UDim2.new(1, -51, 0, 12), Size = UDim2.fromOffset(38, 38),
+    }, function() w:OpenProfile() end)
+    UI.icon(w, utility, "grid", { Position = UDim2.fromOffset(13, 13), Size = UDim2.fromOffset(12, 12) }, "Text")
+    w.UtilityButton = utility
+    -- One continuous outboard rail; the selected control is not a second large card.
+    w.Rail = UI.frame(w, w.Frame, { Position = UDim2.fromOffset(-30, 92), Size = UDim2.new(0, 58, 1, -136) }, "Panel", "Panel")
+    UI.stroke(w, w.Rail, "Border", 0.9)
     w.Nav = UI.new("ScrollingFrame", w.Frame, {
-        Position = UDim2.fromOffset(4, 54),
-        Size = UDim2.new(0, 44, 1, -108),
+        Position = UDim2.fromOffset(-24, 99),
+        Size = UDim2.new(0, 46, 1, -205),
         CanvasSize = UDim2.new(),
         AutomaticCanvasSize = Enum.AutomaticSize.Y,
         ScrollBarThickness = 0,
         ScrollingDirection = Enum.ScrollingDirection.Y,
     })
-    UI.bind(w, w.Nav, "BackgroundColor3", "Panel")
-    w.Nav.BackgroundTransparency = 0
-    UI.round(w, w.Nav, "Panel")
-    UI.list(w.Nav, 6)
-    UI.pad(w.Nav, 3)
+    UI.list(w.Nav, 5)
+    UI.pad(w.Nav, 2)
     w.ProfileButton = UI.button(
         w,
         w.Frame,
         "",
-        { Position = UDim2.new(0, 7, 1, -47), Size = UDim2.fromOffset(36, 36) },
+        { Position = UDim2.new(0, -24, 1, -99), Size = UDim2.fromOffset(44, 44) },
         function()
             w:OpenProfile()
         end
@@ -827,14 +864,17 @@ function Library:CreateWindow(config)
     UI.icon(
         w,
         w.ProfileButton,
-        "profile",
-        { Position = UDim2.fromOffset(10, 10), Size = UDim2.fromOffset(16, 16) },
-        "Text"
+        "owl",
+        { Position = UDim2.fromOffset(8, 8), Size = UDim2.fromOffset(28, 28) },
+        "Thumb"
     )
+    local profileRing = UI.frame(w, w.ProfileButton, { Position = UDim2.fromOffset(4, 4), Size = UDim2.fromOffset(36, 36) })
+    UI.new("UICorner", profileRing, { CornerRadius = UDim.new(1, 0) })
+    UI.stroke(w, profileRing, "Border", 0.55)
     w.Body = UI.frame(
         w,
         w.Frame,
-        { Position = UDim2.fromOffset(60, 49), Size = UDim2.new(1, -76, 1, -61), ClipsDescendants = true }
+        { Position = UDim2.fromOffset(UI.Metrics.BodyX, UI.Metrics.BodyY), Size = UDim2.new(1, -UI.Metrics.BodyX - UI.Metrics.Margin, 1, -UI.Metrics.BodyY - 14), ClipsDescendants = true }
     )
     w.Empty = UI.text(
         w,
@@ -1086,14 +1126,20 @@ function UI.Window:Reflow()
         )
     end
     self.Compact = b.X < 650
-    self.Nav.Position = UDim2.fromOffset(self.Compact and 4 or -20, 82)
-    self.Nav.Size = UDim2.new(0, 44, 1, -130)
-    self.ProfileButton.Position = UDim2.new(0, self.Compact and 7 or -16, 1, -47)
+    local railX = self.Compact and 4 or -30
+    self.Rail.Position = UDim2.fromOffset(railX, self.Compact and 62 or 92)
+    self.Rail.Size = UDim2.new(0, self.Compact and 48 or 58, 1, self.Compact and -76 or -136)
+    self.Nav.Position = UDim2.fromOffset(railX + (self.Compact and 1 or 6), self.Compact and 69 or 99)
+    self.Nav.Size = UDim2.new(0, 46, 1, self.Compact and -133 or -205)
+    self.ProfileButton.Position = UDim2.new(0, railX + (self.Compact and 2 or 6), 1, self.Compact and -60 or -99)
+    self.Body.Position = UDim2.fromOffset(self.Compact and 60 or UI.Metrics.BodyX, UI.Metrics.BodyY)
+    self.Body.Size = UDim2.new(1, -(self.Compact and 70 or UI.Metrics.BodyX + UI.Metrics.Margin), 1, -UI.Metrics.BodyY - 14)
+    self.SearchSurface.Size = self.Compact and UDim2.new(1, -136, 0, 34) or UDim2.new(0.40, 0, 0, 34)
     self.Touch = UI.S.Input.TouchEnabled
     local size = self.DesiredSize
     local width = math.clamp(size.X.Offset + b.X * size.X.Scale, self.MinSize.X, self.MaxSize.X)
     local height = math.clamp(size.Y.Offset + b.Y * size.Y.Scale, self.MinSize.Y, self.MaxSize.Y)
-    width = math.min(width, (b.X - (self.Compact and 16 or 40)) / self.Scale)
+    width = math.min(width, (b.X - (self.Compact and 16 or (30 * self.Scale + 16))) / self.Scale)
     height = math.min(height, (b.Y - 16) / self.Scale)
     if self.Compact then
         width = (b.X - 16) / self.Scale
@@ -1101,6 +1147,11 @@ function UI.Window:Reflow()
     end
     self.Frame.Size = UDim2.fromOffset(math.max(100, width), math.max(100, height))
     self.UIScale.Scale = self.Scale
+    for c in self.Controls do
+        if c.AutoHeight and not c.Dead and not c.Section.RowHeight then
+            c.Frame.Size = UDim2.new(1, 0, 0, self.Touch and math.max(UI.Metrics.TouchRow, 44 / self.Scale) or UI.Metrics.Row)
+        end
+    end
     self:SetPosition(self.Frame.Position)
     for _, t in self.Tabs do
         t:Layout()
@@ -1123,7 +1174,7 @@ function UI.Window:SetPosition(p)
     local x = p.X.Offset + p.X.Scale * b.X
     local y = p.Y.Offset + p.Y.Scale * b.Y
     self.Frame.Position = UDim2.fromOffset(
-        math.clamp(x, self.Compact and 8 or 28, math.max(self.Compact and 8 or 28, b.X - size.X - 8)),
+        math.clamp(x, self.Compact and 8 or (30 * self.Scale + 8), math.max(self.Compact and 8 or (30 * self.Scale + 8), b.X - size.X - 8)),
         math.clamp(y, 8, math.max(8, b.Y - size.Y - 8))
     )
     if self.Shadow then
@@ -1200,6 +1251,7 @@ function UI.Window:SetAccent(color, instant)
         UI.warn("Theme", "Accent must be Color3")
         return
     end
+    if self.Theme.Accent == color then return end
     self.Theme.Accent = color
     self:RefreshTheme(instant)
 end
@@ -1228,7 +1280,7 @@ function UI.Window:RefreshTheme(instant)
         end
     end
     for _, t in self.Tabs do
-        t:Render()
+        t:Render(instant)
     end
 end
 function UI.Window:SetTheme(theme)
@@ -1299,9 +1351,7 @@ function UI.Window:Destroy()
     for _, c in table.clone(self.Companions) do
         c:Destroy()
     end
-    for _, t in self.Tweens do
-        t:Cancel()
-    end
+    for obj in self.Tweens do UI.cancelTweens(self, obj) end
     table.clear(self.Tweens)
     UI.clean(self.Bag)
     self.Gui:Destroy()
@@ -1321,20 +1371,24 @@ function UI.Window:AddTab(options)
         Visible = true,
         Order = #self.Tabs + 1,
     }, UI.Tab)
-    tab.Button = UI.button(tab, self.Nav, "", { Size = UDim2.fromOffset(36, 36), LayoutOrder = tab.Order }, function()
+    tab.Button = UI.button(tab, self.Nav, "", { Size = UDim2.fromOffset(42, 44), LayoutOrder = tab.Order }, function()
         tab:Select()
     end)
     tab.Icon = UI.icon(
         self,
         tab.Button,
         options.Icon or "grid",
-        { Position = UDim2.fromOffset(10, 10), Size = UDim2.fromOffset(16, 16) }
+        { Position = UDim2.fromOffset(12, 13), Size = UDim2.fromOffset(18, 18) }
     )
     tab.Stroke = UI.stroke(self, tab.Button, "Accent", 1)
     UI.tooltip(tab, tab.Button, function()
         return tab.Name
     end)
-    tab.Page = UI.new("ScrollingFrame", self.Body, {
+    local corner = tab.Button:FindFirstChildOfClass("UICorner")
+    corner.CornerRadius = UDim.new(0, 11 * self.CornerStyle)
+    self.Corners[corner] = "Panel"
+    tab.Group = UI.new("CanvasGroup", self.Body, { Size = UDim2.fromScale(1, 1), Visible = false })
+    tab.Page = UI.new("ScrollingFrame", tab.Group, {
         Size = UDim2.fromScale(1, 1),
         CanvasSize = UDim2.new(),
         AutomaticCanvasSize = Enum.AutomaticSize.Y,
@@ -1347,9 +1401,9 @@ function UI.Window:AddTab(options)
     tab.Full = UI.frame(self, tab.Page, { Size = UDim2.new(1, -6, 0, 0), AutomaticSize = Enum.AutomaticSize.Y })
     tab.Left = UI.frame(self, tab.Page, { Size = UDim2.new(0.5, -10, 0, 0), AutomaticSize = Enum.AutomaticSize.Y })
     tab.Right = UI.frame(self, tab.Page, { Size = UDim2.new(0.5, -10, 0, 0), AutomaticSize = Enum.AutomaticSize.Y })
-    UI.list(tab.Full, 14)
-    UI.list(tab.Left, 14)
-    UI.list(tab.Right, 14)
+    UI.list(tab.Full, 12)
+    UI.list(tab.Left, 12)
+    UI.list(tab.Right, 12)
     UI.connect(tab, tab.Full:GetPropertyChangedSignal("AbsoluteSize"), function()
         tab:Layout()
     end)
@@ -1363,31 +1417,38 @@ function UI.Window:AddTab(options)
     return tab
 end
 UI.Window.AddPage = UI.Window.AddTab
-function UI.Tab:Render()
-    local selected = self.Window.Selected == self
-    self.Button.BackgroundTransparency = selected and 0.8 or 1
-    self.Button.BackgroundColor3 = selected and self.Window.Theme.Accent or self.Window.Theme.Hover
-    self.Stroke.Transparency = selected and 0.65 or 1
+function UI.Tab:Render(instant)
+    local w = self.Window
+    local selected = w.Selected == self
+    UI.tween(w, self.Button, {
+        BackgroundTransparency = selected and 0.86 or 1,
+        BackgroundColor3 = selected and w.Theme.Accent or w.Theme.Hover,
+    }, "Nav", instant)
+    UI.tween(w, self.Stroke, { Transparency = selected and 0.56 or 1 }, "Nav", instant)
     for _, obj in self.Icon:GetDescendants() do
         if obj:IsA("Frame") then
-            obj.BackgroundColor3 = selected and self.Window.Theme.Accent or self.Window.Theme.Faint
+            UI.tween(w, obj, { BackgroundColor3 = selected and w.Theme.Accent or w.Theme.Faint }, "Nav", instant)
+        elseif obj:IsA("ImageLabel") then
+            UI.tween(w, obj, { ImageColor3 = selected and w.Theme.Accent or w.Theme.Faint }, "Nav", instant)
         end
     end
 end
 function UI.Tab:Select()
-    if self.Dead or not self.Visible then
-        return
-    end
+    if self.Dead or not self.Visible then return end
     local w = self.Window
+    if w.Selected == self then return end
     w:ClosePopups()
     UI.releaseDrag(w)
     w.Selected = self
     for _, t in w.Tabs do
         t.Page.Visible = t == self
+        t.Group.Visible = t == self
         t:Render()
     end
     self:Layout()
-    self.Page.Position = UDim2.fromOffset(5, 0)
+    UI.tween(w, self.Group, { GroupTransparency = 1 }, "Nav", true)
+    UI.tween(w, self.Group, { GroupTransparency = 0 }, "Nav")
+    UI.tween(w, self.Page, { Position = UDim2.fromOffset(4, 0) }, "Nav", true)
     UI.tween(w, self.Page, { Position = UDim2.fromOffset(0, 0) }, "Nav")
     w:SearchControls(w.Search.Text)
 end
@@ -1402,16 +1463,17 @@ function UI.Tab:Layout()
     end
     local narrow = self.Window.Frame.AbsoluteSize.X / scale < 610
     self.Left.Position = UDim2.fromOffset(0, y)
-    self.Left.Size = UDim2.new(narrow and 1 or 0.5, narrow and -6 or -10, 0, 0)
+    self.Left.Size = UDim2.new(narrow and 1 or 0.5, narrow and -4 or -8, 0, 0)
     self.Right.Size = self.Left.Size
     self.Right.Position = narrow and UDim2.fromOffset(0, y + self.Left.AbsoluteSize.Y / scale + 14)
-        or UDim2.new(0.5, 4, 0, y)
+        or UDim2.new(0.5, 8, 0, y)
 end
 function UI.Tab:SetVisible(v)
     self.Visible = v == true
     self.Button.Visible = self.Visible
     if not self.Visible and self.Window.Selected == self then
         self.Page.Visible = false
+        self.Group.Visible = false
         self.Window.Selected = nil
         for _, t in self.Window.Tabs do
             if t.Visible and t ~= self then
@@ -1430,8 +1492,10 @@ function UI.Tab:Destroy()
         s:Destroy()
     end
     UI.clean(self.Bag)
+    UI.cancelTree(self.Window, self.Button)
+    UI.cancelTree(self.Window, self.Group)
     self.Button:Destroy()
-    self.Page:Destroy()
+    self.Group:Destroy()
     local index = table.find(self.Window.Tabs, self)
     if index then
         table.remove(self.Window.Tabs, index)
@@ -1465,14 +1529,18 @@ function UI.Tab:AddSection(options)
         Visible = true,
         Side = side,
     }, UI.Section)
-    s.Frame = UI.frame(
-        self.Window,
-        self[side],
-        { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = #self.Sections + 1 }
-    )
-    UI.list(s.Frame, 3)
-    s.Title =
-        UI.text(self.Window, s.Frame, s.Name, { Size = UDim2.new(1, 0, 0, 24), LayoutOrder = 0, TextSize = 12 }, "Text")
+    s.Frame = UI.frame(self.Window, self[side], {
+        Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = #self.Sections + 1,
+    })
+    UI.list(s.Frame, 6)
+    s.Title = UI.text(self.Window, s.Frame, s.Name, {
+        Size = UDim2.new(1, 0, 0, s.Name == "" and 0 or 26), LayoutOrder = 0, TextSize = 11,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+    }, "Text")
+    s.Content = UI.frame(self.Window, s.Frame, {
+        Name = "Controls", Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 1,
+    }, "Panel", "Panel")
+    s.Layout = UI.list(s.Content, 0)
     table.insert(self.Sections, s)
     return s
 end
@@ -1554,7 +1622,8 @@ function UI.Window:SearchControls(query)
         end
     end
     for _, tab in self.Tabs do
-        tab.Page.Visible = tab == self.Selected and tab.Visible
+        tab.Page.Visible = tab == self.Selected
+        tab.Group.Visible = tab.Page.Visible and tab.Visible
         tab:Render()
     end
     self.Empty.Visible = query ~= "" and total == 0
@@ -1610,14 +1679,18 @@ function UI.control(section, options, kind, height)
             w.Flags[c.Flag] = c
         end
     end
-    c.Frame = UI.frame(w, section.Frame, {
-        Size = UDim2.new(1, 0, 0, height or section.RowHeight or (w.Touch and 44 or 36)),
-        LayoutOrder = #section.Controls + 1,
-        Visible = c.Visible,
-    }, "Panel", "Control")
+    c.AutoHeight = height == nil
+    c.Frame = UI.frame(w, section.Content or section.Frame, {
+        Size = UDim2.new(1, 0, 0, height or section.RowHeight or (w.Touch and math.max(UI.Metrics.TouchRow, 44 / w.Scale) or UI.Metrics.Row)),
+        LayoutOrder = #section.Controls + 1, Visible = c.Visible,
+    })
+    if not section.Flat and #section.Controls > 0 then
+        c.Separator = UI.frame(w, c.Frame, {
+            Position = UDim2.fromOffset(10, 0), Size = UDim2.new(1, -20, 0, 1), BackgroundTransparency = 0.7,
+        }, "Border")
+    end
     c.Label = UI.text(w, c.Frame, c.Name, {
-        Position = UDim2.fromOffset(10, 0),
-        Size = UDim2.new(0.57, -10, 1, 0),
+        Position = UDim2.fromOffset(10, 0), Size = UDim2.new(0.57, -10, 1, 0),
         TextTruncate = Enum.TextTruncate.AtEnd,
     }, "Muted")
     c.Field = UI.frame(w, c.Frame, { Position = UDim2.new(0.57, 0, 0, 0), Size = UDim2.new(0.43, -10, 1, 0) })
@@ -1725,7 +1798,7 @@ function UI.Control:SetDescription(s)
     self.Description = tostring(s)
 end
 function UI.Control:SetTooltip(s)
-    self.TooltipFrame = tostring(s)
+    self.Tooltip = tostring(s)
 end
 function UI.Control:OnChanged(callback)
     assert(type(callback) == "function", "[UiLib] OnChanged expects function")
@@ -1765,6 +1838,7 @@ function UI.Control:Destroy()
     self.Window.Controls[self] = nil
     UI.clean(self.Bag)
     table.clear(self.Listeners)
+    UI.cancelTree(self.Window, self.Frame)
     self.Frame:Destroy()
     local i = table.find(self.Section.Controls, self)
     if i then
@@ -1786,33 +1860,23 @@ function UI.Section:AddToggle(options)
     options = options or {}
     local c = UI.control(self, options, "Toggle")
     local w = c.Window
-    local hit = UI.button(c, c.Field, "", { Size = UDim2.fromScale(1, 1) }, function()
-        c:Set(not c.Value)
-    end)
-    local track = UI.frame(
-        w,
-        hit,
-        { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.fromScale(1, 0.5), Size = UDim2.fromOffset(25, 14) },
-        "Row",
-        "Small"
-    )
-    local thumb = UI.frame(w, track, { Position = UDim2.fromOffset(3, 3), Size = UDim2.fromOffset(8, 8) }, "Faint")
+    local hit = UI.button(c, c.Field, "", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Size = UDim2.new(0, 44, 1, 0) }, function() c:Set(not c.Value) end)
+    local track = UI.frame(w, hit, {
+        AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.fromScale(1, 0.5), Size = UDim2.fromOffset(30, 20),
+    }, "Row")
+    UI.new("UICorner", track, { CornerRadius = UDim.new(1, 0) })
+    local thumb = UI.frame(w, track, { Position = UDim2.fromOffset(3, 3), Size = UDim2.fromOffset(14, 14) }, "Faint")
     UI.new("UICorner", thumb, { CornerRadius = UDim.new(1, 0) })
-    c.Validate = function(v)
-        return type(v) == "boolean", v, "Expected boolean"
-    end
+    c.Track, c.Thumb = track, thumb
+    c.Validate = function(value) return type(value) == "boolean", value, "Expected boolean" end
     c.Render = function(instant)
-        local color = c.Value and w.Theme.Accent or w.Theme.Faint
-        local props = { Position = UDim2.fromOffset(c.Value and 14 or 3, 3), BackgroundColor3 = color }
-        if instant then
-            for k, v in props do
-                thumb[k] = v
-            end
-        else
-            UI.tween(w, thumb, props, "Toggle")
-        end
-        track.BackgroundColor3 = c.Value and w.Theme.Panel:Lerp(w.Theme.Accent, 0.13) or w.Theme.Row
-        thumb.BackgroundTransparency = c.Disabled and 0.6 or 0
+        UI.tween(w, thumb, {
+            Position = UDim2.fromOffset(c.Value and 13 or 3, 3),
+            BackgroundColor3 = c.Value and w.Theme.Accent or w.Theme.Faint,
+            BackgroundTransparency = c.Disabled and 0.6 or 0,
+        }, "Toggle", instant)
+        UI.tween(w, track, { BackgroundColor3 = c.Value and w.Theme.Row:Lerp(w.Theme.Accent, 0.12) or w.Theme.Row }, "Toggle", instant)
+        UI.tween(w, c.Label, { TextColor3 = c.Value and w.Theme.Text or w.Theme.Muted, TextTransparency = c.Disabled and 0.55 or 0 }, "Toggle", instant)
     end
     return UI.finish(c, options.Default == true)
 end
@@ -1823,7 +1887,7 @@ function UI.Section:AddCheckbox(options)
     local b = UI.button(c, c.Field, "", {
         AnchorPoint = Vector2.new(1, 0),
         Position = UDim2.fromScale(1, 0),
-        Size = UDim2.fromOffset(36, c.Frame.Size.Y.Offset),
+        Size = UDim2.new(0, 44, 1, 0),
     }, function()
         c:Set(not c.Value)
     end)
@@ -1858,23 +1922,27 @@ function UI.slider(section, options, range)
     )
     local c = UI.control(section, options, range and "RangeSlider" or "Slider")
     local w = c.Window
+    c.Label.Size = UDim2.new(range and 0.46 or 0.51, -10, 1, 0)
+    c.Field.Position = UDim2.new(range and 0.46 or 0.51, 0, 0, 0)
+    c.Field.Size = UDim2.new(range and 0.54 or 0.49, -10, 1, 0)
     c.Min, c.Max, c.Increment = min, max, step
     local number = UI.text(w, c.Field, "", {
         Position = UDim2.fromOffset(0, 0),
-        Size = UDim2.new(0.3, 0, 1, 0),
+        Size = UDim2.new(range and 0.34 or 0.18, 0, 1, 0),
         TextXAlignment = Enum.TextXAlignment.Right,
-        TextSize = 11,
+        TextSize = 10,
+        TextTruncate = Enum.TextTruncate.AtEnd,
     }, "Text")
-    local hit = UI.button(c, c.Field, "", { Position = UDim2.new(0.36, 0, 0, 0), Size = UDim2.new(0.64, 0, 1, 0) }, nil)
+    local hit = UI.button(c, c.Field, "", { Position = UDim2.new(range and 0.38 or 0.24, 0, 0, 0), Size = UDim2.new(range and 0.62 or 0.76, 0, 1, 0) }, nil)
     local track =
-        UI.frame(w, hit, { Position = UDim2.new(0, 4, 0.5, -2), Size = UDim2.new(1, -8, 0, 4) }, "Row", "Small")
+        UI.frame(w, hit, { Position = UDim2.new(0, 4, 0.5, -2.5), Size = UDim2.new(1, -8, 0, 5) }, "Row", "Small")
     local fill = UI.frame(w, track, { Size = UDim2.fromScale(0.5, 1) }, "Accent", "Small")
     local thumbs = {}
     for i = 1, range and 2 or 1 do
         local t = UI.frame(
             w,
             track,
-            { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(7, 7), Position = UDim2.fromScale(0.5, 0.5) },
+            { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(10, 10), Position = UDim2.fromScale(0.5, 0.5) },
             "Thumb"
         )
         UI.new("UICorner", t, { CornerRadius = UDim.new(1, 0) })
@@ -1902,20 +1970,17 @@ function UI.slider(section, options, range)
     local function format(v)
         return (options.Prefix or "") .. string.format("%.4g", v) .. (options.Suffix or "")
     end
-    c.Render = function()
-        if c.Value == nil then
-            return
-        end
+    c.Track, c.Fill, c.Thumbs = track, fill, thumbs
+    c.Render = function(instant)
+        if c.Value == nil then return end
+        local direct = instant or (w.Router.Drag and w.Router.Drag.Owner == c) or not c.Drawn
+        c.Drawn = true
         local a = range and (c.Value[1] - min) / (max - min) or 0
         local b = ((range and c.Value[2] or c.Value) - min) / (max - min)
-        fill.Position = UDim2.fromScale(a, 0)
-        fill.Size = UDim2.fromScale(b - a, 1)
-        thumbs[1].Position = UDim2.fromScale(range and a or b, 0.5)
-        if range then
-            thumbs[2].Position = UDim2.fromScale(b, 0.5)
-        end
+        UI.tween(w, fill, { Position = UDim2.fromScale(a, 0), Size = UDim2.fromScale(b - a, 1), BackgroundTransparency = c.Disabled and 0.65 or 0 }, "Slider", direct)
+        UI.tween(w, thumbs[1], { Position = UDim2.fromScale(range and a or b, 0.5) }, "Slider", direct)
+        if range then UI.tween(w, thumbs[2], { Position = UDim2.fromScale(b, 0.5) }, "Slider", direct) end
         number.Text = range and (format(c.Value[1]) .. "–" .. format(c.Value[2])) or format(c.Value)
-        fill.BackgroundTransparency = c.Disabled and 0.65 or 0
     end
     UI.drag(c, hit, function(p)
         local ratio = math.clamp((p.X - track.AbsolutePosition.X) / math.max(1, track.AbsoluteSize.X), 0, 1)
@@ -1953,7 +2018,9 @@ function UI.Section:AddRangeSlider(o)
 end
 function UI.Section:AddButton(options)
     options = options or {}
-    local c = UI.control(self, options, "Button")
+    local style = options.Style or "Secondary"
+    local inline = style == "Ghost" or style == "Row" or style == "Icon" or self.Flat
+    local c = UI.control(self, options, "Button", options.Height or self.RowHeight or (inline and nil or 52))
     local w = c.Window
     c.Label.Visible = false
     c.Field.Visible = false
@@ -1961,7 +2028,7 @@ function UI.Section:AddButton(options)
         c,
         c.Frame,
         c.Name,
-        { Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center },
+        { Position = UDim2.fromOffset(inline and 0 or 10, inline and 0 or 9), Size = inline and UDim2.fromScale(1, 1) or UDim2.new(1, -20, 1, -18), TextXAlignment = style == "Row" and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center },
         function()
             UI.call(c.Name, c.Callback)
             for callback in c.Listeners do
@@ -1969,7 +2036,6 @@ function UI.Section:AddButton(options)
             end
         end
     )
-    local style = options.Style or "Secondary"
     if style == "Icon" then
         c.Button.Text = ""
         UI.icon(
@@ -1980,9 +2046,10 @@ function UI.Section:AddButton(options)
         )
     end
     c.Render = function()
-        c.Frame.BackgroundColor3 = style == "Primary" and w.Theme.Panel:Lerp(w.Theme.Accent, 0.2) or w.Theme.Row
+        c.Button.BackgroundColor3 = style == "Primary" and w.Theme.Hover:Lerp(w.Theme.Accent, 0.22) or w.Theme.Hover
         c.Button.TextColor3 = style == "Destructive" and w.Theme.Danger or w.Theme.Text
-        c.Frame.BackgroundTransparency = style == "Ghost" and 1 or 0
+        c.Frame.BackgroundTransparency = 1
+        c.Button.BackgroundTransparency = (style == "Ghost" or style == "Row" or self.Flat) and 1 or 0
         c.Button.TextTransparency = c.Disabled and 0.6 or 0
     end
     function c:SetName(n)
@@ -2138,7 +2205,8 @@ function UI.dropdown(section, options, multi)
         TextTruncate = Enum.TextTruncate.AtEnd,
         TextSize = 11,
     })
-    UI.icon(w, b, "chevron", { Position = UDim2.new(1, -20, 0.5, -8), Size = UDim2.fromOffset(16, 16) })
+    local arrow = UI.icon(w, b, "chevron", { Position = UDim2.new(1, -18, 0.5, -6), Size = UDim2.fromOffset(12, 12) })
+    c.Button, c.Arrow = b, arrow
     c.Validate = function(v)
         if multi then
             if type(v) ~= "table" then
@@ -2206,18 +2274,21 @@ function UI.dropdown(section, options, multi)
             self:Close()
             return
         end
-        local searchable = options.Searchable ~= false
+        local searchable = options.Searchable == true or (options.Searchable == nil and #self.Options > 7)
         local header = searchable and 36 or 4
         local footer = multi and 32 or 0
         local p = w:OpenPopover(
             b,
             Vector2.new(
-                math.max(210, b.AbsoluteSize.X),
+                math.max(w.Touch and 210 or 144, b.AbsoluteSize.X / w.Scale),
                 math.min(292, #self.Options * (w.Touch and 40 or 28) + header + footer + 10)
             ),
             self.Popup
         )
         self.OpenPopup = p
+        p.PreferSide = "Below"
+        p:Place()
+        UI.tween(w, arrow, { Rotation = 180 }, "Popup")
         local rows = {}
         local search
         if searchable then
@@ -2242,7 +2313,7 @@ function UI.dropdown(section, options, multi)
             local row = UI.button(
                 p,
                 list,
-                "  " .. tostring(v),
+                tostring(v),
                 { Size = UDim2.new(1, -3, 0, w.Touch and 40 or 28), LayoutOrder = index },
                 function()
                     if multi then
@@ -2260,13 +2331,18 @@ function UI.dropdown(section, options, multi)
                     end
                 end
             )
-            rows[v] = row
+            UI.new("UIPadding", row, { PaddingLeft = UDim.new(0, 25), PaddingRight = UDim.new(0, 7) })
+            local check = UI.icon(w, row, "check", { Position = UDim2.new(0, -18, 0.5, -5), Size = UDim2.fromOffset(10, 10) }, "Accent")
+            rows[v] = { Button = row, Check = check }
         end
         self.RefreshOptions = function()
-            for v, row in rows do
+            for v, entry in rows do
+                local row = entry.Button
                 local selected = multi and c.Value and table.find(c.Value, v) ~= nil or (not multi and c.Value == v)
-                row.TextColor3 = selected and w.Theme.Accent or w.Theme.Text
-                row.Text = (selected and "  ✓  " or "      ") .. tostring(v)
+                row.TextColor3 = selected and w.Theme.Text or w.Theme.Muted
+                row.BackgroundColor3 = w.Theme.Accent
+                row.BackgroundTransparency = selected and 0.94 or 1
+                entry.Check.Visible = selected
                 row.Visible = not search
                     or string.find(string.lower(tostring(v)), string.lower(search.Text), 1, true) ~= nil
             end
@@ -2299,6 +2375,7 @@ function UI.dropdown(section, options, multi)
             end
         end
         p.OnClose = function()
+            UI.tween(w, arrow, { Rotation = 0 }, "Popup")
             c.RefreshOptions = nil
             c.OpenPopup = nil
         end
@@ -2431,6 +2508,7 @@ function UI.Section:AddProgressBar(options)
     local track =
         UI.frame(w, c.Frame, { Position = UDim2.new(0, 8, 1, -10), Size = UDim2.new(1, -16, 0, 5) }, "Row", "Small")
     local fill = UI.frame(w, track, { Size = UDim2.fromScale(0, 1) }, "Accent", "Small")
+    c.Track, c.Fill = track, fill
     c.Validate = function(v)
         return UI.finite(v), UI.finite(v) and math.clamp(v, 0, 1) or 0, "Expected progress 0..1"
     end
@@ -2476,22 +2554,21 @@ function UI.Section:AddColorPicker(options)
     local b = UI.button(c, c.Field, "", { Size = UDim2.fromScale(1, 1) }, function()
         c:Open()
     end)
-    local swatch = UI.frame(
-        w,
-        b,
-        { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.fromScale(1, 0.5), Size = UDim2.fromOffset(24, 12) },
-        nil,
-        "Small"
-    )
-    swatch.BackgroundTransparency = 0
-    c.Validate = function(v)
-        if typeof(v) == "Color3" then
-            v = { Color = v, Alpha = c.Value and c.Value.Alpha or options.Alpha or 1 }
+    local swatch = UI.frame(w, b, {
+        AnchorPoint = Vector2.new(1, 0.5),
+        Position = UDim2.fromScale(1, 0.5),
+        Size = UDim2.fromOffset(22, 11),
+        BackgroundTransparency = 0,
+    }, nil, "Small")
+    c.Swatch = swatch
+    c.Validate = function(value)
+        if typeof(value) == "Color3" then
+            value = { Color = value, Alpha = c.Value and c.Value.Alpha or options.Alpha or 1 }
         end
-        if type(v) ~= "table" or typeof(v.Color) ~= "Color3" or not UI.finite(v.Alpha) then
+        if type(value) ~= "table" or typeof(value.Color) ~= "Color3" or not UI.finite(value.Alpha) then
             return false, nil, "Expected Color3 or {Color=Color3, Alpha=number}"
         end
-        return true, { Color = v.Color, Alpha = math.clamp(v.Alpha, 0, 1) }
+        return true, { Color = value.Color, Alpha = math.clamp(value.Alpha, 0, 1) }
     end
     c.Render = function()
         if not c.Value then
@@ -2514,166 +2591,239 @@ function UI.Section:AddColorPicker(options)
             self:Close()
             return
         end
-        local p = w:OpenPopover(b, Vector2.new(232, 354), self.Popup)
+        local width, padding = w.Touch and 236 or 178, w.Touch and 12 or 10
+        local square, top = width - padding * 2, w.Touch and 44 or 26
+        local copyWidth, utilityWidth = w.Touch and 44 or 22, w.Touch and 44 or 23
+        local hitHeight = w.Touch and 44 or 24
+        local hueY = top + square + 4
+        local alphaY = hueY + hitHeight
+        local footerY = alphaY + hitHeight + 5
+        local footerHeight = w.Touch and 44 or 22
+        local height = footerY + footerHeight + 8
+        local p = w:OpenPopover(self.Popup and self.Frame or b, Vector2.new(width, height), self.Popup)
         self.OpenPopup = p
-        p.Content:Destroy()
-        p.Content = UI.new("ScrollingFrame", p.Frame, {
+        p.PreferSide = self.Popup and "Right" or "Below"
+        p:Place()
+        -- Retain the popup's scaled/composited content owner; only this child scrolls.
+        local content = UI.new("ScrollingFrame", p.Content, {
             Size = UDim2.fromScale(1, 1),
-            CanvasSize = UDim2.fromOffset(0, 354),
+            CanvasSize = UDim2.fromOffset(0, height),
             ScrollBarThickness = 2,
             ScrollingDirection = Enum.ScrollingDirection.Y,
         })
+        UI.bind(w, content, "ScrollBarImageColor3", "Faint")
         local owner = { Window = w, Popup = p, Bag = p.Bag, Disabled = false }
-        UI.text(
-            w,
-            p.Content,
-            self.Name,
-            { Position = UDim2.fromOffset(10, 7), Size = UDim2.new(1, -40, 0, 18), TextSize = 11 }
-        )
-        UI.button(p, p.Content, "×", {
-            Position = UDim2.new(1, -28, 0, 4),
-            Size = UDim2.fromOffset(24, 24),
-            TextXAlignment = Enum.TextXAlignment.Center,
-        }, function()
-            c:Close()
-        end)
-        local sv = UI.frame(
-            w,
-            p.Content,
-            { Position = UDim2.fromOffset(10, 30), Size = UDim2.new(1, -20, 0, 212) },
-            nil,
-            "Small"
-        )
-        sv.BackgroundTransparency = 0
-        sv.Active = true
-        local white = UI.new(
-            "Frame",
-            sv,
-            { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0 }
-        )
-        UI.round(w, white, "Small")
-        UI.new("UIGradient", white, {
-            Transparency = NumberSequence.new({
-                NumberSequenceKeypoint.new(0, 0),
-                NumberSequenceKeypoint.new(1, 1),
-            }),
+        UI.text(w, content, self.Name, {
+            Position = UDim2.fromOffset(padding, 2),
+            Size = UDim2.new(1, -padding * 2 - copyWidth - 3, 0, top - 2),
+            TextSize = w.Touch and 11 or 9,
+            TextTruncate = Enum.TextTruncate.AtEnd,
         })
-        local black = UI.new(
-            "Frame",
-            sv,
-            { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(), BackgroundTransparency = 0 }
-        )
-        UI.round(w, black, "Small")
+        local sv = UI.frame(w, content, {
+            Position = UDim2.fromOffset(padding, top),
+            Size = UDim2.new(1, -padding * 2, 0, square),
+            BackgroundTransparency = 0,
+            Active = true,
+        }, nil, "Control")
+        local white = UI.new("Frame", sv, {
+            Size = UDim2.fromScale(1, 1),
+            BackgroundColor3 = Color3.new(1, 1, 1),
+            BackgroundTransparency = 0,
+        })
+        UI.round(w, white, "Control")
+        UI.new("UIGradient", white, {
+            Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1) }),
+        })
+        local black = UI.new("Frame", sv, {
+            Size = UDim2.fromScale(1, 1),
+            BackgroundColor3 = Color3.new(),
+            BackgroundTransparency = 0,
+        })
+        UI.round(w, black, "Control")
         UI.new("UIGradient", black, {
             Rotation = 90,
             Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(1, 0) }),
         })
         local function marker(parent)
-            local f =
-                UI.frame(w, parent, { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(9, 9), ZIndex = 3 })
+            local f = UI.frame(w, parent, {
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                Size = UDim2.fromOffset(11, 11),
+                BackgroundTransparency = 0.5,
+                ZIndex = 3,
+            }, "Base")
             UI.new("UICorner", f, { CornerRadius = UDim.new(1, 0) })
-            UI.stroke(w, f, "Thumb", 0)
+            UI.stroke(w, f, "Thumb", 0).Thickness = 1.5
             return f
         end
         local cursor = marker(sv)
-        local hueHit = UI.frame(
-            w,
-            p.Content,
-            { Position = UDim2.fromOffset(10, 245), Size = UDim2.new(1, -20, 0, 28), Active = true }
-        )
+        local hueHit = UI.frame(w, content, {
+            Position = UDim2.fromOffset(padding + utilityWidth + 4, hueY),
+            Size = UDim2.new(1, -padding * 2 - utilityWidth - 4, 0, hitHeight),
+            Active = true,
+        })
         local hue = UI.new("Frame", hueHit, {
-            Position = UDim2.fromOffset(0, 10),
-            Size = UDim2.new(1, 0, 0, 8),
+            Position = UDim2.new(0, 0, 0.5, -7),
+            Size = UDim2.new(1, 0, 0, 14),
             BackgroundTransparency = 0,
             BackgroundColor3 = Color3.new(1, 1, 1),
         })
-        UI.round(w, hue, "Small")
+        UI.new("UICorner", hue, { CornerRadius = UDim.new(1, 0) })
         local keys = {}
         for i = 0, 6 do
             keys[i + 1] = ColorSequenceKeypoint.new(i / 6, Color3.fromHSV(i / 6, 1, 1))
         end
         UI.new("UIGradient", hue, { Color = ColorSequence.new(keys) })
         local hueCursor = marker(hue)
-        local alphaHit = UI.frame(
-            w,
-            p.Content,
-            { Position = UDim2.fromOffset(10, 273), Size = UDim2.new(1, -20, 0, 24), Active = true }
-        )
-        local alpha = UI.frame(
-            w,
-            alphaHit,
-            { Position = UDim2.fromOffset(0, 8), Size = UDim2.new(1, 0, 0, 8), ClipsDescendants = true },
-            "Row",
-            "Small"
-        )
-        for i = 0, 26 do
-            UI.new("Frame", alpha, {
-                Position = UDim2.fromOffset(i * 8, 0),
-                Size = UDim2.fromOffset(4, 4),
-                BackgroundColor3 = Color3.fromRGB(100, 103, 110),
-                BackgroundTransparency = 0,
-            })
-            UI.new("Frame", alpha, {
-                Position = UDim2.fromOffset(i * 8 + 4, 4),
-                Size = UDim2.fromOffset(4, 4),
-                BackgroundColor3 = Color3.fromRGB(100, 103, 110),
-                BackgroundTransparency = 0,
-            })
+        local alphaHit = UI.frame(w, content, {
+            Position = UDim2.fromOffset(padding, alphaY),
+            Size = UDim2.new(1, -padding * 2, 0, hitHeight),
+            Active = true,
+        })
+        local alpha = UI.frame(w, alphaHit, {
+            Position = UDim2.new(0, 0, 0.5, -7),
+            Size = UDim2.new(1, 0, 0, 14),
+            ClipsDescendants = true,
+        }, "Thumb")
+        UI.new("UICorner", alpha, { CornerRadius = UDim.new(1, 0) })
+        for i = 0, math.ceil(square / 14) do
+            for row = 0, 1 do
+                UI.frame(w, alpha, {
+                    Position = UDim2.fromOffset(i * 14 + row * 7, row * 7),
+                    Size = UDim2.fromOffset(7, 7),
+                    BackgroundTransparency = 0.86,
+                }, "Base")
+            end
         end
         local alphaFill = UI.new("Frame", alpha, { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 0 })
+        UI.new("UICorner", alphaFill, { CornerRadius = UDim.new(1, 0) })
         UI.new("UIGradient", alphaFill, {
-            Transparency = NumberSequence.new({
-                NumberSequenceKeypoint.new(0, 1),
-                NumberSequenceKeypoint.new(1, 0),
-            }),
+            Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(1, 0) }),
         })
         local alphaCursor = marker(alpha)
-        local hex = UI.new("TextBox", p.Content, {
-            Position = UDim2.fromOffset(10, 306),
-            Size = UDim2.new(1, -82, 0, 28),
+        local field = UI.frame(w, content, {
+            Position = UDim2.fromOffset(padding, footerY),
+            Size = UDim2.new(1, -padding * 2, 0, footerHeight),
+            BackgroundTransparency = 0.45,
+        }, "Row", "Small")
+        local hex = UI.new("TextBox", field, {
+            Position = UDim2.fromOffset(7, 0),
+            Size = UDim2.new(1, -57, 1, 0),
             ClearTextOnFocus = false,
-            TextSize = 12,
+            TextSize = w.Touch and 11 or 9,
+            TextTruncate = Enum.TextTruncate.AtEnd,
         })
         UI.bind(w, hex, "TextColor3", "Text")
-        local copy = UI.button(p, p.Content, UI.locale(w, "Copy"), {
-            Position = UDim2.new(1, -64, 0, 306),
-            Size = UDim2.fromOffset(54, 28),
-            TextXAlignment = Enum.TextXAlignment.Center,
+        local rgb = false
+        local formatButton
+        formatButton = UI.button(p, field, "HEX", {
+            Position = UDim2.new(1, -47, 0, 0),
+            Size = UDim2.fromOffset(47, footerHeight),
+            TextSize = w.Touch and 10 or 8,
         }, function()
-            -- Clipboard injection is optional and explicit; standard Roblox has no clipboard API.
+            hex:ReleaseFocus()
+            rgb = not rgb
+            formatButton.Text = rgb and "RGB" or "HEX"
+            if c.UpdatePicker then
+                c.UpdatePicker()
+            end
+        end)
+        UI.icon(w, formatButton, "chevron", {
+            Position = UDim2.new(1, -14, 0.5, -4),
+            Size = UDim2.fromOffset(8, 8),
+        }, "Muted")
+        local copy = UI.button(p, content, "", {
+            Position = UDim2.new(1, -padding - copyWidth, 0, 0),
+            Size = UDim2.fromOffset(copyWidth, top),
+        }, function()
             if Library.Clipboard then
-                UI.call("Clipboard", Library.Clipboard, "#" .. c.Value.Color:ToHex())
+                UI.call("Clipboard", Library.Clipboard, "#" .. c.Value.Color:ToHex():upper())
             else
                 hex:CaptureFocus()
                 hex.SelectionStart = 1
                 hex.CursorPosition = #hex.Text + 1
             end
         end)
-        local h, s, v = c.Value.Color:ToHSV()
-        local updating = false
-        self.UpdatePicker = function()
-            if updating then
+        UI.icon(w, copy, "copy", { Position = UDim2.new(0.5, -4, 0.5, -4), Size = UDim2.fromOffset(8, 8) }, "Text")
+        UI.tooltip(p, copy, function()
+            return UI.locale(w, "Copy")
+        end)
+        local preview = UI.button(p, content, "", {
+            Position = UDim2.fromOffset(padding, hueY),
+            Size = UDim2.fromOffset(utilityWidth, hitHeight),
+        }, function()
+            c:Reset()
+        end)
+        local previewColor = UI.frame(w, preview, {
+            Position = UDim2.new(0.5, -6, 0.5, -6),
+            Size = UDim2.fromOffset(12, 12),
+            BackgroundTransparency = 0,
+        }, nil, "Small")
+        UI.stroke(w, previewColor, "Text", 0.7)
+        UI.tooltip(p, preview, function()
+            return UI.locale(w, "Reset")
+        end)
+        local function layoutPicker()
+            if p.Dead or p.Frame.AbsoluteSize.X <= 0 then
                 return
             end
-            local nh, ns, nv = c.Value.Color:ToHSV()
-            if ns > 0 then
-                h = nh
+            -- Viewport clamping can narrow the popup at non-default scales. Keep SV square.
+            local scale = p.Scale and p.Scale.Scale or 1
+            local edge = math.max(1, p.Frame.AbsoluteSize.X / math.max(0.01, scale) - padding * 2)
+            sv.Size = UDim2.new(1, -padding * 2, 0, edge)
+            local hueTop = top + edge + 4
+            local alphaTop = hueTop + hitHeight
+            local fieldTop = alphaTop + hitHeight + 5
+            hueHit.Position = UDim2.fromOffset(padding + utilityWidth + 4, hueTop)
+            alphaHit.Position = UDim2.fromOffset(padding, alphaTop)
+            preview.Position = UDim2.fromOffset(padding, hueTop)
+            field.Position = UDim2.fromOffset(padding, fieldTop)
+            local canvasHeight = fieldTop + footerHeight + 8
+            content.CanvasSize = UDim2.fromOffset(0, canvasHeight)
+            if math.abs(p.Size.Y - canvasHeight) > 0.01 then
+                p.Size = Vector2.new(width, canvasHeight)
+                p:Place()
             end
-            s = ns
-            v = nv
+        end
+        UI.connect(p, p.Frame:GetPropertyChangedSignal("AbsoluteSize"), layoutPicker)
+        layoutPicker()
+        local h, s, v = c.Value.Color:ToHSV()
+        local updating = false
+        self.UpdatePicker = function(preserveHSV)
+            if updating or p.Dead then
+                return
+            end
+            if not preserveHSV then
+                local nh, ns, nv = c.Value.Color:ToHSV()
+                if ns > 0 then
+                    h = nh
+                end
+                if nv > 0 then
+                    s = ns
+                end
+                v = nv
+            end
             sv.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
-            cursor.Position = UDim2.fromScale(s, 1 - v)
-            hueCursor.Position = UDim2.fromScale(h, 0.5)
-            alphaCursor.Position = UDim2.fromScale(c.Value.Alpha, 0.5)
+            cursor.Position = UDim2.new(s, (0.5 - s) * 14, 1 - v, (v - 0.5) * 14)
+            hueCursor.Position = UDim2.new(h, (0.5 - h) * 14, 0.5, 0)
+            hueCursor.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
+            alphaCursor.Position = UDim2.new(c.Value.Alpha, (0.5 - c.Value.Alpha) * 14, 0.5, 0)
+            alphaCursor.BackgroundColor3 = c.Value.Color
             alphaFill.BackgroundColor3 = c.Value.Color
-            hex.Text = "#" .. c.Value.Color:ToHex():upper()
+            previewColor.BackgroundColor3 = c.Value.Color
+            previewColor.BackgroundTransparency = 1 - c.Value.Alpha
+            if not hex:IsFocused() then
+                local color = c.Value.Color
+                hex.Text = rgb and string.format("%d, %d, %d", math.round(color.R * 255), math.round(color.G * 255), math.round(color.B * 255))
+                    or "#" .. color:ToHex():upper()
+            end
         end
         local function commit()
+            local color = Color3.fromHSV(h, s, v)
             updating = true
-            c:Set({ Color = Color3.fromHSV(h, s, v), Alpha = c.Value.Alpha })
+            c:Set({ Color = color, Alpha = c.Value.Alpha })
             updating = false
             if c.UpdatePicker and not c.Dead then
-                c.UpdatePicker()
+                c.UpdatePicker(c.Value.Color == color)
             end
         end
         UI.drag(owner, sv, function()
@@ -2692,17 +2842,37 @@ function UI.Section:AddColorPicker(options)
         UI.drag(owner, alphaHit, function()
             return true
         end, function(pos)
-            c:Set({
-                Color = c.Value.Color,
-                Alpha = math.clamp((pos.X - alpha.AbsolutePosition.X) / math.max(1, alpha.AbsoluteSize.X), 0, 1),
-            })
+            updating = true
+            c:Set({ Color = c.Value.Color, Alpha = math.clamp((pos.X - alpha.AbsolutePosition.X) / math.max(1, alpha.AbsoluteSize.X), 0, 1) })
+            updating = false
+            if c.UpdatePicker then
+                c.UpdatePicker(true)
+            end
         end)
         UI.connect(p, hex.FocusLost, function()
-            local value = hex.Text:gsub("#", "")
-            if #value == 6 and value:match("^%x+$") then
-                c:Set({ Color = Color3.fromHex(value), Alpha = c.Value.Alpha })
+            if p.Dead or c.Dead then
+                return
+            end
+            local value = hex.Text:match("^%s*(.-)%s*$")
+            local color
+            if rgb then
+                local red, green, blue = value:match("^(%d+)%s*,%s*(%d+)%s*,%s*(%d+)$")
+                red, green, blue = tonumber(red), tonumber(green), tonumber(blue)
+                if red and green and blue and red <= 255 and green <= 255 and blue <= 255 then
+                    color = Color3.fromRGB(red, green, blue)
+                end
             else
-                UI.warn(c.Name, "HEX must contain six hexadecimal digits")
+                value = value:gsub("^#", "")
+                if #value == 6 and value:match("^%x+$") then
+                    color = Color3.fromHex(value)
+                end
+            end
+            if color then
+                c:Set({ Color = color, Alpha = c.Value.Alpha })
+            else
+                UI.warn(c.Name, rgb and "RGB requires three integers in 0..255" or "HEX requires six hexadecimal digits")
+            end
+            if c.UpdatePicker then
                 c.UpdatePicker()
             end
         end)
@@ -2714,8 +2884,15 @@ function UI.Section:AddColorPicker(options)
     end
     return UI.finish(c, { Color = options.Default or w.Theme.Accent, Alpha = options.Alpha or 1 })
 end
--- Cubic Bezier uses true control points and 80 segments, not a coarse polyline.
+-- True Bezier control points; the cubic hot path avoids allocations while dragging.
 function UI.bezier(points, t)
+    if #points == 2 then
+        return points[1]:Lerp(points[2], t)
+    elseif #points == 4 then
+        local u = 1 - t
+        return points[1] * (u * u * u) + points[2] * (3 * u * u * t)
+            + points[3] * (3 * u * t * t) + points[4] * (t * t * t)
+    end
     local work = table.clone(points)
     for level = #work - 1, 1, -1 do
         for i = 1, level do
@@ -2726,179 +2903,227 @@ function UI.bezier(points, t)
 end
 function UI.Section:AddCurveEditor(options)
     options = options or {}
-    local c = UI.control(self, options, "CurveEditor", options.Height or 170)
+    local c = UI.control(self, options, "CurveEditor", options.Height or 160)
     local w = c.Window
-    c.Label.Size = UDim2.new(1, -20, 0, 24)
+    c.Label.Position = UDim2.fromOffset(12, 4)
+    c.Label.Size = UDim2.new(1, -24, 0, 24)
     c.Field.Visible = false
-    local graph = UI.frame(
-        w,
-        c.Frame,
-        { Position = UDim2.fromOffset(12, 30), Size = UDim2.new(1, -24, 1, -46), ClipsDescendants = true },
-        "Panel",
-        "Small"
-    )
-    local plot = UI.frame(w, graph, { Position = UDim2.fromOffset(10, 12), Size = UDim2.new(1, -20, 1, -28) })
-    for i = 0, 10 do
-        local x = UI.frame(w, plot, { Position = UDim2.fromScale(i / 10, 0), Size = UDim2.new(0, 1, 1, 0) }, "Border")
-        x.BackgroundTransparency = 0.82
-        local y = UI.frame(w, plot, { Position = UDim2.fromScale(0, i / 10), Size = UDim2.new(1, 0, 0, 1) }, "Border")
-        y.BackgroundTransparency = 0.82
+    local graph = UI.frame(w, c.Frame, {
+        Position = UDim2.fromOffset(12, 32),
+        Size = UDim2.new(1, -24, 1, -38),
+        ClipsDescendants = true,
+    })
+    local plot = UI.frame(w, graph, {
+        Position = UDim2.fromOffset(16, 18), Size = UDim2.new(1, -32, 1, -42),
+    })
+    c.Graph, c.Plot = graph, plot
+    local divisions = options.GridDivisions
+    local columns = typeof(divisions) == "Vector2" and divisions.X or divisions or 24
+    local rows = typeof(divisions) == "Vector2" and divisions.Y or 8
+    columns = UI.finite(columns) and math.clamp(math.floor(columns), 2, 64) or 24
+    rows = UI.finite(rows) and math.clamp(math.floor(rows), 2, 32) or 8
+    for axis, count in { columns, rows } do
+        for i = 0, count do
+            local line = UI.frame(w, plot, {
+                Position = axis == 1 and UDim2.fromScale(i / count, 0) or UDim2.fromScale(0, i / count),
+                Size = axis == 1 and UDim2.new(0, 1, 1, 0) or UDim2.new(1, 0, 0, 1),
+            }, "Border")
+            line.BackgroundTransparency = i % 4 == 0 and 0.84 or 0.93
+        end
     end
-    local segments = {}
-    for i = 1, 80 do
-        segments[i] =
-            UI.frame(w, plot, { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(1, 1.3) }, "Accent")
+    local segments, handles, dots, labels = {}, {}, {}, {}
+    for i = 1, 100 do
+        segments[i] = UI.frame(w, plot, {
+            AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(1, 1.2), ZIndex = 2,
+        }, "Accent")
     end
-    local handles = {}
-    local labels = {}
+    for i = 1, 2 do
+        local pill = UI.frame(w, graph, {
+            Size = UDim2.fromOffset(74, 17), ZIndex = 3, Visible = options.PointLabels ~= false,
+        }, "Row", "Small")
+        pill.BackgroundTransparency = 0.5
+        labels[i] = UI.text(w, pill, "", {
+            Size = UDim2.fromScale(1, 1), TextSize = 10,
+            TextXAlignment = Enum.TextXAlignment.Center,
+        }, "Muted")
+    end
     c.Validate = function(points)
         if type(points) ~= "table" or #points < 2 or #points > 8 then
             return false, nil, "Expected 2–8 Vector2 control points"
         end
         local result = {}
-        for i, p in points do
-            if typeof(p) ~= "Vector2" or not UI.finite(p.X) or not UI.finite(p.Y) then
+        for i, point in points do
+            if typeof(point) ~= "Vector2" or not UI.finite(point.X) or not UI.finite(point.Y) then
                 return false, nil, "Invalid point"
             end
-            result[i] = Vector2.new(math.clamp(p.X, 0, 1), math.clamp(p.Y, 0, 1))
+            result[i] = Vector2.new(math.clamp(point.X, 0, 1), math.clamp(point.Y, 0, 1))
         end
         return true, result
     end
+    -- Allocate the hit targets once; opposite-corner handles intentionally have no connecting polygon.
+    for i = 1, 8 do
+        local hit = UI.new("TextButton", plot, {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Size = UDim2.fromOffset(w.Touch and 44 or 24, w.Touch and 44 or 24),
+            ZIndex = 4, Visible = false,
+        })
+        local dot = UI.frame(w, hit, {
+            AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+            Size = UDim2.fromOffset(6, 6),
+        }, "Thumb")
+        UI.new("UICorner", dot, { CornerRadius = UDim.new(1, 0) })
+        UI.stroke(w, dot, "Accent", 0.7)
+        handles[i], dots[i] = hit, dot
+        UI.connect(c, hit.MouseEnter, function()
+            if not c.Disabled and options.Editable ~= false then
+                UI.tween(w, dot, { Size = UDim2.fromOffset(7, 7) }, "Hover")
+            end
+        end)
+        UI.connect(c, hit.MouseLeave, function()
+            UI.tween(w, dot, { Size = UDim2.fromOffset(6, 6) }, "Hover")
+        end)
+        UI.drag(c, hit, function()
+            return options.Editable ~= false and c.Value ~= nil and i <= #c.Value
+        end, function(pos)
+            local points = c:Get()
+            points[i] = Vector2.new(
+                math.clamp((pos.X - plot.AbsolutePosition.X) / math.max(1, plot.AbsoluteSize.X), 0, 1),
+                math.clamp((pos.Y - plot.AbsolutePosition.Y) / math.max(1, plot.AbsoluteSize.Y), 0, 1)
+            )
+            c:Set(points)
+        end)
+    end
     c.Render = function()
-        if not c.Value then
+        if not c.Value or c.Dead then
             return
         end
-        local size = plot.AbsoluteSize / (c.Popup and 1 or w.Scale)
-        local function project(p)
-            return Vector2.new(p.X * size.X, p.Y * size.Y)
-        end
-        local last = project(UI.bezier(c.Value, 0))
+        local scale = c.Popup and 1 or w.Scale
+        local size = plot.AbsoluteSize / scale
+        local last = UI.bezier(c.Value, 0) * size
         for i, line in segments do
-            local nextPoint = project(UI.bezier(c.Value, i / #segments))
-            local delta = nextPoint - last
-            line.Position = UDim2.fromOffset((last.X + nextPoint.X) / 2, (last.Y + nextPoint.Y) / 2)
-            line.Size = UDim2.fromOffset(math.max(0.1, delta.Magnitude + 0.4), 1.3)
+            local point = UI.bezier(c.Value, i / #segments) * size
+            local delta = point - last
+            line.Position = UDim2.fromOffset((last.X + point.X) / 2, (last.Y + point.Y) / 2)
+            line.Size = UDim2.fromOffset(math.max(0.1, delta.Magnitude + 0.35), 1.2)
             line.Rotation = math.deg(math.atan2(delta.Y, delta.X))
-            last = nextPoint
+            line.BackgroundTransparency = c.Disabled and 0.6 or 0.08
+            last = point
         end
-        for i = 1, 8 do
-            if not handles[i] then
-                local hit = UI.button(c, plot, "", {
-                    AnchorPoint = Vector2.new(0.5, 0.5),
-                    Size = UDim2.fromOffset(w.Touch and 36 or 20, w.Touch and 36 or 20),
-                    ZIndex = 3,
-                }, nil)
-                local dot = UI.frame(w, hit, {
-                    AnchorPoint = Vector2.new(0.5, 0.5),
-                    Position = UDim2.fromScale(0.5, 0.5),
-                    Size = UDim2.fromOffset(5, 5),
-                }, "Thumb")
-                UI.new("UICorner", dot, { CornerRadius = UDim.new(1, 0) })
-                handles[i] = hit
-                UI.drag(c, hit, function()
-                    return options.Editable ~= false and i <= #c.Value
-                end, function(pos)
-                    local points = c:Get()
-                    points[i] = Vector2.new(
-                        math.clamp((pos.X - plot.AbsolutePosition.X) / math.max(1, plot.AbsoluteSize.X), 0, 1),
-                        math.clamp((pos.Y - plot.AbsolutePosition.Y) / math.max(1, plot.AbsoluteSize.Y), 0, 1)
-                    )
-                    c:Set(points)
-                end)
-            end
+        for i, hit in handles do
             local point = c.Value[i]
-            handles[i].Visible = point ~= nil
+            hit.Visible = point ~= nil
             if point then
-                handles[i].Position = UDim2.fromScale(point.X, point.Y)
+                hit.Position = UDim2.fromScale(point.X, point.Y)
+                dots[i].BackgroundTransparency = c.Disabled and 0.65 or 0.15
             end
         end
-        if labels[1] then
-            labels[1].Text = string.format("%.2f, %.2f", c.Value[1].X, c.Value[1].Y)
-            local lastPoint = c.Value[#c.Value]
-            labels[2].Text = string.format("%.2f, %.2f", lastPoint.X, lastPoint.Y)
+        for i, index in { 1, #c.Value } do
+            local point = c.Value[index]
+            local pill = labels[i].Parent
+            local x = math.clamp(16 + point.X * size.X - (i == 2 and 74 or 4), 0,
+                math.max(0, graph.AbsoluteSize.X / scale - 74))
+            pill.Position = UDim2.fromOffset(x, 18 + point.Y * size.Y + (i == 1 and 7 or -23))
+            labels[i].Text = string.format("%.2f, %.2f", point.X, point.Y)
         end
     end
-    labels[1] = UI.text(
-        w,
-        graph,
-        "",
-        { Position = UDim2.new(0, 4, 1, -15), Size = UDim2.fromOffset(80, 15), TextSize = 10 },
-        "Muted"
-    )
-    labels[2] = UI.text(w, graph, "", {
-        Position = UDim2.new(1, -85, 0, -1),
-        Size = UDim2.fromOffset(80, 15),
-        TextSize = 10,
-        TextXAlignment = Enum.TextXAlignment.Right,
-    }, "Muted")
     UI.connect(c, plot:GetPropertyChangedSignal("AbsoluteSize"), function()
         c.Render()
     end)
-    return UI.finish(
-        c,
-        options.Points or { Vector2.new(0, 1), Vector2.new(0, 0), Vector2.new(1, 1), Vector2.new(1, 0) }
-    )
+    return UI.finish(c, options.Points or {
+        Vector2.new(0, 1), Vector2.new(0, 0), Vector2.new(1, 1), Vector2.new(1, 0),
+    })
 end
 function UI.Section:AddGraph(options)
     options = table.clone(options or {})
     options.Editable = false
     return self:AddCurveEditor(options)
 end
--- Companion layout and isolated preview scene.
+-- Companion geometry is measured from the video, independent of presentation-scene perspective.
 function UI.Window:AddCompanionWindow(options)
     options = options or {}
+    local size = options.Size or Vector2.new(340, 460)
+    if typeof(size) == "UDim2" then
+        size = Vector2.new(size.X.Offset + self.Root.AbsoluteSize.X * size.X.Scale,
+            size.Y.Offset + self.Root.AbsoluteSize.Y * size.Y.Scale)
+    end
+    assert(typeof(size) == "Vector2" and UI.finite(size.X) and UI.finite(size.Y), "[UiLib] Invalid companion size")
     local p = setmetatable({
-        Window = self,
-        Bag = UI.bag(),
-        Controls = {},
-        Linked = options.Linked ~= false,
-        Side = options.Side or "Left",
-        Visible = true,
-        Size = options.Size or Vector2.new(280, 410),
+        Window = self, Bag = UI.bag(), Controls = {},
+        Linked = options.Linked ~= false, Side = options.Side or "Left", Visible = options.Visible ~= false,
+        Size = Vector2.new(math.max(220, size.X), math.max(260, size.Y)),
+        Gap = UI.finite(options.Gap) and math.max(0, options.Gap) or 38,
+        OffsetY = UI.finite(options.OffsetY) and options.OffsetY or -42,
     }, UI.Companion)
-    p.Frame = UI.frame(
-        self,
-        self.Root,
-        { Size = UDim2.fromOffset(p.Size.X, p.Size.Y), Position = UDim2.fromOffset(12, 12), ZIndex = 3, Active = true },
-        "Base",
-        "Panel"
-    )
-    UI.stroke(self, p.Frame, "Border", 0.65)
-    p.Header = UI.frame(self, p.Frame, { Size = UDim2.new(1, 0, 0, 34) })
-    UI.text(
-        self,
-        p.Header,
-        options.Title or "Animation preview",
-        { Position = UDim2.fromOffset(12, 0), Size = UDim2.new(1, -44, 1, 0), TextSize = 11 }
-    )
-    local closeButton = UI.button(p, p.Header, "×", {
-        Position = UDim2.new(1, -32, 0, 4),
-        Size = UDim2.fromOffset(28, 28),
-        TextXAlignment = Enum.TextXAlignment.Center,
+    p.Frame = UI.frame(self, self.Root, {
+        Size = UDim2.fromOffset(p.Size.X, p.Size.Y), Position = UDim2.fromOffset(12, 12),
+        ZIndex = 3, Active = true,
+    }, "Base", "Window")
+    p.UIScale = UI.new("UIScale", p.Frame, { Scale = self.Scale })
+    UI.stroke(self, p.Frame, "Border", 0.8)
+    p.Header = UI.frame(self, p.Frame, { Size = UDim2.new(1, 0, 0, 48) })
+    p.UtilityButton = UI.button(p, p.Header, "", {
+        Position = UDim2.fromOffset(14, 13), Size = UDim2.new(0.55, -16, 0, 30),
     }, function()
-        p:Hide()
+        if options.OnSettings then
+            UI.call("Preview settings", options.OnSettings, p)
+            return
+        end
+        p.Menu = self:CreateContextMenu(p.UtilityButton, {
+            { Name = "Reset view", Callback = function()
+                for _, control in p.Controls do
+                    if control.Kind == "Viewport" then
+                        control:SetRotation(-0.3, -0.12)
+                    end
+                end
+            end },
+            { Name = "Hide preview", Callback = function() p:Hide() end },
+        })
     end)
-    p.Content = UI.new("ScrollingFrame", p.Frame, {
-        Position = UDim2.fromOffset(8, 36),
-        Size = UDim2.new(1, -16, 1, -44),
-        CanvasSize = UDim2.new(),
-        AutomaticCanvasSize = Enum.AutomaticSize.Y,
-        ScrollBarThickness = 0,
+    p.UtilityButton.BackgroundTransparency = 0.64
+    UI.icon(self, p.UtilityButton, "settings", {
+        Position = UDim2.new(0, 9, 0.5, -5), Size = UDim2.fromOffset(10, 10),
+    }, "Text")
+    UI.text(self, p.UtilityButton, options.Title or "Animation visualizer", {
+        Position = UDim2.fromOffset(29, 0), Size = UDim2.new(1, -36, 1, 0),
+        TextSize = 9, TextTruncate = Enum.TextTruncate.AtEnd,
     })
-    UI.list(p.Content, 4)
-    p.Section = setmetatable(
-        { Window = self, Bag = p.Bag, Frame = p.Content, Controls = p.Controls, Name = "Preview", Visible = true },
-        UI.Section
-    )
+    p.LinkButton = UI.button(p, p.Header, "", {
+        Position = UDim2.new(0.64, 0, 0, 13), Size = UDim2.new(0.36, -14, 0, 30),
+    }, function()
+        if options.OnStatus then
+            UI.call("Preview status", options.OnStatus, p)
+        else
+            p:SetLinked(not p.Linked)
+        end
+    end)
+    p.LinkButton.BackgroundTransparency = 0.64
+    UI.icon(self, p.LinkButton, "lock", {
+        Position = UDim2.new(0, 8, 0.5, -5), Size = UDim2.fromOffset(10, 10),
+    }, "Text")
+    p.LinkLabel = UI.text(self, p.LinkButton, options.Status or "Linked", {
+        Position = UDim2.fromOffset(27, 0), Size = UDim2.new(1, -31, 1, 0),
+        TextSize = 9, TextTruncate = Enum.TextTruncate.AtEnd,
+    })
+    p.StatusText = options.Status
+    p.Content = UI.new("ScrollingFrame", p.Frame, {
+        Position = UDim2.fromOffset(15, 54), Size = UDim2.new(1, -30, 1, -65),
+        CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        ScrollBarThickness = 0, ScrollingDirection = Enum.ScrollingDirection.Y,
+    })
+    UI.list(p.Content, 8)
+    p.Section = setmetatable({
+        Window = self, Bag = p.Bag, Frame = p.Content, Controls = p.Controls,
+        Name = "Preview", Visible = true, Flat = true, RowHeight = self.Touch and 44 or 32,
+    }, UI.Section)
     UI.drag(p, p.Header, function(pos)
-        if UI.inside(closeButton, pos) then
+        if UI.inside(p.UtilityButton, pos) or UI.inside(p.LinkButton, pos) then
             return false
         end
         return { Start = pos, Position = p.Frame.Position }
-    end, function(pos, s)
+    end, function(pos, state)
         p.Linked = false
-        p.Frame.Position =
-            UDim2.fromOffset(s.Position.X.Offset + pos.X - s.Start.X, s.Position.Y.Offset + pos.Y - s.Start.Y)
+        p.Frame.Position = UDim2.fromOffset(state.Position.X.Offset + pos.X - state.Start.X,
+            state.Position.Y.Offset + pos.Y - state.Start.Y)
         p:Reflow()
     end)
     table.insert(self.Companions, p)
@@ -2911,29 +3136,37 @@ function UI.Companion:Reflow()
         return
     end
     local w = self.Window
-    local b = w.Root.AbsoluteSize
+    local bounds, scale = w.Root.AbsoluteSize, w.Scale
     self.Frame.Visible = self.Visible and w.Visible and (not w.Compact or self.MobileOpen == true)
-    local width = math.min(self.Size.X, b.X - 16)
-    local height = math.min(self.Size.Y, b.Y - 16)
-    self.Frame.Size = UDim2.fromOffset(width, height)
+    local width = math.max(1, math.min(self.Size.X * scale, bounds.X - 16))
+    local height = math.max(1, math.min(self.Size.Y * scale, bounds.Y - 16))
+    self.UIScale.Scale = scale
+    self.Frame.Size = UDim2.fromOffset(width / scale, height / scale)
     local x, y = self.Frame.Position.X.Offset, self.Frame.Position.Y.Offset
     if self.Linked then
         local pos = w.Frame.AbsolutePosition - w.Root.AbsolutePosition
-        x = self.Side == "Right" and pos.X + w.Frame.AbsoluteSize.X + 18 or pos.X - width - 18
-        y = pos.Y - 24
-        if (x < 8 or x + width > b.X - 8) and not self.MobileOpen then
-            local alternative = self.Side == "Right" and pos.X - width - 18 or pos.X + w.Frame.AbsoluteSize.X + 18
-            if alternative >= 8 and alternative + width <= b.X - 8 then
+        local gap = self.Gap * scale
+        x = self.Side == "Right" and pos.X + w.Frame.AbsoluteSize.X + gap or pos.X - width - gap
+        y = pos.Y + self.OffsetY * scale
+        if (x < 8 or x + width > bounds.X - 8) and not self.MobileOpen then
+            local alternative = self.Side == "Right" and pos.X - width - gap or pos.X + w.Frame.AbsoluteSize.X + gap
+            if alternative >= 8 and alternative + width <= bounds.X - 8 then
                 x = alternative
             else
                 self.Frame.Visible = false
             end
         end
     end
-    self.Frame.Position = UDim2.fromOffset(
-        math.clamp(x, 8, math.max(8, b.X - width - 8)),
-        math.clamp(y, 8, math.max(8, b.Y - height - 8))
-    )
+    if w.Compact and self.MobileOpen then
+        x, y = (bounds.X - width) / 2, (bounds.Y - height) / 2
+    end
+    self.LinkLabel.Text = self.StatusText or (self.Linked and "Linked" or "Free")
+    self.Frame.Position = UDim2.fromOffset(math.clamp(x, 8, math.max(8, bounds.X - width - 8)),
+        math.clamp(y, 8, math.max(8, bounds.Y - height - 8)))
+    if not self.Frame.Visible and self.Menu then
+        self.Menu:Destroy()
+        self.Menu = nil
+    end
 end
 function UI.Companion:SetVisible(v)
     self.Visible = v == true
@@ -2955,6 +3188,12 @@ function UI.Companion:Destroy()
         return
     end
     self.Dead = true
+    if self.Menu then
+        self.Menu:Destroy()
+    end
+    if self.Window.Router.Drag and self.Window.Router.Drag.Owner == self then
+        UI.releaseDrag(self.Window)
+    end
     for _, c in table.clone(self.Controls) do
         c:Destroy()
     end
@@ -2972,23 +3211,43 @@ function UI.Companion:AddLabel(o)
     return self.Section:AddLabel(o)
 end
 function UI.Companion:AddProgressBar(o)
-    return self.Section:AddProgressBar(o)
+    o = table.clone(o or {})
+    if o.Compact == nil then
+        o.Compact = true
+    end
+    local c = self.Section:AddProgressBar(o)
+    if o.Compact then
+        c.Frame.BackgroundTransparency = 1
+        c.Frame.Size = UDim2.new(1, 0, 0, 14)
+        c.Track.Position = UDim2.fromOffset(0, 2)
+        c.Track.Size = UDim2.new(1, 0, 0, 9)
+    end
+    return c
 end
 function UI.Companion:AddButton(o)
     return self.Section:AddButton(o)
 end
 function UI.Companion:AddMetadata(values)
     local labels = {}
+    local function format(entry, value)
+        if type(entry.Formatter) == "function" then
+            local ok, result = pcall(entry.Formatter, value)
+            if ok then
+                return tostring(result)
+            end
+            UI.warn("Metadata", result)
+        end
+        return entry.Name == "" and tostring(value) or tostring(entry.Name) .. ": " .. tostring(value)
+    end
     local c = self.Section:AddCustomControl({
-        Name = "Metadata",
-        Height = math.ceil(#values / 2) * 18,
+        Name = "Metadata", Height = math.ceil(#values / 2) * 16,
         Build = function(frame, control)
+            frame.BackgroundTransparency = 1
             for i, entry in values do
                 local right = i % 2 == 0
-                labels[i] = UI.text(control.Window, frame, tostring(entry.Name) .. ": " .. tostring(entry.Value), {
-                    Position = UDim2.new(right and 0.5 or 0, 4, 0, math.floor((i - 1) / 2) * 18),
-                    Size = UDim2.new(0.5, -8, 0, 18),
-                    TextSize = 10,
+                labels[i] = UI.text(control.Window, frame, format(entry, entry.Value), {
+                    Position = UDim2.new(right and 0.5 or 0, 0, 0, math.floor((i - 1) / 2) * 16),
+                    Size = UDim2.new(0.5, -4, 0, 16), TextSize = 10,
                     TextTruncate = Enum.TextTruncate.AtEnd,
                     TextXAlignment = right and Enum.TextXAlignment.Right or Enum.TextXAlignment.Left,
                 }, i > 2 and "Muted" or "Text")
@@ -2996,45 +3255,59 @@ function UI.Companion:AddMetadata(values)
         end,
     })
     function c:SetEntry(index, value)
-        assert(labels[index], "[UiLib] Unknown metadata entry")
-        labels[index].Text = tostring(values[index].Name) .. ": " .. tostring(value)
+        if self.Dead or not labels[index] then
+            UI.warn("Metadata", "Unknown or destroyed metadata entry")
+            return false
+        end
+        labels[index].Text = format(values[index], value)
+        return true
     end
     return c
 end
 function UI.Companion:AddActions(actions)
-    return self.Section:AddCustomControl({
-        Name = "Actions",
-        Height = 28,
-        Build = function(frame, c)
-            for i, a in actions do
-                local b = UI.button(
-                    c,
-                    frame,
-                    "",
-                    { Position = UDim2.new((i - 1) / #actions, 2, 0, 0), Size = UDim2.new(1 / #actions, -4, 1, 0) },
-                    a.Callback
-                )
-                b.BackgroundTransparency = 0
-                UI.icon(
-                    c.Window,
-                    b,
-                    a.Icon or "play",
-                    { Position = UDim2.new(0.5, -8, 0.5, -8), Size = UDim2.fromOffset(16, 16) }
-                )
+    local icons, buttons = {}, {}
+    local c = self.Section:AddCustomControl({
+        Name = "Actions", Height = self.Window.Touch and 44 or 32,
+        Build = function(frame, control)
+            frame.BackgroundTransparency = 1
+            for i, action in actions do
+                local hit = UI.button(control, frame, "", {
+                    Position = UDim2.new((i - 1) / #actions, 0, 0, 0),
+                    Size = UDim2.new(1 / #actions, i == #actions and 0 or -14, 1, 0),
+                }, action.Callback)
+                hit.BackgroundTransparency = 1
+                local surface = UI.frame(control.Window, hit, {
+                    Position = UDim2.new(0, 0, 0.5, -16), Size = UDim2.new(1, 0, 0, 32),
+                }, "Row", "Panel")
+                icons[i] = UI.icon(control.Window, surface, action.Icon or "play", {
+                    Position = UDim2.new(0.5, -6, 0.5, -6), Size = UDim2.fromOffset(12, 12),
+                }, "Text")
+                buttons[i] = surface
             end
         end,
     })
+    function c:SetActionIcon(index, name)
+        if self.Dead or not buttons[index] then
+            return false
+        end
+        icons[index]:Destroy()
+        icons[index] = UI.icon(self.Window, buttons[index], name, {
+            Position = UDim2.new(0.5, -6, 0.5, -6), Size = UDim2.fromOffset(12, 12),
+        }, "Text")
+        return true
+    end
+    return c
 end
 function UI.Section:AddViewport(options)
     options = options or {}
-    local c = UI.control(self, options, "Viewport", options.Height or 260)
+    local c = UI.control(self, options, "Viewport", options.Height or 280)
     local w = c.Window
     c.Label.Visible = false
     c.Field.Visible = false
     c.Frame.BackgroundTransparency = 1
     c.Viewport = UI.new("ViewportFrame", c.Frame, {
         Size = UDim2.fromScale(1, 1),
-        Ambient = Color3.fromRGB(180, 180, 185),
+        Ambient = Color3.fromRGB(164, 164, 170),
         LightColor = Color3.new(1, 1, 1),
         LightDirection = Vector3.new(-1, -1, -2),
     })
@@ -3042,27 +3315,23 @@ function UI.Section:AddViewport(options)
     c.Camera = UI.new("Camera", c.Viewport, { FieldOfView = 32 })
     c.Viewport.CurrentCamera = c.Camera
     c.Scene = UI.new("Model", c.World, { Name = "PreviewScene" })
-    c.Yaw = options.Rotation or -0.25
-    c.Pitch = 0
+    c.Yaw = UI.finite(options.Rotation) and options.Rotation or -0.28
+    c.Pitch = UI.finite(options.Pitch) and math.clamp(options.Pitch, -1.2, 1.2) or -0.12
     local lines = {}
     c.Cage = UI.new("Model", c.World, { Name = "AccentWireframe" })
     function c:FrameCamera()
-        if not self.Model then
-            return
-        end
-        local cf, size = self.Bounds, self.BoundsSize
-        if not cf then
-            cf, size = self.Model:GetBoundingBox()
-            self.Bounds = cf
-            self.BoundsSize = size
-        end
-        local aspect = self.Viewport.AbsoluteSize.X / math.max(1, self.Viewport.AbsoluteSize.Y)
-        local fov = math.rad(self.Camera.FieldOfView / 2)
-        local distance = (math.max(size.Y, size.X / math.max(0.25, aspect)) * 0.65) / math.tan(fov) + size.Z * 0.7
-        local center = cf.Position
+        if self.Dead or not self.Model or not self.Bounds then return end
+        local center = self.Bounds.Position
         local rotation = CFrame.Angles(self.Pitch, self.Yaw, 0)
-        self.Camera.CFrame =
-            CFrame.lookAt(center + rotation:VectorToWorldSpace(Vector3.new(0, size.Y * 0.05, distance)), center)
+        local aspect = math.max(0.1, self.Viewport.AbsoluteSize.X / math.max(1, self.Viewport.AbsoluteSize.Y))
+        local tangent = math.tan(math.rad(self.Camera.FieldOfView / 2))
+        local distance = 1
+        -- Fit the entire cage at the current orbit, not only the unrotated model's height.
+        for _, corner in self.FitCorners do
+            local point = rotation:PointToObjectSpace(corner - center)
+            distance = math.max(distance, point.Z + math.abs(point.Y) / tangent, point.Z + math.abs(point.X) / (tangent * aspect))
+        end
+        self.Camera.CFrame = CFrame.lookAt(center + rotation:VectorToWorldSpace(Vector3.new(0, 0, distance * 1.07)), center)
     end
     function c:SetModel(model)
         if typeof(model) ~= "Instance" or not model:IsA("Model") then
@@ -3102,9 +3371,15 @@ function UI.Section:AddViewport(options)
         self.Cage:ClearAllChildren()
         table.clear(lines)
         local boxCf, boxSize = clone:GetBoundingBox()
-        boxSize += Vector3.new(0.8, 0.65, 0.65)
+        local padding = options.WireframePadding
+        if typeof(padding) ~= "Vector3" or not UI.finite(padding.X) or not UI.finite(padding.Y) or not UI.finite(padding.Z) then
+            padding = Vector3.new(1.8, 2, 3.2)
+        end
         if options.Wireframe ~= false then
-            local vertices = {}
+            boxSize += Vector3.new(math.max(0, padding.X), math.max(0, padding.Y), math.max(0, padding.Z))
+        end
+        self.Bounds, self.BoundsSize = boxCf, boxSize
+        local vertices = {}
             for x = -1, 1, 2 do
                 for y = -1, 1, 2 do
                     for z = -1, 1, 2 do
@@ -3117,6 +3392,8 @@ function UI.Section:AddViewport(options)
                     end
                 end
             end
+        self.FitCorners = vertices
+        if options.Wireframe ~= false then
             for i = 1, 8 do
                 for j = i + 1, 8 do
                     local a, b = vertices[i], vertices[j]
@@ -3153,7 +3430,11 @@ function UI.Section:AddViewport(options)
         return true
     end
     function c:SetRotation(yaw, pitch)
-        self.Yaw = yaw
+        if self.Dead or not UI.finite(yaw) or (pitch ~= nil and not UI.finite(pitch)) then
+            UI.warn(self.Name, "Rotation must be finite and preview must be alive")
+            return false
+        end
+        self.Yaw = yaw % (2 * math.pi)
         self.Pitch = math.clamp(pitch or self.Pitch, -1.2, 1.2)
         self:FrameCamera()
     end
@@ -3215,12 +3496,22 @@ function UI.popupSection(w, p, name)
         CanvasSize = UDim2.new(),
         AutomaticCanvasSize = Enum.AutomaticSize.Y,
         ScrollBarThickness = 2,
+        ScrollingDirection = Enum.ScrollingDirection.Y,
     })
-    UI.list(frame, 3)
-    local section = setmetatable(
-        { Window = w, Popup = p, Bag = UI.bag(), Frame = frame, Controls = {}, Name = name or "", Visible = true },
-        UI.Section
-    )
+    UI.bind(w, frame, "ScrollBarImageColor3", "Faint")
+    local layout = UI.list(frame, 2)
+    local section = setmetatable({
+        Window = w,
+        Popup = p,
+        Bag = UI.bag(),
+        Frame = frame,
+        Controls = {},
+        Name = name or "",
+        Visible = true,
+        RowHeight = w.Touch and 44 or 30,
+        Flat = true,
+        Layout = layout,
+    }, UI.Section)
     UI.keep(p.Bag, function()
         section:Destroy()
     end)
@@ -3234,149 +3525,230 @@ function UI.Window:OpenProfile()
         self:ClosePopups()
         return
     end
-    local p = self:OpenPopover(self.ProfileButton, Vector2.new(224, self.Touch and 430 or 268))
+    local p = self:OpenPopover(self.ProfileButton, Vector2.new(self.Touch and 304 or 204, self.Touch and 338 or 194))
+    p.PreferSide = "Right"
+    p.Align = "End"
+    p:Place()
     self.ProfilePopup = p
     local s = UI.popupSection(self, p, "Profile")
-    s.RowHeight = self.Touch and 44 or 24
+    p.Section = s
+    s.RowHeight = self.Touch and 44 or 20
+    s.Layout.Padding = UDim.new(0, 0)
     local w = self
-    s:AddCustomControl({
+    local header = s:AddCustomControl({
         Name = "Profile",
         Height = 52,
         Build = function(frame)
-            UI.icon(
-                w,
-                frame,
-                "profile",
-                { Position = UDim2.fromOffset(10, 15), Size = UDim2.fromOffset(16, 16) },
-                "Text"
-            )
-            UI.text(w, frame, w.Title, { Position = UDim2.fromOffset(38, 8), Size = UDim2.new(1, -44, 0, 20) })
-            UI.text(
-                w,
-                frame,
-                "Interface preferences",
-                { Position = UDim2.fromOffset(38, 27), Size = UDim2.new(1, -44, 0, 16), TextSize = 10 },
-                "Muted"
-            )
+            local player = UI.S.Players.LocalPlayer
+            UI.icon(w, frame, w.ProfileIcon or "owl", {
+                Position = UDim2.fromOffset(5, 7),
+                Size = UDim2.fromOffset(30, 30),
+            }, "Thumb")
+            UI.text(w, frame, w.ProfileName or (player and player.DisplayName) or w.Title, {
+                Position = UDim2.fromOffset(46, 8),
+                Size = UDim2.new(1, -51, 0, 17),
+                TextSize = 11,
+                TextTruncate = Enum.TextTruncate.AtEnd,
+            })
+            UI.text(w, frame, w.ProfileDescription or "Interface preferences", {
+                Position = UDim2.fromOffset(46, 25),
+                Size = UDim2.new(1, -51, 0, 14),
+                TextSize = 9,
+                TextTruncate = Enum.TextTruncate.AtEnd,
+            }, "Muted")
+            if #w.Companions > 0 then
+                local preview = UI.button(p, frame, "", {
+                    Position = UDim2.fromOffset(0, 0),
+                    Size = UDim2.fromOffset(40, 44),
+                }, function()
+                    w.Companions[1]:Show()
+                    w:ClosePopups()
+                end)
+                UI.tooltip(p, preview, function()
+                    return UI.locale(w, "Show preview")
+                end)
+            end
         end,
     })
-    s:AddColorPicker({
-        Name = "Color scheme",
+    header.Frame.BackgroundTransparency = 1
+    local function decorate(control, icon)
+        control.Frame.BackgroundTransparency = 1
+        local button = control.Button
+        if button then
+            button.TextXAlignment = Enum.TextXAlignment.Left
+            button.TextSize = w.Touch and 11 or 9.5
+            UI.new("UIPadding", button, { PaddingLeft = UDim.new(0, 25), PaddingRight = UDim.new(0, 21) })
+        else
+            control.Label.Position = UDim2.fromOffset(25, 0)
+            control.Label.Size = UDim2.new(1, -46, 1, 0)
+            control.Label.TextSize = w.Touch and 11 or 9.5
+            UI.bind(w, control.Label, "TextColor3", "Text")
+            control.Field.Position = UDim2.fromOffset(0, 0)
+            control.Field.Size = UDim2.fromScale(1, 1)
+            control.Swatch.Visible = false
+        end
+        UI.icon(w, control.Frame, icon, {
+            Position = UDim2.new(0, 5, 0.5, -4),
+            Size = UDim2.fromOffset(8, 8),
+        }, "Text")
+        UI.icon(w, control.Frame, "ellipsis", {
+            Position = UDim2.new(1, -15, 0.5, -4),
+            Size = UDim2.fromOffset(8, 8),
+        }, "Text")
+        return control
+    end
+    decorate(s:AddColorPicker({
+        Name = UI.locale(w, "Color scheme"),
         Default = self.Theme.Accent,
         Callback = function(color)
             w:SetAccent(color, true)
         end,
-    })
-    local function nested(name, build)
-        local c = s:AddButton({ Name = name .. "    ...", Style = "Row" })
+    }), "palette")
+    local function nested(name, icon, rows, build)
+        local c = decorate(s:AddButton({ Name = UI.locale(w, name), Style = "Ghost" }), icon)
         c.Callback = function()
-            local child = w:OpenPopover(c.Frame, Vector2.new(252, self.Touch and 116 or 92), p)
+            if c.OpenPopup and not c.OpenPopup.Dead then
+                c:Close()
+                return
+            end
+            local child = w:OpenPopover(c.Frame, Vector2.new(252, 16 + rows * (w.Touch and 44 or 30) + math.max(0, rows - 1) * 2), p)
+            child.PreferSide = "Right"
+            child:Place()
+            c.OpenPopup = child
+            child.OnClose = function()
+                c.OpenPopup = nil
+            end
             build(UI.popupSection(w, child, name))
         end
     end
-    nested("Scale", function(section)
+    nested("Scale", "scale", 2, function(section)
         section:AddSlider({
-            Name = "Scale",
+            Name = UI.locale(w, "Scale"),
             Min = 0.75,
             Max = 1.5,
             Increment = 0.05,
             Default = w.Scale,
-            Callback = function(v)
-                w:SetScale(v)
+            Callback = function(value)
+                w:SetScale(value)
             end,
         })
         section:AddDropdown({
-            Name = "Scale mode",
+            Name = UI.locale(w, "Scale mode"),
             Options = { "Manual", "Fit" },
             Default = w.ScaleMode or "Manual",
-            Callback = function(v)
-                w.ScaleMode = v
+            Searchable = false,
+            Callback = function(value)
+                w.ScaleMode = value
                 w:Reflow()
             end,
         })
     end)
-    nested("Corner smoothness", function(section)
+    nested("Corner smoothness", "corners", 1, function(section)
         section:AddSlider({
-            Name = "Corner radius",
+            Name = UI.locale(w, "Corner radius"),
             Min = 0,
             Max = 2,
             Increment = 0.05,
             Default = w.CornerStyle,
-            Callback = function(v)
-                w:SetCornerStyle(v)
+            Callback = function(value)
+                w:SetCornerStyle(value)
             end,
         })
     end)
-    nested("Animation speed", function(section)
+    nested("Animation speed", "speed", 2, function(section)
         local speedControl
         local enabled = section:AddToggle({
-            Name = "Enabled",
+            Name = UI.locale(w, "Enabled"),
             Default = w.AnimationSpeed > 0,
-            Callback = function(v)
-                w:SetAnimationSpeed(v and (speedControl and speedControl:Get() or 1) or 0)
+            Callback = function(value)
+                w:SetAnimationSpeed(value and (speedControl and speedControl:Get() or 1) or 0)
             end,
         })
         speedControl = section:AddSlider({
-            Name = "Animation speed",
+            Name = UI.locale(w, "Animation speed"),
             Min = 0.1,
             Max = 4,
             Increment = 0.1,
-            Default = math.max(0.1, w.AnimationSpeed),
-            Callback = function(v)
+            Default = w.AnimationSpeed > 0 and w.AnimationSpeed or 1,
+            Callback = function(value)
                 if enabled:Get() then
-                    w:SetAnimationSpeed(v)
+                    w:SetAnimationSpeed(value)
                 end
             end,
         })
     end)
-    local locales = {}
-    for key in Library.Locales do
-        table.insert(locales, key)
-    end
-    table.sort(locales)
-    s:AddDropdown({
-        Name = "Interface language",
-        Options = locales,
-        Default = w.Language,
-        Callback = function(v)
-            w:SetLocale(v)
-        end,
-    })
-    s:AddKeybind({
-        Name = "Hide / show key",
-        Default = w.HideKey,
-        Changed = function(v)
-            w.HideKey = v
-        end,
-    })
-    if #self.Companions > 0 then
-        s:AddButton({
-            Name = "Show preview",
-            Callback = function()
-                w.Companions[1]:Show()
-                w:ClosePopups()
+    nested("Interface language", "language", 1, function(section)
+        local locales = {}
+        for key in Library.Locales do
+            table.insert(locales, key)
+        end
+        table.sort(locales)
+        section:AddDropdown({
+            Name = UI.locale(w, "Interface language"),
+            Options = locales,
+            Default = w.Language,
+            Searchable = false,
+            Callback = function(value)
+                w:SetLocale(value)
             end,
         })
-    end
+    end)
+    nested("Hide / show key", "keyboard", 1, function(section)
+        section:AddKeybind({
+            Name = UI.locale(w, "Hide / show key"),
+            Default = w.HideKey,
+            Changed = function(value)
+                w.HideKey = value
+            end,
+        })
+    end)
     p.OnClose = function()
         w.ProfilePopup = nil
     end
     return p
 end
 function UI.Window:CreateContextMenu(anchor, items, parentPopup)
-    local p =
-        self:OpenPopover(anchor, Vector2.new(190, math.min(360, #items * (self.Touch and 44 or 32) + 16)), parentPopup)
+    assert(type(items) == "table", "[UiLib/Context] Items must be an array")
+    local rowHeight = self.Touch and 44 or 25
+    local p = self:OpenPopover(anchor, Vector2.new(self.Touch and 220 or 166, math.min(360, #items * rowHeight + 16)), parentPopup)
     local s = UI.popupSection(self, p, "Context")
+    s.RowHeight = rowHeight
+    s.Layout.Padding = UDim.new(0, 0)
     for _, item in items do
-        s:AddButton({
+        if type(item) ~= "table" or type(item.Name) ~= "string" then
+            UI.warn("Context", "Each item requires a Name string")
+            continue
+        end
+        local c = s:AddButton({
             Name = item.Name,
-            Style = item.Destructive and "Destructive" or "Row",
+            Style = "Ghost",
             Disabled = item.Disabled,
             Callback = function()
                 p:Destroy()
-                UI.call("Context/" .. tostring(item.Name), item.Callback)
+                UI.call("Context/" .. item.Name, item.Callback)
             end,
         })
+        c.Button.TextXAlignment = Enum.TextXAlignment.Left
+        c.Button.TextSize = self.Touch and 11 or 10
+        c.Button.TextTruncate = Enum.TextTruncate.AtEnd
+        UI.new("UIPadding", c.Button, {
+            PaddingLeft = UDim.new(0, item.Icon and 25 or 7),
+            PaddingRight = UDim.new(0, 7),
+        })
+        if item.Destructive then
+            local render = c.Render
+            c.Render = function()
+                render()
+                c.Button.TextColor3 = self.Theme.Danger
+            end
+            c.Render()
+        end
+        if item.Icon then
+            UI.icon(self, c.Frame, item.Icon, {
+                Position = UDim2.new(0, 6, 0.5, -5),
+                Size = UDim2.fromOffset(10, 10),
+            }, item.Destructive and "Danger" or "Muted")
+        end
     end
     return p
 end
@@ -3388,7 +3760,7 @@ function UI.Control:SetContextMenu(items)
         self,
         self.Frame,
         "",
-        { Position = UDim2.new(0.55, -26, 0, 0), Size = UDim2.fromOffset(24, self.Frame.Size.Y.Offset) },
+        { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -48, 0, 0), Size = UDim2.new(0, 30, 1, 0) },
         function()
             self.Window:CreateContextMenu(self.ContextButton, items, self.Popup)
         end
@@ -3857,13 +4229,16 @@ function Library:CreateReferenceDemo(options)
     local w = self:CreateWindow({
         Id = options.Id or "reference",
         Title = options.Title or "Interface",
-        Size = UDim2.fromOffset(800, 540),
-        Accent = Color3.fromRGB(197, 54, 225),
+        Size = options.Size or UDim2.fromOffset(800, 520),
+        Accent = options.Accent or Color3.fromRGB(213, 53, 234),
+        Scale = options.Scale,
+        ProfileName = options.Name or "Preview",
+        ProfileDescription = options.ProfileDescription or "Interface preferences",
         Resizable = true,
         Parent = options.Parent,
     })
     local main = w:AddTab({ Name = "Main", Icon = "target" })
-    local general = main:AddLeftSection({ Name = "General" })
+    local general = main:AddLeftSection({ Name = "Main" })
     general
         :AddToggle({
             Name = "Enable targeting",
@@ -3918,7 +4293,7 @@ function Library:CreateReferenceDemo(options)
     motion:AddCurveEditor({
         Name = "Smoothness type",
         Points = { Vector2.new(0, 1), Vector2.new(0, 0), Vector2.new(1, 1), Vector2.new(1, 0) },
-        Height = 166,
+        Height = 160,
         Flag = "Demo.Curve",
     })
     motion:AddSlider({ Name = "Horizontal speed", Min = 0, Max = 100, Default = 50, Flag = "Demo.Horizontal" })
@@ -3934,7 +4309,7 @@ function Library:CreateReferenceDemo(options)
     local filters = main:AddRightSection({ Name = "Filters and checks" })
     filters:AddToggle({ Name = "Ignore teammates", Default = false, Flag = "Demo.Teammates" })
     filters:AddToggle({ Name = "Ignore obstacles", Default = false, Flag = "Demo.Obstacles" })
-    local controls = w:AddTab({ Name = "Controls", Icon = "grid" })
+    local controls = w:AddTab({ Name = "Controls", Icon = "binoculars" })
     local values = controls:AddLeftSection({ Name = "Value controls" })
     values:AddCheckbox({ Name = "Checkbox", Default = true, Flag = "Demo.Check" })
     values:AddMultiDropdown({
@@ -3971,7 +4346,7 @@ function Library:CreateReferenceDemo(options)
             })
         end,
     })
-    w:AddTab({ Name = "Preview", Icon = "play" }):AddSection({ Name = "Companion" }):AddButton({
+    w:AddTab({ Name = "Preview", Icon = "globe" }):AddSection({ Name = "Companion" }):AddButton({
         Name = "Show preview",
         Callback = function()
             if w.Companions[1] then
@@ -3979,7 +4354,19 @@ function Library:CreateReferenceDemo(options)
             end
         end,
     })
-    local settings = w:AddTab({ Name = "Settings", Icon = "settings" })
+    local themes = w:AddTab({ Name = "Appearance", Icon = "settings" }):AddLeftSection({ Name = "Accent presets" })
+    for _, preset in {
+        { "Blue", Color3.fromRGB(81, 95, 255) }, { "Cyan", Color3.fromRGB(65, 201, 244) },
+        { "Orange", Color3.fromRGB(246, 113, 67) }, { "Green", Color3.fromRGB(126, 230, 83) },
+        { "Violet", Color3.fromRGB(154, 78, 246) }, { "Magenta", Color3.fromRGB(213, 53, 234) },
+    } do
+        themes:AddButton({ Name = preset[1], Callback = function() w:SetAccent(preset[2]) end })
+    end
+    local tools = w:AddTab({ Name = "Tools", Icon = "code" }):AddLeftSection({ Name = "Interaction checks" })
+    tools:AddButton({ Name = "Open preferences", Callback = function() w:OpenProfile() end })
+    tools:AddButton({ Name = "Hide interface", Callback = function() w:Hide() end })
+    tools:AddParagraph({ Name = "Reference showcase", Content = "UI demonstration only. Controls do not modify gameplay." })
+    local settings = w:AddTab({ Name = "Settings", Icon = "folder" })
     settings:AddSection({ Name = "Interface", Side = "Left" }):AddButton({
         Name = "Open preferences",
         Callback = function()
@@ -4006,7 +4393,7 @@ function Library:CreateReferenceDemo(options)
     })
     local preview = w:AddCompanionWindow({
         Title = "Animation visualizer",
-        Size = Vector2.new(280, 410),
+        Size = Vector2.new(340, 460),
         Side = "Left",
         Linked = true,
     })
@@ -4022,17 +4409,19 @@ function Library:CreateReferenceDemo(options)
             { "Right leg", Vector3.new(1, 2, 1), Vector3.new(0.5, -1, 0) },
         }
     do
-        UI.new("Part", mannequin, {
+        local block = UI.new("Part", mannequin, {
             Name = part[1],
             Size = part[2],
             Position = part[3],
             Anchored = true,
             Color = Color3.fromRGB(208, 209, 212),
             Material = Enum.Material.SmoothPlastic,
+            CanCollide = false,
         })
+        if part[1] == "Head" then UI.new("SpecialMesh", block, { MeshType = Enum.MeshType.Head }) end
     end
     local viewport =
-        preview:AddViewport({ Model = options.Model or mannequin, Height = 270, Wireframe = true, Interactive = true })
+        preview:AddViewport({ Model = options.Model or mannequin, Height = 280, Wireframe = true, Interactive = true })
     mannequin:Destroy()
     preview:AddMetadata({
         { Name = "Name", Value = options.Name or "Preview" },
@@ -4040,7 +4429,8 @@ function Library:CreateReferenceDemo(options)
         { Name = "ID", Value = "000000" },
         { Name = "Position", Value = "0.00 / 0.00" },
     })
-    preview:AddActions({
+    local transport
+    transport = preview:AddActions({
         {
             Icon = "previous",
             Callback = function()
@@ -4051,6 +4441,7 @@ function Library:CreateReferenceDemo(options)
             Icon = "play",
             Callback = function()
                 viewport:SetAutoRotate(not viewport.AutoRotate)
+                transport:SetActionIcon(2, viewport.AutoRotate and "pause" or "play")
             end,
         },
         {
@@ -4063,12 +4454,14 @@ function Library:CreateReferenceDemo(options)
     preview:AddProgressBar({ Name = "Progress", Default = 0.5, Compact = true })
     main:Select()
     local bounds = w.Root.AbsoluteSize
-    local totalWidth = w.Frame.AbsoluteSize.X + preview.Size.X + 18
+    local previewWidth = preview.Size.X * w.Scale
+    local gap = preview.Gap * w.Scale
+    local totalWidth = w.Frame.AbsoluteSize.X + previewWidth + gap
     if bounds.X >= totalWidth + 16 then
         w:SetPosition(
             UDim2.fromOffset(
-                (bounds.X - totalWidth) / 2 + preview.Size.X + 18,
-                math.max(32, (bounds.Y - w.Frame.AbsoluteSize.Y) / 2)
+                (bounds.X - totalWidth) / 2 + previewWidth + gap,
+                math.max(50 * w.Scale, (bounds.Y - w.Frame.AbsoluteSize.Y) / 2 + 21 * w.Scale)
             )
         )
     end
