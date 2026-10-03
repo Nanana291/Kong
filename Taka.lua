@@ -10,7 +10,23 @@
         local Section = Page:AddSection({ Name = "General" })
         Section:AddToggle({ Name = "Enabled", Default = false, Callback = function(value) end })
         Window:Notify({ Title = "Ready", Text = "Takataka loaded", Type = "success" })
-        Takataka:Demo()      -- optional showcase (never runs automatically)
+        Takataka:Demo()      -- rebuild the showcase at any time
+
+    Executing the file builds the showcase automatically, so a fresh run always
+    shows a window. To start from an empty canvas instead:
+
+        _G.TAKATAKA_NO_AUTOSTART = true   -- set before loading
+        local Takataka = loadstring(game:HttpGet("..."))()
+        Takataka:SetAutoStart(false)      -- or cancel it right after loading
+
+    Diagnostics — every failure inside this file reaches the console:
+        Takataka:SetDebug(true)           -- log bootstrap stages and skipped work
+        Takataka:PrintDiagnostics()       -- list the last errors with their stage
+        Takataka:GetErrors()              -- the same list as a table
+        Takataka:SetErrorWatch(false)     -- stop reporting runtime errors
+
+    A failed control callback warns once, naming the control:
+        [Takataka] callback "Enabled": <the error>
 ]]
 
 local Players = game:GetService("Players")
@@ -22,8 +38,27 @@ local CoreGuiService = game:GetService("CoreGui")
 
 local Library = {}
 Library.__index = Library
-Library.Version = "1.0.0"
+Library.Version = "1.0.1"
 Library.Name = "Takataka"
+Library.Config = {
+    AutoStart = true,      -- building the showcase on load makes execution visible
+    Debug = false,         -- verbose stage logging
+    WatchErrors = true,    -- route every runtime error to the console
+}
+
+-- Lua 5.1/Luau compatible varargs helpers (table.pack is Luau only).
+local function pack(...)
+    return { n = select("#", ...), ... }
+end
+local unpackValues = table.unpack or unpack
+
+-- utf8 is native in Roblox/Luau, but a fallback keeps text handling alive anywhere.
+local utf8Lib = nil
+pcall(function()
+    if type(utf8) == "table" then
+        utf8Lib = utf8
+    end
+end)
 
 local Util = {}
 local Theme = {}
@@ -31,6 +66,7 @@ local Motion = {}
 local Scope = {}
 local Anim = {}
 local Prim = {}
+local Diagnostics = {}
 local Layers = {}
 local Components = {}
 
@@ -71,15 +107,27 @@ function Util.lerp(a, b, alpha)
 end
 
 -- UTF-8-safe truncation: never split a multi-byte character in half.
+-- Control characters removed, invalid UTF-8 replaced, and truncation that never
+-- splits a multi-byte character — with or without the utf8 library.
 function Util.text(value, limit)
     local result = tostring(value == nil and "" or value)
     result = result:gsub("[%z\1-\8\11\12\14-\31]", "")
-    local ok, length = pcall(utf8.len, result)
-    if not ok or not length then
+    if utf8Lib then
+        local ok, length = pcall(utf8Lib.len, result)
+        if not ok or not length then
+            result = result:gsub("[\128-\255]", "?")
+        end
+    else
         result = result:gsub("[\128-\255]", "?")
     end
     if limit and #result > limit then
-        local boundary = utf8.offset(result, 0, limit + 1)
+        local boundary
+        if utf8Lib then
+            local ok, offset = pcall(utf8Lib.offset, result, 0, limit + 1)
+            if ok then
+                boundary = offset
+            end
+        end
         result = result:sub(1, (boundary or (limit + 1)) - 1)
     end
     return result
@@ -160,21 +208,30 @@ function Util.guard(callback, ...)
     if type(callback) ~= "function" then
         return true
     end
-    local args = table.pack(...)
-    local ok, failure = pcall(function()
-        callback(unpack(args, 1, args.n))
-    end)
+    local args = pack(...)
+    local ok, failure = pcall(callback, unpackValues(args, 1, args.n))
     if not ok then
-        warn("[Takataka] callback error: " .. tostring(failure))
+        Diagnostics.Report("callback", failure)
+    end
+    return ok
+end
+
+-- Same, but the console message names the control that failed.
+function Util.guardNamed(label, callback, ...)
+    if type(callback) ~= "function" then
+        return true
+    end
+    local args = pack(...)
+    local ok, failure = pcall(callback, unpackValues(args, 1, args.n))
+    if not ok then
+        Diagnostics.Report("callback \"" .. tostring(label or "anonymous") .. "\"", failure)
     end
     return ok
 end
 
 function Util.safeCall(fn, ...)
-    local args = table.pack(...)
-    local ok, a, b, c = pcall(function()
-        return fn(unpack(args, 1, args.n))
-    end)
+    local args = pack(...)
+    local ok, a, b, c = pcall(fn, unpackValues(args, 1, args.n))
     if ok then
         return true, a, b, c
     end
@@ -191,6 +248,148 @@ function Util.hit(point, object)
         and point.X <= origin.X + size.X
         and point.Y >= origin.Y
         and point.Y <= origin.Y + size.Y
+end
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- Diagnostics — every failure inside this file reaches the console.
+-- Errors always warn (deduplicated + rate limited); stage traces and skipped
+-- operations only log while debug mode is on.
+-- ══════════════════════════════════════════════════════════════════════════════
+
+Diagnostics.Debug = false
+Diagnostics.WatchErrors = true
+Diagnostics.Limit = 40
+Diagnostics.Errors = {}
+Diagnostics.Seen = {}
+Diagnostics.Hooked = false
+Diagnostics.Connection = nil
+
+function Diagnostics.Report(stage, failure)
+    local message = tostring(failure)
+    local trace = ""
+    if Diagnostics.Debug then
+        pcall(function()
+            if type(debug.traceback) == "function" then
+                trace = debug.traceback("", 2) or ""
+            end
+        end)
+    end
+    table.insert(Diagnostics.Errors, {
+        Time = os.clock(),
+        Stage = tostring(stage),
+        Message = message,
+        Trace = trace,
+    })
+    while #Diagnostics.Errors > Diagnostics.Limit do
+        table.remove(Diagnostics.Errors, 1)
+    end
+    local key = tostring(stage) .. "|" .. message
+    local now = os.clock()
+    local last = Diagnostics.Seen[key]
+    if last and (now - last) < 3 then
+        return
+    end
+    Diagnostics.Seen[key] = now
+    warn("[Takataka] " .. tostring(stage) .. ": " .. message)
+    if trace ~= "" then
+        warn(trace)
+    end
+end
+
+function Diagnostics.Stage(name, detail)
+    if not Diagnostics.Debug then
+        return
+    end
+    if detail ~= nil then
+        print("[Takataka] " .. tostring(name) .. " — " .. tostring(detail))
+    else
+        print("[Takataka] " .. tostring(name))
+    end
+end
+
+function Diagnostics.Protect(label, callback)
+    local ok, failure = pcall(callback)
+    if not ok then
+        Diagnostics.Report(label, failure)
+    end
+    return ok
+end
+
+function Diagnostics.Thread(label, callback, ...)
+    local args = pack(...)
+    return task.spawn(function()
+        local results = pack(pcall(callback, unpackValues(args, 1, args.n)))
+        if not results[1] then
+            Diagnostics.Report("thread " .. tostring(label), results[2])
+        end
+    end)
+end
+
+-- Any error raised anywhere in the game reaches the console through here.
+local function sharedEnvironment()
+    local ok, environment = pcall(function()
+        if type(getgenv) == "function" then
+            return getgenv()
+        end
+        return _G
+    end)
+    if ok and type(environment) == "table" then
+        return environment
+    end
+    return nil
+end
+
+function Diagnostics.Install()
+    if Diagnostics.Hooked or not Diagnostics.WatchErrors then
+        return false
+    end
+    -- a previous execution of this file may still hold a hook: take it over
+    -- instead of stacking a second one that would duplicate every warning
+    local environment = sharedEnvironment()
+    if environment then
+        local previous = rawget(environment, "__TakatakaDiagnostics")
+        if type(previous) == "table" and previous ~= Diagnostics and previous.Connection then
+            pcall(function()
+                previous.Connection:Disconnect()
+            end)
+            previous.Connection = nil
+            previous.Hooked = false
+        end
+    end
+    local ok, scriptContext = pcall(function()
+        return game:GetService("ScriptContext")
+    end)
+    if not ok or not scriptContext then
+        return false
+    end
+    local connected = pcall(function()
+        Diagnostics.Connection = scriptContext.Error:Connect(function(message, stack, source)
+            local origin = "unknown"
+            if source ~= nil then
+                origin = tostring(source)
+            end
+            Diagnostics.Report("runtime error (" .. origin .. ")", tostring(message) .. " " .. tostring(stack))
+        end)
+    end)
+    Diagnostics.Hooked = connected == true
+    if environment and Diagnostics.Hooked then
+        environment.__TakatakaDiagnostics = Diagnostics
+    end
+    return Diagnostics.Hooked
+end
+
+function Diagnostics.Uninstall()
+    if Diagnostics.Connection then
+        pcall(function()
+            Diagnostics.Connection:Disconnect()
+        end)
+        Diagnostics.Connection = nil
+    end
+    local environment = sharedEnvironment()
+    if environment and rawget(environment, "__TakatakaDiagnostics") == Diagnostics then
+        environment.__TakatakaDiagnostics = nil
+    end
+    Diagnostics.Hooked = false
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════
@@ -418,7 +617,10 @@ function Scope:Later(seconds, callback)
     thread = task.delay(seconds, function()
         self.Tasks[thread] = nil
         if self.Alive then
-            callback()
+            local ok, failure = pcall(callback)
+            if not ok then
+                Diagnostics.Report("delayed task", failure)
+            end
         end
     end)
     self.Tasks[thread] = true
@@ -432,7 +634,10 @@ function Scope:Run(callback)
     local thread
     thread = task.defer(function()
         if self.Alive then
-            callback()
+            local ok, failure = pcall(callback)
+            if not ok then
+                Diagnostics.Report("task", failure)
+            end
         end
         self.Tasks[thread] = nil
     end)
@@ -551,7 +756,11 @@ end
 -- Anim.To(object, goals, tweenInfo, onCompleted)
 -- Only one tween per object+property may exist; new goals cancel the old record for those keys.
 function Anim.To(object, goals, info, onCompleted, allowWhileLocked)
-    if not object or not object.Parent then
+    if not object then
+        return nil
+    end
+    if not object.Parent then
+        Diagnostics.Stage("tween skipped", tostring(object.Name) .. " has no parent")
         return nil
     end
     if Motion.Reduced and not allowWhileLocked then
@@ -1281,6 +1490,32 @@ end
 -- ══════════════════════════════════════════════════════════════════════════════
 
 Layers.Root = nil
+
+-- AbsoluteSize is (0,0) until the GUI renders its first frame, and executors can
+-- hide the ScreenGui entirely. The camera viewport is the reliable authority.
+function Layers.Measure()
+    local width, height = 0, 0
+    local ok, camera = pcall(function()
+        return workspace.CurrentCamera
+    end)
+    if ok and camera then
+        local viewport = camera.ViewportSize
+        if viewport then
+            width, height = viewport.X, viewport.Y
+        end
+    end
+    if width < 2 or height < 2 then
+        local screen = Layers.Root
+        if screen and screen.Parent then
+            local absolute = screen.AbsoluteSize
+            width, height = absolute.X, absolute.Y
+        end
+    end
+    if width < 2 or height < 2 then
+        width, height = 1280, 720
+    end
+    return Vector2.new(math.max(160, width), math.max(160, height))
+end
 Layers.Overlay = nil
 Layers.Backdrop = nil
 Layers.ModalHost = nil
@@ -1396,7 +1631,7 @@ function Notify.Layout()
     if not Layers.NotifyHost then
         return
     end
-    local host = Layers.Root and Layers.Root.AbsoluteSize or Vector2.new(1280, 720)
+    local host = Layers.Measure()
     local width = math.min(352, math.max(200, host.X - 32))
     local y = 16
     for _, item in ipairs(Notify.Items) do
@@ -1510,7 +1745,7 @@ function Notify.Create(config)
         end)
     end
 
-    local host = Layers.Root and Layers.Root.AbsoluteSize or Vector2.new(1280, 720)
+    local host = Layers.Measure()
     item.Root.Position = UDim2.fromOffset(host.X - width - 16 + 24, 16)
     table.insert(Notify.Items, item)
     Notify.Layout()
@@ -1526,7 +1761,7 @@ function Notify.Drain()
     if not Layers.NotifyHost then
         return
     end
-    local host = Layers.Root and Layers.Root.AbsoluteSize or Vector2.new(1280, 720)
+    local host = Layers.Measure()
     Notify.Limit = Util.clamp(math.floor(host.Y / 120), 1, 4)
     while #Notify.Items < Notify.Limit and #Notify.Queue > 0 do
         Notify.Create(table.remove(Notify.Queue, 1))
@@ -1603,7 +1838,7 @@ function Tooltip.Show(anchor, text)
     label.TextYAlignment = Enum.TextYAlignment.Center
     Prim.place(label, 8, 0, width - 16, height)
 
-    local host = Layers.Root.AbsoluteSize
+    local host = Layers.Measure()
     local position = anchor.AbsolutePosition
     local size = anchor.AbsoluteSize
     local x = Util.clamp(position.X + size.X / 2 - width / 2, 8, math.max(8, host.X - width - 8))
@@ -1689,7 +1924,7 @@ function Context.Open(items, position)
     menu.Root.Active = true
     Prim.corner(menu.Root, Theme.Radius.Medium)
     Prim.stroke(menu.Root, Theme.Color.StrokeStrong, 1, 0.2)
-    local host = Layers.Root.AbsoluteSize
+    local host = Layers.Measure()
     local x = Util.clamp(position.X, 8, math.max(8, host.X - width - 8))
     local y = Util.clamp(position.Y, 8, math.max(8, host.Y - height - 8))
     menu.Root.Position = UDim2.fromOffset(x, y + 6)
@@ -2194,7 +2429,7 @@ function Components.Button(scope, parent, config)
             return
         end
         if config.Callback then
-            Util.guard(config.Callback, button)
+            Util.guardNamed(config.Name, config.Callback, button)
         end
     end)
     if config.Tooltip then
@@ -2289,7 +2524,7 @@ function Components.IconButton(scope, parent, config)
     scope:Connect(button.Root.Activated, function()
         if button.Disabled then return end
         if config.Callback then
-            Util.guard(config.Callback, button)
+            Util.guardNamed(config.Name, config.Callback, button)
         end
     end)
     if config.Tooltip then
@@ -2368,7 +2603,7 @@ function Components.Toggle(scope, parent, config)
         self.Value = value
         self:Apply()
         if not silent and config.Callback then
-            Util.guard(config.Callback, value)
+            Util.guardNamed(config.Name, config.Callback, value)
         end
     end
 
@@ -2442,7 +2677,7 @@ function Components.Checkbox(scope, parent, config)
         self.Value = value
         self:Apply()
         if not silent and config.Callback then
-            Util.guard(config.Callback, value)
+            Util.guardNamed(config.Name, config.Callback, value)
         end
     end
     function box:Get() return self.Value end
@@ -2499,7 +2734,10 @@ function Components.Badge(scope, parent, config)
     badge.Label.Size = UDim2.new(1, -textX - 10, 1, 0)
     badge.Label.Position = UDim2.fromOffset(textX, 0)
     function badge:SetText(value)
-        self.Label.Text = Util.text(value, 20)
+        local label = Util.text(value, 20)
+        self.Label.Text = label
+        local measured = Util.measureWidth(label, Theme.Type.Micro, Theme.Font.Bold) + (self.Icon and 30 or 20)
+        self.Root.Size = UDim2.fromOffset(math.max(measured, 24), self.Root.Size.Y.Offset)
     end
     function badge:SetType(value)
         local nextStyle = BADGE_STYLE[value] or BADGE_STYLE.neutral
@@ -2644,7 +2882,7 @@ function Components.Progress(scope, parent, config)
         self.Value = value
         Anim.To(self.Fill, { Size = UDim2.fromScale(value, 1) }, Motion.Fast)
         if not silent and config.Callback then
-            Util.guard(config.Callback, value)
+            Util.guardNamed(config.Name, config.Callback, value)
         end
     end
     function progress:Get() return self.Value end
@@ -2878,7 +3116,7 @@ function Components.Segmented(scope, parent, config)
         self.Value = value
         self:Apply(true)
         if not silent and config.Callback then
-            Util.guard(config.Callback, value)
+            Util.guardNamed(config.Name, config.Callback, value)
         end
     end
     function group:Get() return self.Value end
@@ -2996,7 +3234,7 @@ function Popover.Open(config)
     Popover.Close(true)
     local host = Layers.Root
     local anchor = config.Anchor
-    local hostSize = host.AbsoluteSize
+    local hostSize = Layers.Measure()
     local origin = host.AbsolutePosition
     local anchorPosition = anchor.AbsolutePosition - origin
     local anchorSize = anchor.AbsoluteSize
@@ -3170,7 +3408,7 @@ function Components.Slider(scope, parent, config)
         self.Value = value
         self:Apply()
         if not silent and config.Callback then
-            Util.guard(config.Callback, value)
+            Util.guardNamed(config.Name, config.Callback, value)
         end
     end
 
@@ -3519,7 +3757,7 @@ function Components.Dropdown(scope, parent, config)
             Anchor = self.Root,
             Width = math.max(180, self.Root.AbsoluteSize.X),
             Height = desiredHeight,
-            MaxHeight = math.min(360, math.max(120, Layers.Root.AbsoluteSize.Y - 40)),
+            MaxHeight = math.min(360, math.max(120, Layers.Measure().Y - 40)),
             Fill = function(menu, body, width, maxHeight)
                 buildMenu(menu, body, width, maxHeight)
             end,
@@ -3548,7 +3786,7 @@ function Components.Dropdown(scope, parent, config)
                         table.insert(list, entry.Value)
                     end
                 end
-                Util.guard(config.Callback, list)
+                Util.guardNamed(config.Name, config.Callback, list)
             end
             -- keep the menu open for multi-select, but refresh the check marks
             if Popover.Current then
@@ -3605,7 +3843,7 @@ function Components.Dropdown(scope, parent, config)
             self.Values = values
             self:Apply()
             if not silent and config.Callback then
-                Util.guard(config.Callback, value)
+                Util.guardNamed(config.Name, config.Callback, value)
             end
             return
         end
@@ -3615,7 +3853,7 @@ function Components.Dropdown(scope, parent, config)
         self.Value = value
         self:Apply()
         if not silent and config.Callback then
-            Util.guard(config.Callback, value)
+            Util.guardNamed(config.Name, config.Callback, value)
         end
     end
 
@@ -3808,10 +4046,17 @@ function Components.Textbox(scope, parent, config)
 
     function textbox:SetValue(value, silent)
         local text = tostring(value == nil and "" or value)
+        if self.Numeric then
+            local number = tonumber(text)
+            if number then
+                number = math.max(config.Min or number, math.min(config.Max or number, number))
+                text = tostring(number)
+            end
+        end
         self.Value = text
         self.Input.Text = text
         if not silent and config.Callback then
-            Util.guard(config.Callback, self.Numeric and tonumber(text) or text)
+            Util.guardNamed(config.Name, config.Callback, self.Numeric and tonumber(text) or text)
         end
     end
     function textbox:Get()
@@ -4118,7 +4363,7 @@ function Components.SelectRow(scope, parent, config)
         self.Value = value
         self:Apply()
         if not silent and config.Callback then
-            Util.guard(config.Callback, value)
+            Util.guardNamed(config.Name, config.Callback, value)
         end
     end
     function select:Get() return self.Value end
@@ -5150,7 +5395,7 @@ function Modal.Layout()
     if not config or not Layers.ModalHost then
         return
     end
-    local host = Layers.Root.AbsoluteSize
+    local host = Layers.Measure()
     local desired = config.Width or MODAL_WIDTH[config.Size or "medium"] or 420
     local width = math.min(desired, math.max(220, host.X - 32))
     local maxHeight = math.max(160, host.Y - 40)
@@ -5162,8 +5407,9 @@ function Modal.Layout()
     local actionHeight = Modal.Actions and 56 or 20
     local descriptionHeight = Modal.MeasuredText or 0
     local height = math.min(maxHeight, 22 + headerHeight + descriptionHeight + bodyHeight + actionHeight + (Modal.Icon and 44 or 0))
-    Modal.Root.Size = UDim2.fromOffset(width, height)
+    Modal.Root.Size = UDim2.fromScale(1, 1)
     Modal.Frame.Size = UDim2.fromOffset(width, height)
+    Modal.Frame.Position = UDim2.fromOffset(math.floor(host.X / 2), math.floor(host.Y / 2))
     local y = 22
     if Modal.Icon then
         Prim.place(Modal.Icon.Root, width / 2 - 22, y, 44, 44)
@@ -5332,7 +5578,7 @@ function Modal.Open(config)
     end
 
     -- measure text blocks against the final width
-    local host = Layers.Root.AbsoluteSize
+    local host = Layers.Measure()
     local width = math.min(config.Width or MODAL_WIDTH[config.Size or "medium"] or 420, math.max(220, host.X - 32))
     local inner = width - 40
     if Modal.Text.Text ~= "" then
@@ -5341,10 +5587,12 @@ function Modal.Open(config)
     if Modal.Body and config.Body then
         Modal.MeasuredBody = Util.finite(config.BodyHeight, 0)
         if config.BuildBody then
+            -- the scope is handed to the builder so custom bodies can create
+            -- real components exactly like a page section does
             local built = Util.safeCall(config.BuildBody, Modal.Body, inner, function(height)
                 Modal.MeasuredBody = math.max(Modal.MeasuredBody, height)
                 Modal.Layout()
-            end)
+            end, Modal.Scope)
             if not built then
                 Modal.MeasuredBody = Util.finite(config.BodyHeight, 120)
             end
@@ -5573,6 +5821,33 @@ function Components.Section(scope, parent, config)
 
     function section:AddProgress(value)
         return self:Add(Components.Progress(scope, section.Body, value))
+    end
+
+    -- A status chip row: keeps its intrinsic width and stays at the left edge.
+    function section:AddBadge(value)
+        value = value or {}
+        local height = value.Height or 22
+        local badge = Components.Badge(scope, section.Body, value)
+        badge.Height = height + 8
+        badge.Layout = function(_, width)
+            badge.Root.Position = UDim2.fromOffset(0, 4)
+            badge.Root.Size = UDim2.fromOffset(math.min(badge.Root.Size.X.Offset, width), height)
+            return badge.Height
+        end
+        return self:Add(badge)
+    end
+
+    -- A placeholder row for content that is still loading.
+    function section:AddSkeleton(value)
+        value = value or {}
+        local height = value.Height or 40
+        local skeleton = Components.Skeleton(scope, section.Body, value)
+        skeleton.Height = height
+        skeleton.Layout = function(_, width)
+            skeleton.Root.Size = UDim2.fromOffset(width, height)
+            return height
+        end
+        return self:Add(skeleton)
     end
 
     function section:AddMetadata(value)
@@ -6301,6 +6576,8 @@ end
 function WindowClass:BindResponsive()
     self.Scope:Connect(self.Root:GetPropertyChangedSignal("AbsoluteSize"), function()
         self:Layout()
+        Notify.Layout()
+        Popover.Close()
     end)
     self.Scope:Connect(self.Root:GetPropertyChangedSignal("AbsolutePosition"), function()
         self:Layout()
@@ -7008,6 +7285,16 @@ function Library:CreateWindow(config)
             Anim.To(window.Window, { GroupTransparency = 0 }, Motion.Emphasized)
         end
     end)
+    -- AbsoluteSize is unreliable on the very first pass; one extra layout after the
+    -- GUI has rendered guarantees a correctly sized window even if no resize fires.
+    window.Scope:Run(function()
+        task.defer(function()
+            if not window.Destroyed then
+                window:Layout()
+                Diagnostics.Stage("layout", string.format("%dx%d", window.Design.Width, window.Design.Height))
+            end
+        end)
+    end)
     return window
 end
 
@@ -7102,6 +7389,57 @@ function Library:SetTheme(patch)
     end
 end
 
+function Library:SetDebug(value)
+    Diagnostics.Debug = value == true
+    self.Config.Debug = Diagnostics.Debug
+    if Diagnostics.Debug then
+        Diagnostics.Stage("debug", "verbose logging enabled")
+    end
+    return self
+end
+
+function Library:GetErrors()
+    return Diagnostics.Errors
+end
+
+function Library:PrintDiagnostics()
+    local count = #Diagnostics.Errors
+    print("[Takataka] diagnostics — errors: " .. tostring(count))
+    for index, entry in ipairs(Diagnostics.Errors) do
+        print(string.format("  %d) [%s] %s", index, entry.Stage, entry.Message))
+    end
+    if count == 0 then
+        print("  none")
+    end
+    return count
+end
+
+function Library:SetErrorWatch(value)
+    Diagnostics.WatchErrors = value ~= false
+    self.Config.WatchErrors = Diagnostics.WatchErrors
+    if Diagnostics.WatchErrors then
+        Diagnostics.Install()
+    else
+        Diagnostics.Uninstall()
+    end
+    return self
+end
+
+function Library:SetAutoStart(value)
+    self.Config.AutoStart = value ~= false
+    if self.Config.AutoStart then
+        if not (self.Window and not self.Window.Destroyed) then
+            self:AutoStart()
+        end
+    elseif self.AutoStartThread then
+        pcall(function()
+            task.cancel(self.AutoStartThread)
+        end)
+        self.AutoStartThread = nil
+    end
+    return self
+end
+
 function Library:GetScale()
     return self.Window and self.Window.UserScale or 1
 end
@@ -7113,22 +7451,60 @@ function Library:SetScale(value)
     end
 end
 
+-- Shown automatically on load so executing the file always produces a window.
+function Library.AutoStart()
+    if Library.Config.AutoStart == false then
+        return nil
+    end
+    local environment = (type(getgenv) == "function" and getgenv()) or _G
+    if type(environment) == "table" and environment.TAKATAKA_NO_AUTOSTART == true then
+        return nil
+    end
+    Diagnostics.Stage("autostart", "building the showcase window")
+    Library.AutoStartThread = Diagnostics.Thread("autostart", function()
+        task.wait(0.15)
+        if Library.Config.AutoStart == false then
+            return
+        end
+        if Library.Window and not Library.Window.Destroyed then
+            return
+        end
+        local ok, failure = pcall(function()
+            Library:Demo()
+        end)
+        if not ok then
+            Diagnostics.Report("autostart showcase", failure)
+        end
+    end)
+    return Library.AutoStartThread
+end
+
 -- ── bootstrap ────────────────────────────────────────────────────────────────
 
+Diagnostics.Debug = Library.Config.Debug == true
+Diagnostics.WatchErrors = Library.Config.WatchErrors ~= false
+Diagnostics.Install()
+
+local BOOT_STAGE = "environment"
 local BOOT_OK, BOOT_ERROR = pcall(function()
     local environment = (type(getgenv) == "function" and getgenv()) or _G
     if type(environment) == "table" then
         local previous = rawget(environment, "__TakatakaUi")
         if type(previous) == "table" and previous.__TakatakaOwned and type(previous.DestroyWindow) == "function" then
+            Diagnostics.Stage("re-execution", "removing the previous instance")
             pcall(previous.DestroyWindow, previous)
         end
         environment.__TakatakaUi = Library
     end
     Library.__TakatakaOwned = true
+    Diagnostics.Stage("bootstrap", "ready (v" .. tostring(Library.Version) .. ")")
+    BOOT_STAGE = "autostart"
+    Library.AutoStart()
 end)
 
 if not BOOT_OK then
-    warn("[Takataka] bootstrap error: " .. tostring(BOOT_ERROR))
+    warn("[Takataka] bootstrap failed at stage '" .. tostring(BOOT_STAGE) .. "': " .. tostring(BOOT_ERROR))
+    Diagnostics.Report("bootstrap (" .. tostring(BOOT_STAGE) .. ")", BOOT_ERROR)
 end
 
 -- ══════════════════════════════════════════════════════════════════════════════
@@ -7731,4 +8107,3 @@ end
 
 -- The library table is the module result.
 return Library
-
