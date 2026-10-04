@@ -7,6 +7,9 @@
 -- Same Id replaces the previous window, including listeners, across library re-execution.
 -- Window > Tab > SubTab > controls remains the public hierarchy; Settings is a separate overlay.
 -- CreateWindow also accepts Theme, Language, Settings=false, Autoload=false, GameName, Filesystem.
+-- ManualSize=true uses FluentModded.lua's 500x480; false/nil preserves the existing Size/default.
+-- Toggle Locked=true stays OFF and opens a Premium callout; SetLocked(false) restores interaction.
+-- OnBuyPremium(toggle, window), on Window or Toggle, connects your purchase flow; it never auto-unlocks.
 -- Themes: Neron Dark / Graphite / OLED / Light; locales: English / Spanish / Russian / Portuguese.
 -- Stateful controls with string Flag are saved unless Persistent=false. No flag is generated implicitly.
 -- Window:CreateProfile/SaveProfile/LoadProfile(name [, silent]) return success, error or load counts.
@@ -73,6 +76,8 @@ local T = {
     Geometry = {
         Width = 872,
         Height = 548,
+        ManualWidth = 500, -- UIs/FluentModded.lua CreateWindow Size
+        ManualHeight = 480,
         Sidebar = 234,
         Header = 64,
         Strip = 40,
@@ -94,6 +99,9 @@ local T = {
         ToggleHeight = 14,
         ToggleKnob = 10,
         ToggleInset = 2,
+        PremiumBadge = 56,
+        PremiumWidth = 290,
+        PremiumHeight = 164,
         Swatch = 17,
         Scrollbar = 9,
         ScrollInset = 10,
@@ -464,6 +472,13 @@ function Icons.make(parent, name, size, color, w)
             l(0.25, 0.75, 0.73, 0.27)
             l(0.32, 0.80, 0.80, 0.32)
             l(0.25, 0.75, 0.20, 0.85)
+        elseif name == "lock" then
+            r(0.5, 0.30, 0.18)
+            l(0.24, 0.42, 0.76, 0.42)
+            l(0.76, 0.42, 0.76, 0.84)
+            l(0.76, 0.84, 0.24, 0.84)
+            l(0.24, 0.84, 0.24, 0.42)
+            l(0.5, 0.57, 0.5, 0.69)
         elseif name == "folder" then
             l(0.15, 0.27, 0.40, 0.27)
             l(0.4, 0.27, 0.50, 0.38)
@@ -645,10 +660,11 @@ function Overlay:Place()
     y = math.clamp(y, 8, math.max(8, view.Y - height - 8))
     a.holder.Position = UDim2.fromOffset(x, y)
 end
-function Overlay:Open(owner, anchor, width, height, build)
+function Overlay:Open(owner, anchor, width, height, build, allowLocked)
     self:Close(true)
     local w = self.w
-    if w.destroyed or not w.visible or w.searchOpen or not owner:_usable() then
+    local usable = owner:_usable() or (allowLocked and owner.state.Locked and owner._available and owner:_available())
+    if w.destroyed or not w.visible or w.searchOpen or not usable then
         return
     end
     local bag = Maid.new(w.motion)
@@ -1556,6 +1572,7 @@ function Components.row(page, config, kind)
         config = config,
         state = {
             Disabled = config.Disabled == true,
+            Locked = kind == "Toggle" and config.Locked == true,
             Visible = config.Visible ~= false,
             Hovered = false,
             Pressed = false,
@@ -1647,7 +1664,7 @@ function Components.row(page, config, kind)
     w:_indexChanged()
     return self
 end
-function Control:_usable()
+function Control:_available()
     return not self.destroyed
         and (not self.inlineOwner or self.inlineOwner:_usable())
         and not self.state.Disabled
@@ -1665,6 +1682,9 @@ function Control:_usable()
         and (self.page.system or self.window.activeTab == self.page.tab)
         and (self.page.system or self.page.tab.activeSub == self.page)
 end
+function Control:_usable()
+    return not self.state.Locked and self:_available()
+end
 function Control:_layout()
     if self.destroyed then
         return
@@ -1680,7 +1700,8 @@ function Control:_layout()
         )
         return
     end
-    local narrow = self.window.compact
+    local width = self.row.AbsoluteSize.X / self.window.scale
+    local narrow = self.window.compact or (self.window.manualSize and width < 400)
     local hasDesc = self.description ~= ""
     local h = T.Geometry.Row
     local descriptionHeight = 0
@@ -1691,7 +1712,6 @@ function Control:_layout()
         descriptionHeight = math.ceil(lines)
         h = math.max(h, descriptionHeight + 44)
     end
-    local width = self.row.AbsoluteSize.X / self.window.scale
     local laneWidth = math.min(T.Geometry.ControlLane, math.max(130, width * 0.38))
     if narrow then
         h = hasDesc and math.max(106, descriptionHeight + 82) or 90
@@ -1859,6 +1879,9 @@ function Control:SetName(name)
     if self.actionLabel and not self.config.Text then
         self.actionLabel.Text = self.name
     end
+    if self.premiumBadge then
+        self:_layout()
+    end
     return self
 end
 function Control:SetDescription(text)
@@ -1926,6 +1949,11 @@ function Components.circle(parent, diameter, color)
     return f
 end
 function SubTab:AddToggle(config)
+    config = config or {}
+    assert(
+        config.OnBuyPremium == nil or type(config.OnBuyPremium) == "function",
+        "Neron OnBuyPremium expects a function"
+    )
     local self = Components.row(self, config, "Toggle")
     self.track = U.frame(self.lane, {
         Name = "SwitchTrack",
@@ -1945,16 +1973,62 @@ function SubTab:AddToggle(config)
         Size = UDim2.fromOffset(44, 40),
         ZIndex = self.lane.ZIndex + 3,
     })
+    function self:_premiumChrome()
+        if self.premiumBadge then
+            return
+        end
+        self.lockIcon = Icons.make(self.lane, "lock", 12, self.window.theme.TextMuted, self.window)
+        self.lockIcon.AnchorPoint = Vector2.new(1, 0.5)
+        self.lockIcon.Position = UDim2.new(1, -T.Geometry.Toggle - 10, 0.5, 0)
+        self.premiumBadge = U.label(self.row, "PREMIUM", 9, self.window.theme.Accent, {
+            Name = "PremiumBadge",
+            Size = UDim2.fromOffset(T.Geometry.PremiumBadge, 18),
+            TextXAlignment = Enum.TextXAlignment.Center,
+            Font = Enum.Font.GothamMedium,
+            ZIndex = self.lane.ZIndex,
+        })
+        U.corner(self.premiumBadge, T.Radius.Input)
+        self.premiumEdge = U.stroke(self.premiumBadge, self.window.theme.Accent, 1)
+        self.premiumEdge.Transparency = 0.45
+    end
+    function self:layoutVisual()
+        if not self.premiumBadge then
+            return
+        end
+        local available = self.label.Size.X.Offset
+        local badge = T.Geometry.PremiumBadge
+        local text = S.Text:GetTextSize(self.name, T.Type.ElementTitle, Enum.Font.GothamBold, Vector2.new(10000, 20)).X
+        local x = math.min(text + 10, math.max(0, available - badge))
+        self.premiumBadge.Position = UDim2.fromOffset(T.Geometry.LabelInset + x, self.label.Position.Y.Offset + 1)
+        if self.state.Locked then
+            self.label.Size = UDim2.fromOffset(math.max(1, x - 10), 20)
+        end
+    end
     function self:renderVisual()
         local w, state = self.window, self.state
         local on = self.value == true
+        local inactive = state.Disabled or state.Locked
         local track = state.Disabled and w.theme.InputBackground
-            or (on and w.theme.ToggleTrackOn or w.theme.ToggleTrackOff)
-        local knob = state.Disabled and w.theme.TextDisabled or (on and w.theme.ToggleKnobOn or w.theme.ToggleKnobOff)
-        if not state.Disabled and state.Hovered then
+            or (state.Locked and w.theme.DropdownBackground or (on and w.theme.ToggleTrackOn or w.theme.ToggleTrackOff))
+        local knob = state.Disabled and w.theme.TextDisabled
+            or (state.Locked and w.theme.TextSecondary or (on and w.theme.ToggleKnobOn or w.theme.ToggleKnobOff))
+        if state.Locked then
+            self:_premiumChrome()
+        end
+        if self.premiumBadge then
+            self.premiumBadge.Visible = state.Locked
+            self.lockIcon.Visible = state.Locked
+            self.premiumBadge.TextColor3 = state.Disabled and w.theme.TextDisabled or w.theme.Accent
+            self.premiumEdge.Color = w.theme.Accent
+            Icons.color(
+                self.lockIcon,
+                state.Disabled and w.theme.TextDisabled or w.theme.Accent:Lerp(w.theme.TextSecondary, 0.4)
+            )
+        end
+        if not inactive and state.Hovered then
             track = track:Lerp(w.theme.TextPrimary, 0.035)
         end
-        if not state.Disabled and state.Pressed then
+        if not inactive and state.Pressed then
             knob = knob:Lerp(track, 0.12)
         end
         local inset = T.Geometry.ToggleInset + T.Geometry.ToggleKnob / 2
@@ -1965,18 +2039,59 @@ function SubTab:AddToggle(config)
         })
     end
     function self:Set(value, silent)
-        return self:_commit(value == true, silent)
+        return self:_commit(not self.state.Locked and value == true, silent)
+    end
+    function self:GetLocked()
+        return self.state.Locked
+    end
+    function self:SetLocked(value, silent)
+        if self.destroyed or self.state.Locked == (value == true) then
+            return self
+        end
+        self.state.Locked = value == true
+        self.config.Locked = self.state.Locked
+        self:Close()
+        self.window.input:Cancel(self)
+        self.state.Pressed = false
+        self.window.pressed[self] = nil
+        if self.state.Locked then
+            self:Set(false, silent)
+        end
+        for _, attached in ipairs(self.attachments) do
+            attached:Close()
+            attached:_render()
+        end
+        self:_layout()
+        self:_render()
+        return self
+    end
+    function self:OpenPremium()
+        if self.state.Locked and self:_available() then
+            local width = math.min(
+                T.Geometry.PremiumWidth,
+                math.max(180, self.window.stage.AbsoluteSize.X / self.window.scale - 16)
+            )
+            self.window.overlay:Open(self, self.row, width, T.Geometry.PremiumHeight, function(group, bag)
+                Components.premium(self, group, bag)
+            end, true)
+        end
+        return self
     end
     local function activate()
-        if self:_usable() then
+        if self:_available() then
             self.state.Pressed = false
-            self:Set(not self.value)
+            self.window.pressed[self] = nil
+            if self.state.Locked then
+                self:OpenPremium()
+            else
+                self:Set(not self.value)
+            end
         end
     end
     U.connect(self.bag, self.row.Activated, activate)
     U.connect(self.bag, self.hitbox.Activated, activate)
     U.connect(self.bag, self.hitbox.InputBegan, function(event)
-        if U.primary(event) and self:_usable() then
+        if U.primary(event) and self:_available() then
             self.state.Pressed = true
             self.window.pressed[self] = event
             self:_render()
@@ -1993,8 +2108,118 @@ function SubTab:AddToggle(config)
         self.ColorPicker = picker
         return picker
     end
-    self:Set(config and config.Default == true, true)
+    self:Set(config.Default == true, true)
+    self:_layout()
     return self
+end
+function Components.premium(control, group, bag)
+    local w = control.window
+    local function available()
+        local active = w.overlay.active
+        return not bag.dead
+            and control.state.Locked
+            and control.state.Open
+            and control:_available()
+            and active
+            and active.owner == control
+            and active.group == group
+    end
+    local icon = Icons.make(group, "lock", 18, w.theme.Accent, w)
+    icon.Position = UDim2.fromOffset(14, 15)
+    SettingsUI.text(w, group, "PremiumRequired", {
+        Name = "PremiumHeading",
+        Position = UDim2.fromOffset(42, 12),
+        Size = UDim2.new(1, -56, 0, 24),
+        Font = Enum.Font.GothamBold,
+        TextSize = 14,
+    }, "TextPrimary")
+    local copy = U.label(
+        group,
+        string.format(w:Translate("UnlockPremiumFeature"), control.name),
+        T.Type.Value,
+        w.theme.SystemText,
+        {
+            Position = UDim2.fromOffset(14, 46),
+            Size = UDim2.new(1, -28, 0, 54),
+            TextWrapped = true,
+            TextYAlignment = Enum.TextYAlignment.Top,
+        }
+    )
+    U.bind(w, copy, "TextColor3", "SystemText")
+    local buy = U.button(group, {
+        Name = "BuyPremium",
+        Position = UDim2.new(0, 14, 1, -54),
+        Size = UDim2.new(1, -28, 0, 40),
+        BackgroundTransparency = 0,
+        BackgroundColor3 = w.theme.Accent,
+        ZIndex = group.ZIndex + 2,
+    })
+    U.corner(buy, T.Radius.Button)
+    SettingsUI.text(w, buy, "BuyPremium", {
+        TextXAlignment = Enum.TextXAlignment.Center,
+        Font = Enum.Font.GothamMedium,
+    }, "ButtonText")
+    local owner = { state = { Hovered = false, Pressed = false } }
+    function owner:_render()
+        if bag.dead then
+            return
+        end
+        Icons.color(icon, w.theme.Accent)
+        w.motion:To(buy, T.Motion.Micro, {
+            BackgroundColor3 = self.state.Pressed and w.theme.AccentPressed
+                or (self.state.Hovered and w.theme.AccentHover or w.theme.Accent),
+        })
+    end
+    w.systemRenders = w.systemRenders or {}
+    w.systemRenders[buy] = owner
+    bag:Add(function()
+        w.systemRenders[buy] = nil
+        w.pressed[owner] = nil
+    end)
+    U.connect(bag, buy.MouseEnter, function()
+        owner.state.Hovered = true
+        owner:_render()
+    end)
+    U.connect(bag, buy.MouseLeave, function()
+        owner.state.Hovered, owner.state.Pressed = false, false
+        owner:_render()
+    end)
+    U.connect(bag, buy.InputBegan, function(event)
+        if U.primary(event) and available() then
+            owner.state.Pressed = true
+            w.pressed[owner] = event
+            owner:_render()
+        end
+    end)
+    U.connect(bag, buy.InputEnded, function(event)
+        if U.primary(event) then
+            owner.state.Pressed = false
+            owner:_render()
+        end
+    end)
+    U.connect(bag, buy.Activated, function()
+        if not available() then
+            return
+        end
+        owner.state.Pressed = false
+        w.pressed[owner] = nil
+        w.overlay:Close()
+        local callback = control.config.OnBuyPremium or w.onBuyPremium
+        if type(callback) ~= "function" then
+            w:Notify("PremiumRequired", w:Translate("PurchaseNotConfigured"), "Warning")
+            return
+        end
+        local ok, err = xpcall(function()
+            callback(control, w)
+        end, debug.traceback)
+        if not ok then
+            U.warn("Buy Premium", err)
+            if not w.destroyed then
+                w:Notify("Failed", nil, "Danger")
+            end
+        end
+    end)
+    owner:_render()
 end
 function Components.numeric(config)
     local min = U.finite(config.Min, 0)
@@ -3094,7 +3319,12 @@ function Library:CreateWindow(config)
         config.Filesystem == nil or type(config.Filesystem) == "table",
         "Neron Filesystem expects an API adapter table"
     )
-    local size = config.Size
+    assert(
+        config.OnBuyPremium == nil or type(config.OnBuyPremium) == "function",
+        "Neron OnBuyPremium expects a function"
+    )
+    local size = config.ManualSize == true and Vector2.new(T.Geometry.ManualWidth, T.Geometry.ManualHeight)
+        or config.Size
     local baseWidth = typeof(size) == "Vector2" and U.finite(size.X, 0) or T.Geometry.Width
     local baseHeight = typeof(size) == "Vector2" and U.finite(size.Y, 0) or T.Geometry.Height
     assert(baseWidth >= 320 and baseHeight >= 320, "Neron window Size must be at least 320x320")
@@ -3169,6 +3399,8 @@ function Library:CreateWindow(config)
         pressed = setmetatable({}, { __mode = "k" }),
         name = tostring(config.Name or "NERON"),
         searchEnabled = config.Search ~= false,
+        manualSize = config.ManualSize == true,
+        onBuyPremium = config.OnBuyPremium,
     }, Window)
     w.bag.motion = w.motion
     registry[id] = w
@@ -3731,6 +3963,20 @@ Locale.rows = {
     Themes = { "Themes", "Temas", "Темы", "Temas" },
     Language = { "Language", "Idioma", "Язык", "Idioma" },
     General = { "General", "General", "Общие", "Geral" },
+    PremiumRequired = { "Premium Required", "Se requiere Premium", "Требуется Premium", "Premium necessário" },
+    BuyPremium = { "Buy Premium", "Comprar Premium", "Купить Premium", "Comprar Premium" },
+    UnlockPremiumFeature = {
+        "Unlock %s with Premium.",
+        "Desbloquea %s con Premium.",
+        "Разблокируйте %s с Premium.",
+        "Desbloqueie %s com Premium.",
+    },
+    PurchaseNotConfigured = {
+        "Premium purchase is not configured.",
+        "La compra de Premium no está configurada.",
+        "Покупка Premium не настроена.",
+        "A compra do Premium não está configurada.",
+    },
     Close = { "Close", "Cerrar", "Закрыть", "Fechar" },
     Create = { "Create", "Crear", "Создать", "Criar" },
     Save = { "Save", "Guardar", "Сохранить", "Salvar" },
