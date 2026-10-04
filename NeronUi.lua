@@ -3,6 +3,7 @@
 -- Set(value [, silent]) fires Callback only on change. Defaults are silent.
 -- Range:Set(low, high [, silent]); Color:Set(color [, silent]); callbacks receive snapshots.
 -- Numeric controls: Step/Increment, Prefix, Suffix, Rounding. Values are finite and clamped.
+-- Textbox Numeric=true restricts editing to a finite signed decimal while preserving Textbox string callbacks.
 -- Parent may be supplied for Studio. Otherwise protected UI -> CoreGui -> PlayerGui.
 -- Same Id replaces the previous window, including listeners, across library re-execution.
 -- Window > Tab > SubTab > controls remains the public hierarchy; Settings is a separate overlay.
@@ -13,6 +14,7 @@
 -- Desktop automatic Size is912x543; mobile defaults unchanged.
 -- Tooltips/Tooltip/ToolTip provide hover/hold hints. Explicit sizing takes precedence over saved dimensions.
 -- Premium={Active=boolean,ExpiresAt=UnixSeconds,Plan=string}; SetPremiumStatus updates Settings > General.
+-- ThemeTransition supports spatial left/right theme sweeps with reversible control micro-interactions; ReducedMotion is available.
 -- Premium is external display state, never a saved entitlement or automatic unlock.
 -- Toggle Locked=true stays OFF and opens a Premium callout; SetLocked(false) restores interaction.
 -- OnBuyPremium(toggle, window), on Window or Toggle, connects your purchase flow; it never auto-unlocks.
@@ -440,10 +442,11 @@ function U.warn(name, err)
 end
 
 -- Native vector icons are the deterministic fallback. Asset ids/registry entries override them.
--- Geometry is normalized to a 24x24/Lucide-like visual grid and rendered through Neron's existing Frame/UIStroke pipeline.
+-- Geometry is normalized from Lucide's canonical 24x24, stroke-2, round-cap/round-join language
+-- and rendered through Neron's existing Frame/UIStroke pipeline; no runtime HTTP or image dependency is used.
 function Icons.line(parent, x1, y1, x2, y2, color, width)
     local dx, dy = x2 - x1, y2 - y1
-    return U.new("Frame", {
+    local line = U.new("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale((x1 + x2) / 2, (y1 + y2) / 2),
         Size = UDim2.new(math.sqrt(dx * dx + dy * dy), 0, 0, width or 1.4),
@@ -452,6 +455,10 @@ function Icons.line(parent, x1, y1, x2, y2, color, width)
         BackgroundColor3 = color,
         ZIndex = parent.ZIndex,
     }, parent)
+    -- Lucide uses round caps/joins. A tiny UICorner keeps Neko's Frame renderer while
+    -- matching that visual contract at the 12/14 px sizes used by SubTabs/Tabs.
+    U.corner(line, 100)
+    return line
 end
 function Icons.ring(parent, x, y, r, color, width)
     local f = U.new("Frame", {
@@ -475,7 +482,8 @@ function Icons.poly(parent, points, color, width, closed)
     end
 end
 function Icons.arc(parent, cx, cy, r, a1, a2, color, width, steps)
-    steps = steps or 6
+    -- A minimum of eight chords avoids visibly faceted Lucide curves at small sizes.
+    steps = math.max(steps or 8, 8)
     local px, py
     for i = 0, steps do
         local t = a1 + (a2 - a1) * (i / steps)
@@ -502,8 +510,15 @@ local function copy(src)
     for _, v in ipairs(src) do out[#out+1] = v end
     return out
 end
-local NativeIcons = {}
-local function define(name, commands) NativeIcons[name] = commands end
+local NativeIcons, IconMeta = {}, {}
+local function define(name, commands, meta)
+    assert(type(name) == "string" and NativeIcons[name] == nil, "Neron duplicate native icon: " .. tostring(name))
+    assert(type(commands) == "table" and #commands > 0, "Neron icon geometry is empty: " .. tostring(name))
+    NativeIcons[name] = commands
+    if meta then
+        IconMeta[name] = meta
+    end
+end
 local pi = math.pi
 
 local function gear(teeth)
@@ -548,7 +563,7 @@ local function coinStack()
 end
 
 -- Core / automation
-define("settings", gear(8))
+define("settings", gear(8), {scale=.98})
 define("cog", append(gear(6), {iconRing(.5,.5,.07)}))
 define("wrench", {iconArc(.35,.3,.16,-.5,2.2,6),iconLine(.43,.42,.76,.75),iconRing(.78,.78,.07)})
 define("hammer", {iconPoly({{.22,.25},{.45,.12},{.58,.26},{.35,.39}},true),iconLine(.4,.36,.76,.78),iconLine(.7,.84,.82,.72)})
@@ -583,8 +598,8 @@ define("focus", {iconLine(.18,.36,.18,.18),iconLine(.18,.18,.36,.18),iconLine(.8
 define("radar", {iconRing(.5,.5,.34),iconRing(.5,.5,.2),iconLine(.5,.5,.76,.27),iconRing(.62,.43,.035)})
 
 -- Combat / rewards
-define("sword", swordBase(false))
-define("swords", append(swordBase(false),swordBase(true)))
+define("sword", swordBase(false), {scale=1.05})
+define("swords", append(swordBase(false),swordBase(true)), {scale=.96})
 define("skull", {iconArc(.5,.43,.3,pi,2*pi,8),iconLine(.2,.43,.24,.7),iconLine(.76,.7,.8,.43),iconLine(.24,.7,.38,.78),iconLine(.62,.78,.76,.7),iconRing(.38,.5,.055),iconRing(.62,.5,.055),iconLine(.45,.68,.45,.8),iconLine(.55,.68,.55,.8)})
 define("crown", {iconPoly({{.18,.3},{.34,.56},{.5,.28},{.66,.56},{.82,.3},{.76,.76},{.24,.76}},true),iconLine(.24,.66,.76,.66)})
 define("trophy", {iconPoly({{.3,.2},{.7,.2},{.66,.53},{.57,.63},{.43,.63},{.34,.53}},true),iconArc(.28,.35,.16,pi/2,3*pi/2,6),iconArc(.72,.35,.16,-pi/2,pi/2,6),iconLine(.5,.63,.5,.78),iconLine(.36,.82,.64,.82)})
@@ -615,7 +630,7 @@ define("map", mapBase())
 define("map-pin", append(mapBase(),pinBase()))
 define("map-pinned", append(pinBase(),{iconLine(.18,.74,.38,.66),iconLine(.62,.66,.82,.74),iconLine(.38,.66,.5,.72),iconLine(.5,.72,.62,.66)}))
 define("map-pin-search", append(pinBase(),{iconRing(.72,.7,.1),iconLine(.79,.77,.87,.85)}))
-define("navigation", {iconPoly({{.5,.12},{.78,.82},{.5,.67},{.22,.82}},true),iconLine(.5,.67,.5,.36)})
+define("navigation", {iconPoly({{.5,.12},{.78,.82},{.5,.67},{.22,.82}},true),iconLine(.5,.67,.5,.36)}, {scale=.94})
 define("compass", {iconRing(.5,.5,.36),iconPoly({{.6,.3},{.54,.54},{.3,.6},{.46,.46}},true)})
 define("locate", {iconRing(.5,.5,.2),iconLine(.5,.1,.5,.25),iconLine(.5,.75,.5,.9),iconLine(.1,.5,.25,.5),iconLine(.75,.5,.9,.5)})
 define("locate-fixed", append({iconRing(.5,.5,.2),iconRing(.5,.5,.04)}, {iconLine(.5,.1,.5,.25),iconLine(.5,.75,.5,.9),iconLine(.1,.5,.25,.5),iconLine(.75,.5,.9,.5)}))
@@ -630,7 +645,7 @@ define("mountain", {iconPoly({{.12,.8},{.39,.3},{.5,.47},{.6,.34},{.88,.8}},fals
 define("mountain-snow", {iconPoly({{.1,.82},{.36,.28},{.5,.52},{.62,.34},{.9,.82}},false),iconPoly({{.29,.43},{.36,.28},{.44,.42},{.5,.52}},false),iconPoly({{.55,.45},{.62,.34},{.7,.47}},false)})
 
 -- Farming / resources
-define("tractor", {iconRing(.3,.72,.15),iconRing(.72,.7,.11),iconPoly({{.25,.57},{.25,.4},{.48,.4},{.58,.6},{.78,.6}},false),iconLine(.48,.4,.48,.24),iconLine(.48,.24,.65,.24),iconLine(.65,.24,.7,.6),iconLine(.2,.57,.12,.57),iconLine(.58,.6,.58,.72)})
+define("tractor", {iconRing(.3,.72,.15),iconRing(.72,.7,.11),iconPoly({{.25,.57},{.25,.4},{.48,.4},{.58,.6},{.78,.6}},false),iconLine(.48,.4,.48,.24),iconLine(.48,.24,.65,.24),iconLine(.65,.24,.7,.6),iconLine(.2,.57,.12,.57),iconLine(.58,.6,.58,.72)}, {scale=.95,y=-.005})
 define("sprout", {iconLine(.5,.82,.5,.42),iconArc(.38,.42,.18,0,pi,6),iconArc(.62,.52,.18,pi,2*pi,6),iconLine(.5,.42,.32,.27),iconLine(.5,.52,.7,.37)})
 define("pickaxe", {iconArc(.48,.31,.28,pi,2*pi,8),iconLine(.48,.31,.72,.78),iconLine(.66,.82,.78,.74)})
 define("shovel", {iconLine(.5,.18,.5,.62),iconRing(.5,.18,.07),iconPoly({{.34,.62},{.66,.62},{.6,.82},{.5,.88},{.4,.82}},true)})
@@ -646,7 +661,7 @@ define("package", packageBase(false))
 define("package-open", packageBase(true))
 define("package-search", append(packageBase(false),{iconRing(.72,.7,.1),iconLine(.79,.77,.88,.86)}))
 define("boxes", {iconPoly({{.14,.3},{.32,.2},{.5,.3},{.32,.4}},true),iconPoly({{.5,.3},{.68,.2},{.86,.3},{.68,.4}},true),iconPoly({{.32,.58},{.5,.48},{.68,.58},{.5,.68}},true),iconLine(.32,.4,.32,.58),iconLine(.68,.4,.68,.58),iconLine(.5,.3,.5,.48)})
-define("backpack", append({iconArc(.5,.34,.2,pi,2*pi,7)}, append(rect(.23,.34,.77,.84), {iconLine(.23,.5,.77,.5),iconPoly({{.36,.34},{.38,.2},{.62,.2},{.64,.34}},false),iconLine(.38,.66,.62,.66)})))
+define("backpack", append({iconArc(.5,.34,.2,pi,2*pi,7)}, append(rect(.23,.34,.77,.84), {iconLine(.23,.5,.77,.5),iconPoly({{.36,.34},{.38,.2},{.62,.2},{.64,.34}},false),iconLine(.38,.66,.62,.66)})), {scale=.95})
 define("shopping-bag", {iconPoly({{.22,.34},{.78,.34},{.74,.84},{.26,.84}},true),iconArc(.5,.36,.18,pi,2*pi,6)})
 define("shopping-cart", {iconLine(.14,.22,.24,.22),iconPoly({{.24,.22},{.32,.62},{.72,.62},{.82,.34},{.28,.34}},false),iconLine(.32,.62,.28,.72),iconLine(.28,.72,.72,.72),iconRing(.34,.82,.045),iconRing(.68,.82,.045)})
 define("archive", append(rect(.18,.28,.82,.8),{iconPoly({{.14,.18},{.86,.18},{.82,.3},{.18,.3}},true),iconLine(.4,.48,.6,.48)}))
@@ -656,12 +671,196 @@ define("cpu", append(rect(.26,.26,.74,.74),{iconPoly({{.36,.36},{.64,.36},{.64,.
 define("memory-stick", append(rect(.2,.3,.8,.7),{iconLine(.28,.2,.28,.3),iconLine(.42,.2,.42,.3),iconLine(.58,.2,.58,.3),iconLine(.72,.2,.72,.3),iconLine(.28,.7,.28,.8),iconLine(.42,.7,.42,.8),iconLine(.58,.7,.58,.8),iconLine(.72,.7,.72,.8),iconPoly({{.36,.4},{.64,.4},{.64,.6},{.36,.6}},true)}))
 
 -- Player / game / utility
-define("gamepad", gamepadBase())
-define("gamepad-2", append(gamepadBase(),{iconLine(.43,.22,.57,.22),iconLine(.5,.15,.5,.29)}))
+define("gamepad", gamepadBase(), {scale=.93})
+define("gamepad-2", append(gamepadBase(),{iconLine(.43,.22,.57,.22),iconLine(.5,.15,.5,.29)}), {scale=.92})
 define("joystick", {iconRing(.5,.78,.08),iconLine(.5,.7,.5,.36),iconRing(.5,.26,.12),iconPoly({{.25,.84},{.75,.84},{.7,.7},{.58,.66},{.42,.66},{.3,.7}},false)})
 define("dumbbell", {iconLine(.24,.5,.76,.5),iconLine(.22,.34,.22,.66),iconLine(.3,.38,.3,.62),iconLine(.78,.34,.78,.66),iconLine(.7,.38,.7,.62),iconLine(.12,.42,.12,.58),iconLine(.88,.42,.88,.58)})
 define("biceps-flexed", {iconArc(.42,.58,.26,.1*pi,1.15*pi,8),iconLine(.18,.64,.32,.78),iconLine(.32,.78,.58,.8),iconArc(.62,.54,.2,pi,2*pi,7),iconLine(.58,.34,.68,.2),iconLine(.68,.2,.8,.27),iconLine(.8,.27,.76,.43)})
-define("timer", {iconRing(.5,.55,.3),iconLine(.5,.55,.5,.34),iconLine(.5,.55,.66,.64),iconLine(.42,.16,.58,.16),iconLine(.5,.16,.5,.25),iconLine(.72,.25,.8,.33)})
+define("timer", {iconRing(.5,.55,.3),iconLine(.5,.55,.5,.34),iconLine(.5,.55,.66,.64),iconLine(.42,.16,.58,.16),iconLine(.5,.16,.5,.25),iconLine(.72,.25,.8,.33)}, {scale=.97})
+
+-- Extended canonical icon namespace (Lucide-derived silhouettes, Neko-native geometry).
+-- Definitions stay declarative and are instantiated lazily by Icons.make.
+local function userBase()
+    return {
+        iconRing(.5,.30,.12),
+        iconArc(.5,.78,.28,pi,2*pi,9),
+        iconLine(.22,.78,.22,.86),
+        iconLine(.78,.78,.78,.86),
+    }
+end
+local function calendarBase()
+    return append(rect(.18,.24,.82,.84), {
+        iconLine(.18,.40,.82,.40),
+        iconLine(.32,.16,.32,.30),
+        iconLine(.68,.16,.68,.30),
+    })
+end
+local function fileBase()
+    return {
+        iconPoly({{.25,.14},{.60,.14},{.78,.32},{.78,.86},{.25,.86}},true),
+        iconLine(.60,.14,.60,.32), iconLine(.60,.32,.78,.32),
+    }
+end
+local function mediaFrame()
+    return append(rect(.16,.22,.84,.78), {})
+end
+local function bellBase()
+    return {
+        iconArc(.5,.51,.25,pi,2*pi,9),
+        iconLine(.25,.51,.25,.67), iconLine(.75,.51,.75,.67),
+        iconLine(.25,.67,.18,.76), iconLine(.18,.76,.82,.76), iconLine(.82,.76,.75,.67),
+        iconArc(.5,.78,.09,0,pi,6),
+    }
+end
+local function speakerBase()
+    return {
+        iconPoly({{.20,.42},{.34,.42},{.54,.26},{.54,.74},{.34,.58},{.20,.58}},true),
+    }
+end
+local function radioWaveBase()
+    return {
+        iconArc(.5,.5,.18,-.8,.8,6), iconArc(.5,.5,.30,-.8,.8,8),
+        iconArc(.5,.5,.18,pi-.8,pi+.8,6), iconArc(.5,.5,.30,pi-.8,pi+.8,8),
+        iconRing(.5,.5,.035),
+    }
+end
+local function vehicleBase()
+    return {
+        iconPoly({{.18,.60},{.23,.43},{.35,.32},{.66,.32},{.77,.45},{.84,.50},{.84,.68},{.16,.68},{.16,.60}},true),
+        iconRing(.30,.70,.08), iconRing(.70,.70,.08),
+    }
+end
+local function shieldMini(cx, cy, s)
+    return {iconPoly({
+        {cx,cy-s*.55},{cx+s*.48,cy-s*.36},{cx+s*.42,cy+s*.17},{cx,cy+s*.55},{cx-s*.42,cy+s*.17},{cx-s*.48,cy-s*.36}
+    },true)}
+end
+local function heartShape()
+    return {
+        iconPoly({{.50,.82},{.23,.56},{.20,.38},{.29,.26},{.42,.27},{.50,.37},{.58,.27},{.71,.26},{.80,.38},{.77,.56}},true)
+    }
+end
+
+-- People / identity
+-- Lucide User family: circular head + open shoulder/body contour, with canonical status overlays.
+define("user", userBase(), {scale=1.03,y=-.005})
+define("users", {
+    iconRing(.42,.31,.10), iconRing(.68,.35,.085),
+    iconArc(.40,.76,.24,pi,2*pi,8), iconLine(.16,.76,.16,.84), iconLine(.64,.76,.64,.84),
+    iconArc(.68,.72,.18,pi,2*pi,7), iconLine(.86,.72,.86,.80),
+}, {scale=1.02})
+define("user-check", append(userBase(), {iconLine(.64,.56,.70,.62),iconLine(.70,.62,.82,.48)}), {scale=1.01})
+define("user-search", append(userBase(), {iconRing(.69,.66,.11),iconLine(.77,.74,.87,.84)}), {scale=.98})
+define("user-star", append(userBase(), {iconPoly({{.74,.49},{.77,.57},{.86,.57},{.79,.62},{.82,.71},{.74,.66},{.66,.71},{.69,.62},{.62,.57},{.71,.57}},true)}), {scale=.98})
+define("user-key", append(userBase(), {iconRing(.69,.62,.075),iconLine(.76,.62,.88,.62),iconLine(.83,.62,.83,.69),iconLine(.88,.62,.88,.67)}), {scale=.97})
+define("user-shield", append(userBase(), shieldMini(.72,.66,.22)), {scale=.96})
+define("person-standing", {iconRing(.5,.19,.07),iconLine(.5,.28,.5,.58),iconLine(.5,.39,.31,.49),iconLine(.5,.39,.69,.49),iconLine(.5,.58,.36,.84),iconLine(.5,.58,.64,.84)}, {scale=1.04})
+define("hand", {iconPoly({{.28,.55},{.28,.33},{.35,.29},{.41,.33},{.41,.20},{.48,.17},{.54,.22},{.54,.17},{.61,.15},{.67,.21},{.67,.25},{.74,.24},{.79,.31},{.78,.56},{.70,.75},{.57,.84},{.39,.79}},true),iconLine(.41,.33,.41,.54),iconLine(.54,.22,.54,.51),iconLine(.67,.25,.67,.52)}, {scale=.94})
+define("hand-helping", {iconPoly({{.13,.58},{.29,.47},{.44,.52},{.58,.52},{.64,.57},{.58,.63},{.45,.63}},false),iconPoly({{.29,.47},{.38,.37},{.48,.35},{.58,.40},{.73,.51},{.87,.48},{.87,.66},{.72,.70},{.57,.79},{.36,.75},{.13,.66}},false),iconLine(.13,.58,.13,.66)}, {scale=.95})
+define("heart-pulse", append(heartShape(), {iconLine(.18,.53,.32,.53),iconLine(.32,.53,.39,.40),iconLine(.39,.40,.48,.66),iconLine(.48,.66,.56,.49),iconLine(.56,.49,.68,.49),iconLine(.68,.49,.73,.42),iconLine(.73,.42,.82,.42)}), {scale=.94})
+define("heart-handshake", append(heartShape(), {iconLine(.34,.50,.45,.59),iconLine(.45,.59,.52,.52),iconLine(.52,.52,.62,.60),iconLine(.40,.63,.48,.70),iconLine(.52,.70,.61,.62)}), {scale=.94})
+
+-- Badges / status
+define("star", {iconPoly({{.50,.14},{.59,.39},{.86,.39},{.64,.55},{.72,.82},{.50,.66},{.28,.82},{.36,.55},{.14,.39},{.41,.39}},true)}, {scale=.96})
+define("sparkle", {iconPoly({{.50,.17},{.57,.40},{.80,.50},{.57,.60},{.50,.83},{.43,.60},{.20,.50},{.43,.40}},true)}, {scale=.98})
+define("badge-percent", {iconPoly({{.50,.12},{.61,.18},{.73,.17},{.80,.27},{.88,.35},{.84,.48},{.88,.61},{.79,.71},{.73,.82},{.60,.82},{.50,.88},{.40,.82},{.27,.82},{.21,.71},{.12,.61},{.16,.48},{.12,.35},{.20,.27},{.27,.17},{.39,.18}},true),iconRing(.37,.38,.055),iconRing(.64,.63,.055),iconLine(.34,.69,.68,.31)}, {scale=.92})
+define("badge-question-mark", {iconPoly({{.50,.12},{.61,.18},{.73,.17},{.80,.27},{.88,.35},{.84,.48},{.88,.61},{.79,.71},{.73,.82},{.60,.82},{.50,.88},{.40,.82},{.27,.82},{.21,.71},{.12,.61},{.16,.48},{.12,.35},{.20,.27},{.27,.17},{.39,.18}},true),iconArc(.50,.43,.12,pi,2*pi,6),iconLine(.62,.43,.50,.56),iconRing(.50,.68,.018)}, {scale=.92})
+define("circle-check", {iconRing(.50,.50,.36),iconLine(.31,.50,.44,.63),iconLine(.44,.63,.70,.36)}, {scale=.96})
+define("triangle-alert", {iconPoly({{.50,.13},{.88,.82},{.12,.82}},true),iconLine(.50,.35,.50,.57),iconRing(.50,.69,.018)}, {scale=.95})
+define("info", {iconRing(.50,.50,.36),iconLine(.50,.45,.50,.69),iconRing(.50,.32,.018)}, {scale=.96})
+define("check-check", {iconLine(.14,.48,.27,.61),iconLine(.27,.61,.49,.36),iconLine(.43,.55,.54,.66),iconLine(.54,.66,.84,.32)}, {scale=1.02})
+
+-- Search / scan
+-- "search" is the existing native glyph and intentionally remains the canonical registry key.
+define("search-check", {iconRing(.43,.43,.26),iconLine(.62,.62,.84,.84),iconLine(.32,.43,.40,.51),iconLine(.40,.51,.55,.35)}, {scale=.98})
+define("binoculars", {iconArc(.29,.62,.17,pi,2*pi,7),iconArc(.71,.62,.17,pi,2*pi,7),iconLine(.12,.62,.18,.81),iconLine(.46,.62,.40,.81),iconLine(.54,.62,.60,.81),iconLine(.88,.62,.82,.81),iconPoly({{.22,.62},{.30,.30},{.42,.30},{.47,.62}},false),iconPoly({{.53,.62},{.58,.30},{.70,.30},{.78,.62}},false),iconLine(.42,.43,.58,.43)}, {scale=.95})
+define("telescope", {iconPoly({{.16,.36},{.66,.22},{.72,.42},{.22,.56}},true),iconPoly({{.66,.22},{.79,.18},{.85,.40},{.72,.42}},true),iconLine(.47,.51,.36,.84),iconLine(.52,.50,.66,.84),iconLine(.38,.64,.60,.64),iconRing(.50,.52,.035)}, {scale=.94,y=.005})
+define("zoom-in", {iconRing(.42,.42,.26),iconLine(.61,.61,.84,.84),iconLine(.42,.30,.42,.54),iconLine(.30,.42,.54,.42)}, {scale=.98})
+define("zoom-out", {iconRing(.42,.42,.26),iconLine(.61,.61,.84,.84),iconLine(.30,.42,.54,.42)}, {scale=.98})
+define("scan", {iconLine(.15,.33,.15,.15),iconLine(.15,.15,.33,.15),iconLine(.67,.15,.85,.15),iconLine(.85,.15,.85,.33),iconLine(.15,.67,.15,.85),iconLine(.15,.85,.33,.85),iconLine(.67,.85,.85,.85),iconLine(.85,.85,.85,.67)}, {scale=.98})
+define("scan-search", {iconLine(.13,.31,.13,.13),iconLine(.13,.13,.31,.13),iconLine(.69,.13,.87,.13),iconLine(.87,.13,.87,.31),iconLine(.13,.69,.13,.87),iconLine(.13,.87,.31,.87),iconLine(.69,.87,.87,.87),iconLine(.87,.87,.87,.69),iconRing(.48,.47,.15),iconLine(.59,.58,.72,.71)}, {scale=.95})
+define("qr-code", {iconPoly({{.16,.16},{.38,.16},{.38,.38},{.16,.38}},true),iconPoly({{.62,.16},{.84,.16},{.84,.38},{.62,.38}},true),iconPoly({{.16,.62},{.38,.62},{.38,.84},{.16,.84}},true),iconLine(.51,.18,.51,.35),iconLine(.51,.35,.43,.43),iconLine(.43,.43,.32,.43),iconLine(.50,.62,.50,.75),iconLine(.50,.75,.62,.75),iconLine(.62,.62,.74,.62),iconLine(.74,.62,.74,.84),iconRing(.84,.84,.018)}, {scale=.96})
+define("barcode", {iconLine(.18,.22,.18,.78),iconLine(.28,.22,.28,.78),iconLine(.38,.22,.38,.78),iconLine(.50,.22,.50,.78),iconLine(.62,.22,.62,.78),iconLine(.72,.22,.72,.78),iconLine(.82,.22,.82,.78)}, {scale=.96})
+
+-- Notifications / time
+define("bell", bellBase(), {scale=.98})
+define("bell-ring", append(bellBase(), {iconArc(.50,.45,.39,-.75,-.18,4),iconArc(.50,.45,.39,pi+.18,pi+.75,4)}), {scale=.93})
+define("alarm-clock", {iconRing(.50,.55,.28),iconLine(.50,.55,.50,.40),iconLine(.50,.55,.61,.64),iconLine(.26,.22,.16,.31),iconLine(.74,.22,.84,.31),iconLine(.32,.80,.24,.88),iconLine(.68,.80,.76,.88)}, {scale=.96})
+define("clock", {iconRing(.50,.50,.36),iconLine(.50,.50,.50,.29),iconLine(.50,.50,.65,.59)}, {scale=.96})
+define("hourglass", {iconLine(.24,.14,.76,.14),iconLine(.24,.86,.76,.86),iconPoly({{.30,.14},{.30,.32},{.50,.50},{.30,.68},{.30,.86}},false),iconPoly({{.70,.14},{.70,.32},{.50,.50},{.70,.68},{.70,.86}},false)}, {scale=.96})
+define("calendar", calendarBase(), {scale=.96})
+define("calendar-days", append(calendarBase(), {iconRing(.34,.54,.018),iconRing(.50,.54,.018),iconRing(.66,.54,.018),iconRing(.34,.69,.018),iconRing(.50,.69,.018),iconRing(.66,.69,.018)}), {scale=.94})
+define("calendar-clock", append(calendarBase(), {iconRing(.67,.68,.14),iconLine(.67,.68,.67,.58),iconLine(.67,.68,.75,.73)}), {scale=.92})
+define("calendar-range", append(calendarBase(), {iconLine(.32,.55,.68,.55),iconLine(.32,.69,.58,.69),iconRing(.28,.55,.018),iconRing(.72,.69,.018)}), {scale=.94})
+define("list-clock", {iconLine(.18,.28,.52,.28),iconLine(.18,.45,.48,.45),iconLine(.18,.62,.42,.62),iconRing(.68,.62,.19),iconLine(.68,.62,.68,.50),iconLine(.68,.62,.78,.68)}, {scale=.98})
+
+-- Transport / world
+define("car", vehicleBase(), {scale=.96})
+define("train-front", {iconPoly({{.27,.15},{.73,.15},{.78,.23},{.78,.70},{.68,.79},{.32,.79},{.22,.70},{.22,.23}},true),iconLine(.22,.42,.78,.42),iconLine(.50,.15,.50,.42),iconRing(.35,.60,.025),iconRing(.65,.60,.025),iconLine(.34,.79,.25,.88),iconLine(.66,.79,.75,.88)}, {scale=.96})
+define("tram-front", {iconPoly({{.22,.16},{.78,.16},{.82,.22},{.82,.72},{.74,.80},{.26,.80},{.18,.72},{.18,.22}},true),iconLine(.18,.46,.82,.46),iconLine(.50,.16,.50,.46),iconRing(.32,.62,.025),iconRing(.68,.62,.025),iconLine(.30,.80,.22,.89),iconLine(.70,.80,.78,.89)}, {scale=.94})
+define("ship", {iconLine(.50,.12,.50,.30),iconPoly({{.28,.30},{.72,.30},{.72,.50},{.50,.42},{.28,.50}},true),iconPoly({{.15,.58},{.50,.43},{.85,.58},{.78,.78},{.63,.87},{.50,.82},{.37,.87},{.22,.78}},true),iconArc(.27,.88,.15,pi,2*pi,5),iconArc(.73,.88,.15,pi,2*pi,5)}, {scale=.92,y=-.01})
+define("ship-wheel", {iconRing(.50,.50,.25),iconRing(.50,.50,.055),iconLine(.50,.10,.50,.25),iconLine(.50,.75,.50,.90),iconLine(.10,.50,.25,.50),iconLine(.75,.50,.90,.50),iconLine(.22,.22,.33,.33),iconLine(.67,.67,.78,.78),iconLine(.78,.22,.67,.33),iconLine(.33,.67,.22,.78)}, {scale=.96})
+define("ship-cargo", {iconLine(.50,.11,.50,.23),iconPoly({{.23,.24},{.77,.24},{.77,.38},{.70,.38},{.70,.56},{.30,.56},{.30,.38},{.23,.38}},true),iconPoly({{.14,.58},{.86,.58},{.80,.76},{.68,.86},{.54,.82},{.46,.82},{.32,.86},{.20,.76}},true),iconArc(.27,.89,.15,pi,2*pi,5),iconArc(.73,.89,.15,pi,2*pi,5)}, {scale=.91,y=-.01})
+define("cable-car", {iconLine(.12,.28,.88,.12),iconLine(.50,.28,.50,.42),iconPoly({{.25,.42},{.75,.42},{.80,.50},{.80,.79},{.20,.79},{.20,.50}},true),iconLine(.38,.42,.38,.65),iconLine(.62,.42,.62,.65),iconLine(.20,.65,.80,.65),iconRing(.35,.84,.035),iconRing(.65,.84,.035)}, {scale=.93})
+define("scooter", {iconRing(.28,.72,.10),iconRing(.72,.72,.10),iconLine(.28,.62,.55,.62),iconLine(.55,.62,.64,.35),iconLine(.64,.35,.79,.35),iconLine(.66,.20,.73,.20),iconLine(.73,.20,.79,.62)}, {scale=.98})
+define("van", {iconPoly({{.17,.34},{.58,.34},{.70,.46},{.82,.48},{.82,.70},{.18,.70}},true),iconLine(.58,.34,.58,.52),iconLine(.58,.52,.76,.52),iconRing(.32,.72,.09),iconRing(.68,.72,.09)}, {scale=.98})
+define("baggage-claim", {iconLine(.13,.28,.19,.28),iconLine(.19,.28,.19,.63),iconLine(.19,.63,.84,.63),iconPoly({{.38,.30},{.72,.30},{.72,.58},{.38,.58}},true),iconPoly({{.48,.30},{.48,.20},{.62,.20},{.62,.30}},false),iconRing(.40,.76,.07),iconRing(.72,.76,.07)}, {scale=.94})
+define("lighthouse", {iconPoly({{.39,.27},{.61,.27},{.68,.84},{.32,.84}},true),iconPoly({{.34,.27},{.42,.16},{.58,.16},{.66,.27}},true),iconLine(.36,.50,.64,.50),iconLine(.20,.22,.34,.22),iconLine(.66,.22,.80,.22),iconLine(.18,.12,.34,.18),iconLine(.66,.18,.82,.12),iconLine(.18,.86,.82,.86)}, {scale=.96})
+define("park", {iconLine(.22,.72,.78,.72),iconLine(.30,.72,.30,.84),iconLine(.70,.72,.70,.84),iconLine(.26,.54,.74,.54),iconLine(.32,.54,.37,.72),iconLine(.68,.54,.63,.72),iconPoly({{.50,.14},{.35,.43},{.43,.43},{.32,.58},{.68,.58},{.57,.43},{.65,.43}},true)}, {scale=.96})
+define("tent-tree", {iconPoly({{.13,.82},{.38,.38},{.63,.82}},true),iconLine(.38,.38,.38,.82),iconPoly({{.70,.20},{.58,.42},{.65,.42},{.55,.58},{.85,.58},{.75,.42},{.82,.42}},true),iconLine(.70,.58,.70,.84)}, {scale=.94})
+define("droplet", {iconPoly({{.50,.13},{.32,.42},{.25,.59},{.28,.73},{.38,.84},{.50,.88},{.62,.84},{.72,.73},{.75,.59},{.68,.42}},true)}, {scale=.96})
+define("droplets", {iconPoly({{.34,.24},{.21,.47},{.18,.58},{.22,.69},{.34,.74},{.46,.69},{.50,.58},{.46,.47}},true),iconPoly({{.66,.13},{.54,.34},{.53,.44},{.57,.54},{.66,.59},{.76,.55},{.82,.46},{.80,.35}},true),iconPoly({{.64,.62},{.57,.75},{.58,.82},{.64,.87},{.71,.83},{.73,.76}},true)}, {scale=.94})
+define("sun", {iconRing(.50,.50,.14),iconLine(.50,.12,.50,.23),iconLine(.50,.77,.50,.88),iconLine(.12,.50,.23,.50),iconLine(.77,.50,.88,.50),iconLine(.23,.23,.31,.31),iconLine(.69,.69,.77,.77),iconLine(.77,.23,.69,.31),iconLine(.31,.69,.23,.77)}, {scale=.98})
+define("moon", {iconPoly({{.66,.18},{.56,.17},{.44,.22},{.34,.31},{.28,.43},{.27,.56},{.31,.68},{.39,.78},{.51,.83},{.64,.82},{.74,.76},{.82,.65},{.72,.68},{.60,.67},{.50,.62},{.43,.53},{.41,.42},{.44,.31},{.52,.23}},true)}, {scale=.96})
+define("sun-moon", {iconRing(.37,.52,.17),iconArc(.60,.48,.23,-pi/2,pi/2,7),iconLine(.37,.16,.37,.26),iconLine(.10,.52,.20,.52),iconLine(.18,.30,.25,.37),iconLine(.18,.74,.25,.67),iconLine(.37,.78,.37,.88),iconLine(.60,.21,.67,.14),iconLine(.69,.35,.80,.35)}, {scale=.95})
+define("tornado", {iconLine(.13,.22,.87,.22),iconLine(.20,.36,.80,.36),iconLine(.27,.50,.72,.50),iconLine(.34,.64,.66,.64),iconLine(.42,.78,.57,.78)}, {scale=1.02})
+define("rainbow", {iconArc(.50,.78,.37,pi,2*pi,10),iconArc(.50,.78,.25,pi,2*pi,9),iconArc(.50,.78,.13,pi,2*pi,7),iconLine(.13,.78,.13,.86),iconLine(.87,.78,.87,.86)}, {scale=.98})
+
+-- Media / playback
+define("play", {iconPoly({{.31,.20},{.31,.80},{.80,.50}},true)}, {scale=.94,x=.015})
+define("pause", {iconBar(.31,.22,.14,.56,0),iconBar(.57,.22,.14,.56,0)}, {scale=.94})
+define("fast-forward", {iconPoly({{.18,.24},{.18,.76},{.48,.50}},true),iconPoly({{.45,.24},{.45,.76},{.75,.50}},true),iconLine(.80,.24,.80,.76)}, {scale=.96})
+define("rewind", {iconPoly({{.82,.24},{.82,.76},{.52,.50}},true),iconPoly({{.55,.24},{.55,.76},{.25,.50}},true),iconLine(.20,.24,.20,.76)}, {scale=.96})
+define("skip-forward", {iconPoly({{.22,.23},{.22,.77},{.67,.50}},true),iconLine(.77,.23,.77,.77)}, {scale=.98})
+define("skip-back", {iconPoly({{.78,.23},{.78,.77},{.33,.50}},true),iconLine(.23,.23,.23,.77)}, {scale=.98})
+define("music", {iconLine(.40,.26,.76,.18),iconLine(.40,.26,.40,.69),iconLine(.76,.18,.76,.61),iconLine(.40,.37,.76,.29),iconRing(.31,.73,.09),iconRing(.67,.65,.09)}, {scale=.98})
+define("headphones", {iconArc(.50,.50,.31,pi,2*pi,9),iconLine(.19,.50,.19,.70),iconLine(.81,.50,.81,.70),iconPoly({{.19,.56},{.28,.56},{.28,.75},{.19,.75}},true),iconPoly({{.72,.56},{.81,.56},{.81,.75},{.72,.75}},true)}, {scale=.96})
+define("mic", {iconPoly({{.42,.20},{.58,.20},{.64,.27},{.64,.52},{.58,.63},{.42,.63},{.36,.52},{.36,.27}},true),iconArc(.50,.52,.25,0,pi,7),iconLine(.50,.77,.50,.88),iconLine(.36,.88,.64,.88)}, {scale=.96})
+define("speaker", append(speakerBase(), {iconArc(.55,.50,.16,-.9,.9,6),iconArc(.55,.50,.28,-.8,.8,7)}), {scale=.96})
+define("video", append(mediaFrame(), {iconPoly({{.84,.39},{.92,.32},{.92,.68},{.84,.61}},true)}), {scale=.90,x=-.01})
+define("image", {iconPoly({{.17,.20},{.83,.20},{.83,.80},{.17,.80}},true),iconRing(.36,.38,.07),iconPoly({{.22,.73},{.40,.54},{.52,.65},{.64,.49},{.78,.71}},false)}, {scale=.96})
+define("images", {iconPoly({{.25,.17},{.82,.17},{.82,.72},{.25,.72}},true),iconRing(.42,.33,.055),iconPoly({{.31,.66},{.45,.51},{.55,.61},{.65,.48},{.77,.65}},false),iconLine(.18,.30,.18,.82),iconLine(.18,.82,.72,.82)}, {scale=.94})
+define("clapperboard", {iconPoly({{.18,.35},{.82,.35},{.82,.80},{.18,.80}},true),iconPoly({{.16,.20},{.78,.12},{.84,.29},{.20,.37}},true),iconLine(.31,.18,.40,.34),iconLine(.51,.16,.60,.32),iconLine(.70,.13,.79,.29)}, {scale=.94})
+define("theater", {iconPoly({{.16,.25},{.44,.19},{.44,.68},{.36,.78},{.25,.78},{.16,.68}},true),iconPoly({{.56,.19},{.84,.25},{.84,.68},{.75,.78},{.64,.78},{.56,.68}},true),iconArc(.30,.51,.09,0,pi,5),iconArc(.70,.45,.09,pi,2*pi,5),iconRing(.25,.38,.018),iconRing(.36,.38,.018),iconRing(.64,.36,.018),iconRing(.75,.36,.018)}, {scale=.94})
+define("volume", append(speakerBase(), {iconArc(.55,.50,.17,-.9,.9,6),iconArc(.55,.50,.29,-.8,.8,7)}), {scale=.96})
+define("volume-off", append(speakerBase(), {iconLine(.63,.37,.84,.64),iconLine(.84,.37,.63,.64)}), {scale=.96})
+define("radio", {iconPoly({{.15,.29},{.85,.29},{.85,.79},{.15,.79}},true),iconLine(.24,.29,.67,.14),iconLine(.24,.43,.56,.43),iconRing(.68,.55,.12),iconLine(.24,.57,.45,.57),iconLine(.24,.68,.45,.68)}, {scale=.95})
+define("radio-tower", {iconLine(.50,.24,.50,.86),iconLine(.38,.86,.62,.86),iconRing(.50,.32,.035),iconArc(.50,.32,.19,-.8,.8,6),iconArc(.50,.32,.19,pi-.8,pi+.8,6),iconArc(.50,.32,.34,-.8,.8,8),iconArc(.50,.32,.34,pi-.8,pi+.8,8)}, {scale=.93,y=.01})
+define("satellite-dish", {iconArc(.45,.42,.28,-.10,1.45,8),iconLine(.26,.62,.44,.78),iconLine(.44,.78,.72,.78),iconLine(.49,.65,.40,.80),iconRing(.54,.34,.035),iconLine(.57,.31,.75,.18),iconArc(.64,.27,.20,-.9,.1,6)}, {scale=.96})
+
+-- Files / connectivity / hardware
+define("file", fileBase(), {scale=.98})
+define("file-text", append(fileBase(), {iconLine(.34,.47,.67,.47),iconLine(.34,.60,.67,.60),iconLine(.34,.73,.57,.73)}), {scale=.96})
+define("file-code", append(fileBase(), {iconLine(.45,.49,.35,.60),iconLine(.35,.60,.45,.71),iconLine(.60,.49,.70,.60),iconLine(.70,.60,.60,.71)}), {scale=.94})
+define("file-terminal", append(fileBase(), {iconLine(.35,.49,.46,.60),iconLine(.46,.60,.35,.71),iconLine(.54,.71,.68,.71)}), {scale=.94})
+define("folder-check", {iconPoly({{.14,.28},{.39,.28},{.49,.38},{.86,.38},{.86,.80},{.14,.80}},true),iconLine(.38,.58,.48,.68),iconLine(.48,.68,.66,.50)}, {scale=.96})
+define("folders", {iconPoly({{.22,.22},{.42,.22},{.51,.31},{.82,.31},{.82,.69},{.22,.69}},true),iconPoly({{.14,.34},{.24,.34},{.24,.77},{.76,.77},{.76,.69}},false)}, {scale=.96})
+define("clipboard-check", {iconPoly({{.25,.22},{.75,.22},{.75,.84},{.25,.84}},true),iconPoly({{.39,.16},{.61,.16},{.65,.28},{.35,.28}},true),iconLine(.36,.55,.46,.65),iconLine(.46,.65,.66,.45)}, {scale=.96})
+define("copy", {iconPoly({{.30,.22},{.80,.22},{.80,.72},{.30,.72}},true),iconPoly({{.20,.32},{.20,.82},{.70,.82},{.70,.72}},false)}, {scale=.98})
+define("download", {iconLine(.50,.14,.50,.61),iconLine(.34,.46,.50,.62),iconLine(.50,.62,.66,.46),iconLine(.20,.78,.20,.86),iconLine(.20,.86,.80,.86),iconLine(.80,.86,.80,.78)}, {scale=.98})
+define("upload", {iconLine(.50,.62,.50,.15),iconLine(.34,.31,.50,.15),iconLine(.50,.15,.66,.31),iconLine(.20,.78,.20,.86),iconLine(.20,.86,.80,.86),iconLine(.80,.86,.80,.78)}, {scale=.98})
+define("inbox", {iconPoly({{.18,.24},{.82,.24},{.86,.76},{.62,.76},{.56,.66},{.44,.66},{.38,.76},{.14,.76}},true),iconLine(.18,.56,.39,.56),iconLine(.61,.56,.82,.56)}, {scale=.98})
+define("router", {iconPoly({{.18,.55},{.82,.55},{.82,.79},{.18,.79}},true),iconRing(.31,.67,.022),iconRing(.41,.67,.022),iconLine(.65,.67,.73,.67),iconLine(.50,.55,.50,.37),iconArc(.50,.37,.15,pi,2*pi,6),iconArc(.50,.37,.27,pi,2*pi,7)}, {scale=.96})
+define("antenna", {iconLine(.50,.43,.50,.86),iconLine(.36,.86,.64,.86),iconRing(.50,.36,.035),iconArc(.50,.36,.16,-.9,.9,6),iconArc(.50,.36,.16,pi-.9,pi+.9,6),iconArc(.50,.36,.29,-.85,.85,8),iconArc(.50,.36,.29,pi-.85,pi+.85,8)}, {scale=.94})
+define("usb", {iconLine(.50,.82,.50,.26),iconLine(.50,.45,.32,.45),iconLine(.32,.45,.32,.32),iconPoly({{.27,.32},{.32,.24},{.37,.32}},true),iconLine(.50,.56,.68,.56),iconLine(.68,.56,.68,.68),iconRing(.68,.73,.045),iconPoly({{.45,.26},{.50,.16},{.55,.26}},true)}, {scale=.98})
+define("nfc", {iconArc(.48,.50,.16,-1.1,1.1,6),iconArc(.48,.50,.16,pi-1.1,pi+1.1,6),iconArc(.48,.50,.28,-1.05,1.05,8),iconArc(.48,.50,.28,pi-1.05,pi+1.05,8),iconLine(.48,.34,.48,.66)}, {scale=.98})
+
+-- Games / fantasy / combat utility
+define("dice-6", {iconPoly({{.19,.19},{.81,.19},{.81,.81},{.19,.81}},true),iconRing(.34,.33,.025),iconRing(.66,.33,.025),iconRing(.34,.50,.025),iconRing(.66,.50,.025),iconRing(.34,.67,.025),iconRing(.66,.67,.025)}, {scale=.96})
+define("chess-king", {iconLine(.50,.12,.50,.30),iconLine(.40,.21,.60,.21),iconPoly({{.35,.31},{.65,.31},{.72,.46},{.62,.64},{.68,.78},{.32,.78},{.38,.64},{.28,.46}},true),iconLine(.28,.86,.72,.86),iconLine(.34,.78,.66,.78)}, {scale=.96})
+define("bow-arrow", {iconArc(.37,.50,.28,-pi/2,pi/2,9),iconLine(.37,.22,.37,.78),iconLine(.26,.50,.82,.50),iconLine(.82,.50,.70,.42),iconLine(.82,.50,.70,.58)}, {scale=.98})
+define("bomb", {iconRing(.45,.58,.24),iconLine(.60,.40,.70,.29),iconArc(.76,.24,.09,pi,2*pi,5),iconLine(.78,.14,.82,.08),iconLine(.70,.16,.66,.09),iconLine(.85,.23,.92,.21)}, {scale=.96})
+define("ghost", {iconPoly({{.22,.78},{.22,.44},{.26,.30},{.36,.20},{.50,.16},{.64,.20},{.74,.30},{.78,.44},{.78,.81},{.68,.73},{.58,.82},{.50,.73},{.42,.82},{.32,.73}},true),iconRing(.39,.45,.025),iconRing(.61,.45,.025)}, {scale=.96})
 
 -- Existing internal icons retained in the same namespace.
 define("search", {iconRing(.42,.42,.25),iconLine(.60,.60,.85,.85)})
@@ -677,6 +876,12 @@ define("menu", {iconLine(.18,.28,.82,.28),iconLine(.18,.5,.82,.5),iconLine(.18,.
 define("discord", {iconRing(.5,.5,.32),iconRing(.37,.48,.025),iconRing(.63,.48,.025),iconLine(.33,.65,.67,.65)})
 define("brand", {iconBar(.24,.22,.58,.14,-28),iconBar(.18,.45,.58,.14,-28),iconBar(.12,.68,.58,.14,-28)})
 
+local NativeIconCount = 0
+for _ in pairs(NativeIcons) do
+    NativeIconCount += 1
+end
+Library.NativeIconCount = NativeIconCount
+
 local function normalizeIconName(name)
     if type(name) ~= "string" then return name end
     local n = string.lower(name)
@@ -686,6 +891,7 @@ local function normalizeIconName(name)
 end
 Icons.normalizeName = normalizeIconName
 Icons.Native = NativeIcons
+Icons.Meta = IconMeta
 
 function Icons.make(parent, name, size, color, w)
     local root = U.frame(parent, { Size = UDim2.fromOffset(size, size), ZIndex = parent.ZIndex + 1 }, w)
@@ -701,25 +907,46 @@ function Icons.make(parent, name, size, color, w)
             ZIndex = root.ZIndex,
         }, root)
     else
-        local commands = NativeIcons[normalized] or NativeIcons.settings
+        local commands = NativeIcons[normalized]
+        local resolved = normalized
+        if not commands then
+            resolved, commands = "settings", NativeIcons.settings
+            root:SetAttribute("NeronUnknownIcon", tostring(name))
+        end
+        root:SetAttribute("NeronIconName", resolved)
+        local meta = IconMeta[resolved]
+        local glyph = root
+        if meta then
+            local scale = math.clamp(U.finite(meta.scale, 1), 0.75, 1.15)
+            local ox = math.clamp(U.finite(meta.x, 0), -0.08, 0.08)
+            local oy = math.clamp(U.finite(meta.y, 0), -0.08, 0.08)
+            glyph = U.frame(root, {
+                Name = "OpticalGlyph",
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                Position = UDim2.fromScale(0.5 + ox, 0.5 + oy),
+                Size = UDim2.fromScale(scale, scale),
+                ZIndex = root.ZIndex,
+            }, w)
+        end
         for _, cmd in ipairs(commands) do
             if cmd[1] == "line" then
-                Icons.line(root, cmd[2], cmd[3], cmd[4], cmd[5], color)
+                Icons.line(glyph, cmd[2], cmd[3], cmd[4], cmd[5], color)
             elseif cmd[1] == "ring" then
-                Icons.ring(root, cmd[2], cmd[3], cmd[4], color)
+                Icons.ring(glyph, cmd[2], cmd[3], cmd[4], color)
             elseif cmd[1] == "poly" then
-                Icons.poly(root, cmd[2], color, nil, cmd[3])
+                Icons.poly(glyph, cmd[2], color, nil, cmd[3])
             elseif cmd[1] == "arc" then
-                Icons.arc(root, cmd[2], cmd[3], cmd[4], cmd[5], cmd[6], color, nil, cmd[7])
+                Icons.arc(glyph, cmd[2], cmd[3], cmd[4], cmd[5], cmd[6], color, nil, cmd[7])
             elseif cmd[1] == "bar" then
-                U.new("Frame", {
+                local bar = U.new("Frame", {
                     Position = UDim2.fromScale(cmd[2], cmd[3]),
                     Size = UDim2.fromScale(cmd[4], cmd[5]),
                     Rotation = cmd[6],
                     BackgroundTransparency = 0,
                     BackgroundColor3 = color,
-                    ZIndex = root.ZIndex,
-                }, root)
+                    ZIndex = glyph.ZIndex,
+                }, glyph)
+                U.corner(bar, 100)
             end
         end
     end
@@ -1267,6 +1494,9 @@ function Window:Destroy()
     end
     if self.tooltip then
         self.tooltip:Cancel()
+    end
+    if Presentation.cancelThemeTransition then
+        Presentation.cancelThemeTransition(self, false)
     end
     if self.geometryCancel then
         self.bag:Remove(self.geometryCancel, true)
@@ -3115,7 +3345,9 @@ end
 
 function SubTab:AddTextbox(config)
     config = config or {}
+    assert(config.Numeric == nil or type(config.Numeric) == "boolean", "Neron Textbox Numeric expects boolean")
     local self = Components.row(self, config, "Textbox")
+    self.numeric = config.Numeric == true
     self.box = U.new("TextBox", {
         AnchorPoint = Vector2.new(1, 0.5),
         Position = UDim2.fromScale(1, 0.5),
@@ -3140,26 +3372,47 @@ function SubTab:AddTextbox(config)
     U.bind(self.window, self.box, "PlaceholderColor3", "TextMuted")
     self.focusStroke = U.stroke(self.box, self.window.theme.BorderStrong, 1)
     self.focusStroke.Transparency = 1
-    function self:normalize(value)
-        local text = tostring(value or "")
+    local function truncate(text)
         local max = math.max(0, math.floor(U.finite(config.MaxLength, 4096)))
         local ok, offset = pcall(utf8.offset, text, max + 1)
         if ok and offset then
-            text = text:sub(1, offset - 1)
+            return text:sub(1, offset - 1)
         elseif not ok then
-            text = text:sub(1, max)
-        end
-        if config.Numeric then
-            if text == "" then
-                return ""
-            end
-            local number = U.finite(text, nil)
-            if not number then
-                return tostring(self.value or "")
-            end
-            return tostring(number)
+            return text:sub(1, max)
         end
         return text
+    end
+    function self:sanitizeNumeric(value)
+        local text = truncate(tostring(value or ""))
+        local out, decimal, sign = {}, false, false
+        for i = 1, #text do
+            local ch = text:sub(i, i)
+            if ch:match("%d") then
+                out[#out + 1] = ch
+            elseif ch == "." and not decimal then
+                decimal = true
+                out[#out + 1] = ch
+            elseif ch == "-" and #out == 0 and not sign then
+                sign = true
+                out[#out + 1] = ch
+            end
+        end
+        return table.concat(out)
+    end
+    function self:normalize(value)
+        local text = truncate(tostring(value or ""))
+        if not self.numeric then
+            return text
+        end
+        text = self:sanitizeNumeric(text)
+        if text == "" then
+            return ""
+        end
+        local number = U.finite(text, nil)
+        if not number then
+            return tostring(self.value or "")
+        end
+        return tostring(number)
     end
     function self:renderVisual()
         self.box.TextEditable = not self.state.Disabled
@@ -3207,16 +3460,18 @@ function SubTab:AddTextbox(config)
         if self.writing or self.destroyed then
             return
         end
-        local text = self:normalize(self.box.Text)
-        if not config.Numeric then
-            if text ~= self.box.Text then
-                self.writing = true
-                self.box.Text = text
-                self.writing = false
-            end
+        local text = self.numeric and self:sanitizeNumeric(self.box.Text) or self:normalize(self.box.Text)
+        if text ~= self.box.Text then
+            self.writing = true
+            self.box.Text = text
+            self.writing = false
         end
         if config.Live then
-            self:Set(text)
+            if not self.numeric or text == "" or U.finite(text, nil) ~= nil then
+                -- Preserve the typed numeric string while focused (for example `1.`);
+                -- FocusLost/Set canonicalizes it without changing Textbox's string API.
+                self:_commit(text, false)
+            end
         end
     end)
     self:Set(config.Default or "", true)
@@ -4229,6 +4484,13 @@ function Library:CreateWindow(config)
         config.OnBuyPremium == nil or type(config.OnBuyPremium) == "function",
         "Neron OnBuyPremium expects a function"
     )
+    assert(
+        config.ThemeTransition == nil
+            or type(config.ThemeTransition) == "boolean"
+            or type(config.ThemeTransition) == "table",
+        "Neron ThemeTransition expects boolean or table"
+    )
+    assert(config.ReducedMotion == nil or type(config.ReducedMotion) == "boolean", "Neron ReducedMotion expects boolean")
     local manual = config.ManualSize
     local size
     if manual == true then
@@ -4254,6 +4516,10 @@ function Library:CreateWindow(config)
     local baseWidth, baseHeight = size.X, size.Y
     assert(baseWidth >= 320 and baseHeight >= 320, "Neron window Size must be at least 320x320")
     assert(config.Accent == nil or typeof(config.Accent) == "Color3", "Neron window Accent expects Color3")
+    local transitionConfig = type(config.ThemeTransition) == "table" and config.ThemeTransition or {}
+    local transitionDirection = transitionConfig.Direction == "RightToLeft" and "RightToLeft" or "LeftToRight"
+    local transitionDuration = math.clamp(U.finite(transitionConfig.Duration, 0.86), 0.35, 1.50)
+    local transitionIntensity = math.clamp(U.finite(transitionConfig.Intensity, 1), 0, 1)
     local env = _G
     if type(getgenv) == "function" then
         local ok, value = pcall(getgenv)
@@ -4329,6 +4595,14 @@ function Library:CreateWindow(config)
             and config.Size == nil
             and (not S.Input.TouchEnabled or (S.Input.KeyboardEnabled == true and S.Input.MouseEnabled == true)),
         onBuyPremium = config.OnBuyPremium,
+        themeTransitionEnabled = config.ThemeTransition ~= false and transitionConfig.Enabled ~= false,
+        themeTransitionDuration = transitionDuration,
+        themeTransitionDirection = transitionDirection,
+        themeTransitionFrontier = transitionConfig.Frontier ~= false,
+        themeTransitionInteractions = transitionConfig.Interactions ~= false,
+        themeTransitionIntensity = transitionIntensity,
+        reducedMotion = config.ReducedMotion == true,
+        themeTransitionGeneration = 0,
     }, Window)
     w.bag.motion = w.motion
     registry[id] = w
@@ -4724,9 +4998,355 @@ function Presentation.colors(name, overrides, accent)
     end
     return theme
 end
-function Presentation.apply(w)
+
+-- Theme transitions are spatial and event-driven: bound colors are swept in buckets,
+-- while control chrome receives reversible micro-interactions. No frame loop is used.
+function Presentation.themeDiffers(a, b)
+    if type(a) ~= "table" or type(b) ~= "table" then
+        return true
+    end
+    for token in pairs(Theme) do
+        if a[token] ~= b[token] then
+            return true
+        end
+    end
+    return false
+end
+function Presentation.restoreThemeTransient(w, state)
+    if not state or not state.restores then
+        return
+    end
+    for obj, properties in pairs(state.restores) do
+        if typeof(obj) == "Instance" and obj.Parent then
+            for property, value in pairs(properties) do
+                w.motion:Cancel(obj, property)
+                local ok = pcall(function()
+                    obj[property] = value
+                end)
+                if not ok then
+                    -- A destroyed/replaced object is harmless during transition teardown.
+                end
+            end
+        end
+    end
+end
+function Presentation.cancelThemeTransition(w, settle)
+    local state = w.themeSweep
+    if not state then
+        return
+    end
+    w.themeSweep = nil
+    Presentation.restoreThemeTransient(w, state)
+    if state.frontierTween then
+        pcall(function()
+            state.frontierTween:Cancel()
+        end)
+    end
+    state.bag:Destroy()
+    if settle and not w.destroyed then
+        Presentation.apply(w, true)
+    end
+end
+function Presentation.themeRatio(w, object)
+    if not object or not object.Parent then
+        return 0.5
+    end
+    local width = math.max(1, w.root.AbsoluteSize.X)
+    local left = w.root.AbsolutePosition.X
+    local x = object.AbsolutePosition.X + object.AbsoluteSize.X * 0.5
+    local ratio = math.clamp((x - left) / width, 0, 1)
+    if w.themeTransitionDirection == "RightToLeft" then
+        ratio = 1 - ratio
+    end
+    return ratio
+end
+function Presentation.rememberThemeProperty(state, object, property)
+    if not object or not object.Parent then
+        return
+    end
+    local properties = state.restores[object]
+    if not properties then
+        properties = {}
+        state.restores[object] = properties
+    end
+    if properties[property] == nil then
+        local ok, value = pcall(function()
+            return object[property]
+        end)
+        if ok then
+            properties[property] = value
+        end
+    end
+end
+function Presentation.themePulse(w, state, entry)
+    if not w.themeTransitionInteractions or w.reducedMotion or w.destroyed then
+        return
+    end
+    local owner, kind = entry.owner, entry.kind
+    if not owner or owner.destroyed or not entry.root or not entry.root.Parent then
+        return
+    end
+    local intensity = w.themeTransitionIntensity or 1
+    if intensity <= 0 then
+        return
+    end
+    local touched = {}
+    local function pulse(object, property, value, duration)
+        if not object or not object.Parent then
+            return
+        end
+        Presentation.rememberThemeProperty(state, object, property)
+        touched[#touched + 1] = { object = object, property = property }
+        w.motion:To(object, duration or 0.055, { [property] = value })
+    end
+    if kind == "Tab" then
+        if owner.icon and owner.icon.Visible then
+            pulse(owner.icon, "Rotation", (w.themeTransitionDirection == "RightToLeft" and -1 or 1) * 3.2 * intensity)
+        end
+    elseif kind == "SubTab" then
+        if owner.icon and owner.icon.Visible then
+            pulse(owner.icon, "Rotation", (w.themeTransitionDirection == "RightToLeft" and -1 or 1) * 2.6 * intensity)
+        end
+    elseif kind == "Toggle" and owner.track then
+        pulse(owner.track, "Rotation", (w.themeTransitionDirection == "RightToLeft" and -1 or 1) * 1.5 * intensity)
+    elseif (kind == "Slider" or kind == "RangeSlider") and owner.thumbs then
+        for _, thumb in ipairs(owner.thumbs) do
+            if thumb.Parent then
+                Presentation.rememberThemeProperty(state, thumb, "Size")
+                local base = state.restores[thumb] and state.restores[thumb].Size or thumb.Size
+                local grow = math.max(1, math.floor(1.5 * intensity + 0.5))
+                pulse(thumb, "Size", UDim2.fromOffset(base.X.Offset + grow, base.Y.Offset + grow))
+            end
+        end
+    elseif (kind == "Dropdown" or kind == "MultiDropdown") and owner.trigger then
+        Presentation.rememberThemeProperty(state, owner.trigger, "Position")
+        local base = state.restores[owner.trigger].Position
+        local direction = w.themeTransitionDirection == "RightToLeft" and 1 or -1
+        pulse(owner.trigger, "Position", UDim2.new(base.X.Scale, base.X.Offset + direction * 1.5 * intensity, base.Y.Scale, base.Y.Offset))
+    elseif kind == "Textbox" and owner.edit then
+        pulse(owner.edit, "Rotation", -8 * intensity)
+    elseif kind == "Button" and owner.action then
+        pulse(owner.action, "Rotation", (w.themeTransitionDirection == "RightToLeft" and -1 or 1) * 0.45 * intensity)
+    elseif kind == "ColorPicker" and owner.swatch then
+        Presentation.rememberThemeProperty(state, owner.swatch, "Size")
+        local base = state.restores[owner.swatch].Size
+        local grow = math.max(1, math.floor(2 * intensity + 0.5))
+        pulse(owner.swatch, "Size", UDim2.fromOffset(base.X.Offset + grow, base.Y.Offset + grow))
+    elseif kind == "System" then
+        pulse(entry.root, "Rotation", (w.themeTransitionDirection == "RightToLeft" and -1 or 1) * 0.30 * intensity)
+    end
+    state.bag:After(0.09, function()
+        if w.themeSweep ~= state or w.destroyed then
+            return
+        end
+        for _, item in ipairs(touched) do
+            local object = item.object
+            local values = state.restores[object]
+            local value = values and values[item.property]
+            if object.Parent and value ~= nil then
+                w.motion:To(object, 0.075, { [item.property] = value })
+            end
+        end
+    end)
+end
+function Presentation.collectThemeParticipants(w)
+    local out, seen = {}, {}
+    local function add(root, owner, kind)
+        if not root or not root.Parent or seen[owner] then
+            return
+        end
+        seen[owner] = true
+        out[#out + 1] = { root = root, owner = owner, kind = kind }
+    end
+    for _, tab in ipairs(w.tabs) do
+        if not tab.destroyed and tab.row and tab.row.Visible then
+            add(tab.row, tab, "Tab")
+        end
+        for _, sub in ipairs(tab.subtabs) do
+            if not sub.destroyed and sub.button and sub.button.Visible then
+                add(sub.button, sub, "SubTab")
+            end
+            for _, control in ipairs(sub.controls) do
+                if not control.destroyed and control.row and control.row.Visible then
+                    add(control.row, control, control.kind)
+                end
+            end
+        end
+    end
+    for _, page in pairs(w.settingsPages or {}) do
+        for _, control in ipairs(page.controls) do
+            if not control.destroyed and control.row and control.row.Visible then
+                add(control.row, control, control.kind)
+            end
+        end
+    end
+    for button, owner in pairs(w.systemRenders or {}) do
+        if button.Parent and not seen[owner] then
+            add(button, owner, "System")
+        end
+    end
+    return out
+end
+function Presentation.renderThemeParticipant(entry)
+    local owner = entry.owner
+    if not owner or owner.destroyed then
+        return
+    end
+    if type(owner._render) == "function" then
+        owner:_render()
+    end
+end
+function Presentation.buildThemeFrontier(w, state, duration)
+    if not w.themeTransitionFrontier or w.reducedMotion or not w.root or not w.root.Parent then
+        return
+    end
+    local width = math.max(2, math.floor(6 * (w.themeTransitionIntensity or 1) + 2))
+    local startX = w.themeTransitionDirection == "RightToLeft" and w.root.Size.X.Offset + width or -width
+    local endX = w.themeTransitionDirection == "RightToLeft" and -width or w.root.Size.X.Offset + width
+    local frontier = U.new("Frame", {
+        Name = "ThemeFrontier",
+        Position = UDim2.fromOffset(startX, 0),
+        Size = UDim2.new(0, width, 1, 0),
+        BackgroundTransparency = 0.38,
+        BackgroundColor3 = w.theme.Accent,
+        ZIndex = T.Z.Tooltip - 1,
+    }, w.root)
+    state.bag:Add(frontier)
+    w.bindings[frontier] = nil
+    local gradient = U.new("UIGradient", {
+        Rotation = 0,
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 1),
+            NumberSequenceKeypoint.new(0.35, 0.55),
+            NumberSequenceKeypoint.new(0.5, 0.08),
+            NumberSequenceKeypoint.new(0.65, 0.55),
+            NumberSequenceKeypoint.new(1, 1),
+        }),
+    }, frontier)
+    w.bindings[gradient] = nil
+    local tween = S.Tween:Create(
+        frontier,
+        TweenInfo.new(duration, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
+        { Position = UDim2.fromOffset(endX, 0) }
+    )
+    state.frontierTween = tween
+    state.bag:Add(function()
+        pcall(function()
+            tween:Cancel()
+        end)
+    end)
+    tween:Play()
+end
+function Presentation.transition(w)
     if w.destroyed then
         return
+    end
+    local target = Presentation.colors(w.themeName, w.themeOverrides, w.customAccent)
+    if not Presentation.themeDiffers(w.theme, target) then
+        w.theme = target
+        Presentation.apply(w)
+        return
+    end
+    if not w.themeTransitionEnabled then
+        w.theme = target
+        Presentation.apply(w)
+        return
+    end
+    Presentation.cancelThemeTransition(w, false)
+    w.themeTransitionGeneration = (w.themeTransitionGeneration or 0) + 1
+    local state = {
+        generation = w.themeTransitionGeneration,
+        bag = Maid.new(w.motion),
+        restores = setmetatable({}, { __mode = "k" }),
+    }
+    w.themeSweep = state
+    w.theme = target
+    local duration = w.reducedMotion and 0.18 or w.themeTransitionDuration
+    if w.compact and not w.reducedMotion then
+        duration *= 0.86
+    end
+    state.duration = duration
+    local buckets = w.reducedMotion and 1 or (w.compact and 18 or 28)
+    local travel = w.reducedMotion and 0 or math.max(0.12, duration - 0.13)
+    local localDuration = w.reducedMotion and 0.14 or math.min(0.14, duration * 0.18)
+    local boundBuckets = {}
+    for i = 1, buckets do
+        boundBuckets[i] = {}
+    end
+    for obj, bindings in pairs(w.bindings) do
+        if obj.Parent then
+            local ratio = Presentation.themeRatio(w, obj)
+            local bucket = math.clamp(math.floor(ratio * (buckets - 1) + 1.5), 1, buckets)
+            local goals = {}
+            for property, token in pairs(bindings) do
+                local value = target[token]
+                if value ~= nil then
+                    goals[property] = value
+                end
+            end
+            if next(goals) then
+                boundBuckets[bucket][#boundBuckets[bucket] + 1] = { object = obj, goals = goals }
+            end
+        else
+            w.bindings[obj] = nil
+        end
+    end
+    local participantBuckets = {}
+    for i = 1, buckets do
+        participantBuckets[i] = {}
+    end
+    for _, entry in ipairs(Presentation.collectThemeParticipants(w)) do
+        local ratio = Presentation.themeRatio(w, entry.root)
+        local bucket = math.clamp(math.floor(ratio * (buckets - 1) + 1.5), 1, buckets)
+        participantBuckets[bucket][#participantBuckets[bucket] + 1] = entry
+    end
+    Presentation.buildThemeFrontier(w, state, duration)
+    for i = 1, buckets do
+        local ratio = buckets == 1 and 0 or (i - 1) / (buckets - 1)
+        local hit = ratio * travel
+        if not w.reducedMotion and w.themeTransitionInteractions and #participantBuckets[i] > 0 then
+            state.bag:After(math.max(0, hit - 0.045), function()
+                if w.themeSweep ~= state or w.destroyed then
+                    return
+                end
+                for _, entry in ipairs(participantBuckets[i]) do
+                    Presentation.themePulse(w, state, entry)
+                end
+            end)
+        end
+        state.bag:After(hit, function()
+            if w.themeSweep ~= state or w.destroyed then
+                return
+            end
+            for _, item in ipairs(boundBuckets[i]) do
+                if item.object.Parent then
+                    w.motion:To(item.object, localDuration, item.goals)
+                end
+            end
+            for _, entry in ipairs(participantBuckets[i]) do
+                if entry.root.Parent then
+                    Presentation.renderThemeParticipant(entry)
+                end
+            end
+        end)
+    end
+    state.bag:After(duration + 0.10, function()
+        if w.themeSweep ~= state or w.destroyed then
+            return
+        end
+        Presentation.restoreThemeTransient(w, state)
+        w.themeSweep = nil
+        Presentation.apply(w, true)
+        state.bag:Destroy()
+    end)
+end
+
+function Presentation.apply(w, preserveTransition)
+    if w.destroyed then
+        return
+    end
+    if not preserveTransition then
+        Presentation.cancelThemeTransition(w, false)
     end
     w.theme = Presentation.colors(w.themeName, w.themeOverrides, w.customAccent)
     for obj, bindings in pairs(w.bindings) do
@@ -4806,7 +5426,7 @@ function Window:SetTheme(name, silent)
     end
     self.themeName, self.themeOverrides, self.customAccent = name, {}, nil
     Presentation.remember(self)
-    Presentation.apply(self)
+    Presentation.transition(self)
     if not silent and self.persistence then
         self.persistence:QueuePresentation()
     end
@@ -4814,6 +5434,36 @@ function Window:SetTheme(name, silent)
 end
 function Window:GetTheme()
     return self.themeName
+end
+function Window:SetThemeTransitionEnabled(value)
+    if self.destroyed then
+        return self
+    end
+    self.themeTransitionEnabled = value == true
+    if not self.themeTransitionEnabled and self.themeSweep then
+        Presentation.cancelThemeTransition(self, true)
+    end
+    return self
+end
+function Window:SetThemeTransitionDuration(seconds)
+    if self.destroyed then
+        return self
+    end
+    self.themeTransitionDuration = math.clamp(U.finite(seconds, self.themeTransitionDuration or 0.86), 0.35, 1.50)
+    return self
+end
+function Window:SetReducedMotion(value)
+    if self.destroyed then
+        return self
+    end
+    self.reducedMotion = value == true
+    if self.themeSweep then
+        Presentation.cancelThemeTransition(self, true)
+    end
+    return self
+end
+function Window:GetReducedMotion()
+    return self.reducedMotion == true
 end
 function Window:GetThemeTokens()
     return table.clone(self.theme)
