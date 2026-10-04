@@ -10,7 +10,7 @@
 -- ManualSize accepts Vector2.new(w,h), offset UDim2 or {w,h}; nil/false keeps Size/default.
 -- Legacy ManualSize=true still selects500x480. Resizable defaults true; MinSize/MaxSize bound it.
 -- RememberSize/RememberPosition default false, including when older preferences enabled them; startup is centered.
--- Desktop automatic Size matches Nothing UI:445+10% viewport width,315+10% height; mobile defaults unchanged.
+-- Desktop automatic Size is912x543; mobile defaults unchanged.
 -- Tooltips/Tooltip/ToolTip provide hover/hold hints. Explicit sizing takes precedence over saved dimensions.
 -- Premium={Active=boolean,ExpiresAt=UnixSeconds,Plan=string}; SetPremiumStatus updates Settings > General.
 -- Premium is external display state, never a saved entitlement or automatic unlock.
@@ -82,9 +82,8 @@ local T = {
     Geometry = {
         Width = 872,
         Height = 548,
-        DesktopWidthOffset = 445, -- Nothing-UI-Library/source.lua default Size
-        DesktopHeightOffset = 315,
-        DesktopViewportRatio = 0.1,
+        DesktopWidth = 912,
+        DesktopHeight = 543,
         ManualWidth = 500, -- UIs/FluentModded.lua CreateWindow Size
         ManualHeight = 480,
         Sidebar = 234,
@@ -1049,16 +1048,8 @@ function Window:_responsive(preserveCapture)
         return
     end
     if self.defaultDesktopSize then
-        self.baseWidth = math.clamp(
-            T.Geometry.DesktopWidthOffset + view.X * T.Geometry.DesktopViewportRatio,
-            self.minimumSize.X,
-            self.maximumSize.X
-        )
-        self.baseHeight = math.clamp(
-            T.Geometry.DesktopHeightOffset + view.Y * T.Geometry.DesktopViewportRatio,
-            self.minimumSize.Y,
-            self.maximumSize.Y
-        )
+        self.baseWidth = math.clamp(T.Geometry.DesktopWidth, self.minimumSize.X, self.maximumSize.X)
+        self.baseHeight = math.clamp(T.Geometry.DesktopHeight, self.minimumSize.Y, self.maximumSize.Y)
     end
     local portrait = view.X < 600 or (view.Y > view.X and view.X < 900)
     local width = portrait and math.max(320, self.manualSize and math.min(self.baseWidth, view.X - 16) or view.X - 16)
