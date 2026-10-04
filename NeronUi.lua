@@ -20,7 +20,13 @@
 -- Themes: Neron Dark / Graphite / OLED / Light; locales: English / Spanish / Russian / Portuguese.
 -- Stateful controls with string Flag are saved unless Persistent=false. No flag is generated implicitly.
 -- Window:CreateProfile/SaveProfile/LoadProfile(name [, silent]) return success, error or load counts.
--- LoadProfile(name,true) and startup autoload update state/UI without callbacks; false/nil is normal load.
+-- LoadProfile(name,true) is silent; false/nil restores callbacks. Options: {FireCallbacks=false,Animate=false}.
+-- Autoload fires changed callbacks by default (AutoloadCallbacks=false opts out).
+-- Synchronous construction auto-finalizes on the next deferred turn. For yielding builders use
+-- AutoFinalize=false and Window:Finalize(), or BeginUpdate()/EndUpdate() around the build.
+-- Late controls consume pending values once, after defaults/options, unless already edited.
+-- GetValue/SetValue/Normalize/Serialize/Deserialize/RefreshVisual are the common control contract.
+-- Flags is a compatibility mirror. Save reads controllers, never trusts direct Flags assignments.
 -- ImportProfile(name,json [, overwrite]); ExportProfile([name]); Rename/Duplicate/Delete/RefreshProfiles.
 -- SetAutoload(name), DisableAutoload(), GetAutoload(), ApplyAutoload(); OpenSettings([category]).
 -- SetTheme/GetTheme/GetThemeTokens; ImportTheme/ExportTheme; SetLanguage/GetLanguage/Translate.
@@ -156,7 +162,7 @@ local U, Maid, Motion, Icons, Input, Overlay, Scroll = {}, {}, {}, {}, {}, {}, {
 local Window, Tab, SubTab, Control, Components = {}, {}, {}, {}, {}
 local Presentation, Locale, Storage, Profiles, SettingsUI = {}, {}, {}, {}, {}
 local Tooltip, Geometry, Premium = {}, {}, {}
-local Library = { Version = "2.0.0", Tokens = T, Theme = Theme, Icons = {} }
+local Library = { Version = "2.1.0", Tokens = T, Theme = Theme, Icons = {} }
 Window.__index = Window
 Tab.__index = Tab
 SubTab.__index = SubTab
@@ -378,11 +384,13 @@ function U.equal(a, b)
     if type(a) ~= "table" or type(b) ~= "table" then
         return a == b
     end
-    if #a ~= #b then
-        return false
+    for key, value in pairs(a) do
+        if not U.equal(value, b[key]) then
+            return false
+        end
     end
-    for i, value in ipairs(a) do
-        if value ~= b[i] then
+    for key in pairs(b) do
+        if a[key] == nil then
             return false
         end
     end
@@ -542,7 +550,8 @@ local function pinBase()
 end
 local function packageBase(opened)
     local c={iconPoly({{.2,.32},{.5,.16},{.8,.32},{.8,.72},{.5,.86},{.2,.72}},true),iconLine(.2,.32,.5,.48),iconLine(.8,.32,.5,.48),iconLine(.5,.48,.5,.86)}
-    if opened then c[#c+1]=iconLine(.2,.32,.12,.22); c[#c+1]=iconLine(.8,.32,.88,.22) end
+    if opened then c[#c+1]=iconLine(.2,.32,.12,.22)
+c[#c+1]=iconLine(.8,.32,.88,.22) end
     return c
 end
 local function swordBase(flip)
@@ -2058,7 +2067,12 @@ function Components.row(page, config, kind)
     assert(not page.destroyed, "Neron subtab is destroyed")
     config = config or {}
     local w = page.window
-    if config.Flag then
+    if config.Flag ~= nil then
+        assert(
+            type(config.Flag) == "string" and #config.Flag > 0 and #config.Flag <= 256,
+            "Neron Flag must be a nonempty string (maximum 256 bytes)"
+        )
+        -- Keep the first owner. Reject before allocating any UI or changing Flags.
         assert(not w.flagOwners[config.Flag], "Neron duplicate Flag: " .. config.Flag)
     end
     local self = setmetatable({
@@ -2090,6 +2104,9 @@ function Components.row(page, config, kind)
     page.controlSerial = (page.controlSerial or 0) + 1
     if self.flag then
         w.flagOwners[self.flag] = self
+    end
+    if Profiles.stateful[kind] and w.persistence then
+        w.persistence:BeginControl(self)
     end
     self.row = U.new(self.inlineOwner and "Frame" or "TextButton", {
         Name = self.name,
@@ -2277,11 +2294,14 @@ function Control:_emit()
         return
     end
     self.emitting = true
+    self.callbackError = nil
     local count = 0
     repeat
         self.pending = false
         count += 1
         local value = U.copy(self.value)
+        self.lastEmitted = self:Serialize()
+        self.emissionRevision = self.revision
         local ok, err = xpcall(function()
             if self.kind == "RangeSlider" then
                 self.config.Callback(value[1], value[2])
@@ -2294,27 +2314,32 @@ function Control:_emit()
             end
         end, debug.traceback)
         if not ok then
+            self.callbackError = tostring(err)
             U.warn(self.name, err)
         end
     until self.destroyed or not self.pending or count >= 8
     if self.pending and not self.destroyed then
-        U.warn(self.name, "callback reentry limit reached")
+        self.callbackError = "callback reentry limit reached"
+        U.warn(self.name, self.callbackError)
     end
     self.emitting = false
     self.pending = false
 end
-function Control:_commit(value, silent)
+function Control:_commit(value, silent, extraChanged)
     if self.destroyed then
         return self
     end
-    local changed = not U.equal(self.value, value)
+    local changed = extraChanged == true or not U.equal(self.value, value)
+    if changed then
+        self.revision = (self.revision or 0) + 1
+    end
     self.value = U.copy(value)
     if self.flag then
         self.window.Flags[self.flag] = U.copy(value)
     end
     self:_render()
-    if self.flag and self.window.persistence then
-        self.window.persistence:QueueAutoload()
+    if changed and self.window.persistence then
+        self.window.persistence:ControlChanged(self)
     end
     if changed and not silent then
         self:_emit()
@@ -2323,6 +2348,285 @@ function Control:_commit(value, silent)
 end
 function Control:Get()
     return U.copy(self.value)
+end
+-- Inspect render endpoints, not transient tween positions. Motion leases are the owned final visual targets.
+function Motion:Target(object, property)
+    local slots = self.leases[object]
+    return slots and slots[property] and slots[property].goal or object[property]
+end
+function Control:VerifyHydration(expected)
+    if self.destroyed then
+        return false, "Destroyed during hydration"
+    end
+    if not U.equal(self:Serialize(), expected) then
+        return false, "Canonical value differs"
+    end
+    if self.flag and not U.equal(self.value, self.window.Flags[self.flag]) then
+        return false, "Flag differs"
+    end
+    local kind = self.kind
+    if kind == "Toggle" then
+        local inset = T.Geometry.ToggleInset + T.Geometry.ToggleKnob / 2
+        local position = self.window.motion:Target(self.knob, "Position")
+        if position.X.Offset ~= (self.value and T.Geometry.Toggle - inset or inset) then
+            return false, "Toggle knob target differs"
+        end
+        local state, theme = self.state, self.window.theme
+        local track = state.Disabled and theme.InputBackground
+            or (
+                state.Locked and theme.DropdownBackground
+                or (self.value and theme.ToggleTrackOn or theme.ToggleTrackOff)
+            )
+        local knob = state.Disabled and theme.TextDisabled
+            or (state.Locked and theme.TextSecondary or (self.value and theme.ToggleKnobOn or theme.ToggleKnobOff))
+        if not state.Disabled and not state.Locked then
+            if state.Hovered then
+                track = track:Lerp(theme.TextPrimary, 0.035)
+            end
+            if state.Pressed then
+                knob = knob:Lerp(track, 0.12)
+            end
+        end
+        if
+            self.window.motion:Target(self.track, "BackgroundColor3") ~= track
+            or self.window.motion:Target(self.knob, "BackgroundColor3") ~= knob
+        then
+            return false, "Toggle theme colors differ"
+        end
+    elseif kind == "Slider" or kind == "RangeSlider" then
+        local range, n = kind == "RangeSlider", self.number
+        local low, high = n.min, self.value
+        if range then
+            low, high = self.value[1], self.value[2]
+        end
+        local a, b = (low - n.min) / (n.max - n.min), (high - n.min) / (n.max - n.min)
+        local travel = self.track.Size.X.Offset - T.Geometry.Thumb
+        local function near(x, y)
+            return math.abs(x - y) < 1e-5
+        end
+        if
+            not near(self.thumbs[1].Position.X.Offset, T.Geometry.Thumb / 2 + (range and a or b) * travel)
+            or (range and not near(self.thumbs[2].Position.X.Offset, T.Geometry.Thumb / 2 + b * travel))
+            or not near(self.fill.Position.X.Offset, range and a * travel or 0)
+            or not near(self.fill.Size.X.Offset, (range and b - a or b) * travel + T.Geometry.Thumb)
+        then
+            return false, "Slider geometry differs"
+        end
+        local text = range and (Components.format(n, low) .. ", " .. Components.format(n, high))
+            or Components.format(n, high)
+        if self.valueLabel.Text ~= text then
+            return false, "Slider label differs"
+        end
+    elseif kind == "Dropdown" or kind == "MultiDropdown" then
+        local multi = kind == "MultiDropdown"
+        local text = multi
+                and (#self.value > 0 and table.concat(self.value, ", ") or tostring(
+                    self.config.Placeholder or Locale.text(self.window, "None")
+                ))
+            or tostring(self.value or self.config.Placeholder or Locale.text(self.window, "Select"))
+        if self.valueLabel.Text ~= text then
+            return false, "Dropdown label differs"
+        end
+        for _, option in ipairs(self.optionRows or {}) do
+            local selected = multi and table.find(self.value, option.value) ~= nil
+                or (not multi and option.value == self.value)
+            if option.dot.Visible ~= selected then
+                return false, "Dropdown popup selection differs"
+            end
+        end
+    elseif kind == "Textbox" then
+        if self.box.Text ~= self.value then
+            return false, "Textbox text differs"
+        end
+    elseif kind == "ColorPicker" then
+        if self.swatch.BackgroundColor3 ~= self.value then
+            return false, "Color preview differs"
+        end
+        local alpha = (self.state.Disabled or (self.inlineOwner and self.inlineOwner.state.Disabled)) and 0.65
+            or 1 - self.alpha
+        if math.abs(self.swatch.BackgroundTransparency - alpha) > 1e-6 then
+            return false, "Alpha preview differs"
+        end
+        if self.picker then
+            local p = self.picker
+            if
+                p.svHandle.Position.X.Scale ~= self.saturation
+                or p.svHandle.Position.Y.Scale ~= 1 - self.brightness
+                or p.hueHandle.Position.X.Scale ~= self.hue
+                or (p.alphaHandle and p.alphaHandle.Position.X.Scale ~= self.alpha)
+            then
+                return false, "Color picker handles differ"
+            end
+        end
+    end
+    return true
+end
+
+function Control:GetValue()
+    return self:Get()
+end
+function Control:Normalize(value)
+    local kind = self.kind
+    if kind == "Toggle" then
+        if type(value) ~= "boolean" then
+            return nil, false, "Expected boolean"
+        end
+        return not self.state.Locked and value, true
+    elseif kind == "Slider" then
+        if type(value) ~= "number" or U.finite(value, nil) == nil then
+            return nil, false, "Expected finite number"
+        end
+        return Components.quantize(self.number, value), true
+    elseif kind == "RangeSlider" then
+        if type(value) ~= "table" then
+            return nil, false, "Expected range"
+        end
+        local low, high = value[1] or value.Min, value[2] or value.Max
+        if
+            type(low) ~= "number"
+            or type(high) ~= "number"
+            or U.finite(low, nil) == nil
+            or U.finite(high, nil) == nil
+        then
+            return nil, false, "Expected two finite numbers"
+        end
+        low, high = Components.quantize(self.number, low), Components.quantize(self.number, high)
+        return { math.min(low, high), math.max(low, high) }, true
+    elseif kind == "Dropdown" then
+        if value == nil then
+            return nil, true
+        end
+        if type(value) ~= "string" then
+            return nil, false, "Expected option string"
+        end
+        if not table.find(self.values, value) then
+            return nil, false, #self.values == 0 and "WaitingForOptions" or "Unavailable option"
+        end
+        return value, true
+    elseif kind == "MultiDropdown" then
+        if type(value) ~= "table" then
+            return nil, false, "Expected selection list"
+        end
+        local requested, count = {}, 0
+        for key, item in pairs(value) do
+            if type(key) ~= "number" or key < 1 or key % 1 ~= 0 or type(item) ~= "string" then
+                return nil, false, "Expected dense string list"
+            end
+            count += 1
+            requested[item] = true
+        end
+        if count ~= #value then
+            return nil, false, "Expected dense string list"
+        end
+        if count > 0 and #self.values == 0 then
+            return nil, false, "WaitingForOptions"
+        end
+        local selected = {}
+        local maximum = self.unlimited and #self.values or self.maxSelections
+        for _, item in ipairs(self.values) do
+            if requested[item] and #selected < maximum then
+                table.insert(selected, item)
+            end
+        end
+        return selected, true
+    elseif kind == "Textbox" then
+        if type(value) ~= "string" then
+            return nil, false, "Expected string"
+        end
+        return self:normalize(value), true
+    elseif kind == "ColorPicker" then
+        local color = Presentation.decodeColor(value)
+        return color, color ~= nil, color == nil and "Expected color payload" or nil
+    end
+    return nil, false, "Not persistent"
+end
+function Control:Serialize()
+    local entry = { kind = self.kind, value = self:Get() }
+    if self.kind == "ColorPicker" and self.value then
+        entry.value = Presentation.colorData(self.value)
+        if self.hasAlpha then
+            entry.alpha = self.alpha
+        end
+    elseif self.kind == "Dropdown" and self.value == nil then
+        entry.empty = true -- JSON cannot preserve a nil selection without a marker.
+    end
+    return entry
+end
+function Control:Deserialize(entry)
+    if type(entry) ~= "table" or (entry.kind ~= nil and entry.kind ~= self.kind) then
+        return nil, false, "Control type changed"
+    end
+    if entry.value == nil and not (self.kind == "Dropdown" and entry.empty == true) then
+        return nil, false, "Missing value"
+    end
+    if self.kind == "Toggle" and self.state.Locked and entry.value == true then
+        return nil, false, "Premium locked"
+    end
+    local value, valid, reason = self:Normalize(entry.value)
+    if not valid then
+        return nil, false, reason
+    end
+    local result = { value = U.copy(value) }
+    if self.kind == "ColorPicker" then
+        local alpha = entry.alpha
+        if alpha == nil and type(entry.value) == "table" then
+            alpha = entry.value.a
+        end
+        if alpha ~= nil and (type(alpha) ~= "number" or U.finite(alpha, nil) == nil) then
+            return nil, false, "Expected finite alpha"
+        end
+        result.alpha = self.hasAlpha and math.clamp(alpha == nil and self.alpha or alpha, 0, 1) or self.alpha
+    end
+    return result, true
+end
+function Control:SetValue(value, options)
+    if self.destroyed then
+        return self, false, "Destroyed control"
+    end
+    options = type(options) == "table" and options or { Silent = options == true }
+    local normalized, valid, reason = self:Normalize(value)
+    if not valid then
+        return self, false, reason
+    end
+    local previous = self:Serialize()
+    self.applyOptions = options
+    -- Set is the same path used by input. Batch color + alpha before dispatching once.
+    if self.kind == "ColorPicker" and options.Alpha ~= nil then
+        self:SetAlpha(options.Alpha, true)
+    end
+    local ok, err = pcall(self.Set, self, normalized, true)
+    self.applyOptions = nil
+    if not ok then
+        return self, false, tostring(err)
+    end
+    local changed = not U.equal(previous, self:Serialize())
+    if changed and options.FireCallback ~= false and options.FireCallbacks ~= false and options.Silent ~= true then
+        self:_emit()
+    end
+    return self, true
+end
+function Control:RefreshVisual(animate)
+    if self.destroyed then
+        return self
+    end
+    if self.flag then
+        self.window.Flags[self.flag] = U.copy(self.value)
+    end
+    self.applyOptions = { Animate = animate == true }
+    local ok, err = pcall(self._render, self)
+    self.applyOptions = nil
+    if not ok then
+        error(err, 0)
+    end
+    return self
+end
+function Control:_ready()
+    self.initialized = true
+    self.defaultRevision = self.revision or 0
+    if self.window.persistence then
+        self.window.persistence:EndControl(self)
+    end
+    return self
 end
 function Control:SetVisible(value)
     if self.destroyed then
@@ -2439,9 +2743,12 @@ function Control:Destroy()
     self.window.motion:Cancel(self.desc)
     U.remove(self.page.controls, self)
     U.remove(self.window.index, self)
-    if self.flag then
+    if self.flag and self.window.flagOwners[self.flag] == self then
         self.window.flagOwners[self.flag] = nil
         self.window.Flags[self.flag] = nil
+    end
+    if self.window.persistence then
+        self.window.persistence:EndControl(self)
     end
     self.bag:Destroy()
     self.window:_indexChanged()
@@ -2542,14 +2849,16 @@ function SubTab:AddToggle(config)
             knob = knob:Lerp(track, 0.12)
         end
         local inset = T.Geometry.ToggleInset + T.Geometry.ToggleKnob / 2
-        w.motion:To(self.track, T.Motion.Fast, { BackgroundColor3 = track })
-        w.motion:To(self.knob, T.Motion.Fast, {
+        local duration = self.applyOptions and self.applyOptions.Animate == false and 0 or T.Motion.Fast
+        w.motion:To(self.track, duration, { BackgroundColor3 = track })
+        w.motion:To(self.knob, duration, {
             BackgroundColor3 = knob,
             Position = UDim2.new(0, on and T.Geometry.Toggle - inset or inset, 0.5, 0),
         })
     end
     function self:Set(value, silent)
-        return self:_commit(not self.state.Locked and value == true, silent)
+        local normalized = self:Normalize(value == true)
+        return self:_commit(normalized, silent)
     end
     function self:GetLocked()
         return self.state.Locked
@@ -2620,7 +2929,7 @@ function SubTab:AddToggle(config)
     end
     self:Set(config.Default == true, true)
     self:_layout()
-    return self
+    return self:_ready()
 end
 function Components.premium(control, group, bag)
     local w = control.window
@@ -2839,13 +3148,13 @@ function Components.slider(page, config, range)
                 high = low[2]
                 low = low[1]
             end
-            low = Components.quantize(self.number, low)
-            high = Components.quantize(self.number, high)
-            return self:_commit({ math.min(low, high), math.max(low, high) }, silent)
+            local normalized = self:Normalize({ U.finite(low, self.number.min), U.finite(high, self.number.min) })
+            return self:_commit(normalized, silent)
         end
     else
         function self:Set(value, silent)
-            return self:_commit(Components.quantize(self.number, value), silent)
+            local normalized = self:Normalize(U.finite(value, self.number.min))
+            return self:_commit(normalized, silent)
         end
     end
     U.connect(self.bag, self.track.InputBegan, function(event)
@@ -2897,7 +3206,7 @@ function Components.slider(page, config, range)
         self:Set(config.Default or self.number.min, true)
     end
     self:_layout()
-    return self
+    return self:_ready()
 end
 function SubTab:AddSlider(config)
     return Components.slider(self, config, false)
@@ -2965,32 +3274,26 @@ function Components.dropdown(page, config, multi)
         end
     end
     function self:Set(value, silent)
-        if multi then
-            local requested = {}
-            for _, v in ipairs(type(value) == "table" and value or {}) do
-                requested[tostring(v)] = true
-            end
-            local selected = {}
-            local maximum = self.unlimited and #self.values or self.maxSelections
-            for _, v in ipairs(self.values) do
-                if requested[v] and #selected < maximum then
-                    table.insert(selected, v)
-                end
-            end
-            return self:_commit(selected, silent)
-        end
-        if value ~= nil then
+        if not multi and value ~= nil then
             value = tostring(value)
         end
-        if value ~= nil and not table.find(self.values, value) then
+        local requested = multi and Components.values(type(value) == "table" and value or {}) or value
+        -- Direct/default Set keeps an empty canonical list until options exist. Hydration's
+        -- SetValue validates first and defers a nonempty saved list instead of discarding it.
+        if multi and #self.values == 0 then
+            requested = {}
+        end
+        local normalized, valid = self:Normalize(requested)
+        if not valid then
             return self
         end
-        return self:_commit(value, silent)
+        return self:_commit(normalized, silent)
     end
     function self:SetValues(values, silent)
         local open = self.state.Open
         self:Close()
         self.values = Components.values(values)
+        self.updatingOptions = true
         if multi then
             self:Set(self.value, silent)
         else
@@ -3000,8 +3303,12 @@ function Components.dropdown(page, config, multi)
             end
             self:Set(current, silent)
         end
+        self.updatingOptions = nil
         if open then
             self:Open()
+        end
+        if self.window.persistence then
+            self.window.persistence:QueuePending(self.flag)
         end
         return self
     end
@@ -3090,7 +3397,7 @@ function Components.dropdown(page, config, multi)
         end
     end)
     self:Set(config.Default or (multi and {} or self.values[1]), true)
-    return self
+    return self:_ready()
 end
 function SubTab:AddDropdown(config)
     return Components.dropdown(self, config, false)
@@ -3150,11 +3457,7 @@ function SubTab:AddColorPicker(config)
         alpha = math.clamp(U.finite(alpha, 1), 0, 1)
         local changed = self.alpha ~= alpha
         self.alpha = alpha
-        self:_render()
-        if changed and not silent then
-            self:_emit()
-        end
-        return self
+        return self:_commit(self.value, silent, changed)
     end
     function self:GetAlpha()
         return self.alpha
@@ -3336,7 +3639,7 @@ function SubTab:AddColorPicker(config)
         end
     end)
     self:Set(config.Default or Color3.fromRGB(70, 177, 245), true)
-    return self
+    return self:_ready()
 end
 
 function SubTab:AddTextbox(config)
@@ -3411,6 +3714,11 @@ function SubTab:AddTextbox(config)
         return tostring(number)
     end
     function self:renderVisual()
+        if self.value ~= nil and not self.state.Focused and self.box.Text ~= self.value then
+            self.writing = true
+            self.box.Text = self.value
+            self.writing = false
+        end
         self.box.TextEditable = not self.state.Disabled
         self.box.TextColor3 = self.state.Disabled and self.window.theme.TextDisabled or self.window.theme.TextPrimary
         Icons.color(self.edit, self.box.TextColor3)
@@ -3425,6 +3733,7 @@ function SubTab:AddTextbox(config)
         if self.destroyed then
             return self
         end
+        self.editStart = nil
         value = self:normalize(value)
         if self.box.Text ~= value then
             self.writing = true
@@ -3449,7 +3758,12 @@ function SubTab:AddTextbox(config)
     end)
     U.connect(self.bag, self.box.FocusLost, function()
         self.state.Focused = false
-        self:Set(self.box.Text)
+        local previous = self.editStart
+        self.editStart = nil
+        self:Set(self.box.Text, config.Live ~= true)
+        if config.Live ~= true and previous ~= nil and previous ~= self.value then
+            self:_emit()
+        end
         self:_render()
     end)
     U.connect(self.bag, self.box:GetPropertyChangedSignal("Text"), function()
@@ -3462,16 +3776,16 @@ function SubTab:AddTextbox(config)
             self.box.Text = text
             self.writing = false
         end
-        if config.Live then
-            if not self.numeric or text == "" or U.finite(text, nil) ~= nil then
-                -- Preserve the typed numeric string while focused (for example `1.`);
-                -- FocusLost/Set canonicalizes it without changing Textbox's string API.
-                self:_commit(text, false)
+        if not self.numeric or text == "" or U.finite(text, nil) ~= nil then
+            if config.Live ~= true and self.editStart == nil then
+                self.editStart = self.value
             end
+            -- Non-Live edits still update canonical state; only callback delivery waits for FocusLost.
+            self:_commit(text, config.Live ~= true)
         end
     end)
     self:Set(config.Default or "", true)
-    return self
+    return self:_ready()
 end
 function SubTab:AddButton(config)
     config = config or {}
@@ -4839,12 +5153,15 @@ function Library:CreateWindow(config)
     w:_responsive()
     Presentation.init(w, config)
     Profiles.init(w, config)
+    w.ControlRegistry = { ByFlag = w.flagOwners }
     w.premiumData = Premium.normalize(config.Premium) or {}
     Premium.schedule(w)
     SettingsUI.init(w, config)
     if config.Accent then
         w:SetAccent(config.Accent)
     end
+    w.constructed = true
+    w.persistence:QueueReady()
     return w
 end
 
@@ -5092,15 +5409,21 @@ function Presentation.decodeColor(value)
     if typeof(value) == "Color3" then
         return value
     end
-    if type(value) ~= "table" or #value ~= 3 then
+    if type(value) ~= "table" then
         return nil
     end
-    for i = 1, 3 do
-        if type(value[i]) ~= "number" or U.finite(value[i], nil) == nil then
-            return nil
-        end
+    local r, g, b = value[1] or value.r, value[2] or value.g, value[3] or value.b
+    if
+        type(r) ~= "number"
+        or type(g) ~= "number"
+        or type(b) ~= "number"
+        or U.finite(r, nil) == nil
+        or U.finite(g, nil) == nil
+        or U.finite(b, nil) == nil
+    then
+        return nil
     end
-    return Color3.new(math.clamp(value[1], 0, 1), math.clamp(value[2], 0, 1), math.clamp(value[3], 0, 1))
+    return Color3.new(math.clamp(r, 0, 1), math.clamp(g, 0, 1), math.clamp(b, 0, 1))
 end
 function Window:ExportTheme()
     local values = {}
@@ -5382,6 +5705,31 @@ Locale.rows = {
     },
     Ready = { "Ready", "Listo", "Готово", "Pronto" },
 }
+-- Profile status uses the same localized native typography/toast surfaces as the rest of Settings.
+Locale.rows.Saving = { "Saving…", "Guardando…", "Сохранение…", "Salvando…" }
+Locale.rows.Loading = { "Loading…", "Cargando…", "Загрузка…", "Carregando…" }
+Locale.rows.Modified = { "Modified", "Modificado", "Изменён", "Modificado" }
+Locale.rows.Selected = { "Selected", "Seleccionado", "Выбран", "Selecionado" }
+Locale.rows.LoadedWithWarnings = {
+    "Loaded with warnings",
+    "Cargado con avisos",
+    "Загружено с предупреждениями",
+    "Carregado com avisos",
+}
+Locale.rows.RestoreFailure = {
+    "Could not fully restore profile",
+    "No se pudo restaurar el perfil completo",
+    "Не удалось полностью восстановить профиль",
+    "Não foi possível restaurar todo o perfil",
+}
+Locale.rows.WaitingForControls =
+    { "Waiting for controls", "Esperando controles", "Ожидание элементов", "Aguardando controles" }
+Locale.rows.RestoreSummary = {
+    "%d restored · %d unavailable · %d failed",
+    "%d restaurados · %d no disponibles · %d fallidos",
+    "%d восстановлено · %d недоступно · %d ошибок",
+    "%d restaurados · %d indisponíveis · %d falhas",
+}
 Locale.dictionaries = {}
 for i, language in ipairs(Locale.order) do
     local dictionary = {}
@@ -5587,11 +5935,21 @@ function Storage:Exists(path)
     return ok and value == true
 end
 function Storage:Read(path)
-    if not self:Exists(path) then
+    if not self.available then
+        return nil, "FilesystemUnavailable"
+    end
+    local checked, exists = self:Call("isfile", path)
+    if not checked then
+        return nil, exists
+    end
+    if not exists then
         return nil, "MissingProfile"
     end
     local ok, contents = self:Call("readfile", path)
-    if not ok or type(contents) ~= "string" then
+    if not ok then
+        return nil, contents
+    end
+    if type(contents) ~= "string" then
         return nil, "InvalidJSON"
     end
     return contents
@@ -5626,6 +5984,8 @@ function Storage:Write(path, value)
     if not wrote or verify ~= json or not Storage.decode(verify) then
         if backup then
             self:Call("writefile", path, backup)
+        elseif type(self.api.delfile) == "function" then
+            self:Call("delfile", path)
         end
         return false, reason or "SaveFailure"
     end
@@ -5717,8 +6077,15 @@ function Profiles.init(w, config)
         store = Storage.new(config.Filesystem),
         placeId = game.PlaceId,
         gameName = Storage.gameName(config.GameName, tostring(game.PlaceId)),
-        applied = setmetatable({}, { __mode = "k" }),
-        silentLoad = true,
+        silentLoad = config.SilentLoad == true,
+        autoloadCallbacks = config.AutoloadCallbacks ~= false,
+        autoFinalize = config.AutoFinalize ~= false,
+        uiReady = false,
+        buildDepth = 0,
+        building = {},
+        pendingValues = {},
+        autoloadState = config.Autoload == false and "Disabled" or "WaitingForControls",
+        debug = config.ConfigDebug == true,
         autoloadAllowed = config.Autoload ~= false,
         ready = config.GameName ~= nil,
     }, { __index = Profiles })
@@ -5833,68 +6200,248 @@ end
 function Profiles:Path(name)
     return self.folder .. "/" .. name .. ".json"
 end
+-- Registry, readiness, hydration and reporting share this one manager. No second config store.
+function Profiles:Debug(message)
+    if self.debug then
+        print("[Neron Config] " .. message)
+    end
+end
+function Profiles:BeginControl(control)
+    self.building[control] = true
+    if not self.autoloadChecked then
+        self.uiReady = false
+    end
+    if self.readyCancel then
+        self.window.bag:Remove(self.readyCancel, true)
+        self.readyCancel = nil
+    end
+end
+function Profiles:EndControl(control)
+    self.building[control] = nil
+    if self.window.destroyed then
+        return
+    end
+    if control.initialized and not control.destroyed and self.autoloadChecked then
+        self:QueuePending(control.flag)
+    end
+    if
+        control.initialized
+        and self.baseline
+        and not self.applying
+        and control.flag
+        and Profiles.stateful[control.kind]
+        and control.config.Persistent ~= false
+    then
+        self:UpdateDirty(control)
+    end
+    self:QueueReady()
+end
+function Profiles:QueueReady()
+    if
+        self.readyCancel
+        or self.window.destroyed
+        or not self.window.constructed
+        or not self.autoFinalize
+        or self.buildDepth > 0
+        or next(self.building)
+    then
+        return
+    end
+    -- This is a construction-turn boundary, not a duration guess. Yielding builders opt into Finalize.
+    self.readyCancel = self.window.bag:After(0, function()
+        self.readyCancel = nil
+        if self.buildDepth == 0 and not next(self.building) then
+            self:Finalize()
+        end
+    end, true)
+end
+function Profiles:Finalize()
+    if self.window.destroyed then
+        return false, "WindowDestroyed"
+    end
+    if not self.window.constructed or self.buildDepth > 0 or next(self.building) then
+        return false, "WaitingForControls"
+    end
+    self.uiReady = true
+    self:QueueAutoload()
+    for flag in pairs(self.pendingValues) do
+        self:QueuePending(flag)
+    end
+    return true
+end
+function Profiles:ControlChanged(control)
+    if
+        not control.initialized
+        or not control.flag
+        or control.config.Persistent == false
+        or not Profiles.stateful[control.kind]
+    then
+        return
+    end
+    if not self.applying and not control.hydrating and not control.updatingOptions then
+        -- A user/API edit always wins over a queued late startup value.
+        self.pendingValues[control.flag] = nil
+    end
+    if self.activeProfile and not self.applying then
+        self:UpdateDirty(control)
+    end
+end
+function Profiles:UpdateDirty(control)
+    if not self.baseline then
+        return
+    end
+    self.dirtyFlags = self.dirtyFlags or {}
+    if control and control.flag then
+        local previous = self.baseline[control.flag]
+        local modified = control.destroyed and previous ~= nil
+            or (not control.destroyed and not U.equal(control:Serialize(), previous))
+        self.dirtyFlags[control.flag] = modified and true or nil
+    else
+        -- Full reconciliation is operation-driven; slider/text editing checks only its own flag.
+        table.clear(self.dirtyFlags)
+        for flag, entry in pairs(self.baseline) do
+            local owner = self.window.flagOwners[flag]
+            if not owner or owner.destroyed or not U.equal(owner:Serialize(), entry) then
+                self.dirtyFlags[flag] = true
+            end
+        end
+        for flag, owner in pairs(self.window.flagOwners) do
+            if
+                owner.initialized
+                and Profiles.stateful[owner.kind]
+                and owner.config.Persistent ~= false
+                and self.baseline[flag] == nil
+            then
+                self.dirtyFlags[flag] = true
+            end
+        end
+    end
+    local dirty = next(self.dirtyFlags) ~= nil
+    if self.dirty ~= dirty then
+        self.dirty = dirty
+        self:Feedback()
+        self:Changed()
+    end
+end
+function Profiles:Feedback(key, name, result)
+    if key then
+        self.operation = { key = key, name = name, result = result }
+        self:Debug(key .. (name and " " .. name or ""))
+    end
+    local w = self.window
+    if w.destroyed then
+        return
+    end
+    if w.persistenceLabel and not w.persistenceLabel.destroyed then
+        local operation = self.operation
+        local text = operation and Locale.text(w, operation.key) or Locale.text(w, self:Status())
+        if operation and operation.name then
+            text = operation.name .. " · " .. text
+        end
+        if operation and operation.result then
+            local r = operation.result
+            text ..= " · " .. string.format(Locale.text(w, "RestoreSummary"), r.applied, r.ignored, r.failed)
+        end
+        w.persistenceLabel:Set(text, true)
+    end
+    if SettingsUI.updateProfileStates then
+        SettingsUI.updateProfileStates(w)
+    end
+end
 function Profiles:Snapshot()
-    local entries = {}
+    local entries, count = {}, 0
     for flag, control in pairs(self.window.flagOwners) do
         if
-            type(flag) == "string"
+            control.initialized
             and not control.destroyed
             and Profiles.stateful[control.kind]
             and control.config.Persistent ~= false
         then
-            local value = control:Get()
-            local entry = { kind = control.kind, value = value }
-            if control.kind == "ColorPicker" then
-                entry.value = Presentation.colorData(value)
-                if control.hasAlpha then
-                    entry.alpha = control.alpha
-                end
+            count += 1
+            if count > 2048 then
+                error("Profile exceeds 2048 persisted controls", 0)
             end
+            -- Settle a Textbox draft (including non-Live edits) through the same public setter.
+            if control.kind == "Textbox" then
+                local draftStart = control.editStart
+                control:Set(control.box.Text, true)
+                control.editStart = draftStart
+            end
+            local entry = control:Serialize()
+            local _, valid, reason = control:Deserialize(entry)
+            if not valid then
+                error("Invalid control " .. flag .. ": " .. tostring(reason), 0)
+            end
+            control:RefreshVisual(false) -- repair a directly modified compatibility Flags mirror
             entries[flag] = entry
         end
     end
     local now = os.time()
     return {
-        schemaVersion = 1,
+        schemaVersion = 2,
         libraryVersion = Library.Version,
         game = self.gameName,
         placeId = self.placeId,
         createdAt = now,
         updatedAt = now,
+        savedAt = now,
         values = entries,
     }
 end
 function Profiles:Migrate(data)
-    if type(data) ~= "table" or type(data.values) ~= "table" then
+    if type(data) ~= "table" then
         return nil, "InvalidProfile"
     end
     local version = data.schemaVersion
-    if version == nil or version == 0 then
-        local values = {}
-        for flag, value in pairs(data.values) do
-            local control = self.window.flagOwners[flag]
-            if control and Profiles.stateful[control.kind] then
-                values[flag] = { kind = control.kind, value = value }
-            end
-        end
-        data.values, data.schemaVersion = values, 1
-    elseif version ~= 1 then
+    if version ~= nil and version ~= 0 and version ~= 1 and version ~= 2 then
         return nil, "InvalidProfile"
     end
+    if version ~= nil and type(data.values) ~= "table" then
+        return nil, "InvalidProfile"
+    end
+    local source = data.values or data.Flags or data.flags or data
+    if type(source) ~= "table" then
+        return nil, "InvalidProfile"
+    end
+    -- Preserve unknown entries, including false, so late registration can still resolve them.
+    local migrated = {
+        schemaVersion = 2,
+        libraryVersion = data.libraryVersion,
+        game = data.game,
+        placeId = data.placeId,
+        createdAt = data.createdAt,
+        updatedAt = data.updatedAt,
+        savedAt = data.savedAt,
+        values = {},
+    }
     local count = 0
-    for flag, entry in pairs(data.values) do
+    for flag, entry in pairs(source) do
         count += 1
-        if count > 2048 or type(flag) ~= "string" or type(entry) ~= "table" then
+        if count > 2048 or type(flag) ~= "string" or #flag == 0 or #flag > 256 then
             return nil, "InvalidProfile"
         end
+        if version == 1 or version == 2 then
+            if type(entry) ~= "table" or (entry.kind ~= nil and type(entry.kind) ~= "string") then
+                return nil, "InvalidProfile"
+            end
+            migrated.values[flag] =
+                { kind = entry.kind, value = U.copy(entry.value), alpha = entry.alpha, empty = entry.empty }
+        elseif type(entry) == "table" and type(entry.kind) == "string" then
+            migrated.values[flag] =
+                { kind = entry.kind, value = U.copy(entry.value), alpha = entry.alpha, empty = entry.empty }
+        else
+            migrated.values[flag] = { value = U.copy(entry) }
+        end
     end
-    return data
+    self:Debug("Decoded schema " .. tostring(version or "legacy") .. " -> 2")
+    return migrated
 end
 function Profiles:Read(name)
     local clean, err = self:Name(name)
     if not clean then
         return nil, err
     end
+    self:Debug("Reading " .. clean)
     local json, reason = self.store:Read(self:Path(clean))
     if not json then
         return nil, reason
@@ -5906,98 +6453,180 @@ function Profiles:Read(name)
     return self:Migrate(data)
 end
 function Profiles:ValidValue(control, entry)
-    if entry.kind ~= control.kind then
-        return nil
-    end
-    local value, kind = entry.value, control.kind
-    if kind == "Toggle" then
-        if type(value) ~= "boolean" then
-            return nil
-        end
-    elseif kind == "Slider" then
-        if type(value) ~= "number" or not U.finite(value, nil) then
-            return nil
-        end
-        value = Components.quantize(control.number, value)
-    elseif kind == "RangeSlider" then
-        if type(value) ~= "table" or #value ~= 2 then
-            return nil
-        end
-        for i = 1, 2 do
-            if type(value[i]) ~= "number" or not U.finite(value[i], nil) then
-                return nil
-            end
-        end
-        local a, b = Components.quantize(control.number, value[1]), Components.quantize(control.number, value[2])
-        value = { math.min(a, b), math.max(a, b) }
-    elseif kind == "Dropdown" then
-        if type(value) ~= "string" or not table.find(control.values, value) then
-            return nil
-        end
-    elseif kind == "MultiDropdown" then
-        if type(value) ~= "table" then
-            return nil
-        end
-        local filtered = {}
-        for _, v in ipairs(value) do
-            if type(v) == "string" and table.find(control.values, v) then
-                table.insert(filtered, v)
-            end
-        end
-        value = filtered
-    elseif kind == "ColorPicker" then
-        value = Presentation.decodeColor(value)
-        if not value then
-            return nil
-        end
-        if entry.alpha ~= nil and (type(entry.alpha) ~= "number" or not U.finite(entry.alpha, nil)) then
-            return nil
-        end
-    elseif kind == "Textbox" then
-        if type(value) ~= "string" then
-            return nil
-        end
-        value = control:normalize(value)
-    else
-        return nil
-    end
-    return value, true
+    local result, valid, reason = control:Deserialize(entry)
+    return result and result.value, valid, reason
 end
-function Profiles:Apply(data, silent, pendingOnly)
-    local applied, ignored = 0, 0
-    local owners = table.clone(self.window.flagOwners)
-    for flag, entry in pairs(data.values) do
-        local control = owners[flag]
-        if
-            control
-            and not control.destroyed
-            and Profiles.stateful[control.kind]
-            and control.config.Persistent ~= false
-            and (not pendingOnly or not self.applied[control])
-        then
-            local value, valid = self:ValidValue(control, entry)
-            if valid then
-                self.applied[control] = true
-                if control.kind == "ColorPicker" then
-                    local alpha = entry.alpha ~= nil and math.clamp(entry.alpha, 0, 1) or control.alpha
-                    local changed = control.alpha ~= alpha or not U.equal(control.value, value)
-                    control.alpha = alpha
-                    control:Set(value, true)
-                    if changed and not silent then
-                        control:_emit()
-                    end
-                else
-                    control:Set(value, silent == true)
-                end
-                applied += 1
-            else
-                ignored += 1
-            end
+function Profiles:Policy(options)
+    if type(options) ~= "table" then
+        options = { Silent = options == true }
+    end
+    return {
+        FireCallbacks = options.FireCallbacks ~= false and options.FireCallback ~= false and options.Silent ~= true,
+        Animate = options.Animate ~= false,
+        Source = options.Source or "Config",
+    }
+end
+function Profiles:Prepare(data, result)
+    local plan = {}
+    local flags = {}
+    for flag in pairs(data.values) do
+        flags[#flags + 1] = flag
+    end
+    table.sort(flags) -- deterministic callback/application order
+    for _, flag in ipairs(flags) do
+        local control, entry = self.window.flagOwners[flag], data.values[flag]
+        if not control or control.destroyed or not control.initialized then
+            result.unknown += 1
+            result.ignored += 1
+            result.pending[flag] = entry
+            result.details[flag] = "Unknown control"
+        elseif not Profiles.stateful[control.kind] or control.config.Persistent == false then
+            result.ignored += 1
+            result.details[flag] = "Not persistent"
         else
-            ignored += 1
+            local ok, normalized, valid, reason = pcall(control.Deserialize, control, entry)
+            if ok and valid then
+                local expected = { kind = control.kind, value = U.copy(normalized.value) }
+                if control.kind == "ColorPicker" then
+                    expected.value = Presentation.colorData(normalized.value)
+                    if control.hasAlpha then
+                        expected.alpha = normalized.alpha
+                    end
+                elseif control.kind == "Dropdown" and normalized.value == nil then
+                    expected.empty = true
+                end
+                plan[#plan + 1] = {
+                    flag = flag,
+                    control = control,
+                    normalized = normalized,
+                    expected = expected,
+                    previous = control:Serialize(),
+                    previousRevision = control.revision,
+                }
+            else
+                result.ignored += 1
+                result.details[flag] = ok and reason or tostring(normalized)
+                if reason == "WaitingForOptions" then
+                    result.pending[flag] = entry
+                end
+                self:Debug("Skipped " .. flag .. ": " .. tostring(result.details[flag]))
+            end
         end
     end
-    return applied, ignored
+    return plan
+end
+function Profiles:Apply(data, options)
+    local policy = self:Policy(options)
+    local result = {
+        applied = 0,
+        ignored = 0,
+        failed = 0,
+        unknown = 0,
+        verified = 0,
+        callbackFailed = 0,
+        details = {},
+        pending = {},
+    }
+    -- All decoding/schema validation has completed before this phase. Normalize everything before mutation.
+    local plan = self:Prepare(data, result)
+    self.applying = true
+    local applied = {}
+    for _, item in ipairs(plan) do
+        local control = item.control
+        self.window.input:Cancel(control) -- a captured drag must not overwrite a loaded value later
+        control.hydrating = true
+        applied[#applied + 1] = item
+        local ok, accepted, reason = pcall(function()
+            local _, accepted, reason = control:SetValue(
+                item.normalized.value,
+                { Silent = true, Animate = policy.Animate, Alpha = item.normalized.alpha, Source = policy.Source }
+            )
+            if not accepted then
+                return false, reason
+            end
+            return control:VerifyHydration(item.expected)
+        end)
+        control.hydrating = nil
+        if not ok or not accepted then
+            result.failed += 1
+            result.details[item.flag] = not ok and tostring(accepted) or reason or "State verification failed"
+            break
+        end
+        self:Debug("Applying " .. item.flag .. " (" .. control.kind .. ")")
+    end
+    if result.failed > 0 then
+        -- Unexpected setter failures roll back *all* staged changes before any user callback runs.
+        for i = #applied, 1, -1 do
+            local item = applied[i]
+            local normalized, valid = item.control:Deserialize(item.previous)
+            if valid then
+                local ok, _, accepted = pcall(
+                    item.control.SetValue,
+                    item.control,
+                    normalized.value,
+                    { Silent = true, Animate = false, Alpha = normalized.alpha, Source = "Rollback" }
+                )
+                local checked, restored = pcall(item.control.VerifyHydration, item.control, item.previous)
+                if not ok or accepted == false or not checked or not restored then
+                    result.details[item.flag] = "Rollback failed"
+                else
+                    item.control.revision = item.previousRevision
+                end
+            end
+        end
+        self.applying = false
+        self.lastResult = result
+        return 0, result.ignored, result
+    end
+    -- Stage B: all controls/UI/Flags are ready before any feature callback can inspect dependencies.
+    if policy.FireCallbacks then
+        for _, item in ipairs(plan) do
+            local control = item.control
+            if
+                not control.destroyed
+                and (
+                    not U.equal(item.previous, control:Serialize())
+                    or control.emissionRevision ~= control.revision
+                    or control.callbackError ~= nil
+                )
+            then
+                -- A preceding callback may already have applied/emitted this exact final state.
+                if
+                    control.emissionRevision ~= control.revision
+                    or not U.equal(control.lastEmitted, control:Serialize())
+                    or control.callbackError ~= nil
+                then
+                    control:_emit()
+                end
+                if control.callbackError then
+                    result.callbackFailed += 1
+                    item.callbackFailed = true
+                    result.details[item.flag] = control.callbackError
+                end
+            end
+        end
+    end
+    -- Verify again after callbacks; consumer code is allowed to change state, but that is not a full restore.
+    for _, item in ipairs(plan) do
+        local control = item.control
+        local ok, verified, reason = pcall(control.VerifyHydration, control, item.expected)
+        if ok and verified then
+            if not item.callbackFailed then
+                result.applied += 1
+            end
+            result.verified += 1
+        else
+            result.failed += 1
+            result.details[item.flag] = ok and reason or tostring(verified)
+        end
+    end
+    result.failed += result.callbackFailed
+    self.applying = false
+    self.lastResult = result
+    self:Debug(
+        string.format("Completed: %d applied, %d skipped, %d failed", result.applied, result.ignored, result.failed)
+    )
+    return result.applied, result.ignored, result
 end
 function Profiles:Changed()
     local w = self.window
@@ -6011,56 +6640,136 @@ function Profiles:Changed()
         end
     end, true)
 end
+function Profiles:CancelStartup()
+    self.autoloadChecked = true
+    self.autoloadState = "Complete"
+    self.pendingValues = {}
+    self.hydrationResult = nil
+    if self.queued then
+        self.window.bag:Remove(self.queued, true)
+        self.queued = nil
+    end
+end
 function Profiles:Save(name, create)
     local ready, reason = self:Writable()
     if not ready then
+        self:Feedback(reason)
         return false, reason
     end
     local clean, err = self:Name(name)
     if not clean then
+        self:Feedback(err)
         return false, err
     end
-    local checked, exists = self.store:Call("isfile", self:Path(clean))
-    if not checked then
-        return false, exists
-    end
-    if create and exists then
-        return false, "ProfileExists"
-    end
-    local snapshot = self:Snapshot()
-    local previous = self:Read(clean)
-    if previous and U.finite(previous.createdAt, nil) then
-        snapshot.createdAt = previous.createdAt
-    end
-    local ok, reason = self.store:Write(self:Path(clean), snapshot)
-    if ok then
-        self.status, self.error = "PersistenceReady", nil
-        self.activeProfile = clean
-        self:Changed()
-    end
-    return ok, reason
-end
-function Profiles:Load(name, silent)
-    local ready, reason = self:Writable()
-    if not ready then
-        return false, reason
-    end
-    local clean, err = self:Name(name)
-    if not clean then
-        return false, err
-    end
-    local data, reason = self:Read(clean)
-    if not data then
-        return false, reason
+    if next(self.building) or self.buildDepth > 0 then
+        return false, "WaitingForControls"
     end
     self.busy = true
-    -- Loading replaces pending startup values, so subsequent late controls never resurrect an older profile.
-    self.autoloadValues = nil
-    local applied, ignored = self:Apply(data, silent == true)
-    self.activeProfile, self.busy = clean, false
+    self:Feedback("Saving", clean)
+    local ok, success, failure = xpcall(function()
+        local checked, exists = self.store:Call("isfile", self:Path(clean))
+        if not checked then
+            return false, exists
+        end
+        if create and exists then
+            return false, "ProfileExists"
+        end
+        local snapshot = self:Snapshot()
+        local previous = exists and self:Read(clean)
+        if previous and U.finite(previous.createdAt, nil) then
+            snapshot.createdAt = previous.createdAt
+        end
+        local saved, why = self.store:Write(self:Path(clean), snapshot)
+        if saved then
+            self:CancelStartup() -- saving user's current state must not be followed by stale startup hydration
+            self.activeProfile, self.baseline, self.dirty = clean, snapshot.values, false
+            self.dirtyFlags = {}
+            self.failedProfile = nil
+            self.status, self.error = "PersistenceReady", nil
+        end
+        return saved, why
+    end, debug.traceback)
+    self.busy = false
+    if not ok then
+        success, failure = false, tostring(success)
+    end
+    self:Feedback(success and "Saved" or "SaveFailure", clean)
     self:Changed()
-    return true, { applied = applied, ignored = ignored }
+    for flag in pairs(self.pendingValues) do
+        self:QueuePending(flag)
+    end
+    return success, failure
 end
+function Profiles:Load(name, options)
+    local ready, reason = self:Writable()
+    if not ready then
+        self:Feedback(reason)
+        return false, reason
+    end
+    local clean, err = self:Name(name)
+    if not clean then
+        self:Feedback(err)
+        return false, err
+    end
+    if next(self.building) or self.buildDepth > 0 then
+        return false, "WaitingForControls"
+    end
+    self.busy = true
+    self.lastResult = nil
+    self:Feedback("Loading", clean)
+    local ok, success, failure, result = xpcall(function()
+        local data, why = self:Read(clean)
+        if not data then
+            return false, why
+        end
+        self:CancelStartup()
+        local _, _, report = self:Apply(data, options)
+        if report.failed > 0 then
+            return false, "RestoreFailure", report
+        end
+        self.activeProfile = clean
+        self.pendingValues = report.pending
+        self.hydrationResult = report
+        self.pendingPolicy = self:Policy(options)
+        self.pendingProfile = clean
+        self.baseline = self:Snapshot().values
+        self.dirtyFlags = {}
+        self.dirty = false
+        return true, report, report
+    end, debug.traceback)
+    self.busy, self.applying = false, false
+    if not ok then
+        success, failure = false, tostring(success)
+    end
+    self.failedProfile = not success and clean or nil
+    if not success then
+        self:UpdateDirty()
+        result = result
+            or {
+                applied = 0,
+                ignored = 0,
+                failed = 1,
+                unknown = 0,
+                verified = 0,
+                callbackFailed = 0,
+                details = { profile = failure },
+                pending = {},
+            }
+    end
+    self.lastResult = result
+    self:Feedback(
+        success and (failure.ignored > 0 and "LoadedWithWarnings" or "Loaded") or "RestoreFailure",
+        clean,
+        result
+    )
+    self:Changed()
+    for flag in pairs(self.pendingValues) do
+        self:QueuePending(flag)
+    end
+    -- Preserve the established boolean + counts API; failures additionally expose the report in slot three.
+    return success, failure, result
+end
+
 function Profiles:AutoloadData()
     local json = self.store:Read("Neron/End/Autoload.json")
     local data = json and Storage.decode(json)
@@ -6104,41 +6813,148 @@ function Profiles:SetAutoload(name, enabled)
     local ok, err = self.store:Write("Neron/End/Autoload.json", data)
     if ok then
         self.autoload = record
+        self:Feedback(enabled ~= false and "AutoloadEnabled" or "AutoloadDisabled", clean)
         self:Changed()
     end
     return ok, err
 end
 function Profiles:QueueAutoload()
-    if self.queued or self.busy or self.window.destroyed or not self.ready or not self.autoloadAllowed then
+    if
+        self.queued
+        or self.busy
+        or self.window.destroyed
+        or not self.ready
+        or not self.uiReady
+        or self.buildDepth > 0
+        or next(self.building)
+        or not self.autoloadAllowed
+        or self.autoloadChecked
+    then
         return
     end
+    self.autoloadState = "WaitingForControls"
     self.queued = self.window.bag:After(0, function()
         self.queued = nil
-        if not self.autoloadChecked then
-            self.autoloadChecked = true
-            local record = self:AutoloadData().games[tostring(self.placeId)]
-            if
-                type(record) == "table"
-                and record.enabled == true
-                and record.game == self.gameName
-                and record.placeId == self.placeId
-            then
-                self.autoload = record
-                local data = self:Read(record.profile)
-                if data then
-                    self.autoloadValues, self.activeProfile = data, record.profile
-                else
-                    self.autoloadError = "MissingProfile"
-                end
+        if self.window.destroyed or not self.uiReady or self.buildDepth > 0 or next(self.building) or self.busy then
+            self:QueueReady()
+            return
+        end
+        if self.autoloadChecked then
+            return
+        end
+        -- Consume the attempt before any read/callback; reentrancy cannot start it a second time.
+        self.autoloadChecked = true
+        self.autoloadState = "Loading"
+        local record = self:AutoloadData().games[tostring(self.placeId)]
+        if
+            type(record) == "table"
+            and record.enabled == true
+            and record.game == self.gameName
+            and record.placeId == self.placeId
+        then
+            self.autoload = record
+            local ok, reason, report = self:Load(
+                record.profile,
+                { FireCallbacks = self.autoloadCallbacks, Animate = false, Source = "Autoload" }
+            )
+            self.autoloadError = not ok and reason or nil
+            self.autoloadResult = report
+            if not ok then
+                self.window:Notify("RestoreFailure", Locale.text(self.window, reason or "Failed"), "Warning")
+            else
+                self.window:Notify(
+                    report.ignored > 0 and "LoadedWithWarnings" or "Loaded",
+                    record.profile
+                        .. " · "
+                        .. string.format(
+                            Locale.text(self.window, "RestoreSummary"),
+                            report.applied,
+                            report.ignored,
+                            report.failed
+                        ),
+                    report.ignored > 0 and "Warning" or "Success"
+                )
             end
         end
-        if self.autoloadValues then
-            self.busy = true
-            self:Apply(self.autoloadValues, true, true)
-            self.busy = false
-        end
+        self.autoloadState = "Complete"
+        self:Feedback()
+        self:Changed()
     end, true)
 end
+function Profiles:MergePendingReport(flag, report)
+    local aggregate = self.hydrationResult
+    if not aggregate then
+        return report
+    end
+    if aggregate.details[flag] == "Unknown control" then
+        aggregate.unknown = math.max(0, aggregate.unknown - 1)
+    end
+    aggregate.applied += report.applied
+    aggregate.verified += report.verified
+    aggregate.ignored = math.max(0, aggregate.ignored - 1) + report.ignored
+    aggregate.failed += report.failed
+    aggregate.callbackFailed += report.callbackFailed
+    aggregate.details[flag] = report.details[flag]
+    self.lastResult = aggregate
+    return aggregate
+end
+function Profiles:QueuePending(flag)
+    if not flag or not self.pendingValues[flag] or self.window.destroyed then
+        return
+    end
+    local control = self.window.flagOwners[flag]
+    if not control or not control.initialized or control.destroyed or control.pendingCancel then
+        return
+    end
+    control.pendingCancel = control.bag:After(0, function()
+        control.pendingCancel = nil
+        if self.busy or self.buildDepth > 0 or not self.uiReady then
+            return
+        end
+        local entry = self.pendingValues[flag]
+        if not entry or self.window.flagOwners[flag] ~= control or self.activeProfile ~= self.pendingProfile then
+            return
+        end
+        local normalized, valid, reason = control:Deserialize(entry)
+        if not valid then
+            if reason ~= "WaitingForOptions" then
+                self.pendingValues[flag] = nil
+            end
+            self:Debug("Late " .. flag .. ": " .. tostring(reason))
+            return
+        end
+        -- Consume before applying/callback so a callback-created control cannot repeat this hydration.
+        self.pendingValues[flag] = nil
+        self.busy = true
+        local ok, applied, ignored, report = xpcall(function()
+            return self:Apply({ values = { [flag] = entry } }, self.pendingPolicy)
+        end, debug.traceback)
+        self.busy, self.applying = false, false
+        if not ok then
+            report = {
+                applied = 0,
+                ignored = 0,
+                failed = 1,
+                unknown = 0,
+                verified = 0,
+                callbackFailed = 0,
+                details = { [flag] = tostring(applied) },
+                pending = {},
+            }
+        end
+        local merged = self:MergePendingReport(flag, report)
+        if report.failed > 0 then
+            self.failedProfile = self.activeProfile
+            self:Feedback("RestoreFailure", self.activeProfile, merged)
+        else
+            self.baseline[flag] = control:Serialize()
+            self:UpdateDirty(control)
+            self:Feedback(merged.ignored > 0 and "LoadedWithWarnings" or "Loaded", self.activeProfile, merged)
+        end
+        self:Changed()
+    end, true)
+end
+
 function Profiles:QueuePresentation()
     if self.window.destroyed then
         return
@@ -6194,6 +7010,8 @@ function Window:GetPersistenceStatus()
     return {
         available = self.persistence.store.available,
         ready = self.persistence.ready,
+        hydrationReady = self.persistence.uiReady,
+        autoloadState = self.persistence.autoloadState,
         game = self.persistence.gameName,
         folder = self.persistence.folder,
         canDelete = type(self.persistence.store.api.delfile) == "function",
@@ -6205,7 +7023,11 @@ function Window:ExportProfile(name)
     if name then
         data, err = self.persistence:Read(name)
     else
-        data = self.persistence:Snapshot()
+        local ok, snapshot = pcall(self.persistence.Snapshot, self.persistence)
+        if not ok then
+            return nil, tostring(snapshot)
+        end
+        data = snapshot
     end
     if not data then
         return nil, err
@@ -6343,7 +7165,7 @@ function Window:DeleteProfile(name)
         manager.activeProfile = nil
     end
     if ok then
-        manager.autoloadValues = nil
+        manager.pendingValues = {}
         manager:Changed()
     end
     return ok, reason
@@ -6362,12 +7184,64 @@ function Window:GetAutoload()
             and table.clone(record)
         or { enabled = false }
 end
+function Window:IsReady()
+    return not self.destroyed and self.persistence.uiReady
+end
+function Window:Finalize()
+    return self.persistence:Finalize()
+end
+function Window:BeginUpdate()
+    local manager = self.persistence
+    manager.buildDepth += 1
+    manager.uiReady = false
+    return self
+end
+function Window:EndUpdate()
+    local manager = self.persistence
+    assert(manager.buildDepth > 0, "Neron EndUpdate without BeginUpdate")
+    manager.buildDepth -= 1
+    if manager.buildDepth == 0 then
+        manager:Finalize()
+        for flag in pairs(manager.pendingValues) do
+            manager:QueuePending(flag)
+        end
+    end
+    return self
+end
+function Window:GetControl(flag)
+    return self.flagOwners[flag]
+end
 function Window:ApplyAutoload()
     local manager = self.persistence
-    manager.autoloadChecked, manager.autoloadValues = false, nil
-    table.clear(manager.applied)
+    if manager.busy then
+        return self
+    end
+    -- Explicit API request can reapply; implicit startup still executes exactly once.
+    manager:CancelStartup()
+    manager.autoloadChecked = false
+    manager.autoloadState = "WaitingForControls"
     manager:QueueAutoload()
     return self
+end
+function Window:GetConfigDiagnostics()
+    local manager = self.persistence
+    local r = manager.lastResult
+    return {
+        ready = manager.uiReady,
+        autoloadState = manager.autoloadState,
+        activeProfile = manager.activeProfile,
+        dirty = manager.dirty == true,
+        operation = manager.operation and { key = manager.operation.key, name = manager.operation.name },
+        result = r and {
+            applied = r.applied,
+            ignored = r.ignored,
+            failed = r.failed,
+            unknown = r.unknown,
+            verified = r.verified,
+            callbackFailed = r.callbackFailed,
+            details = table.clone(r.details),
+        },
+    }
 end
 
 -- Dedicated system interface: never inserted in Window.tabs, search index or consumer flags.
@@ -6528,9 +7402,22 @@ function Window:Notify(key, detail, status)
 end
 function SettingsUI.result(w, ok, err, success)
     if ok then
-        w:Notify(success, nil, "Success")
+        local report = type(err) == "table" and err or nil
+        local detail = report
+                and ((w.persistence.activeProfile or "") .. " · " .. string.format(
+                    Locale.text(w, "RestoreSummary"),
+                    report.applied,
+                    report.ignored,
+                    report.failed
+                ))
+            or nil
+        w:Notify(
+            report and report.ignored > 0 and "LoadedWithWarnings" or success,
+            detail,
+            report and report.ignored > 0 and "Warning" or "Success"
+        )
     else
-        local key = Locale.dictionaries.English[err] and err or "Failed"
+        local key = type(err) == "string" and Locale.dictionaries.English[err] and err or "Failed"
         w:Notify(key, key == "Failed" and tostring(err or "") or nil, "Danger")
     end
     return ok
@@ -6875,6 +7762,35 @@ function SettingsUI.context(w, row, name)
         end
     end)
 end
+function SettingsUI.updateProfileStates(w)
+    local manager = w.persistence
+    if not manager or not w.profileRows then
+        return
+    end
+    local autoload = w:GetAutoload()
+    for name, widgets in pairs(w.profileRows) do
+        if widgets.row.Parent then
+            local active, selected = manager.activeProfile == name, w.selectedProfile == name
+            local operation = manager.operation
+            local working = manager.busy and operation and operation.name == name
+            local state = working and operation.key
+                or (
+                    manager.failedProfile == name and "RestoreFailure"
+                    or (active and (manager.dirty and "Modified" or "Loaded") or (selected and "Selected" or nil))
+                )
+            widgets.state.Text = state and Locale.text(w, state) or ""
+            widgets.state.TextColor3 = manager.failedProfile == name and w.theme.Danger
+                or (active and w.theme.SystemText or w.theme.TextSecondary)
+            widgets.autoload.Text = autoload.enabled and autoload.profile == name and Locale.text(w, "Autoload") or ""
+            widgets.autoload.TextColor3 = w.theme.Accent
+            widgets.name.Text = name .. (active and manager.dirty and " *" or "")
+            widgets.name.TextColor3 = w.theme.TextPrimary
+            U.bind(w, widgets.row, "BackgroundColor3", (active or selected) and "SurfaceSelected" or "RowBackground")
+            widgets.edge.BackgroundColor3 = w.theme.Accent
+            widgets.edge.Visible = selected
+        end
+    end
+end
 function SettingsUI.refreshProfiles(w)
     if w.overlay.active and w.overlay.active.owner.profileContext then
         w.overlay:Close(true)
@@ -6891,9 +7807,10 @@ function SettingsUI.refreshProfiles(w)
     end
     local bag = Maid.new(w.motion)
     w.profileListBag = bag
+    w.profileRows = {}
     local page = w.settingsPages.Profiles
     local profiles, err = w:RefreshProfiles()
-    w.persistenceLabel:Set(Locale.text(w, w.persistence:Status()), true)
+    w.persistence:Feedback()
     if w.pathLabel then
         w.pathLabel:Set(w.persistence.folder, true)
     end
@@ -6932,21 +7849,26 @@ function SettingsUI.refreshProfiles(w)
             )
             local glyph = Icons.make(row, "folder", 14, w.theme.TextSecondary, w)
             glyph.Position = UDim2.fromOffset(14, 17)
-            U.label(row, name, T.Type.Value, w.theme.TextPrimary, {
-                Position = UDim2.fromOffset(38, 0),
-                Size = UDim2.new(1, w.persistence.activeProfile == name and -190 or -120, 1, 0),
+            local title = U.label(row, name, T.Type.Value, w.theme.TextPrimary, {
+                Position = UDim2.fromOffset(38, 3),
+                Size = UDim2.new(1, -92, 0, 21),
             })
-            if autoload.enabled and autoload.profile == name then
-                local dot = Components.circle(row, 4, w.theme.Accent)
-                dot.Position = UDim2.new(1, -70, 0.5, 0)
-            end
-            if w.persistence.activeProfile == name then
-                SettingsUI.text(w, row, "Active", {
-                    Position = UDim2.new(1, -128, 0, 0),
-                    Size = UDim2.fromOffset(80, 48),
-                    TextXAlignment = Enum.TextXAlignment.Right,
-                }, "TextSecondary")
-            end
+            local state = U.label(row, "", 10, w.theme.TextSecondary, {
+                Position = UDim2.fromOffset(38, 25),
+                Size = UDim2.new(0.55, -40, 0, 16),
+            })
+            local badge = U.label(row, "", 10, w.theme.Accent, {
+                Position = UDim2.new(0.55, 0, 0, 25),
+                Size = UDim2.new(0.45, -50, 0, 16),
+                TextXAlignment = Enum.TextXAlignment.Right,
+            })
+            local edge = U.frame(row, {
+                Position = UDim2.fromOffset(0, 10),
+                Size = UDim2.fromOffset(2, 28),
+                BackgroundTransparency = 0,
+                ZIndex = row.ZIndex + 1,
+            }, w, "Accent")
+            w.profileRows[name] = { row = row, name = title, state = state, autoload = badge, edge = edge }
             local menu = U.button(row, {
                 Name = "ProfileActions",
                 Position = UDim2.new(1, -44, 0, 2),
@@ -6958,9 +7880,12 @@ function SettingsUI.refreshProfiles(w)
             U.connect(bag, row.Activated, function()
                 w.selectedProfile = name
                 w.profileName:Set(name, true)
+                SettingsUI.updateProfileStates(w)
             end)
             U.connect(bag, menu.Activated, function()
                 w.selectedProfile = name
+                w.profileName:Set(name, true)
+                SettingsUI.updateProfileStates(w)
                 SettingsUI.context(w, menu, name)
             end)
             U.connect(bag, row.MouseEnter, function()
@@ -6968,12 +7893,14 @@ function SettingsUI.refreshProfiles(w)
             end)
             U.connect(bag, row.MouseLeave, function()
                 w.motion:To(row, T.Motion.Micro, {
-                    BackgroundColor3 = w.persistence.activeProfile == name and w.theme.SurfaceSelected
+                    BackgroundColor3 = (w.persistence.activeProfile == name or w.selectedProfile == name)
+                            and w.theme.SurfaceSelected
                         or w.theme.RowBackground,
                 })
             end)
         end
     end
+    SettingsUI.updateProfileStates(w)
     page.scroll:Update()
 end
 function SettingsUI.profiles(w, page)
@@ -7402,6 +8329,7 @@ function SettingsUI.refreshStyle(w)
     if w.settingsIcon then
         Icons.color(w.settingsIcon, w.settingsOpen and w.theme.Accent or w.theme.TextSecondary)
     end
+    SettingsUI.updateProfileStates(w)
 end
 function SettingsUI.refreshLanguage(w)
     Premium.refresh(w)
