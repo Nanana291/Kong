@@ -1,22 +1,36 @@
--- NeronUi 1.0 — reference-measured, client-only, dependency-free.
+-- NeronUi 2.0 — reference-measured, client-only, dependency-free.
 -- require(ModuleScript) or loadstring(readfile(...))() returns the library; nothing auto-opens.
 -- Set(value [, silent]) fires Callback only on change. Defaults are silent.
 -- Range:Set(low, high [, silent]); Color:Set(color [, silent]); callbacks receive snapshots.
 -- Numeric controls: Step/Increment, Prefix, Suffix, Rounding. Values are finite and clamped.
 -- Parent may be supplied for Studio. Otherwise protected UI -> CoreGui -> PlayerGui.
 -- Same Id replaces the previous window, including listeners, across library re-execution.
+-- Window > Tab > SubTab > controls remains the public hierarchy; Settings is a separate overlay.
+-- CreateWindow also accepts Theme, Language, Settings=false, Autoload=false, GameName, Filesystem.
+-- Themes: Neron Dark / Graphite / OLED / Light; locales: English / Spanish / Russian / Portuguese.
+-- Stateful controls with string Flag are saved unless Persistent=false. No flag is generated implicitly.
+-- Window:CreateProfile/SaveProfile/LoadProfile(name [, silent]) return success, error or load counts.
+-- LoadProfile(name,true) and startup autoload update state/UI without callbacks; false/nil is normal load.
+-- ImportProfile(name,json [, overwrite]); ExportProfile([name]); Rename/Duplicate/Delete/RefreshProfiles.
+-- SetAutoload(name), DisableAutoload(), GetAutoload(), ApplyAutoload(); OpenSettings([category]).
+-- SetTheme/GetTheme/GetThemeTokens; ImportTheme/ExportTheme; SetLanguage/GetLanguage/Translate.
+-- Preferences: Neron/End/{Theme,Autoload}.json; profiles: Neron/<sanitized game>/Settings/<name>.json.
+-- Without filesystem APIs the entire UI still works; persistence returns a descriptive failure.
+-- Readback/rollback protects saves where possible; executor APIs cannot guarantee crash-atomic writes.
 local S = {
     Tween = game:GetService("TweenService"),
     Input = game:GetService("UserInputService"),
     Players = game:GetService("Players"),
     Core = game:GetService("CoreGui"),
     Text = game:GetService("TextService"),
+    Http = game:GetService("HttpService"),
+    Marketplace = game:GetService("MarketplaceService"),
 }
 local Theme = {
     AppBackground = Color3.fromRGB(24, 23, 28),
     WindowBackground = Color3.fromRGB(14, 13, 18),
     SidebarBackground = Color3.fromRGB(16, 15, 20),
-    ContentBackground = Color3.fromRGB(14, 13, 18),
+    ContentBackground = Color3.fromRGB(15, 14, 19),
     RowBackground = Color3.fromRGB(16, 15, 20),
     RowHover = Color3.fromRGB(18, 17, 23),
     PopoverBackground = Color3.fromRGB(12, 11, 17),
@@ -36,6 +50,25 @@ local Theme = {
     Warning = Color3.fromRGB(183, 153, 92),
     Danger = Color3.fromRGB(203, 96, 105),
 }
+Theme.HeaderBackground = Color3.fromRGB(16, 15, 20)
+Theme.RowPressed = Color3.fromRGB(21, 20, 27)
+Theme.SurfaceSecondary = Color3.fromRGB(20, 19, 26)
+Theme.SurfaceSelected = Color3.fromRGB(23, 22, 30)
+Theme.SurfaceEdge = Color3.fromRGB(28, 27, 35)
+Theme.ToggleTrackOff = Color3.fromRGB(22, 20, 28)
+Theme.ToggleTrackOn = Color3.fromRGB(47, 43, 68)
+Theme.ToggleKnobOff = Color3.fromRGB(48, 44, 58)
+Theme.ToggleKnobOn = Color3.fromRGB(119, 113, 180)
+Theme.SliderTrack = Color3.fromRGB(20, 19, 26)
+Theme.SliderFill = Theme.Accent
+Theme.SliderKnob = Theme.Accent
+Theme.SliderCore = Color3.fromRGB(31, 28, 46)
+Theme.DropdownBackground = Color3.fromRGB(19, 18, 25)
+Theme.DropdownHover = Color3.fromRGB(23, 22, 31)
+Theme.Overlay = Color3.new(0, 0, 0)
+Theme.Shadow = Color3.new(0, 0, 0)
+Theme.ButtonText = Color3.fromRGB(17, 15, 25)
+Theme.SystemText = Color3.fromRGB(153, 150, 164)
 local T = {
     Geometry = {
         Width = 872,
@@ -56,7 +89,11 @@ local T = {
         Track = 10,
         Thumb = 10,
         ThumbCore = 4,
-        Toggle = 10,
+        Toggle = 36,
+        AttachedSwatchInset = 64,
+        ToggleHeight = 14,
+        ToggleKnob = 10,
+        ToggleInset = 2,
         Swatch = 17,
         Scrollbar = 9,
         ScrollInset = 10,
@@ -86,11 +123,12 @@ local T = {
         PopoverOption = 12,
     },
     Motion = { Micro = 0.10, Fast = 0.16, Normal = 0.18, Structural = 0.24 },
-    Z = { Shell = 1, Content = 3, Dim = 20, Popover = 30, Search = 40 },
+    Z = { Shell = 1, Content = 3, Dim = 20, Popover = 60, Search = 40, Settings = 50, Confirmation = 70, Toast = 80 },
 }
 local U, Maid, Motion, Icons, Input, Overlay, Scroll = {}, {}, {}, {}, {}, {}, {}
 local Window, Tab, SubTab, Control, Components = {}, {}, {}, {}, {}
-local Library = { Version = "1.0.0", Tokens = T, Theme = Theme, Icons = {} }
+local Presentation, Locale, Storage, Profiles, SettingsUI = {}, {}, {}, {}, {}
+local Library = { Version = "2.0.0", Tokens = T, Theme = Theme, Icons = {} }
 Window.__index = Window
 Tab.__index = Tab
 SubTab.__index = SubTab
@@ -234,6 +272,7 @@ function Motion:Destroy()
         self:Cancel(obj)
     end
 end
+U.owners = setmetatable({}, { __mode = "kv" })
 function U.new(class, props, parent)
     local obj = Instance.new(class)
     if obj:IsA("GuiObject") then
@@ -250,6 +289,21 @@ function U.new(class, props, parent)
         obj[key] = value
     end
     obj.Parent = parent
+    local owner = parent and U.owners[parent]
+    if owner then
+        U.owners[obj] = owner
+        for _, property in ipairs({ "BackgroundColor3", "TextColor3", "PlaceholderColor3", "ImageColor3", "Color" }) do
+            local color = props and props[property]
+            if typeof(color) == "Color3" then
+                for token, value in pairs(owner.theme) do
+                    if color == value then
+                        U.bind(owner, obj, property, token)
+                        break
+                    end
+                end
+            end
+        end
+    end
     return obj
 end
 function U.corner(obj, radius)
@@ -615,6 +669,9 @@ function Overlay:Open(owner, anchor, width, height, build)
     }, holder)
     U.new("UIScale", { Scale = w.scale }, group)
     U.corner(group, T.Radius.Popover)
+    local edge = U.stroke(group, w.theme.SurfaceEdge, 1)
+    edge.Transparency = 0.55
+    U.bind(w, edge, "Color", "SurfaceEdge")
     U.bind(w, group, "BackgroundColor3", "PopoverBackground")
     self.active =
         { owner = owner, anchor = anchor, width = width, height = height, holder = holder, group = group, bag = bag }
@@ -712,7 +769,9 @@ function Scroll.make(w, parent, bag, inset, thin)
             return
         end
         local scale = w.scale
-        local content = layout.AbsoluteContentSize.Y / scale + 4
+        local padding = sf:FindFirstChildOfClass("UIPadding")
+        local inset = padding and (padding.PaddingTop.Offset + padding.PaddingBottom.Offset) or 0
+        local content = layout.AbsoluteContentSize.Y / scale + inset + 4
         sf.CanvasSize = UDim2.fromOffset(0, content)
         local view = sf.AbsoluteSize.Y / scale
         local maximum = math.max(0, content - view)
@@ -767,6 +826,10 @@ function Scroll.make(w, parent, bag, inset, thin)
 end
 
 function Window:_dimState(visible, transparency, immediate)
+    if self.settingsOpen and not visible then
+        visible = true
+        transparency = 0.38
+    end
     self.dimGeneration = (self.dimGeneration or 0) + 1
     local generation = self.dimGeneration
     if self.dimCancel then
@@ -796,6 +859,9 @@ end
 function Window:_selectTab(tab)
     if not self:_canNavigate() or tab.destroyed or tab.disabled or not tab.visible then
         return
+    end
+    if self.settingsOpen then
+        self:CloseSettings(true)
     end
     self.overlay:Close(true)
     self.input:Cancel()
@@ -857,29 +923,12 @@ function Window:_brandLayout()
 end
 function Window:SetAccent(color)
     assert(typeof(color) == "Color3", "Neron SetAccent expects Color3")
-    if self.destroyed then
-        return self
-    end
-    self.theme.Accent = color
-    self.theme.AccentHover = color:Lerp(Color3.new(1, 1, 1), 0.10)
-    self.theme.AccentPressed = color:Lerp(Color3.new(0, 0, 0), 0.22)
-    self.theme.AccentMuted = color:Lerp(self.theme.WindowBackground, 0.76)
-    for obj, bindings in pairs(self.bindings) do
-        if obj.Parent then
-            for property, token in pairs(bindings) do
-                self.motion:Cancel(obj, property)
-                obj[property] = self.theme[token]
-            end
-        end
-    end
-    Icons.color(self.brandIcon, color)
-    for _, tab in ipairs(self.tabs) do
-        tab:_render()
-        for _, sub in ipairs(tab.subtabs) do
-            sub:_render()
-            for _, control in ipairs(sub.controls) do
-                control:_render()
-            end
+    if not self.destroyed then
+        self.customAccent = color
+        Presentation.remember(self)
+        Presentation.apply(self)
+        if self.persistence then
+            self.persistence:QueuePresentation()
         end
     end
     return self
@@ -894,6 +943,9 @@ function Window:SetVisible(value)
         self:CloseSearch(true)
         self.input:Cancel()
         U.focusRelease(self)
+    end
+    if not self.visible and self.CloseSettings then
+        self:CloseSettings(true)
     end
     self.gui.Enabled = self.visible
     if self.visible and not self.activeTab then
@@ -952,6 +1004,13 @@ function Window:_responsive()
             sub.scroll:Update()
         end
     end
+    if self.settingsButton then
+        SettingsUI.footerLayout(self)
+    end
+    if self.settingsPanel then
+        SettingsUI.layout(self)
+    end
+    SettingsUI.transientLayout(self)
     local size = Vector2.new(width * self.scale, height * self.scale)
     local center = self.root.Position
     local x = center.X.Scale * view.X + center.X.Offset
@@ -964,6 +1023,12 @@ function Window:Destroy()
     if self.destroyed then
         return
     end
+    if self.persistence and self.persistence.presentationCancel then
+        self.bag:Remove(self.persistence.presentationCancel, true)
+        self.persistence.presentationCancel = nil
+        self.persistence:SavePresentation()
+    end
+    self:CloseSettings(true)
     self.destroyed = true
     self.overlay:Destroy()
     self.input:Cancel()
@@ -974,14 +1039,35 @@ function Window:Destroy()
     if self.searchResultsBag then
         self.searchResultsBag:Destroy()
     end
+    if self.settingsPages then
+        for _, page in pairs(self.settingsPages) do
+            for i = #page.controls, 1, -1 do
+                page.controls[i]:Destroy()
+            end
+            page.bag:Destroy()
+        end
+    end
+    if self.profileListBag then
+        self.profileListBag:Destroy()
+    end
+    if self.toastBag then
+        self.toastBag:Destroy()
+    end
+    self.toastBag, self.toastGroup = nil, nil
     self.motion:Destroy()
     self.bag:Destroy()
+    if Library.windows then
+        Library.windows[self] = nil
+    end
     if self.registry[self.id] == self then
         self.registry[self.id] = nil
     end
     table.clear(self.index)
     table.clear(self.Flags)
     table.clear(self.bindings)
+    if self.localeBindings then
+        table.clear(self.localeBindings)
+    end
 end
 function Window:AddTab(config)
     assert(not self.destroyed, "Neron window is destroyed")
@@ -1044,7 +1130,8 @@ function Window:AddTab(config)
     tab.header = U.frame(
         self.content,
         { Name = "Header", Size = UDim2.new(1, 0, 0, T.Geometry.Header), Visible = false, ZIndex = T.Z.Content },
-        self
+        self,
+        "HeaderBackground"
     )
     tab.bag:Add(tab.header)
     tab.title = U.label(tab.header, tab.name, T.Type.PageTitle, self.theme.TextPrimary, {
@@ -1145,6 +1232,9 @@ function Tab:_selectSub(sub)
     end
     if w.activeTab ~= self then
         w:_selectTab(self)
+    end
+    if w.settingsOpen then
+        w:CloseSettings(true)
     end
     w.overlay:Close(true)
     w.input:Cancel()
@@ -1479,7 +1569,9 @@ function Components.row(page, config, kind)
         flag = config.Flag,
     }, Control)
     table.insert(page.controls, self)
-    table.insert(w.index, self)
+    if not page.system then
+        table.insert(w.index, self)
+    end
     page.controlSerial = (page.controlSerial or 0) + 1
     if self.flag then
         w.flagOwners[self.flag] = self
@@ -1493,9 +1585,10 @@ function Components.row(page, config, kind)
     }, page.scroll.frame)
     self.row.BackgroundTransparency = 0
     self.row.BackgroundColor3 = w.theme.RowBackground
+    U.corner(self.row, T.Radius.Row)
     self.bag:Add(self.row)
     self.label =
-        U.label(self.row, self.name, T.Type.ElementTitle, w.theme.TextSecondary, { Font = Enum.Font.GothamMedium })
+        U.label(self.row, self.name, T.Type.ElementTitle, w.theme.TextSecondary, { Font = Enum.Font.GothamBold })
     self.desc = U.label(
         self.row,
         self.description,
@@ -1562,12 +1655,15 @@ function Control:_usable()
         and self.window.visible
         and not self.window.destroyed
         and not self.window.searchOpen
+        and not self.window.confirmation
+        and not self.window.transfer
+        and (self.page.system and self.window.settingsOpen and self.window.settingsCategory == self.page.name or not self.page.system and not self.window.settingsOpen)
         and self.page.visible
         and not self.page.disabled
         and self.page.tab.visible
         and not self.page.tab.disabled
-        and self.window.activeTab == self.page.tab
-        and self.page.tab.activeSub == self.page
+        and (self.page.system or self.window.activeTab == self.page.tab)
+        and (self.page.system or self.page.tab.activeSub == self.page)
 end
 function Control:_layout()
     if self.destroyed then
@@ -1576,8 +1672,12 @@ function Control:_layout()
     if self.inlineOwner then
         self.row.Size = UDim2.fromScale(1, 1)
         self.lane.Size = UDim2.fromOffset(32, self.inlineOwner.lane.Size.Y.Offset)
-        self.lane.Position =
-            UDim2.new(1, -48, self.inlineOwner.lane.Position.Y.Scale, self.inlineOwner.lane.Position.Y.Offset)
+        self.lane.Position = UDim2.new(
+            1,
+            -T.Geometry.AttachedSwatchInset,
+            self.inlineOwner.lane.Position.Y.Scale,
+            self.inlineOwner.lane.Position.Y.Offset
+        )
         return
     end
     local narrow = self.window.compact
@@ -1625,10 +1725,21 @@ function Control:_render()
         or s.Pressed
         or s.Focused
         or (self.kind == "Toggle" and self.value == true)
-    local color = s.Disabled and w.theme.TextDisabled or (on and w.theme.TextPrimary or w.theme.TextSecondary)
+    local color = s.Disabled and w.theme.TextDisabled
+        or (
+            (on or self.systemHeading) and w.theme.TextPrimary
+            or (self.page.system and w.theme.SystemText or w.theme.TextSecondary)
+        )
     w.motion:To(self.label, T.Motion.Micro, { TextColor3 = color })
-    w.motion:To(self.desc, T.Motion.Micro, { TextColor3 = s.Disabled and w.theme.TextDisabled or w.theme.TextMuted })
-    w.motion:To(self.row, T.Motion.Micro, { BackgroundColor3 = on and w.theme.RowHover or w.theme.RowBackground })
+    w.motion:To(self.desc, T.Motion.Micro, {
+        TextColor3 = s.Disabled and w.theme.TextDisabled
+            or (self.page.system and w.theme.TextSecondary or w.theme.TextMuted),
+    })
+    w.motion:To(
+        self.row,
+        T.Motion.Micro,
+        { BackgroundColor3 = s.Pressed and w.theme.RowPressed or (on and w.theme.RowHover or w.theme.RowBackground) }
+    )
     if self.renderVisual then
         self:renderVisual()
     end
@@ -1678,6 +1789,9 @@ function Control:_commit(value, silent)
         self.window.Flags[self.flag] = U.copy(value)
     end
     self:_render()
+    if self.flag and self.window.persistence then
+        self.window.persistence:QueueAutoload()
+    end
     if changed and not silent then
         self:_emit()
     end
@@ -1813,28 +1927,59 @@ function Components.circle(parent, diameter, color)
 end
 function SubTab:AddToggle(config)
     local self = Components.row(self, config, "Toggle")
-    self.dot = Components.circle(self.lane, T.Geometry.Toggle, self.window.theme.AccentMuted)
-    self.dot.Position = UDim2.new(1, -T.Geometry.Toggle / 2, 0.5, 0)
-    self.core = Components.circle(self.dot, 4, self.window.theme.RowBackground)
-    self.core.Position = UDim2.fromScale(0.5, 0.5)
+    self.track = U.frame(self.lane, {
+        Name = "SwitchTrack",
+        AnchorPoint = Vector2.new(1, 0.5),
+        Position = UDim2.fromScale(1, 0.5),
+        Size = UDim2.fromOffset(T.Geometry.Toggle, T.Geometry.ToggleHeight),
+        ZIndex = self.lane.ZIndex + 1,
+    }, self.window, "ToggleTrackOff")
+    U.corner(self.track, T.Geometry.ToggleHeight / 2)
+    self.knob = Components.circle(self.track, T.Geometry.ToggleKnob, self.window.theme.ToggleKnobOff)
+    self.knob.Name = "SwitchKnob"
+    self.knob.Position = UDim2.new(0, T.Geometry.ToggleInset + T.Geometry.ToggleKnob / 2, 0.5, 0)
+    self.hitbox = U.button(self.lane, {
+        Name = "SwitchHitbox",
+        AnchorPoint = Vector2.new(1, 0.5),
+        Position = UDim2.new(1, 8, 0.5, 0),
+        Size = UDim2.fromOffset(44, 40),
+        ZIndex = self.lane.ZIndex + 3,
+    })
     function self:renderVisual()
-        local w = self.window
-        local color = self.state.Disabled and w.theme.TextDisabled
-            or (self.value and w.theme.Accent or w.theme.AccentMuted)
-        w.motion:To(self.dot, T.Motion.Fast, { BackgroundColor3 = color })
-        w.motion:To(
-            self.core,
-            T.Motion.Fast,
-            { Size = UDim2.fromOffset(self.state.Pressed and 3 or 4, self.state.Pressed and 3 or 4) }
-        )
+        local w, state = self.window, self.state
+        local on = self.value == true
+        local track = state.Disabled and w.theme.InputBackground
+            or (on and w.theme.ToggleTrackOn or w.theme.ToggleTrackOff)
+        local knob = state.Disabled and w.theme.TextDisabled or (on and w.theme.ToggleKnobOn or w.theme.ToggleKnobOff)
+        if not state.Disabled and state.Hovered then
+            track = track:Lerp(w.theme.TextPrimary, 0.035)
+        end
+        if not state.Disabled and state.Pressed then
+            knob = knob:Lerp(track, 0.12)
+        end
+        local inset = T.Geometry.ToggleInset + T.Geometry.ToggleKnob / 2
+        w.motion:To(self.track, T.Motion.Fast, { BackgroundColor3 = track })
+        w.motion:To(self.knob, T.Motion.Fast, {
+            BackgroundColor3 = knob,
+            Position = UDim2.new(0, on and T.Geometry.Toggle - inset or inset, 0.5, 0),
+        })
     end
     function self:Set(value, silent)
         return self:_commit(value == true, silent)
     end
-    U.connect(self.bag, self.row.Activated, function()
+    local function activate()
         if self:_usable() then
             self.state.Pressed = false
             self:Set(not self.value)
+        end
+    end
+    U.connect(self.bag, self.row.Activated, activate)
+    U.connect(self.bag, self.hitbox.Activated, activate)
+    U.connect(self.bag, self.hitbox.InputBegan, function(event)
+        if U.primary(event) and self:_usable() then
+            self.state.Pressed = true
+            self.window.pressed[self] = event
+            self:_render()
         end
     end)
     function self:AddColorPicker(pickerConfig)
@@ -1901,15 +2046,16 @@ function Components.slider(page, config, range)
         Position = UDim2.fromScale(0, 0.5),
         Size = UDim2.new(1, 0, 0, T.Geometry.Track),
         ZIndex = self.track.ZIndex,
-    }, self.window, "InputBackground")
+    }, self.window, "SliderTrack")
     U.corner(self.rail, 5)
     self.fill =
-        U.frame(self.rail, { Size = UDim2.fromScale(0, 1), ZIndex = self.rail.ZIndex + 1 }, self.window, "Accent")
+        U.frame(self.rail, { Size = UDim2.fromScale(0, 1), ZIndex = self.rail.ZIndex + 1 }, self.window, "SliderFill")
     U.corner(self.fill, 5)
     self.thumbs = {}
     for _ = 1, range and 2 or 1 do
         local thumb = Components.circle(self.rail, T.Geometry.Thumb, self.window.theme.Accent)
-        local center = Components.circle(thumb, T.Geometry.ThumbCore, self.window.theme.RowBackground)
+        local center = Components.circle(thumb, T.Geometry.ThumbCore, self.window.theme.SliderCore)
+        U.bind(self.window, center, "BackgroundColor3", "SliderCore")
         thumb.Position = UDim2.fromScale(0, 0.5)
         center.Position = UDim2.fromScale(0.5, 0.5)
         table.insert(self.thumbs, thumb)
@@ -1940,10 +2086,11 @@ function Components.slider(page, config, range)
         if range then
             self.thumbs[2].Position = UDim2.new(0, T.Geometry.Thumb / 2 + b * travel, 0.5, 0)
         end
-        local color = self.state.Disabled and self.window.theme.TextDisabled or self.window.theme.Accent
+        local color = self.state.Disabled and self.window.theme.TextDisabled or self.window.theme.SliderFill
+        self.rail.BackgroundColor3 = self.window.theme.SliderTrack
         self.fill.BackgroundColor3 = color
         for _, thumb in ipairs(self.thumbs) do
-            thumb.BackgroundColor3 = color
+            thumb.BackgroundColor3 = self.state.Disabled and color or self.window.theme.SliderKnob
         end
         self.valueLabel.Text = range and (Components.format(n, low) .. ", " .. Components.format(n, high))
             or Components.format(n, high)
@@ -2060,13 +2207,13 @@ function Components.dropdown(page, config, multi)
         local w = self.window
         self.valueLabel.Text = multi
                 and ((self.value and #self.value > 0) and table.concat(self.value, ", ") or tostring(
-                    config.Placeholder or "None"
+                    config.Placeholder or Locale.text(w, "None")
                 ))
-            or tostring(self.value or config.Placeholder or "Select")
+            or tostring(self.value or config.Placeholder or Locale.text(w, "Select"))
         self.valueLabel.TextColor3 = self.state.Disabled and w.theme.TextDisabled or w.theme.TextPrimary
         Icons.color(self.chevron, self.valueLabel.TextColor3)
         w.motion:To(self.chevron, T.Motion.Fast, { Rotation = self.state.Open and 180 or 0 })
-        self.trigger.BackgroundColor3 = w.theme.InputBackground
+        self.trigger.BackgroundColor3 = self.state.Open and w.theme.DropdownHover or w.theme.DropdownBackground
         w.motion:To(
             self.trigger,
             T.Motion.Micro,
@@ -2187,7 +2334,13 @@ function Components.dropdown(page, config, multi)
                 end)
             end
             if #self.values == 0 then
-                U.label(holder, "No options", T.Type.Description, self.window.theme.TextMuted)
+                local empty = U.label(
+                    holder,
+                    Locale.text(self.window, "NoOptions"),
+                    T.Type.Description,
+                    self.window.theme.TextMuted
+                )
+                Locale.bind(self.window, empty, "Text", "NoOptions")
             end
             self:_render()
             scroll:Update()
@@ -2218,6 +2371,7 @@ function SubTab:AddColorPicker(config)
     self.alpha = math.clamp(U.finite(config.Alpha, 1), 0, 1)
     self.hasAlpha = config.Alpha ~= nil
     self.swatch = Components.circle(self.lane, T.Geometry.Swatch, Color3.new(1, 1, 1))
+    self.window.bindings[self.swatch] = nil
     self.swatch.Position = UDim2.new(1, -T.Geometry.Swatch / 2, 0.5, 0)
     self.trigger = U.button(self.lane, {
         AnchorPoint = Vector2.new(1, 0.5),
@@ -2278,6 +2432,15 @@ function SubTab:AddColorPicker(config)
         local height = 8 + T.Geometry.PickerSV + 16 + T.Geometry.PickerRail + (self.hasAlpha and 24 or 0) + 8
         self.window.overlay:Open(self, self.trigger, width, height, function(group, bag)
             local w = self.window
+            local function canStart(event)
+                local active = w.overlay.active
+                return self:_usable()
+                    and self.state.Open
+                    and active
+                    and active.owner == self
+                    and active.group == group
+                    and w.input:CanStart(event)
+            end
             local railWidth = width - 16
             local sv = U.button(group, {
                 Position = UDim2.fromOffset(8, 8),
@@ -2304,6 +2467,8 @@ function SubTab:AddColorPicker(config)
                 BackgroundTransparency = 0,
                 ZIndex = sv.ZIndex + 2,
             }, w)
+            w.bindings[white] = nil
+            w.bindings[black] = nil
             U.new("UIGradient", {
                 Rotation = 90,
                 Transparency = NumberSequence.new({
@@ -2326,6 +2491,7 @@ function SubTab:AddColorPicker(config)
                 ZIndex = group.ZIndex + 1,
             })
             U.corner(hue, 2)
+            w.bindings[hue] = nil
             local spectrum = {}
             for i = 0, 6 do
                 table.insert(spectrum, ColorSequenceKeypoint.new(i / 6, Color3.fromHSV(i / 6, 1, 1)))
@@ -2381,7 +2547,7 @@ function SubTab:AddColorPicker(config)
                 }, w)
                 U.corner(p.alphaHandle, 1)
                 U.connect(bag, alpha.InputBegan, function(event)
-                    if not U.primary(event) then
+                    if not canStart(event) then
                         return
                     end
                     w.input:Start(self, event, function(point)
@@ -2397,7 +2563,7 @@ function SubTab:AddColorPicker(config)
                 self:_commit(Color3.fromHSV(h, s, v), false)
             end
             U.connect(bag, sv.InputBegan, function(event)
-                if not U.primary(event) then
+                if not canStart(event) then
                     return
                 end
                 w.input:Start(self, event, function(point)
@@ -2407,7 +2573,7 @@ function SubTab:AddColorPicker(config)
                 end)
             end)
             U.connect(bag, hue.InputBegan, function(event)
-                if not U.primary(event) then
+                if not canStart(event) then
                     return
                 end
                 w.input:Start(self, event, function(point)
@@ -2461,6 +2627,8 @@ function SubTab:AddTextbox(config)
     U.new("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 26) }, self.box)
     self.edit = Icons.make(self.box, "pencil", 10, self.window.theme.TextPrimary, self.window)
     self.edit.Position = UDim2.new(1, -20, 0.5, -5)
+    U.bind(self.window, self.box, "BackgroundColor3", "InputBackground")
+    U.bind(self.window, self.box, "PlaceholderColor3", "TextMuted")
     self.focusStroke = U.stroke(self.box, self.window.theme.BorderStrong, 1)
     self.focusStroke.Transparency = 1
     function self:normalize(value)
@@ -2581,7 +2749,7 @@ function SubTab:AddButton(config)
             or (s.Pressed and w.theme.AccentPressed or (active and w.theme.Accent or w.theme.RowBackground))
         w.motion:To(self.action, T.Motion.Micro, { BackgroundColor3 = color, BackgroundTransparency = 0 })
         self.actionLabel.TextColor3 = s.Disabled and w.theme.TextDisabled
-            or (active and w.theme.WindowBackground or w.theme.TextMuted)
+            or (active and w.theme.ButtonText or (self.page.system and w.theme.SystemText or w.theme.TextMuted))
     end
     function self:Press()
         if self:_usable() then
@@ -2835,6 +3003,9 @@ function Window:_searchResults(query)
     self.searchScroll:Update()
 end
 function Window:OpenSearch()
+    if self.settingsOpen then
+        self:CloseSettings(true)
+    end
     if not self.searchEnabled or not self:_canNavigate() then
         return self
     end
@@ -2890,6 +3061,9 @@ function Window:CloseSearch(immediate)
 end
 function Window:SetSearchEnabled(value)
     self.searchEnabled = value == true
+    if self.searchPreference and not self.searchPreference.destroyed then
+        self.searchPreference:Set(self.searchEnabled, true)
+    end
     self.searchButton.Visible = self.searchEnabled
     if not self.searchEnabled then
         self:CloseSearch()
@@ -2916,6 +3090,10 @@ function Library:RegisterIcon(name, asset)
 end
 function Library:CreateWindow(config)
     config = config or {}
+    assert(
+        config.Filesystem == nil or type(config.Filesystem) == "table",
+        "Neron Filesystem expects an API adapter table"
+    )
     local size = config.Size
     local baseWidth = typeof(size) == "Vector2" and U.finite(size.X, 0) or T.Geometry.Width
     local baseHeight = typeof(size) == "Vector2" and U.finite(size.Y, 0) or T.Geometry.Height
@@ -3004,6 +3182,7 @@ function Library:CreateWindow(config)
         DisplayOrder = config.DisplayOrder or 50,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
     }, parent)
+    U.owners[w.gui] = w
     w.bag:Add(w.gui)
     local unload = U.new("BindableEvent", { Name = "NeronUnload" }, w.gui)
     U.connect(w.bag, unload.Event, function()
@@ -3015,15 +3194,22 @@ function Library:CreateWindow(config)
         end
     end)
     w.stage = U.frame(w.gui, { Name = "Viewport", Size = UDim2.fromScale(1, 1), ZIndex = 1 }, w)
-    w.root = U.frame(w.stage, {
+    w.root = U.new("CanvasGroup", {
+        GroupTransparency = 0,
+        BackgroundTransparency = 0,
+        BackgroundColor3 = w.theme.WindowBackground,
         Name = "Window",
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5),
         Size = UDim2.fromOffset(w.baseWidth, w.baseHeight),
         ClipsDescendants = true,
         ZIndex = T.Z.Shell,
-    }, w, "WindowBackground")
+    }, w.stage)
+    U.bind(w, w.root, "BackgroundColor3", "WindowBackground")
     U.corner(w.root, T.Radius.Window)
+    local edge = U.stroke(w.root, w.theme.SurfaceEdge, 1)
+    edge.Transparency = 0.45
+    U.bind(w, edge, "Color", "SurfaceEdge")
     w.uiScale = U.new("UIScale", { Scale = 1 }, w.root)
     w.content = U.frame(w.root, {
         Name = "Content",
@@ -3065,7 +3251,7 @@ function Library:CreateWindow(config)
     w:_brandLayout()
     local sideHost = U.frame(
         w.sidebar,
-        { Position = UDim2.fromOffset(0, 56), Size = UDim2.new(1, 0, 1, -68), ZIndex = w.sidebar.ZIndex + 1 },
+        { Position = UDim2.fromOffset(0, 56), Size = UDim2.new(1, 0, 1, -112), ZIndex = w.sidebar.ZIndex + 1 },
         w
     )
     w.input = Input.new(w)
@@ -3171,7 +3357,9 @@ function Library:CreateWindow(config)
         w:SetSidebarVisible(false)
     end)
     U.connect(w.bag, w.dim.Activated, function()
-        if w.searchOpen then
+        if w.settingsOpen then
+            w:CloseSettings()
+        elseif w.searchOpen then
             w:CloseSearch()
         else
             w.overlay:Close()
@@ -3182,7 +3370,15 @@ function Library:CreateWindow(config)
             return
         end
         if event.KeyCode == Enum.KeyCode.Escape then
-            if w.searchOpen then
+            if w.transfer then
+                SettingsUI.dismissTransfer(w)
+            elseif w.confirmation then
+                SettingsUI.dismissConfirmation(w)
+            elseif w.overlay.active then
+                w.overlay:Close()
+            elseif w.settingsOpen then
+                w:CloseSettings()
+            elseif w.searchOpen then
                 w:CloseSearch()
             else
                 w.overlay:Close()
@@ -3202,7 +3398,7 @@ function Library:CreateWindow(config)
     end)
     if config.Draggable ~= false then
         local function drag(event)
-            if not U.primary(event) or w.searchOpen or w.overlay.active then
+            if not U.primary(event) or w.searchOpen or w.settingsOpen or w.overlay.active then
                 return
             end
             local start = U.point(event)
@@ -3226,10 +3422,2748 @@ function Library:CreateWindow(config)
         w:_responsive()
     end)
     w:_responsive()
+    Presentation.init(w, config)
+    Profiles.init(w, config)
+    SettingsUI.init(w, config)
     if config.Accent then
         w:SetAccent(config.Accent)
     end
     return w
+end
+
+-- Semantic presentation: bindings are weak, updates event-driven, state remains authoritative.
+Presentation.themes = {
+    ["Neron Dark"] = table.clone(Theme),
+    Graphite = {
+        WindowBackground = Color3.fromRGB(24, 25, 28),
+        SidebarBackground = Color3.fromRGB(28, 29, 33),
+        HeaderBackground = Color3.fromRGB(26, 27, 30),
+        ContentBackground = Color3.fromRGB(23, 24, 27),
+        RowBackground = Color3.fromRGB(28, 29, 33),
+        RowHover = Color3.fromRGB(33, 35, 40),
+        RowPressed = Color3.fromRGB(38, 40, 46),
+        SurfaceSecondary = Color3.fromRGB(34, 36, 41),
+        SurfaceSelected = Color3.fromRGB(40, 43, 49),
+        PopoverBackground = Color3.fromRGB(29, 31, 36),
+        InputBackground = Color3.fromRGB(34, 36, 42),
+        Separator = Color3.fromRGB(43, 45, 51),
+        BorderWeak = Color3.fromRGB(48, 51, 58),
+        SurfaceEdge = Color3.fromRGB(55, 58, 66),
+        BorderStrong = Color3.fromRGB(85, 92, 107),
+        TextPrimary = Color3.fromRGB(226, 229, 235),
+        TextSecondary = Color3.fromRGB(102, 106, 118),
+        TextMuted = Color3.fromRGB(77, 82, 93),
+        TextDisabled = Color3.fromRGB(54, 58, 67),
+        SystemText = Color3.fromRGB(159, 166, 179),
+        Accent = Color3.fromRGB(125, 149, 187),
+        ToggleTrackOff = Color3.fromRGB(44, 48, 56),
+        ToggleTrackOn = Color3.fromRGB(73, 96, 131),
+        ToggleKnobOff = Color3.fromRGB(110, 120, 137),
+        ToggleKnobOn = Color3.fromRGB(182, 207, 238),
+        SliderTrack = Color3.fromRGB(39, 42, 48),
+        SliderCore = Color3.fromRGB(37, 43, 53),
+        DropdownBackground = Color3.fromRGB(32, 34, 39),
+        DropdownHover = Color3.fromRGB(42, 45, 52),
+        ButtonText = Color3.fromRGB(20, 26, 36),
+    },
+    OLED = {
+        WindowBackground = Color3.fromRGB(0, 0, 0),
+        SidebarBackground = Color3.fromRGB(5, 5, 7),
+        ContentBackground = Color3.fromRGB(2, 2, 4),
+        HeaderBackground = Color3.fromRGB(3, 3, 5),
+        RowBackground = Color3.fromRGB(7, 7, 10),
+        RowHover = Color3.fromRGB(13, 12, 18),
+        RowPressed = Color3.fromRGB(18, 16, 24),
+        SurfaceSecondary = Color3.fromRGB(12, 11, 17),
+        SurfaceSelected = Color3.fromRGB(19, 16, 28),
+        PopoverBackground = Color3.fromRGB(9, 8, 14),
+        InputBackground = Color3.fromRGB(14, 12, 20),
+        Separator = Color3.fromRGB(23, 21, 29),
+        BorderWeak = Color3.fromRGB(28, 25, 35),
+        SurfaceEdge = Color3.fromRGB(31, 28, 39),
+        TextPrimary = Color3.fromRGB(231, 227, 240),
+        TextSecondary = Color3.fromRGB(84, 79, 97),
+        TextMuted = Color3.fromRGB(61, 56, 74),
+        TextDisabled = Color3.fromRGB(39, 36, 47),
+        SystemText = Color3.fromRGB(154, 145, 173),
+        Accent = Color3.fromRGB(148, 125, 200),
+        ToggleTrackOff = Color3.fromRGB(24, 20, 32),
+        ToggleTrackOn = Color3.fromRGB(83, 64, 123),
+        ToggleKnobOff = Color3.fromRGB(95, 83, 115),
+        ToggleKnobOn = Color3.fromRGB(190, 166, 232),
+        SliderTrack = Color3.fromRGB(16, 13, 22),
+        SliderCore = Color3.fromRGB(24, 18, 36),
+        DropdownBackground = Color3.fromRGB(12, 10, 17),
+        DropdownHover = Color3.fromRGB(21, 17, 30),
+    },
+    Light = {
+        AppBackground = Color3.fromRGB(223, 226, 232),
+        WindowBackground = Color3.fromRGB(247, 248, 250),
+        SidebarBackground = Color3.fromRGB(237, 239, 244),
+        HeaderBackground = Color3.fromRGB(245, 246, 249),
+        ContentBackground = Color3.fromRGB(244, 245, 248),
+        RowBackground = Color3.fromRGB(249, 250, 252),
+        RowHover = Color3.fromRGB(237, 235, 245),
+        RowPressed = Color3.fromRGB(227, 224, 240),
+        SurfaceSecondary = Color3.fromRGB(235, 237, 243),
+        SurfaceSelected = Color3.fromRGB(226, 223, 239),
+        PopoverBackground = Color3.fromRGB(251, 252, 254),
+        InputBackground = Color3.fromRGB(230, 232, 239),
+        Separator = Color3.fromRGB(218, 220, 228),
+        BorderWeak = Color3.fromRGB(207, 210, 220),
+        BorderStrong = Color3.fromRGB(139, 130, 175),
+        SurfaceEdge = Color3.fromRGB(196, 200, 212),
+        TextPrimary = Color3.fromRGB(30, 31, 41),
+        TextSecondary = Color3.fromRGB(103, 106, 122),
+        TextMuted = Color3.fromRGB(135, 138, 151),
+        TextDisabled = Color3.fromRGB(177, 179, 190),
+        SystemText = Color3.fromRGB(78, 82, 99),
+        Accent = Color3.fromRGB(108, 94, 163),
+        ToggleTrackOff = Color3.fromRGB(198, 200, 211),
+        ToggleTrackOn = Color3.fromRGB(130, 114, 180),
+        ToggleKnobOff = Color3.fromRGB(250, 251, 253),
+        ToggleKnobOn = Color3.fromRGB(252, 250, 255),
+        SliderTrack = Color3.fromRGB(216, 218, 230),
+        SliderCore = Color3.fromRGB(226, 222, 239),
+        DropdownBackground = Color3.fromRGB(234, 236, 242),
+        DropdownHover = Color3.fromRGB(223, 224, 235),
+        ButtonText = Color3.fromRGB(252, 250, 255),
+        Success = Color3.fromRGB(39, 134, 80),
+        Warning = Color3.fromRGB(155, 111, 30),
+        Danger = Color3.fromRGB(179, 55, 65),
+    },
+}
+Presentation.order = { "Neron Dark", "Graphite", "OLED", "Light" }
+function Presentation.colors(name, overrides, accent)
+    local theme = table.clone(Theme)
+    for token, value in pairs(Presentation.themes[name] or {}) do
+        theme[token] = value
+    end
+    for token, value in pairs(overrides or {}) do
+        if Theme[token] and typeof(value) == "Color3" then
+            theme[token] = value
+        end
+    end
+    local color = accent or theme.Accent
+    theme.Accent = color
+    theme.AccentHover = (not accent and overrides and overrides.AccentHover) or color:Lerp(Color3.new(1, 1, 1), 0.10)
+    theme.AccentPressed = (not accent and overrides and overrides.AccentPressed)
+        or color:Lerp(Color3.new(0, 0, 0), 0.22)
+    theme.AccentMuted = (not accent and overrides and overrides.AccentMuted) or color:Lerp(theme.WindowBackground, 0.76)
+    theme.SliderFill = accent or (overrides and overrides.SliderFill) or color
+    theme.SliderKnob = accent or (overrides and overrides.SliderKnob) or color
+    if accent then
+        theme.ToggleTrackOn = color:Lerp(theme.WindowBackground, 0.68)
+        theme.ToggleKnobOn = color:Lerp(Color3.new(1, 1, 1), 0.04)
+    end
+    return theme
+end
+function Presentation.apply(w)
+    if w.destroyed then
+        return
+    end
+    w.theme = Presentation.colors(w.themeName, w.themeOverrides, w.customAccent)
+    for obj, bindings in pairs(w.bindings) do
+        if obj.Parent then
+            for property, token in pairs(bindings) do
+                if obj[property] ~= w.theme[token] then
+                    w.motion:Cancel(obj, property)
+                    obj[property] = w.theme[token]
+                end
+            end
+        else
+            w.bindings[obj] = nil
+        end
+    end
+    Icons.color(w.brandIcon, w.theme.Accent)
+    for _, tab in ipairs(w.tabs) do
+        tab:_render()
+        for _, sub in ipairs(tab.subtabs) do
+            sub:_render()
+            for _, control in ipairs(sub.controls) do
+                control:_render()
+            end
+        end
+    end
+    for _, page in pairs(w.settingsPages or {}) do
+        for _, control in ipairs(page.controls) do
+            control:_render()
+        end
+    end
+    if w.searchOpen then
+        w:_searchResults(w.searchBox.Text)
+    end
+    for button, owner in pairs(w.systemRenders or {}) do
+        if button.Parent then
+            owner:_render()
+        else
+            w.systemRenders[button] = nil
+        end
+    end
+    if
+        w.accentPreference
+        and not w.accentPreference.destroyed
+        and not U.equal(w.accentPreference.value, w.theme.Accent)
+    then
+        w.accentPreference:Set(w.theme.Accent, true)
+    end
+    if SettingsUI.refreshStyle then
+        SettingsUI.refreshStyle(w)
+    end
+end
+function Presentation.remember(w)
+    Library.themeName, Library.themeOverrides, Library.customAccent =
+        w.themeName, table.clone(w.themeOverrides), w.customAccent
+end
+function Presentation.init(w, config)
+    Library.windows = Library.windows or setmetatable({}, { __mode = "k" })
+    Library.windows[w] = true
+    w.themeName = Presentation.themes[config.Theme] and config.Theme or Library.themeName or "Neron Dark"
+    w.themeOverrides = config.Theme == nil and table.clone(Library.themeOverrides or {}) or {}
+    w.customAccent = config.Accent or (config.Theme == nil and Library.customAccent or nil)
+    w.localeBindings = setmetatable({}, { __mode = "k" })
+    w.language = Locale.dictionaries[config.Language] and config.Language or Library.language or "English"
+    Presentation.apply(w)
+    Locale.bind(w, w.searchBox, "PlaceholderText", "Search")
+    for _, obj in ipairs(w.searchEmpty:GetDescendants()) do
+        if obj:IsA("TextLabel") then
+            Locale.bind(w, obj, "Text", "NoMatches")
+        end
+    end
+end
+function Window:SetTheme(name, silent)
+    if self.destroyed or not Presentation.themes[name] then
+        return false, "Unknown theme"
+    end
+    self.themeName, self.themeOverrides, self.customAccent = name, {}, nil
+    Presentation.remember(self)
+    Presentation.apply(self)
+    if not silent and self.persistence then
+        self.persistence:QueuePresentation()
+    end
+    return true
+end
+function Window:GetTheme()
+    return self.themeName
+end
+function Window:GetThemeTokens()
+    return table.clone(self.theme)
+end
+function Library:SetTheme(name)
+    if not Presentation.themes[name] then
+        return false, "Unknown theme"
+    end
+    self.themeName, self.themeOverrides, self.customAccent = name, {}, nil
+    for w in pairs(self.windows or {}) do
+        w:SetTheme(name)
+    end
+    return true
+end
+function Library:GetTheme()
+    return self.themeName or "Neron Dark"
+end
+function Library:GetThemes()
+    return table.clone(Presentation.order)
+end
+function Presentation.colorData(color)
+    return { color.R, color.G, color.B }
+end
+function Presentation.decodeColor(value)
+    if typeof(value) == "Color3" then
+        return value
+    end
+    if type(value) ~= "table" or #value ~= 3 then
+        return nil
+    end
+    for i = 1, 3 do
+        if type(value[i]) ~= "number" or U.finite(value[i], nil) == nil then
+            return nil
+        end
+    end
+    return Color3.new(math.clamp(value[1], 0, 1), math.clamp(value[2], 0, 1), math.clamp(value[3], 0, 1))
+end
+function Window:ExportTheme()
+    local values = {}
+    for token, color in pairs(self.theme) do
+        values[token] = Presentation.colorData(color)
+    end
+    return Storage.encode({ schemaVersion = 1, name = self.themeName, base = self.themeName, colors = values })
+end
+function Window:ImportTheme(json, silent)
+    if self.destroyed then
+        return false, "WindowDestroyed"
+    end
+    local data, err = Storage.decode(json)
+    if not data then
+        return false, err
+    end
+    if data.schemaVersion ~= 1 or type(data.colors) ~= "table" then
+        return false, "Invalid theme schema"
+    end
+    local overrides, count = {}, 0
+    for token, value in pairs(data.colors) do
+        if Theme[token] then
+            local color = Presentation.decodeColor(value)
+            if not color then
+                return false, "Invalid theme color: " .. token
+            end
+            overrides[token], count = color, count + 1
+        end
+    end
+    if count == 0 then
+        return false, "Theme contains no known colors"
+    end
+    self.themeName = Presentation.themes[data.base] and data.base or "Neron Dark"
+    self.themeOverrides, self.customAccent = overrides, nil
+    Presentation.remember(self)
+    Presentation.apply(self)
+    if not silent and self.persistence then
+        self.persistence:QueuePresentation()
+    end
+    return true
+end
+
+-- System labels only. Consumer labels remain untouched unless explicitly bound by the consumer.
+Locale.order = { "English", "Spanish", "Russian", "Portuguese" }
+Locale.rows = {
+    Settings = { "Settings", "Configuración", "Настройки", "Configurações" },
+    Profiles = { "Profiles", "Perfiles", "Профили", "Perfis" },
+    Themes = { "Themes", "Temas", "Темы", "Temas" },
+    Language = { "Language", "Idioma", "Язык", "Idioma" },
+    General = { "General", "General", "Общие", "Geral" },
+    Close = { "Close", "Cerrar", "Закрыть", "Fechar" },
+    Create = { "Create", "Crear", "Создать", "Criar" },
+    Save = { "Save", "Guardar", "Сохранить", "Salvar" },
+    Load = { "Load", "Cargar", "Загрузить", "Carregar" },
+    Rename = { "Rename", "Renombrar", "Переименовать", "Renomear" },
+    Duplicate = { "Duplicate", "Duplicar", "Дублировать", "Duplicar" },
+    Delete = { "Delete", "Eliminar", "Удалить", "Excluir" },
+    Refresh = { "Refresh", "Actualizar", "Обновить", "Atualizar" },
+    Import = { "Import", "Importar", "Импорт", "Importar" },
+    Export = { "Export", "Exportar", "Экспорт", "Exportar" },
+    Confirm = { "Confirm", "Confirmar", "Подтвердить", "Confirmar" },
+    Cancel = { "Cancel", "Cancelar", "Отмена", "Cancelar" },
+    Autoload = { "Autoload", "Carga automática", "Автозагрузка", "Carregamento automático" },
+    Enable = { "Enable", "Activar", "Включить", "Ativar" },
+    Disable = { "Disable", "Desactivar", "Отключить", "Desativar" },
+    Search = {
+        "Search for a setting",
+        "Buscar una configuración",
+        "Поиск настройки",
+        "Buscar configuração",
+    },
+    NoMatches = {
+        "No matching settings",
+        "Sin coincidencias",
+        "Совпадений нет",
+        "Nenhuma configuração encontrada",
+    },
+    NoOptions = { "No options", "Sin opciones", "Нет вариантов", "Sem opções" },
+    None = { "None", "Ninguno", "Нет", "Nenhum" },
+    Select = { "Select", "Seleccionar", "Выбрать", "Selecionar" },
+    NoProfiles = {
+        "No profiles yet",
+        "Aún no hay perfiles",
+        "Профилей пока нет",
+        "Nenhum perfil ainda",
+    },
+    ProfileName = { "Profile name", "Nombre del perfil", "Имя профиля", "Nome do perfil" },
+    Saved = { "Profile saved", "Perfil guardado", "Профиль сохранён", "Perfil salvo" },
+    Loaded = { "Profile loaded", "Perfil cargado", "Профиль загружен", "Perfil carregado" },
+    Deleted = { "Profile deleted", "Perfil eliminado", "Профиль удалён", "Perfil excluído" },
+    Renamed = { "Profile renamed", "Perfil renombrado", "Профиль переименован", "Perfil renomeado" },
+    Duplicated = { "Profile duplicated", "Perfil duplicado", "Профиль скопирован", "Perfil duplicado" },
+    Imported = { "Profile imported", "Perfil importado", "Профиль импортирован", "Perfil importado" },
+    AutoloadEnabled = {
+        "Autoload enabled",
+        "Carga automática activada",
+        "Автозагрузка включена",
+        "Carregamento automático ativado",
+    },
+    AutoloadDisabled = {
+        "Autoload disabled",
+        "Carga automática desactivada",
+        "Автозагрузка отключена",
+        "Carregamento automático desativado",
+    },
+    ThemeChanged = { "Theme changed", "Tema cambiado", "Тема изменена", "Tema alterado" },
+    ThemeImported = { "Theme imported", "Tema importado", "Тема импортирована", "Tema importado" },
+    InvalidJSON = { "Invalid JSON", "JSON no válido", "Неверный JSON", "JSON inválido" },
+    InvalidProfile = { "Invalid profile", "Perfil no válido", "Неверный профиль", "Perfil inválido" },
+    FilesystemUnavailable = {
+        "Filesystem unavailable",
+        "Sistema de archivos no disponible",
+        "Файловая система недоступна",
+        "Sistema de arquivos indisponível",
+    },
+    SaveFailure = {
+        "Could not save",
+        "No se pudo guardar",
+        "Не удалось сохранить",
+        "Não foi possível salvar",
+    },
+    Failed = { "Operation failed", "Operación fallida", "Ошибка операции", "Falha na operação" },
+    DeleteQuestion = {
+        "Delete this profile? This cannot be undone.",
+        "¿Eliminar este perfil? No se puede deshacer.",
+        "Удалить профиль? Это действие необратимо.",
+        "Excluir este perfil? Esta ação é irreversível.",
+    },
+    ProfileBody = {
+        "Save named configurations for this game. Only flagged controls are included.",
+        "Guarda configuraciones para este juego. Solo se incluyen controles con Flag.",
+        "Сохраняйте настройки игры. Включены только элементы с Flag.",
+        "Salve configurações deste jogo. Apenas controles com Flag são incluídos.",
+    },
+    ThemeBody = {
+        "Presentation changes live; your controls and values remain in place.",
+        "La apariencia cambia en vivo; los controles y valores permanecen.",
+        "Оформление меняется сразу; элементы и значения сохраняются.",
+        "A aparência muda ao vivo; controles e valores são preservados.",
+    },
+    LanguageBody = {
+        "System text changes immediately. Developer labels are preserved.",
+        "El texto del sistema cambia al instante. Tus etiquetas se conservan.",
+        "Текст системы меняется сразу. Названия разработчика сохраняются.",
+        "O texto do sistema muda imediatamente. Seus rótulos são preservados.",
+    },
+    GeneralBody = {
+        "Window preferences and persistence capabilities.",
+        "Preferencias de ventana y capacidades de guardado.",
+        "Настройки окна и возможности сохранения.",
+        "Preferências da janela e recursos de armazenamento.",
+    },
+    Accent = { "Custom accent", "Acento personalizado", "Свой акцент", "Cor de destaque" },
+    ResetAccent = { "Reset accent", "Restablecer acento", "Сбросить акцент", "Restaurar destaque" },
+    ThemeJSON = { "Theme JSON", "JSON del tema", "JSON темы", "JSON do tema" },
+    ProfileJSON = { "Profile JSON", "JSON del perfil", "JSON профиля", "JSON do perfil" },
+    Copy = { "Copy", "Copiar", "Копировать", "Copiar" },
+    ClipboardUnavailable = {
+        "Clipboard unavailable; select and copy the text.",
+        "Portapapeles no disponible; selecciona y copia el texto.",
+        "Буфер недоступен; выделите и скопируйте текст.",
+        "Área de transferência indisponível; selecione e copie o texto.",
+    },
+    Copied = { "Copied", "Copiado", "Скопировано", "Copiado" },
+    SilentLoad = {
+        "Silent profile load",
+        "Carga de perfil silenciosa",
+        "Тихая загрузка профиля",
+        "Carregar perfil silenciosamente",
+    },
+    SilentBody = {
+        "Update controls without triggering developer callbacks.",
+        "Actualiza controles sin ejecutar callbacks del desarrollador.",
+        "Обновлять элементы без вызова функций разработчика.",
+        "Atualize controles sem acionar callbacks do desenvolvedor.",
+    },
+    SearchEnabled = { "Enable search", "Activar búsqueda", "Включить поиск", "Ativar busca" },
+    Notifications = {
+        "Show system feedback",
+        "Mostrar avisos del sistema",
+        "Показывать уведомления",
+        "Mostrar avisos do sistema",
+    },
+    PersistenceReady = {
+        "Persistence ready",
+        "Guardado disponible",
+        "Сохранение доступно",
+        "Armazenamento disponível",
+    },
+    ProfileExists = {
+        "A profile with this name already exists",
+        "Ya existe un perfil con ese nombre",
+        "Профиль с таким именем уже существует",
+        "Já existe um perfil com esse nome",
+    },
+    MissingProfile = {
+        "Profile not found",
+        "Perfil no encontrado",
+        "Профиль не найден",
+        "Perfil não encontrado",
+    },
+    InvalidName = {
+        "Enter a valid profile name",
+        "Escribe un nombre de perfil válido",
+        "Введите допустимое имя профиля",
+        "Digite um nome de perfil válido",
+    },
+    SetAutoload = {
+        "Use selected profile",
+        "Usar perfil seleccionado",
+        "Использовать выбранный профиль",
+        "Usar perfil selecionado",
+    },
+    Active = { "Active", "Activo", "Активный", "Ativo" },
+    ResolvingGame = {
+        "Resolving game name…",
+        "Obteniendo nombre del juego…",
+        "Определение названия игры…",
+        "Obtendo nome do jogo…",
+    },
+    WindowDestroyed = {
+        "Window is destroyed",
+        "La ventana está destruida",
+        "Окно уничтожено",
+        "A janela foi destruída",
+    },
+    Ready = { "Ready", "Listo", "Готово", "Pronto" },
+}
+Locale.dictionaries = {}
+for i, language in ipairs(Locale.order) do
+    local dictionary = {}
+    for key, translations in pairs(Locale.rows) do
+        dictionary[key] = translations[i]
+    end
+    Locale.dictionaries[language] = dictionary
+end
+function Locale.text(w, key)
+    return (Locale.dictionaries[w.language or "English"] or {})[key] or Locale.dictionaries.English[key] or key
+end
+function Locale.bind(w, object, property, key)
+    local bindings = w.localeBindings[object] or {}
+    w.localeBindings[object] = bindings
+    bindings[property] = key
+    object[property] = Locale.text(w, key)
+end
+function Window:Translate(key)
+    return Locale.text(self, tostring(key))
+end
+function Window:BindLocalization(object, property, key)
+    assert(
+        typeof(object) == "Instance" and object:IsDescendantOf(self.gui),
+        "Neron localization target must belong to this window"
+    )
+    Locale.bind(self, object, property or "Text", key)
+    return self
+end
+function Window:SetLanguage(language, silent)
+    if self.destroyed or not Locale.dictionaries[language] then
+        return false, "Unknown language"
+    end
+    self.overlay:Close(true)
+    self.language = language
+    Library.language = language
+    for object, properties in pairs(self.localeBindings) do
+        if object.Parent then
+            for property, key in pairs(properties) do
+                object[property] = Locale.text(self, key)
+            end
+        else
+            self.localeBindings[object] = nil
+        end
+    end
+    if SettingsUI.refreshLanguage then
+        SettingsUI.refreshLanguage(self)
+    end
+    if not silent and self.persistence then
+        self.persistence:QueuePresentation()
+    end
+    return true
+end
+function Window:GetLanguage()
+    return self.language
+end
+function Library:SetLanguage(language)
+    if not Locale.dictionaries[language] then
+        return false, "Unknown language"
+    end
+    self.language = language
+    for w in pairs(self.windows or {}) do
+        w:SetLanguage(language)
+    end
+    return true
+end
+function Library:GetLanguage()
+    return self.language or "English"
+end
+function Library:GetLanguages()
+    return table.clone(Locale.order)
+end
+
+-- Executor filesystem adapter. No capability probe writes files; Studio remains fully usable.
+function Storage.resolve(name)
+    local environments = { _G }
+    if type(getgenv) == "function" then
+        local ok, env = pcall(getgenv)
+        if ok and type(env) == "table" then
+            table.insert(environments, env)
+        end
+    end
+    if type(getfenv) == "function" then
+        local ok, env = pcall(getfenv, 0)
+        if ok and type(env) == "table" then
+            table.insert(environments, env)
+        end
+    end
+    for _, env in ipairs(environments) do
+        local ok, fn = pcall(function()
+            return env[name]
+        end)
+        if ok and type(fn) == "function" then
+            return fn
+        end
+    end
+    return nil
+end
+function Storage.new(adapter)
+    local self = setmetatable({ api = {}, known = {} }, { __index = Storage })
+    for _, key in ipairs({ "isfolder", "makefolder", "isfile", "readfile", "writefile", "delfile", "listfiles" }) do
+        if adapter ~= nil then
+            self.api[key] = adapter[key]
+        else
+            self.api[key] = Storage.resolve(key)
+        end
+    end
+    self.available = true
+    for _, key in ipairs({ "isfolder", "makefolder", "isfile", "readfile", "writefile" }) do
+        if type(self.api[key]) ~= "function" then
+            self.available = false
+        end
+    end
+    return self
+end
+function Storage.sanitize(value, fallback)
+    local text = tostring(value or ""):gsub('[%z\1-\31<>:"/\\|?*]', "_"):match("^%s*(.-)%s*$")
+    text = text:gsub("%.+$", ""):gsub("^%.+", ""):gsub("%s+$", "")
+    if #text > 80 then
+        local ok, offset = pcall(utf8.offset, text, 0, 81)
+        text = ok and offset and text:sub(1, offset - 1) or text:sub(1, 80)
+    end
+    if text == "" or text == "." or text == ".." then
+        return fallback
+    end
+    local upper = text:upper()
+    if
+        upper == "CON"
+        or upper == "PRN"
+        or upper == "AUX"
+        or upper == "NUL"
+        or upper:match("^COM%d$")
+        or upper:match("^LPT%d$")
+    then
+        text = "_" .. text
+    end
+    return text
+end
+function Storage.gameName(value, fallback)
+    local name = Storage.sanitize(value, fallback)
+    return name:lower() == "end" and "_" .. name or name
+end
+function Storage.decode(json)
+    if type(json) ~= "string" or #json == 0 or #json > 1024 * 1024 then
+        return nil, "InvalidJSON"
+    end
+    local ok, value = pcall(S.Http.JSONDecode, S.Http, json)
+    if not ok or type(value) ~= "table" then
+        return nil, "InvalidJSON"
+    end
+    return value
+end
+function Storage.encode(value)
+    local ok, json = pcall(S.Http.JSONEncode, S.Http, value)
+    if not ok or type(json) ~= "string" or #json > 1024 * 1024 then
+        return nil, "InvalidJSON"
+    end
+    local decoded = Storage.decode(json)
+    if not decoded then
+        return nil, "InvalidJSON"
+    end
+    return json
+end
+function Storage:Call(key, ...)
+    local fn = self.api[key]
+    if type(fn) ~= "function" then
+        return false, "FilesystemUnavailable"
+    end
+    local ok, result = pcall(fn, ...)
+    if not ok then
+        return false, tostring(result)
+    end
+    return true, result
+end
+function Storage:EnsureFolder(path)
+    if not self.available then
+        return false, "FilesystemUnavailable"
+    end
+    local prefix = ""
+    for part in path:gmatch("[^/]+") do
+        prefix = prefix == "" and part or prefix .. "/" .. part
+        local ok, exists = self:Call("isfolder", prefix)
+        if not ok then
+            return false, exists
+        end
+        if not exists then
+            local made, err = self:Call("makefolder", prefix)
+            if not made then
+                return false, err
+            end
+            local checked, present = self:Call("isfolder", prefix)
+            if not checked or not present then
+                return false, "SaveFailure"
+            end
+        end
+    end
+    return true
+end
+function Storage:Exists(path)
+    local ok, value = self:Call("isfile", path)
+    return ok and value == true
+end
+function Storage:Read(path)
+    if not self:Exists(path) then
+        return nil, "MissingProfile"
+    end
+    local ok, contents = self:Call("readfile", path)
+    if not ok or type(contents) ~= "string" then
+        return nil, "InvalidJSON"
+    end
+    return contents
+end
+function Storage:Write(path, value)
+    if not self.available then
+        return false, "FilesystemUnavailable"
+    end
+    local json, err = Storage.encode(value)
+    if not json then
+        return false, err
+    end
+    local folder = path:match("^(.*)/[^/]+$")
+    local ready, failure = self:EnsureFolder(folder)
+    if not ready then
+        return false, failure
+    end
+    local checked, exists = self:Call("isfile", path)
+    if not checked then
+        return false, exists
+    end
+    local backup
+    if exists then
+        local previous, failure = self:Read(path)
+        if not previous then
+            return false, failure or "SaveFailure"
+        end
+        backup = previous
+    end
+    local wrote, reason = self:Call("writefile", path, json)
+    local verify = wrote and self:Read(path) or nil
+    if not wrote or verify ~= json or not Storage.decode(verify) then
+        if backup then
+            self:Call("writefile", path, backup)
+        end
+        return false, reason or "SaveFailure"
+    end
+    self.known[path] = true
+    return true
+end
+function Storage:Delete(path)
+    local ok, err = self:Call("delfile", path)
+    if not ok then
+        return false, err
+    end
+    local checked, exists = self:Call("isfile", path)
+    if not checked or exists then
+        return false, checked and "SaveFailure" or exists
+    end
+    self.known[path] = nil
+    return true
+end
+function Storage:List(folder)
+    if not self.available then
+        return nil, "FilesystemUnavailable"
+    end
+    local out, seen = {}, {}
+    local ok, files = self:Call("listfiles", folder)
+    if ok and type(files) == "table" then
+        for _, path in ipairs(files) do
+            if type(path) == "string" then
+                local name = path:gsub("\\", "/"):match("([^/]+)%.json$")
+                if
+                    name
+                    and Storage.sanitize(name) == name
+                    and not seen[name]
+                    and self:Exists(folder .. "/" .. name .. ".json")
+                then
+                    out[#out + 1], seen[name] = name, true
+                end
+            end
+        end
+    end
+    -- Executors lacking listfiles can still use and refresh known profiles and Default.
+    for path in pairs(self.known) do
+        if path:sub(1, #folder + 1) == folder .. "/" and self:Exists(path) then
+            local name = path:match("([^/]+)%.json$")
+            if name and not seen[name] then
+                out[#out + 1], seen[name] = name, true
+            end
+        end
+    end
+    if self:Exists(folder .. "/Default.json") and not seen.Default then
+        table.insert(out, "Default")
+    end
+    table.sort(out, function(a, b)
+        return a:lower() == b:lower() and a < b or a:lower() < b:lower()
+    end)
+    return out
+end
+function Maid:Spawn(fn)
+    if self.dead then
+        return
+    end
+    local thread, cancel
+    cancel = function()
+        if thread and coroutine.running() ~= thread and coroutine.status(thread) == "suspended" then
+            task.cancel(thread)
+        end
+    end
+    thread = task.defer(function()
+        if not self.dead then
+            fn()
+        end
+        self:Remove(cancel)
+    end)
+    self:Add(cancel)
+    return cancel
+end
+
+Profiles.stateful = {
+    Toggle = true,
+    Slider = true,
+    RangeSlider = true,
+    Dropdown = true,
+    MultiDropdown = true,
+    ColorPicker = true,
+    Textbox = true,
+}
+function Profiles.init(w, config)
+    local self = setmetatable({
+        window = w,
+        store = Storage.new(config.Filesystem),
+        placeId = game.PlaceId,
+        gameName = Storage.gameName(config.GameName, tostring(game.PlaceId)),
+        applied = setmetatable({}, { __mode = "k" }),
+        silentLoad = true,
+        autoloadAllowed = config.Autoload ~= false,
+        ready = config.GameName ~= nil,
+    }, { __index = Profiles })
+    w.persistence = self
+    self:Paths()
+    local ready, err = self.store:EnsureFolder("Neron/End")
+    self.status = ready and "PersistenceReady" or "FilesystemUnavailable"
+    self.error = err
+    local contents = self.store:Read("Neron/End/Theme.json")
+    local prefs = contents and Storage.decode(contents)
+    if prefs and (prefs.schemaVersion == 1 or prefs.schemaVersion == 0) then
+        if config.Theme == nil and Library.themeName == nil and Presentation.themes[prefs.theme] then
+            w.themeName = prefs.theme
+        end
+        if config.Language == nil and Library.language == nil and Locale.dictionaries[prefs.language] then
+            w.language = prefs.language
+        end
+        local useStoredTheme = config.Theme == nil and Library.themeName == nil
+        if useStoredTheme then
+            w.customAccent = config.Accent or Presentation.decodeColor(prefs.accent)
+            w.themeOverrides = {}
+        end
+        if useStoredTheme and type(prefs.overrides) == "table" then
+            for token, color in pairs(prefs.overrides) do
+                local parsed = Theme[token] and Presentation.decodeColor(color)
+                if parsed then
+                    w.themeOverrides[token] = parsed
+                end
+            end
+        end
+        Presentation.apply(w)
+        w:SetLanguage(w.language, true)
+    end
+    if self.ready then
+        local folderReady, failure = self.store:EnsureFolder(self.folder)
+        self.status, self.error = folderReady and "PersistenceReady" or "SaveFailure", failure
+        self:QueueAutoload()
+    else
+        self.metadataCancel = w.bag:Spawn(function()
+            local ok, info = pcall(S.Marketplace.GetProductInfo, S.Marketplace, game.PlaceId)
+            if w.destroyed or self.ready then
+                return
+            end
+            if ok and type(info) == "table" and type(info.Name) == "string" then
+                self.gameName = Storage.gameName(info.Name, tostring(game.PlaceId))
+            end
+            self.ready = true
+            self:Paths()
+            local folderReady, failure = self.store:EnsureFolder(self.folder)
+            self.status, self.error = folderReady and "PersistenceReady" or "SaveFailure", failure
+            self:QueueAutoload()
+            if w.settingsOpen then
+                SettingsUI.refreshProfiles(w)
+            end
+        end)
+        w.bag:After(5, function()
+            if self.ready or w.destroyed then
+                return
+            end
+            self.ready = true
+            if self.metadataCancel then
+                w.bag:Remove(self.metadataCancel, true)
+                self.metadataCancel = nil
+            end
+            local folderReady, failure = self.store:EnsureFolder(self.folder)
+            self.status, self.error = folderReady and "PersistenceReady" or "SaveFailure", failure
+            self:QueueAutoload()
+            if w.settingsOpen then
+                SettingsUI.refreshProfiles(w)
+            end
+        end)
+    end
+end
+function Profiles:Paths()
+    self.folder = "Neron/" .. self.gameName .. "/Settings"
+end
+function Profiles:Writable()
+    if self.window.destroyed then
+        return false, "WindowDestroyed"
+    end
+    if not self.store.available then
+        return false, "FilesystemUnavailable"
+    end
+    if not self.ready then
+        return false, "ResolvingGame"
+    end
+    if self.busy then
+        return false, "Failed"
+    end
+    return true
+end
+function Profiles:Status()
+    if not self.store.available then
+        return "FilesystemUnavailable"
+    end
+    if not self.ready then
+        return "ResolvingGame"
+    end
+    return self.status
+end
+function Profiles:Name(name)
+    if type(name) ~= "string" then
+        return nil, "InvalidName"
+    end
+    local clean = Storage.sanitize(name)
+    if not clean then
+        return nil, "InvalidName"
+    end
+    return clean
+end
+function Profiles:Path(name)
+    return self.folder .. "/" .. name .. ".json"
+end
+function Profiles:Snapshot()
+    local entries = {}
+    for flag, control in pairs(self.window.flagOwners) do
+        if
+            type(flag) == "string"
+            and not control.destroyed
+            and Profiles.stateful[control.kind]
+            and control.config.Persistent ~= false
+        then
+            local value = control:Get()
+            local entry = { kind = control.kind, value = value }
+            if control.kind == "ColorPicker" then
+                entry.value = Presentation.colorData(value)
+                if control.hasAlpha then
+                    entry.alpha = control.alpha
+                end
+            end
+            entries[flag] = entry
+        end
+    end
+    local now = os.time()
+    return {
+        schemaVersion = 1,
+        libraryVersion = Library.Version,
+        game = self.gameName,
+        placeId = self.placeId,
+        createdAt = now,
+        updatedAt = now,
+        values = entries,
+    }
+end
+function Profiles:Migrate(data)
+    if type(data) ~= "table" or type(data.values) ~= "table" then
+        return nil, "InvalidProfile"
+    end
+    local version = data.schemaVersion
+    if version == nil or version == 0 then
+        local values = {}
+        for flag, value in pairs(data.values) do
+            local control = self.window.flagOwners[flag]
+            if control and Profiles.stateful[control.kind] then
+                values[flag] = { kind = control.kind, value = value }
+            end
+        end
+        data.values, data.schemaVersion = values, 1
+    elseif version ~= 1 then
+        return nil, "InvalidProfile"
+    end
+    local count = 0
+    for flag, entry in pairs(data.values) do
+        count += 1
+        if count > 2048 or type(flag) ~= "string" or type(entry) ~= "table" then
+            return nil, "InvalidProfile"
+        end
+    end
+    return data
+end
+function Profiles:Read(name)
+    local clean, err = self:Name(name)
+    if not clean then
+        return nil, err
+    end
+    local json, reason = self.store:Read(self:Path(clean))
+    if not json then
+        return nil, reason
+    end
+    local data, failure = Storage.decode(json)
+    if not data then
+        return nil, failure
+    end
+    return self:Migrate(data)
+end
+function Profiles:ValidValue(control, entry)
+    if entry.kind ~= control.kind then
+        return nil
+    end
+    local value, kind = entry.value, control.kind
+    if kind == "Toggle" then
+        if type(value) ~= "boolean" then
+            return nil
+        end
+    elseif kind == "Slider" then
+        if type(value) ~= "number" or not U.finite(value, nil) then
+            return nil
+        end
+        value = Components.quantize(control.number, value)
+    elseif kind == "RangeSlider" then
+        if type(value) ~= "table" or #value ~= 2 then
+            return nil
+        end
+        for i = 1, 2 do
+            if type(value[i]) ~= "number" or not U.finite(value[i], nil) then
+                return nil
+            end
+        end
+        local a, b = Components.quantize(control.number, value[1]), Components.quantize(control.number, value[2])
+        value = { math.min(a, b), math.max(a, b) }
+    elseif kind == "Dropdown" then
+        if type(value) ~= "string" or not table.find(control.values, value) then
+            return nil
+        end
+    elseif kind == "MultiDropdown" then
+        if type(value) ~= "table" then
+            return nil
+        end
+        local filtered = {}
+        for _, v in ipairs(value) do
+            if type(v) == "string" and table.find(control.values, v) then
+                table.insert(filtered, v)
+            end
+        end
+        value = filtered
+    elseif kind == "ColorPicker" then
+        value = Presentation.decodeColor(value)
+        if not value then
+            return nil
+        end
+        if entry.alpha ~= nil and (type(entry.alpha) ~= "number" or not U.finite(entry.alpha, nil)) then
+            return nil
+        end
+    elseif kind == "Textbox" then
+        if type(value) ~= "string" then
+            return nil
+        end
+        value = control:normalize(value)
+    else
+        return nil
+    end
+    return value, true
+end
+function Profiles:Apply(data, silent, pendingOnly)
+    local applied, ignored = 0, 0
+    local owners = table.clone(self.window.flagOwners)
+    for flag, entry in pairs(data.values) do
+        local control = owners[flag]
+        if
+            control
+            and not control.destroyed
+            and Profiles.stateful[control.kind]
+            and control.config.Persistent ~= false
+            and (not pendingOnly or not self.applied[control])
+        then
+            local value, valid = self:ValidValue(control, entry)
+            if valid then
+                self.applied[control] = true
+                if control.kind == "ColorPicker" then
+                    local alpha = entry.alpha ~= nil and math.clamp(entry.alpha, 0, 1) or control.alpha
+                    local changed = control.alpha ~= alpha or not U.equal(control.value, value)
+                    control.alpha = alpha
+                    control:Set(value, true)
+                    if changed and not silent then
+                        control:_emit()
+                    end
+                else
+                    control:Set(value, silent == true)
+                end
+                applied += 1
+            else
+                ignored += 1
+            end
+        else
+            ignored += 1
+        end
+    end
+    return applied, ignored
+end
+function Profiles:Changed()
+    local w = self.window
+    if self.refreshCancel or w.destroyed or not w.settingsOpen or w.settingsCategory ~= "Profiles" then
+        return
+    end
+    self.refreshCancel = w.bag:After(0, function()
+        self.refreshCancel = nil
+        if w.settingsOpen and w.settingsCategory == "Profiles" then
+            SettingsUI.refreshProfiles(w)
+        end
+    end, true)
+end
+function Profiles:Save(name, create)
+    local ready, reason = self:Writable()
+    if not ready then
+        return false, reason
+    end
+    local clean, err = self:Name(name)
+    if not clean then
+        return false, err
+    end
+    local checked, exists = self.store:Call("isfile", self:Path(clean))
+    if not checked then
+        return false, exists
+    end
+    if create and exists then
+        return false, "ProfileExists"
+    end
+    local snapshot = self:Snapshot()
+    local previous = self:Read(clean)
+    if previous and U.finite(previous.createdAt, nil) then
+        snapshot.createdAt = previous.createdAt
+    end
+    local ok, reason = self.store:Write(self:Path(clean), snapshot)
+    if ok then
+        self.status, self.error = "PersistenceReady", nil
+        self.activeProfile = clean
+        self:Changed()
+    end
+    return ok, reason
+end
+function Profiles:Load(name, silent)
+    local ready, reason = self:Writable()
+    if not ready then
+        return false, reason
+    end
+    local clean, err = self:Name(name)
+    if not clean then
+        return false, err
+    end
+    local data, reason = self:Read(clean)
+    if not data then
+        return false, reason
+    end
+    self.busy = true
+    -- Loading replaces pending startup values, so subsequent late controls never resurrect an older profile.
+    self.autoloadValues = nil
+    local applied, ignored = self:Apply(data, silent == true)
+    self.activeProfile, self.busy = clean, false
+    self:Changed()
+    return true, { applied = applied, ignored = ignored }
+end
+function Profiles:AutoloadData()
+    local json = self.store:Read("Neron/End/Autoload.json")
+    local data = json and Storage.decode(json)
+    if data and data.schemaVersion == 0 and data.placeId ~= nil then
+        data = {
+            schemaVersion = 1,
+            games = {
+                [tostring(data.placeId)] = {
+                    game = data.game,
+                    placeId = data.placeId,
+                    profile = data.profile,
+                    enabled = data.enabled == true,
+                },
+            },
+        }
+    end
+    if not data or data.schemaVersion ~= 1 or type(data.games) ~= "table" then
+        data = { schemaVersion = 1, games = {} }
+    end
+    return data
+end
+function Profiles:SetAutoload(name, enabled)
+    local ready, err = self:Writable()
+    if not ready then
+        return false, err
+    end
+    local data = self:AutoloadData()
+    local clean
+    if enabled ~= false then
+        clean = self:Name(name)
+        if not clean then
+            return false, "InvalidName"
+        end
+        local valid, err = self:Read(clean)
+        if not valid then
+            return false, err
+        end
+    end
+    local record = { game = self.gameName, placeId = self.placeId, profile = clean, enabled = enabled ~= false }
+    data.games[tostring(self.placeId)] = record
+    local ok, err = self.store:Write("Neron/End/Autoload.json", data)
+    if ok then
+        self.autoload = record
+        self:Changed()
+    end
+    return ok, err
+end
+function Profiles:QueueAutoload()
+    if self.queued or self.busy or self.window.destroyed or not self.ready or not self.autoloadAllowed then
+        return
+    end
+    self.queued = self.window.bag:After(0, function()
+        self.queued = nil
+        if not self.autoloadChecked then
+            self.autoloadChecked = true
+            local record = self:AutoloadData().games[tostring(self.placeId)]
+            if
+                type(record) == "table"
+                and record.enabled == true
+                and record.game == self.gameName
+                and record.placeId == self.placeId
+            then
+                self.autoload = record
+                local data = self:Read(record.profile)
+                if data then
+                    self.autoloadValues, self.activeProfile = data, record.profile
+                else
+                    self.autoloadError = "MissingProfile"
+                end
+            end
+        end
+        if self.autoloadValues then
+            self.busy = true
+            self:Apply(self.autoloadValues, true, true)
+            self.busy = false
+        end
+    end, true)
+end
+function Profiles:QueuePresentation()
+    if self.window.destroyed then
+        return
+    end
+    Library.preferenceRevision = (Library.preferenceRevision or 0) + 1
+    self.preferenceRevision = Library.preferenceRevision
+    if self.presentationCancel then
+        self.window.bag:Remove(self.presentationCancel, true)
+    end
+    self.presentationCancel = self.window.bag:After(0.30, function()
+        self.presentationCancel = nil
+        local ok, err = self:SavePresentation()
+        if not ok and self.window.settingsOpen then
+            self.window:Notify("SaveFailure", Locale.text(self.window, err or "Failed"), "Warning")
+        end
+    end)
+end
+function Profiles:SavePresentation()
+    if self.preferenceRevision and self.preferenceRevision ~= Library.preferenceRevision then
+        return true
+    end
+    local w, overrides = self.window, {}
+    for token, color in pairs(w.themeOverrides) do
+        overrides[token] = Presentation.colorData(color)
+    end
+    local ok, err = self.store:Write("Neron/End/Theme.json", {
+        schemaVersion = 1,
+        theme = w.themeName,
+        language = w.language,
+        accent = w.customAccent and Presentation.colorData(w.customAccent),
+        overrides = overrides,
+    })
+    self.presentationError = ok and nil or err
+    return ok, err
+end
+function Window:SaveProfile(name)
+    return self.persistence:Save(name, false)
+end
+function Window:CreateProfile(name)
+    return self.persistence:Save(name, true)
+end
+function Window:LoadProfile(name, silent)
+    return self.persistence:Load(name, silent)
+end
+function Window:RefreshProfiles()
+    return self.persistence.store:List(self.persistence.folder)
+end
+function Window:GetActiveProfile()
+    return self.persistence.activeProfile
+end
+function Window:GetPersistenceStatus()
+    return {
+        available = self.persistence.store.available,
+        ready = self.persistence.ready,
+        game = self.persistence.gameName,
+        folder = self.persistence.folder,
+        canDelete = type(self.persistence.store.api.delfile) == "function",
+        canList = type(self.persistence.store.api.listfiles) == "function",
+    }
+end
+function Window:ExportProfile(name)
+    local data, err
+    if name then
+        data, err = self.persistence:Read(name)
+    else
+        data = self.persistence:Snapshot()
+    end
+    if not data then
+        return nil, err
+    end
+    return Storage.encode(data)
+end
+function Window:ImportProfile(name, json, overwrite)
+    local ready, reason = self.persistence:Writable()
+    if not ready then
+        return false, reason
+    end
+    local clean, err = self.persistence:Name(name)
+    if not clean then
+        return false, err
+    end
+    local data, failure = Storage.decode(json)
+    if not data then
+        return false, failure
+    end
+    data, failure = self.persistence:Migrate(data)
+    if not data then
+        return false, failure
+    end
+    local path = self.persistence:Path(clean)
+    local checked, exists = self.persistence.store:Call("isfile", path)
+    if not checked then
+        return false, exists
+    end
+    if not overwrite and exists then
+        return false, "ProfileExists"
+    end
+    data.game, data.placeId, data.updatedAt = self.persistence.gameName, self.persistence.placeId, os.time()
+    local ok, reason = self.persistence.store:Write(path, data)
+    if ok then
+        self.persistence.status, self.persistence.error = "PersistenceReady", nil
+        self.persistence:Changed()
+    end
+    return ok, reason
+end
+function Window:DuplicateProfile(name, newName)
+    local json, err = self:ExportProfile(name)
+    if not json then
+        return false, err
+    end
+    return self:ImportProfile(newName, json, false)
+end
+function Window:RenameProfile(name, newName)
+    local manager = self.persistence
+    local ready, reason = manager:Writable()
+    if not ready then
+        return false, reason
+    end
+    if type(manager.store.api.delfile) ~= "function" then
+        return false, "FilesystemUnavailable"
+    end
+    local old, err = manager:Name(name)
+    local new = manager:Name(newName)
+    if not old or not new then
+        return false, err or "InvalidName"
+    end
+    if old == new then
+        return true
+    end
+    local ok, reason = self:DuplicateProfile(old, new)
+    if not ok then
+        return false, reason
+    end
+    local record = manager:AutoloadData().games[tostring(manager.placeId)]
+    local wasAutoload = type(record) == "table"
+        and record.enabled
+        and record.game == manager.gameName
+        and record.profile == old
+    if wasAutoload then
+        local moved, failure = self:SetAutoload(new)
+        if not moved then
+            manager.store:Delete(manager:Path(new))
+            return false, failure
+        end
+    end
+    local deleted, failure = manager.store:Delete(manager:Path(old))
+    if not deleted then
+        -- Only discard the destination after positively reading the source. A failed
+        -- post-delete verification must never remove the last recoverable copy.
+        if manager:Read(old) then
+            if wasAutoload then
+                self:SetAutoload(old)
+            end
+            manager.store:Delete(manager:Path(new))
+        else
+            if manager.activeProfile == old then
+                manager.activeProfile = new
+            end
+            manager:Changed()
+        end
+        return false, failure
+    end
+    if manager.activeProfile == old then
+        manager.activeProfile = new
+    end
+    manager:Changed()
+    return true
+end
+function Window:DeleteProfile(name)
+    local manager = self.persistence
+    local ready, reason = manager:Writable()
+    if not ready then
+        return false, reason
+    end
+    if type(manager.store.api.delfile) ~= "function" then
+        return false, "FilesystemUnavailable"
+    end
+    local clean, err = manager:Name(name)
+    if not clean then
+        return false, err
+    end
+    if not manager.store:Exists(manager:Path(clean)) then
+        return false, "MissingProfile"
+    end
+    local record = manager:AutoloadData().games[tostring(manager.placeId)]
+    local targeted = type(record) == "table"
+        and record.enabled
+        and record.game == manager.gameName
+        and record.profile == clean
+    if targeted then
+        local ok, reason = self:DisableAutoload()
+        if not ok then
+            return false, reason
+        end
+    end
+    local ok, reason = manager.store:Delete(manager:Path(clean))
+    if not ok and targeted then
+        self:SetAutoload(clean)
+    end
+    if ok and manager.activeProfile == clean then
+        manager.activeProfile = nil
+    end
+    if ok then
+        manager.autoloadValues = nil
+        manager:Changed()
+    end
+    return ok, reason
+end
+function Window:SetAutoload(name)
+    return self.persistence:SetAutoload(name, true)
+end
+function Window:DisableAutoload()
+    return self.persistence:SetAutoload(nil, false)
+end
+function Window:GetAutoload()
+    local record = self.persistence:AutoloadData().games[tostring(self.persistence.placeId)]
+    return type(record) == "table"
+            and record.game == self.persistence.gameName
+            and record.placeId == self.persistence.placeId
+            and table.clone(record)
+        or { enabled = false }
+end
+function Window:ApplyAutoload()
+    local manager = self.persistence
+    manager.autoloadChecked, manager.autoloadValues = false, nil
+    table.clear(manager.applied)
+    manager:QueueAutoload()
+    return self
+end
+
+-- Dedicated system interface: never inserted in Window.tabs, search index or consumer flags.
+function SettingsUI.text(w, parent, key, props, role)
+    local label = U.label(parent, Locale.text(w, key), T.Type.Value, w.theme[role or "SystemText"], props)
+    U.bind(w, label, "TextColor3", role or "SystemText")
+    Locale.bind(w, label, "Text", key)
+    return label
+end
+function SettingsUI.interactive(w, object)
+    if w.destroyed or not w.visible or not w.settingsOpen then
+        return false
+    end
+    if w.confirmation then
+        return object:IsDescendantOf(w.confirmation.panel)
+    end
+    if w.transfer then
+        return object:IsDescendantOf(w.transfer.panel)
+    end
+    if not w.settingsPanel or not object:IsDescendantOf(w.settingsPanel) then
+        return false
+    end
+    for key, page in pairs(w.settingsPages) do
+        if object:IsDescendantOf(page.host) then
+            return w.settingsCategory == key
+        end
+    end
+    return true
+end
+function SettingsUI.button(w, parent, key, props, bag, callback, primary)
+    local button = U.button(parent, props)
+    U.corner(button, T.Radius.Button)
+    local label = SettingsUI.text(
+        w,
+        button,
+        key,
+        { TextXAlignment = Enum.TextXAlignment.Center, Font = Enum.Font.GothamMedium },
+        primary and "ButtonText" or "SystemText"
+    )
+    local owner = { state = { Hovered = false, Pressed = false } }
+    function owner:_render()
+        local state = self.state
+        w.motion:To(button, T.Motion.Micro, {
+            BackgroundTransparency = 0,
+            BackgroundColor3 = state.Pressed and (primary and w.theme.AccentPressed or w.theme.RowPressed)
+                or (
+                    primary and w.theme.Accent
+                    or (state.Hovered and w.theme.SurfaceSelected or w.theme.SurfaceSecondary)
+                ),
+        })
+        label.TextColor3 = primary and w.theme.ButtonText or w.theme.SystemText
+    end
+    w.systemRenders = w.systemRenders or {}
+    w.systemRenders[button] = owner
+    bag:Add(function()
+        w.systemRenders[button] = nil
+        w.pressed[owner] = nil
+    end)
+    U.connect(bag, button.MouseEnter, function()
+        owner.state.Hovered = true
+        owner:_render()
+    end)
+    U.connect(bag, button.MouseLeave, function()
+        owner.state.Hovered, owner.state.Pressed = false, false
+        owner:_render()
+    end)
+    U.connect(bag, button.InputBegan, function(event)
+        if U.primary(event) and SettingsUI.interactive(w, button) then
+            owner.state.Pressed = true
+            w.pressed[owner] = event
+            owner:_render()
+        end
+    end)
+    U.connect(bag, button.InputEnded, function(event)
+        if U.primary(event) then
+            owner.state.Pressed = false
+            owner:_render()
+        end
+    end)
+    U.connect(bag, button.Activated, function()
+        if not SettingsUI.interactive(w, button) then
+            return
+        end
+        owner.state.Pressed = false
+        w.pressed[owner] = nil
+        owner:_render()
+        local ok, err = xpcall(callback, debug.traceback)
+        if not ok then
+            U.warn(key, err)
+            w:Notify("Failed", nil, "Danger")
+        end
+    end)
+    U.bind(w, button, "BackgroundColor3", primary and "Accent" or "SurfaceSecondary")
+    owner:_render()
+    return button
+end
+function Window:Notify(key, detail, status)
+    if self.destroyed or self.systemNotifications == false then
+        return self
+    end
+    if self.toastBag then
+        self.toastBag:Destroy()
+    end
+    key = tostring(key or "")
+    status = self.theme[status or "Accent"] and (status or "Accent") or "Accent"
+    local bag = Maid.new(self.motion)
+    self.toastBag = bag
+    local group = U.new("CanvasGroup", {
+        Name = "Feedback",
+        AnchorPoint = Vector2.new(1, 1),
+        Position = UDim2.new(1, -18, 1, -16),
+        Size = UDim2.new(0, math.min(320, self.root.Size.X.Offset - 36), 0, 54),
+        BackgroundTransparency = 0,
+        BackgroundColor3 = self.theme.PopoverBackground,
+        GroupTransparency = 1,
+        ZIndex = T.Z.Toast,
+    }, self.root)
+    bag:Add(group)
+    self.toastGroup = group
+    U.corner(group, T.Radius.Popover)
+    U.bind(self, group, "BackgroundColor3", "PopoverBackground")
+    local line = U.frame(
+        group,
+        { Position = UDim2.fromOffset(0, 8), Size = UDim2.new(0, 2, 1, -16), ZIndex = group.ZIndex + 1 },
+        self,
+        status or "Accent"
+    )
+    U.corner(line, 1)
+    local label = SettingsUI.text(
+        self,
+        group,
+        key,
+        { Position = UDim2.fromOffset(14, 8), Size = UDim2.new(1, -28, 0, 19) },
+        "TextPrimary"
+    )
+    if detail then
+        U.label(
+            group,
+            tostring(detail),
+            T.Type.PageSubtitle,
+            self.theme.SystemText,
+            { Position = UDim2.fromOffset(14, 28), Size = UDim2.new(1, -28, 0, 16) }
+        )
+    else
+        label.Size = UDim2.new(1, -28, 1, -16)
+    end
+    self.motion:To(group, T.Motion.Normal, { GroupTransparency = 0 })
+    bag:After(2.6, function()
+        self.motion:To(group, T.Motion.Fast, { GroupTransparency = 1 })
+        bag:After(T.Motion.Fast, function()
+            bag:Destroy()
+            if self.toastBag == bag then
+                self.toastBag, self.toastGroup = nil, nil
+            end
+        end)
+    end)
+    return self
+end
+function SettingsUI.result(w, ok, err, success)
+    if ok then
+        w:Notify(success, nil, "Success")
+    else
+        local key = Locale.dictionaries.English[err] and err or "Failed"
+        w:Notify(key, key == "Failed" and tostring(err or "") or nil, "Danger")
+    end
+    return ok
+end
+function SettingsUI.dismissConfirmation(w)
+    if w.confirmation then
+        w.confirmation.bag:Destroy()
+        w.confirmation = nil
+    end
+end
+function SettingsUI.confirm(w, title, message, detail, callback)
+    SettingsUI.dismissConfirmation(w)
+    w.overlay:Close(true)
+    w.input:Cancel()
+    U.focusRelease(w)
+    local bag = Maid.new(w.motion)
+    local shade = U.button(w.root, {
+        Name = "ConfirmationShade",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 0.38,
+        BackgroundColor3 = w.theme.Overlay,
+        ZIndex = T.Z.Confirmation,
+    })
+    bag:Add(shade)
+    local panel = U.new("CanvasGroup", {
+        Name = "Confirmation",
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(math.min(360, w.root.Size.X.Offset - 32), 178),
+        BackgroundTransparency = 0,
+        BackgroundColor3 = w.theme.PopoverBackground,
+        GroupTransparency = 1,
+        ZIndex = shade.ZIndex + 1,
+    }, shade)
+    U.corner(panel, T.Radius.Popover)
+    U.bind(w, panel, "BackgroundColor3", "PopoverBackground")
+    local stroke = U.stroke(panel, w.theme.SurfaceEdge)
+    stroke.Transparency = 0.3
+    SettingsUI.text(
+        w,
+        panel,
+        title,
+        { Position = UDim2.fromOffset(16, 12), Size = UDim2.new(1, -32, 0, 24), Font = Enum.Font.GothamBold },
+        "TextPrimary"
+    )
+    SettingsUI.text(w, panel, message, {
+        Position = UDim2.fromOffset(16, 44),
+        Size = UDim2.new(1, -32, 0, 44),
+        TextWrapped = true,
+        TextTruncate = Enum.TextTruncate.None,
+    })
+    U.label(
+        panel,
+        detail or "",
+        T.Type.Description,
+        w.theme.TextSecondary,
+        { Position = UDim2.fromOffset(16, 91), Size = UDim2.new(1, -32, 0, 18) }
+    )
+    SettingsUI.button(
+        w,
+        panel,
+        "Cancel",
+        { Position = UDim2.new(0, 16, 1, -48), Size = UDim2.new(0.5, -24, 0, 32), ZIndex = panel.ZIndex + 2 },
+        bag,
+        function()
+            SettingsUI.dismissConfirmation(w)
+        end
+    )
+    SettingsUI.button(
+        w,
+        panel,
+        "Confirm",
+        { Position = UDim2.new(0.5, 8, 1, -48), Size = UDim2.new(0.5, -24, 0, 32), ZIndex = panel.ZIndex + 2 },
+        bag,
+        function()
+            SettingsUI.dismissConfirmation(w)
+            callback()
+        end,
+        true
+    )
+    U.connect(bag, shade.Activated, function()
+        SettingsUI.dismissConfirmation(w)
+    end)
+    w.confirmation = { bag = bag, panel = panel }
+    w.motion:To(panel, T.Motion.Normal, { GroupTransparency = 0 })
+end
+function SettingsUI.dismissTransfer(w)
+    if w.transfer then
+        if w.transfer.box:IsFocused() then
+            w.transfer.box:ReleaseFocus()
+        end
+        w.transfer.bag:Destroy()
+        w.transfer = nil
+    end
+end
+function SettingsUI.transfer(w, kind, json, import)
+    SettingsUI.dismissTransfer(w)
+    w.overlay:Close(true)
+    w.input:Cancel()
+    U.focusRelease(w)
+    local bag = Maid.new(w.motion)
+    local shade = U.button(w.root, {
+        Name = "TransferShade",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 0.35,
+        BackgroundColor3 = w.theme.Overlay,
+        ZIndex = T.Z.Confirmation,
+    })
+    bag:Add(shade)
+    local panel = U.new("CanvasGroup", {
+        Name = "JSONTransfer",
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.new(1, -48, 1, -80),
+        BackgroundTransparency = 0,
+        BackgroundColor3 = w.theme.PopoverBackground,
+        GroupTransparency = 1,
+        ZIndex = shade.ZIndex + 1,
+    }, shade)
+    U.corner(panel, T.Radius.Popover)
+    U.bind(w, panel, "BackgroundColor3", "PopoverBackground")
+    SettingsUI.text(
+        w,
+        panel,
+        kind == "theme" and "ThemeJSON" or "ProfileJSON",
+        { Position = UDim2.fromOffset(16, 12), Size = UDim2.new(1, -64, 0, 24), Font = Enum.Font.GothamBold },
+        "TextPrimary"
+    )
+    local host = U.frame(
+        panel,
+        { Position = UDim2.fromOffset(16, 48), Size = UDim2.new(1, -32, 1, -112), ZIndex = panel.ZIndex + 1 },
+        w,
+        "InputBackground"
+    )
+    U.corner(host, T.Radius.Input)
+    local scroll = Scroll.make(w, host, bag, 0, true)
+    scroll.frame.Size = UDim2.new(1, -12, 1, 0)
+    U.new("UIPadding", {
+        PaddingLeft = UDim.new(0, 8),
+        PaddingRight = UDim.new(0, 8),
+        PaddingTop = UDim.new(0, 8),
+        PaddingBottom = UDim.new(0, 8),
+    }, scroll.frame)
+    local box = U.new("TextBox", {
+        Size = UDim2.new(1, -16, 0, 200),
+        Text = json or "",
+        ClearTextOnFocus = false,
+        MultiLine = true,
+        TextWrapped = true,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Top,
+        Font = Enum.Font.Code,
+        TextSize = T.Type.Description,
+        TextColor3 = w.theme.SystemText,
+        ZIndex = scroll.frame.ZIndex + 1,
+    }, scroll.frame)
+    local function resize()
+        if #box.Text > 1024 * 1024 then
+            box.Text = box.Text:sub(1, 1024 * 1024)
+        end
+        local width = math.max(80, box.AbsoluteSize.X / w.scale)
+        local size = S.Text:GetTextSize(box.Text, T.Type.Description, Enum.Font.Code, Vector2.new(width, 200000))
+        local height = math.max(200, size.Y + 20)
+        if box.Size.Y.Offset ~= height then
+            box.Size = UDim2.new(1, -16, 0, height)
+        end
+        scroll:Update()
+    end
+    U.connect(bag, box:GetPropertyChangedSignal("Text"), resize)
+    U.connect(bag, box:GetPropertyChangedSignal("AbsoluteSize"), resize)
+    SettingsUI.button(
+        w,
+        panel,
+        "Close",
+        { Position = UDim2.new(0, 16, 1, -48), Size = UDim2.new(0.5, -24, 0, 32), ZIndex = panel.ZIndex + 2 },
+        bag,
+        function()
+            SettingsUI.dismissTransfer(w)
+        end
+    )
+    SettingsUI.button(
+        w,
+        panel,
+        import and "Import" or "Copy",
+        { Position = UDim2.new(0.5, 8, 1, -48), Size = UDim2.new(0.5, -24, 0, 32), ZIndex = panel.ZIndex + 2 },
+        bag,
+        function()
+            if import then
+                local ok, err
+                if kind == "theme" then
+                    ok, err = w:ImportTheme(box.Text)
+                else
+                    ok, err = w:ImportProfile(w.profileName:Get(), box.Text)
+                end
+                if SettingsUI.result(w, ok, err, kind == "theme" and "ThemeImported" or "Imported") then
+                    SettingsUI.dismissTransfer(w)
+                    SettingsUI.refreshProfiles(w)
+                end
+            else
+                local copy = Storage.resolve("setclipboard") or Storage.resolve("toclipboard")
+                local ok = copy and pcall(copy, box.Text)
+                w:Notify(ok and "Copied" or "ClipboardUnavailable")
+                if not ok then
+                    box:CaptureFocus()
+                    box.SelectionStart = 1
+                    box.CursorPosition = #box.Text + 1
+                end
+            end
+        end,
+        true
+    )
+    U.connect(bag, shade.Activated, function()
+        SettingsUI.dismissTransfer(w)
+    end)
+    w.transfer = { bag = bag, panel = panel, box = box }
+    resize()
+    w.motion:To(panel, T.Motion.Normal, { GroupTransparency = 0 })
+end
+function SettingsUI.page(w, key)
+    local bag = Maid.new(w.motion)
+    local host = U.new("CanvasGroup", {
+        Name = key,
+        Size = UDim2.fromScale(1, 1),
+        GroupTransparency = 0,
+        Visible = false,
+        ClipsDescendants = true,
+        ZIndex = w.settingsBody.ZIndex + 1,
+    }, w.settingsBody)
+    bag:Add(host)
+    local page = setmetatable({
+        name = key,
+        window = w,
+        controls = {},
+        system = true,
+        visible = true,
+        disabled = false,
+        tab = { visible = true, disabled = false },
+        bag = bag,
+        host = host,
+    }, SubTab)
+    page.tab.activeSub = page
+    page.scroll = Scroll.make(w, host, bag, 8, true)
+    page.scroll.frame.Size = UDim2.new(1, -16, 1, 0)
+    w.settingsPages[key] = page
+    return page
+end
+function SettingsUI.control(w, page, method, key, config, description)
+    config = table.clone(config or {})
+    config.Name = Locale.text(w, key)
+    if description then
+        config.Description = Locale.text(w, description)
+    end
+    local control = page[method](page, config)
+    w.systemControls[control] = { name = key, description = description }
+    return control
+end
+function SettingsUI.heading(w, page, key, body)
+    local control = SettingsUI.control(w, page, "AddParagraph", key, {}, body)
+    U.bind(w, control.label, "TextColor3", "TextPrimary")
+    control.systemHeading = true
+    control:_render()
+    control.label.Font = Enum.Font.GothamBold
+    control.label.TextSize = T.Type.PageTitle
+    return control
+end
+function SettingsUI.context(w, row, name)
+    local owner = { state = {}, page = w.settingsPages.Profiles, profileContext = true }
+    function owner:_usable()
+        return not w.destroyed
+            and w.settingsOpen
+            and w.settingsCategory == "Profiles"
+            and not w.confirmation
+            and not w.transfer
+    end
+    function owner:_render()
+        local icon = row:FindFirstChildOfClass("Frame")
+        if row.Parent and icon then
+            w.motion:To(icon, T.Motion.Fast, { Rotation = self.state.Open and 180 or 0 })
+        end
+    end
+    local keys = { "Load", "Save", "Rename", "Duplicate", "Delete", "Autoload" }
+    local actions = {
+        Load = function()
+            local ok, err = w:LoadProfile(name, w.persistence.silentLoad)
+            SettingsUI.result(w, ok, err, "Loaded")
+        end,
+        Save = function()
+            local ok, err = w:SaveProfile(name)
+            SettingsUI.result(w, ok, err, "Saved")
+        end,
+        Rename = function()
+            local ok, err = w:RenameProfile(name, w.profileName:Get())
+            SettingsUI.result(w, ok, err, "Renamed")
+        end,
+        Duplicate = function()
+            local ok, err = w:DuplicateProfile(name, w.profileName:Get())
+            SettingsUI.result(w, ok, err, "Duplicated")
+        end,
+        Delete = function()
+            SettingsUI.confirm(w, "Delete", "DeleteQuestion", name, function()
+                local ok, err = w:DeleteProfile(name)
+                SettingsUI.result(w, ok, err, "Deleted")
+                SettingsUI.refreshProfiles(w)
+            end)
+        end,
+        Autoload = function()
+            local ok, err = w:SetAutoload(name)
+            SettingsUI.result(w, ok, err, "AutoloadEnabled")
+        end,
+    }
+    w.overlay:Open(owner, row, 176, #keys * T.Geometry.Option + 8, function(group, bag)
+        for i, key in ipairs(keys) do
+            local button = U.button(group, {
+                Position = UDim2.fromOffset(4, 4 + (i - 1) * T.Geometry.Option),
+                Size = UDim2.new(1, -8, 0, T.Geometry.Option),
+                ZIndex = group.ZIndex + 1,
+            })
+            U.corner(button, T.Radius.Row)
+            SettingsUI.text(
+                w,
+                button,
+                key,
+                { Position = UDim2.fromOffset(8, 0), Size = UDim2.new(1, -16, 1, 0) },
+                key == "Delete" and "Danger" or "SystemText"
+            )
+            U.connect(bag, button.MouseEnter, function()
+                button.BackgroundTransparency = 0
+                button.BackgroundColor3 = w.theme.SurfaceSelected
+            end)
+            U.connect(bag, button.MouseLeave, function()
+                button.BackgroundTransparency = 1
+            end)
+            U.connect(bag, button.Activated, function()
+                local active = w.overlay.active
+                if not owner:_usable() or not owner.state.Open or not active or active.owner ~= owner then
+                    return
+                end
+                w.overlay:Close(true)
+                actions[key]()
+                SettingsUI.refreshProfiles(w)
+            end)
+        end
+    end)
+end
+function SettingsUI.refreshProfiles(w)
+    if w.overlay.active and w.overlay.active.owner.profileContext then
+        w.overlay:Close(true)
+    end
+    if not w.settingsPages or not w.settingsPages.Profiles or w.destroyed then
+        return
+    end
+    if w.persistence.refreshCancel then
+        w.bag:Remove(w.persistence.refreshCancel, true)
+        w.persistence.refreshCancel = nil
+    end
+    if w.profileListBag then
+        w.profileListBag:Destroy()
+    end
+    local bag = Maid.new(w.motion)
+    w.profileListBag = bag
+    local page = w.settingsPages.Profiles
+    local profiles, err = w:RefreshProfiles()
+    w.persistenceLabel:Set(Locale.text(w, w.persistence:Status()), true)
+    if w.pathLabel then
+        w.pathLabel:Set(w.persistence.folder, true)
+    end
+    if not profiles or #profiles == 0 then
+        local empty = U.frame(page.scroll.frame, {
+            Name = "ProfileEmpty",
+            Size = UDim2.new(1, 0, 0, 64),
+            LayoutOrder = 5,
+            ZIndex = page.scroll.frame.ZIndex + 1,
+        }, w, "RowBackground")
+        bag:Add(empty)
+        U.corner(empty, T.Radius.Row)
+        SettingsUI.text(
+            w,
+            empty,
+            err and w.persistence:Status() or "NoProfiles",
+            { Position = UDim2.fromOffset(16, 0), Size = UDim2.new(1, -32, 1, 0) }
+        )
+    else
+        local autoload = w:GetAutoload()
+        for i, name in ipairs(profiles) do
+            local row = U.button(page.scroll.frame, {
+                Name = "Profile",
+                Size = UDim2.new(1, 0, 0, 48),
+                LayoutOrder = 5 + i,
+                BackgroundTransparency = 0,
+                ZIndex = page.scroll.frame.ZIndex + 1,
+            })
+            bag:Add(row)
+            U.corner(row, T.Radius.Row)
+            U.bind(
+                w,
+                row,
+                "BackgroundColor3",
+                w.persistence.activeProfile == name and "SurfaceSelected" or "RowBackground"
+            )
+            local glyph = Icons.make(row, "folder", 14, w.theme.TextSecondary, w)
+            glyph.Position = UDim2.fromOffset(14, 17)
+            U.label(row, name, T.Type.Value, w.theme.TextPrimary, {
+                Position = UDim2.fromOffset(38, 0),
+                Size = UDim2.new(1, w.persistence.activeProfile == name and -190 or -120, 1, 0),
+            })
+            if autoload.enabled and autoload.profile == name then
+                local dot = Components.circle(row, 4, w.theme.Accent)
+                dot.Position = UDim2.new(1, -70, 0.5, 0)
+            end
+            if w.persistence.activeProfile == name then
+                SettingsUI.text(w, row, "Active", {
+                    Position = UDim2.new(1, -128, 0, 0),
+                    Size = UDim2.fromOffset(80, 48),
+                    TextXAlignment = Enum.TextXAlignment.Right,
+                }, "TextSecondary")
+            end
+            local menu = U.button(row, {
+                Name = "ProfileActions",
+                Position = UDim2.new(1, -44, 0, 2),
+                Size = UDim2.fromOffset(40, 44),
+                ZIndex = row.ZIndex + 2,
+            })
+            local icon = Icons.make(menu, "chevron", 8, w.theme.SystemText, w)
+            icon.Position = UDim2.fromOffset(16, 18)
+            U.connect(bag, row.Activated, function()
+                w.selectedProfile = name
+                w.profileName:Set(name, true)
+            end)
+            U.connect(bag, menu.Activated, function()
+                w.selectedProfile = name
+                SettingsUI.context(w, menu, name)
+            end)
+            U.connect(bag, row.MouseEnter, function()
+                w.motion:To(row, T.Motion.Micro, { BackgroundColor3 = w.theme.RowHover })
+            end)
+            U.connect(bag, row.MouseLeave, function()
+                w.motion:To(row, T.Motion.Micro, {
+                    BackgroundColor3 = w.persistence.activeProfile == name and w.theme.SurfaceSelected
+                        or w.theme.RowBackground,
+                })
+            end)
+        end
+    end
+    page.scroll:Update()
+end
+function SettingsUI.profiles(w, page)
+    SettingsUI.heading(w, page, "Profiles", "ProfileBody")
+    w.persistenceLabel = SettingsUI.control(w, page, "AddLabel", w.persistence:Status())
+    w.pathLabel = page:AddLabel(w.persistence.folder)
+    w.profileName = SettingsUI.control(w, page, "AddTextbox", "ProfileName", { Default = "Default", MaxLength = 80 })
+    SettingsUI.control(w, page, "AddButton", "Create", {
+        Primary = true,
+        Callback = function()
+            local ok, err = w:CreateProfile(w.profileName:Get())
+            SettingsUI.result(w, ok, err, "Saved")
+            SettingsUI.refreshProfiles(w)
+        end,
+    })
+    local toolbar = U.frame(page.scroll.frame, {
+        Name = "ProfileToolbar",
+        Size = UDim2.new(1, 0, 0, 176),
+        LayoutOrder = 10000,
+        ZIndex = page.scroll.frame.ZIndex + 1,
+    }, w)
+    page.bag:Add(toolbar)
+    local actions = {
+        {
+            key = "Save",
+            run = function()
+                local ok, err = w:SaveProfile(w.profileName:Get())
+                SettingsUI.result(w, ok, err, "Saved")
+                SettingsUI.refreshProfiles(w)
+            end,
+        },
+        {
+            key = "Load",
+            run = function()
+                local ok, err = w:LoadProfile(w.profileName:Get(), w.persistence.silentLoad)
+                SettingsUI.result(w, ok, err, "Loaded")
+                SettingsUI.refreshProfiles(w)
+            end,
+        },
+        {
+            key = "Refresh",
+            run = function()
+                SettingsUI.refreshProfiles(w)
+            end,
+        },
+        {
+            key = "Autoload",
+            run = function()
+                local ok, err = w:SetAutoload(w.profileName:Get())
+                SettingsUI.result(w, ok, err, "AutoloadEnabled")
+                SettingsUI.refreshProfiles(w)
+            end,
+        },
+        {
+            key = "Import",
+            run = function()
+                SettingsUI.transfer(w, "profile", "", true)
+            end,
+        },
+        {
+            key = "Export",
+            run = function()
+                local json, err = w:ExportProfile(w.profileName:Get())
+                if json then
+                    SettingsUI.transfer(w, "profile", json, false)
+                else
+                    SettingsUI.result(w, false, err, "Ready")
+                end
+            end,
+        },
+        {
+            key = "Disable",
+            run = function()
+                local ok, err = w:DisableAutoload()
+                SettingsUI.result(w, ok, err, "AutoloadDisabled")
+                SettingsUI.refreshProfiles(w)
+            end,
+        },
+        {
+            key = "Themes",
+            run = function()
+                w:SetSettingsCategory("Themes")
+            end,
+        },
+    }
+    local buttons = {}
+    for i, action in ipairs(actions) do
+        buttons[i] = SettingsUI.button(
+            w,
+            toolbar,
+            action.key,
+            { Name = action.key, ZIndex = toolbar.ZIndex + 1 },
+            page.bag,
+            action.run
+        )
+    end
+    w.profileToolbarLayout = function()
+        local width = toolbar.AbsoluteSize.X / w.scale
+        local columns = width >= 540 and 4 or 2
+        local rows = math.ceil(#buttons / columns)
+        local height = rows * 36 + (rows - 1) * 8
+        if toolbar.Size.Y.Offset ~= height then
+            toolbar.Size = UDim2.new(1, 0, 0, height)
+        end
+        for i, button in ipairs(buttons) do
+            local col, row = (i - 1) % columns, math.floor((i - 1) / columns)
+            button.Size = UDim2.new(1 / columns, -6, 0, 36)
+            button.Position = UDim2.new(col / columns, col > 0 and 2 or 0, 0, row * 44)
+        end
+        page.scroll:Update()
+    end
+    U.connect(page.bag, toolbar:GetPropertyChangedSignal("AbsoluteSize"), w.profileToolbarLayout)
+    local function compactInfo(control)
+        function control:layoutVisual()
+            self.row.Size = UDim2.new(1, 0, 0, 28)
+            self.label.Position = UDim2.fromOffset(16, 4)
+            self.label.Size = UDim2.new(1, -32, 0, 20)
+            self.separator.Visible = false
+        end
+        control:_layout()
+    end
+    compactInfo(w.persistenceLabel)
+    compactInfo(w.pathLabel)
+    w.profileToolbarLayout()
+    SettingsUI.refreshProfiles(w)
+end
+function SettingsUI.preview(w, page, name, order)
+    local card = U.button(page.scroll.frame, {
+        Name = name,
+        Size = UDim2.new(1, 0, 0, 92),
+        LayoutOrder = order,
+        BackgroundTransparency = 0,
+        ZIndex = page.scroll.frame.ZIndex + 1,
+    })
+    page.bag:Add(card)
+    U.corner(card, T.Radius.Row)
+    local colors = Presentation.colors(name)
+    local preview = U.new("CanvasGroup", {
+        Name = "ThemePreview",
+        Position = UDim2.fromOffset(14, 14),
+        Size = UDim2.fromOffset(110, 64),
+        BackgroundTransparency = 0,
+        BackgroundColor3 = colors.ContentBackground,
+        GroupTransparency = 0,
+        ZIndex = card.ZIndex + 1,
+    }, card)
+    U.corner(preview, T.Radius.Popover)
+    U.frame(preview, {
+        Size = UDim2.new(0, 28, 1, 0),
+        BackgroundTransparency = 0,
+        BackgroundColor3 = colors.SidebarBackground,
+        ZIndex = preview.ZIndex,
+    }, w)
+    for i = 1, 3 do
+        U.frame(preview, {
+            Position = UDim2.fromOffset(34, 10 + (i - 1) * 16),
+            Size = UDim2.fromOffset(68, 12),
+            BackgroundTransparency = 0,
+            BackgroundColor3 = colors.RowBackground,
+            ZIndex = preview.ZIndex + 1,
+        }, w)
+    end
+    U.frame(preview, {
+        Position = UDim2.fromOffset(39, 14),
+        Size = UDim2.fromOffset(22, 2),
+        BackgroundTransparency = 0,
+        BackgroundColor3 = colors.TextPrimary,
+        ZIndex = preview.ZIndex + 2,
+    }, w)
+    local control = U.frame(preview, {
+        Position = UDim2.fromOffset(87, 13),
+        Size = UDim2.fromOffset(10, 4),
+        BackgroundTransparency = 0,
+        BackgroundColor3 = colors.Accent,
+        ZIndex = preview.ZIndex + 2,
+    }, w)
+    U.corner(control, 2)
+    local rail = U.frame(preview, {
+        Position = UDim2.fromOffset(76, 30),
+        Size = UDim2.fromOffset(20, 3),
+        BackgroundTransparency = 0,
+        BackgroundColor3 = colors.Accent,
+        ZIndex = preview.ZIndex + 2,
+    }, w)
+    U.corner(rail, 1)
+    -- Preview palettes belong to their represented theme, not the currently selected one.
+    w.bindings[preview] = nil
+    for _, obj in ipairs(preview:GetDescendants()) do
+        w.bindings[obj] = nil
+    end
+    U.label(
+        card,
+        name,
+        T.Type.Tab,
+        w.theme.TextPrimary,
+        { Position = UDim2.fromOffset(140, 22), Size = UDim2.new(1, -180, 0, 22), Font = Enum.Font.GothamMedium }
+    )
+    local selected = Components.circle(card, 5, w.theme.Accent)
+    selected.Position = UDim2.new(1, -18, 0.5, 0)
+    w.themeCards[name] = { row = card, dot = selected }
+    U.connect(page.bag, card.Activated, function()
+        if not SettingsUI.interactive(w, card) then
+            return
+        end
+        w:SetTheme(name)
+        w:Notify("ThemeChanged")
+    end)
+    U.connect(page.bag, card.MouseEnter, function()
+        w.motion:To(card, T.Motion.Micro, { BackgroundColor3 = w.theme.RowHover })
+    end)
+    U.connect(page.bag, card.MouseLeave, function()
+        SettingsUI.refreshStyle(w)
+    end)
+end
+function SettingsUI.themes(w, page)
+    SettingsUI.heading(w, page, "Themes", "ThemeBody")
+    for i, name in ipairs(Presentation.order) do
+        SettingsUI.preview(w, page, name, i + 1)
+    end
+    page.controlSerial = 10
+    w.accentPreference = SettingsUI.control(w, page, "AddColorPicker", "Accent", {
+        Default = w.theme.Accent,
+        Callback = function(color)
+            w:SetAccent(color)
+        end,
+    })
+    SettingsUI.control(w, page, "AddButton", "ResetAccent", {
+        Inline = true,
+        Callback = function()
+            w:SetTheme(w.themeName)
+        end,
+    })
+    SettingsUI.control(w, page, "AddButton", "Import", {
+        Inline = true,
+        Callback = function()
+            SettingsUI.transfer(w, "theme", "", true)
+        end,
+    })
+    SettingsUI.control(w, page, "AddButton", "Export", {
+        Inline = true,
+        Callback = function()
+            local json, err = w:ExportTheme()
+            if json then
+                SettingsUI.transfer(w, "theme", json, false)
+            else
+                SettingsUI.result(w, false, err, "Ready")
+            end
+        end,
+    })
+end
+function SettingsUI.flag(w, parent, language)
+    local flag = U.new("CanvasGroup", {
+        Name = "Flag",
+        Position = UDim2.fromOffset(16, 20),
+        Size = UDim2.fromOffset(28, 28),
+        BackgroundTransparency = 0,
+        GroupTransparency = 0,
+        BackgroundColor3 = Color3.new(1, 1, 1),
+        ZIndex = parent.ZIndex + 1,
+    }, parent)
+    U.corner(flag, 100)
+    local function stripe(y, height, color)
+        return U.frame(flag, {
+            Position = UDim2.fromScale(0, y),
+            Size = UDim2.fromScale(1, height),
+            BackgroundTransparency = 0,
+            BackgroundColor3 = color,
+            ZIndex = flag.ZIndex + 1,
+        }, w)
+    end
+    if language == "Russian" then
+        stripe(0, 1 / 3, Color3.fromRGB(243, 244, 246))
+        stripe(1 / 3, 1 / 3, Color3.fromRGB(48, 83, 174))
+        stripe(2 / 3, 1 / 3, Color3.fromRGB(194, 54, 61))
+    elseif language == "Spanish" then
+        stripe(0, 1 / 4, Color3.fromRGB(175, 42, 52))
+        stripe(1 / 4, 1 / 2, Color3.fromRGB(231, 181, 64))
+        stripe(3 / 4, 1 / 4, Color3.fromRGB(175, 42, 52))
+    elseif language == "Portuguese" then
+        stripe(0, 1, Color3.fromRGB(45, 133, 80))
+        U.frame(flag, {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.fromScale(0.5, 0.5),
+            Size = UDim2.fromOffset(17, 17),
+            Rotation = 45,
+            BackgroundTransparency = 0,
+            BackgroundColor3 = Color3.fromRGB(229, 194, 58),
+            ZIndex = flag.ZIndex + 2,
+        }, w)
+        local globe = Components.circle(flag, 11, Color3.fromRGB(51, 71, 132))
+        globe.Position = UDim2.fromScale(0.5, 0.5)
+        globe.ZIndex = flag.ZIndex + 3
+        Icons.line(globe, 0.13, 0.42, 0.87, 0.60, Color3.fromRGB(226, 229, 221), 1)
+    else
+        for i = 0, 12 do
+            stripe(i / 13, 1 / 13, i % 2 == 0 and Color3.fromRGB(177, 63, 74) or Color3.fromRGB(241, 235, 231))
+        end
+        U.frame(flag, {
+            Size = UDim2.fromScale(0.48, 0.54),
+            BackgroundTransparency = 0,
+            BackgroundColor3 = Color3.fromRGB(54, 71, 127),
+            ZIndex = flag.ZIndex + 2,
+        }, w)
+        for x = 1, 3 do
+            for y = 1, 3 do
+                local dot = Components.circle(flag, 1, Color3.fromRGB(242, 241, 238))
+                dot.Position = UDim2.fromOffset(x * 3, y * 3 + 2)
+                dot.ZIndex = flag.ZIndex + 3
+            end
+        end
+    end
+    w.bindings[flag] = nil
+    for _, object in ipairs(flag:GetDescendants()) do
+        w.bindings[object] = nil
+    end
+end
+function SettingsUI.languages(w, page)
+    SettingsUI.heading(w, page, "Language", "LanguageBody")
+    local names = { English = "English", Spanish = "Español", Russian = "Русский", Portuguese = "Português" }
+    local regions = { English = "US", Spanish = "ES", Russian = "RU", Portuguese = "BR" }
+    for i, language in ipairs(Locale.order) do
+        local card = U.button(page.scroll.frame, {
+            Name = language,
+            Size = UDim2.new(1, 0, 0, 68),
+            LayoutOrder = i + 1,
+            BackgroundTransparency = 0,
+            ZIndex = page.scroll.frame.ZIndex + 1,
+        })
+        page.bag:Add(card)
+        U.corner(card, T.Radius.Row)
+        SettingsUI.flag(w, card, language)
+        U.label(
+            card,
+            names[language],
+            T.Type.Tab,
+            w.theme.TextPrimary,
+            { Position = UDim2.fromOffset(58, 12), Size = UDim2.new(1, -90, 0, 24), Font = Enum.Font.GothamMedium }
+        )
+        U.label(
+            card,
+            regions[language],
+            T.Type.PageSubtitle,
+            w.theme.TextSecondary,
+            { Position = UDim2.fromOffset(58, 36), Size = UDim2.new(1, -90, 0, 18) }
+        )
+        local dot = Components.circle(card, 5, w.theme.Accent)
+        dot.Position = UDim2.new(1, -18, 0.5, 0)
+        w.languageCards[language] = { row = card, dot = dot }
+        U.connect(page.bag, card.Activated, function()
+            if SettingsUI.interactive(w, card) then
+                w:SetLanguage(language)
+            end
+        end)
+        U.connect(page.bag, card.MouseEnter, function()
+            w.motion:To(card, T.Motion.Micro, { BackgroundColor3 = w.theme.RowHover })
+        end)
+        U.connect(page.bag, card.MouseLeave, function()
+            SettingsUI.refreshStyle(w)
+        end)
+    end
+end
+function SettingsUI.general(w, page)
+    SettingsUI.heading(w, page, "General", "GeneralBody")
+    SettingsUI.control(w, page, "AddToggle", "SilentLoad", {
+        Default = w.persistence.silentLoad,
+        Callback = function(value)
+            w.persistence.silentLoad = value
+        end,
+    }, "SilentBody")
+    w.searchPreference = SettingsUI.control(w, page, "AddToggle", "SearchEnabled", {
+        Default = w.searchEnabled,
+        Callback = function(value)
+            w:SetSearchEnabled(value)
+        end,
+    })
+    SettingsUI.control(w, page, "AddToggle", "Notifications", {
+        Default = w.systemNotifications ~= false,
+        Callback = function(value)
+            w.systemNotifications = value
+        end,
+    })
+end
+function SettingsUI.refreshStyle(w)
+    for key, entry in pairs(w.settingsNav or {}) do
+        local selected = w.settingsCategory == key
+        entry.row.BackgroundColor3 = selected and w.theme.SurfaceSelected or w.theme.SidebarBackground
+        entry.label.TextColor3 = selected and w.theme.TextPrimary or w.theme.SystemText
+        entry.indicator.Visible = selected
+        entry.indicator.BackgroundColor3 = w.theme.Accent
+    end
+    for name, card in pairs(w.themeCards or {}) do
+        card.row.BackgroundColor3 = name == w.themeName and w.theme.SurfaceSelected or w.theme.RowBackground
+        card.dot.Visible = name == w.themeName
+        card.dot.BackgroundColor3 = w.theme.Accent
+    end
+    for language, card in pairs(w.languageCards or {}) do
+        card.row.BackgroundColor3 = language == w.language and w.theme.SurfaceSelected or w.theme.RowBackground
+        card.dot.Visible = language == w.language
+        card.dot.BackgroundColor3 = w.theme.Accent
+    end
+    if w.settingsIcon then
+        Icons.color(w.settingsIcon, w.settingsOpen and w.theme.Accent or w.theme.TextSecondary)
+    end
+end
+function SettingsUI.refreshLanguage(w)
+    for control, keys in pairs(w.systemControls or {}) do
+        if not control.destroyed then
+            control:SetName(Locale.text(w, keys.name))
+            if keys.description then
+                control:SetDescription(Locale.text(w, keys.description))
+            end
+        else
+            w.systemControls[control] = nil
+        end
+    end
+    SettingsUI.layout(w)
+    if w.settingsPages then
+        SettingsUI.refreshProfiles(w)
+    end
+end
+function SettingsUI.transientLayout(w)
+    if w.confirmation then
+        w.confirmation.panel.Size = UDim2.fromOffset(math.min(360, w.root.Size.X.Offset - 32), 178)
+    end
+    if w.toastGroup then
+        w.toastGroup.Size = UDim2.fromOffset(math.min(320, w.root.Size.X.Offset - 36), 54)
+    end
+end
+function SettingsUI.layout(w)
+    if not w.settingsPanel then
+        return
+    end
+    local compact = w.compact or w.root.Size.X.Offset < 640
+    w.settingsPanel.Position = UDim2.fromOffset(compact and 8 or 18, compact and 12 or 28)
+    w.settingsPanel.Size = UDim2.new(1, -(compact and 16 or 36), 1, -(compact and 24 or 56))
+    w.settingsNavHost.Position = UDim2.fromOffset(8, 56)
+    w.settingsNavHost.Size = compact and UDim2.new(1, -16, 0, 40) or UDim2.new(0, 140, 1, -64)
+    w.settingsNavLayout.FillDirection = compact and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical
+    w.settingsNavHost.ScrollingDirection = compact and Enum.ScrollingDirection.X or Enum.ScrollingDirection.Y
+    w.settingsNavHost.AutomaticCanvasSize = compact and Enum.AutomaticSize.X or Enum.AutomaticSize.Y
+    for key, entry in pairs(w.settingsNav) do
+        entry.row.Size =
+            UDim2.fromOffset(compact and math.max(80, U.width(Locale.text(w, key), T.Type.Value) + 32) or 140, 36)
+        entry.indicator.Size = compact and UDim2.new(1, -16, 0, 1) or UDim2.new(0, 2, 1, -16)
+        entry.indicator.Position = compact and UDim2.new(0, 8, 1, -1) or UDim2.fromOffset(0, 8)
+    end
+    w.settingsBody.Position = UDim2.fromOffset(compact and 12 or 164, compact and 106 or 60)
+    w.settingsBody.Size = UDim2.new(1, -(compact and 24 or 180), 1, -(compact and 120 or 74))
+    if w.profileToolbarLayout then
+        w.profileToolbarLayout()
+    end
+    for _, page in pairs(w.settingsPages) do
+        for _, control in ipairs(page.controls) do
+            control:_layout()
+        end
+        page.scroll:Update()
+    end
+end
+function Window:SetSettingsCategory(key)
+    if not self.settingsPages or not self.settingsPages[key] then
+        return false
+    end
+    self.overlay:Close(true)
+    self.input:Cancel()
+    U.focusRelease(self)
+    SettingsUI.dismissConfirmation(self)
+    SettingsUI.dismissTransfer(self)
+    self.settingsCategory = key
+    for name, page in pairs(self.settingsPages) do
+        self.motion:Cancel(page.host)
+        page.host.Visible = name == key
+        if name == key then
+            page.host.GroupTransparency = 0.35
+            self.motion:To(page.host, T.Motion.Normal, { GroupTransparency = 0 })
+        end
+    end
+    if key == "Profiles" then
+        SettingsUI.refreshProfiles(self)
+    end
+    SettingsUI.refreshStyle(self)
+    return true
+end
+function SettingsUI.build(w)
+    w.settingsPages, w.settingsNav, w.themeCards, w.languageCards = {}, {}, {}, {}
+    w.systemControls = setmetatable({}, { __mode = "k" })
+    local panel = U.new("CanvasGroup", {
+        Name = "SettingsOverlay",
+        Visible = false,
+        GroupTransparency = 1,
+        BackgroundTransparency = 0,
+        BackgroundColor3 = w.theme.WindowBackground,
+        ClipsDescendants = true,
+        ZIndex = T.Z.Settings,
+    }, w.root)
+    w.settingsPanel = panel
+    U.corner(panel, T.Radius.Window)
+    U.bind(w, panel, "BackgroundColor3", "WindowBackground")
+    local stroke = U.stroke(panel, w.theme.SurfaceEdge, 1)
+    stroke.Transparency = 0.4
+    SettingsUI.text(w, panel, "Settings", {
+        Position = UDim2.fromOffset(16, 10),
+        Size = UDim2.new(1, -160, 0, 30),
+        Font = Enum.Font.GothamBold,
+        TextSize = T.Type.PageTitle,
+    }, "TextPrimary")
+    SettingsUI.button(
+        w,
+        panel,
+        "Close",
+        { Position = UDim2.new(1, -100, 0, 8), Size = UDim2.fromOffset(88, 36), ZIndex = panel.ZIndex + 3 },
+        w.bag,
+        function()
+            w:CloseSettings()
+        end
+    )
+    U.frame(
+        panel,
+        { Position = UDim2.fromOffset(0, 48), Size = UDim2.new(1, 0, 0, 1), ZIndex = panel.ZIndex + 1 },
+        w,
+        "Separator"
+    )
+    w.settingsNavHost = U.new(
+        "ScrollingFrame",
+        { Name = "SettingsCategories", ScrollBarThickness = 0, CanvasSize = UDim2.new(), ZIndex = panel.ZIndex + 1 },
+        panel
+    )
+    w.settingsNavLayout =
+        U.new("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }, w.settingsNavHost)
+    for i, key in ipairs({ "Profiles", "Themes", "Language", "General" }) do
+        local row = U.button(
+            w.settingsNavHost,
+            { Name = key, LayoutOrder = i, BackgroundTransparency = 0, ZIndex = panel.ZIndex + 2 }
+        )
+        U.corner(row, T.Radius.Row)
+        local label =
+            SettingsUI.text(w, row, key, { Position = UDim2.fromOffset(16, 0), Size = UDim2.new(1, -24, 1, 0) })
+        local indicator = U.frame(row, { ZIndex = row.ZIndex + 2 }, w, "Accent")
+        w.settingsNav[key] = { row = row, label = label, indicator = indicator }
+        U.connect(w.bag, row.Activated, function()
+            if SettingsUI.interactive(w, row) then
+                w:SetSettingsCategory(key)
+            end
+        end)
+        U.connect(w.bag, row.MouseEnter, function()
+            w.motion:To(row, T.Motion.Micro, { BackgroundColor3 = w.theme.RowHover })
+        end)
+        U.connect(w.bag, row.MouseLeave, function()
+            SettingsUI.refreshStyle(w)
+        end)
+    end
+    w.settingsBody = U.frame(
+        panel,
+        { Name = "SettingsBody", ClipsDescendants = true, ZIndex = panel.ZIndex + 1 },
+        w,
+        "ContentBackground"
+    )
+    SettingsUI.profiles(w, SettingsUI.page(w, "Profiles"))
+    SettingsUI.themes(w, SettingsUI.page(w, "Themes"))
+    SettingsUI.languages(w, SettingsUI.page(w, "Language"))
+    SettingsUI.general(w, SettingsUI.page(w, "General"))
+    SettingsUI.layout(w)
+end
+function SettingsUI.footerLayout(w)
+    w.content.Size =
+        UDim2.new(1, -(w.compact and 0 or T.Geometry.Sidebar), 1, -(w.compact and w.settingsEnabled and 48 or 0))
+end
+function SettingsUI.init(w, config)
+    w.settingsEnabled = config.Settings ~= false
+    local button = U.button(w.root, {
+        Name = "Settings",
+        AnchorPoint = Vector2.new(0, 1),
+        Position = UDim2.new(0, 12, 1, -6),
+        Size = UDim2.fromOffset(44, 40),
+        Visible = w.settingsEnabled,
+        ZIndex = 14,
+    })
+    U.corner(button, T.Radius.Row)
+    w.settingsButton = button
+    w.settingsIcon = Icons.make(button, "settings", 16, w.theme.TextSecondary, w)
+    w.settingsIcon.Position = UDim2.fromOffset(14, 12)
+    U.connect(w.bag, button.Activated, function()
+        if w.settingsOpen then
+            w:CloseSettings()
+        else
+            w:OpenSettings()
+        end
+    end)
+    U.connect(w.bag, button.MouseEnter, function()
+        w.motion:To(button, T.Motion.Micro, { BackgroundColor3 = w.theme.RowHover, BackgroundTransparency = 0 })
+    end)
+    U.connect(w.bag, button.MouseLeave, function()
+        w.motion:To(button, T.Motion.Micro, { BackgroundTransparency = 1 })
+    end)
+    U.connect(w.bag, button.InputBegan, function(event)
+        if U.primary(event) then
+            w.motion:To(button, T.Motion.Micro, { BackgroundColor3 = w.theme.RowPressed, BackgroundTransparency = 0 })
+        end
+    end)
+    U.connect(w.bag, button.InputEnded, function(event)
+        if U.primary(event) then
+            w.motion:To(button, T.Motion.Micro, { BackgroundColor3 = w.theme.RowHover })
+        end
+    end)
+    SettingsUI.footerLayout(w)
+end
+function Window:OpenSettings(category)
+    if self.destroyed or not self.visible or not self.settingsEnabled then
+        return self
+    end
+    self.overlay:Close(true)
+    self.input:Cancel()
+    self:CloseSearch(true)
+    U.focusRelease(self)
+    if self.settingsCancel then
+        self.bag:Remove(self.settingsCancel, true)
+        self.settingsCancel = nil
+    end
+    if not self.settingsPanel then
+        SettingsUI.build(self)
+    end
+    self.settingsOpen = true
+    self:SetSidebarVisible(false)
+    self.settingsPanel.Visible = true
+    self:_dimState(true, 0.38)
+    self.motion:To(self.settingsPanel, T.Motion.Structural, { GroupTransparency = 0 })
+    self:SetSettingsCategory(category or self.settingsCategory or "Profiles")
+    SettingsUI.layout(self)
+    return self
+end
+function Window:CloseSettings(immediate)
+    if self.destroyed and not immediate then
+        return self
+    end
+    self.settingsOpen = false
+    self.overlay:Close(true)
+    self.input:Cancel()
+    U.focusRelease(self)
+    SettingsUI.dismissConfirmation(self)
+    SettingsUI.dismissTransfer(self)
+    if self.settingsCancel then
+        self.bag:Remove(self.settingsCancel, true)
+        self.settingsCancel = nil
+    end
+    if self.settingsPanel then
+        self.motion:To(self.settingsPanel, immediate and 0 or T.Motion.Fast, { GroupTransparency = 1 })
+        if immediate then
+            self.settingsPanel.Visible = false
+        else
+            self.settingsCancel = self.bag:After(T.Motion.Fast, function()
+                self.settingsCancel = nil
+                if not self.settingsOpen then
+                    self.settingsPanel.Visible = false
+                end
+            end)
+        end
+    end
+    self:_dimState(false, 1, immediate)
+    SettingsUI.refreshStyle(self)
+    return self
+end
+function Window:SetSettingsEnabled(enabled)
+    self.settingsEnabled = enabled == true
+    self.settingsButton.Visible = self.settingsEnabled
+    SettingsUI.footerLayout(self)
+    if not self.settingsEnabled then
+        self:CloseSettings(true)
+    end
+    return self
 end
 
 -- Optional showcase: uses only the public API, never executes automatically.
@@ -3307,7 +6241,7 @@ function Library:Demo(config)
     misc:AddSection({ Name = "INFORMATION" })
     misc:AddNotice({ Name = "Local UI only", Description = "The showcase does not alter gameplay." })
     misc:AddSeparator()
-    misc:AddLabel("Neron UI 1.0")
+    misc:AddLabel("Neron UI " .. self.Version)
     local accessibility = w:AddTab({
         Name = "Accessibility",
         Category = "GENERAL",
