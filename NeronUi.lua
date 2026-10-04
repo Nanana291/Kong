@@ -7,7 +7,11 @@
 -- Same Id replaces the previous window, including listeners, across library re-execution.
 -- Window > Tab > SubTab > controls remains the public hierarchy; Settings is a separate overlay.
 -- CreateWindow also accepts Theme, Language, Settings=false, Autoload=false, GameName, Filesystem.
--- ManualSize=true uses FluentModded.lua's 500x480; false/nil preserves the existing Size/default.
+-- ManualSize accepts Vector2.new(w,h), offset UDim2 or {w,h}; nil/false keeps Size/default.
+-- Legacy ManualSize=true still selects500x480. Resizable defaults true; MinSize/MaxSize bound it.
+-- RememberSize/RememberPosition opt in to Theme.json geometry; Tooltips/Tooltip/ToolTip provide hover/hold hints.
+-- Premium={Active=boolean,ExpiresAt=UnixSeconds,Plan=string}; SetPremiumStatus updates Settings > General.
+-- Premium is external display state, never a saved entitlement or automatic unlock.
 -- Toggle Locked=true stays OFF and opens a Premium callout; SetLocked(false) restores interaction.
 -- OnBuyPremium(toggle, window), on Window or Toggle, connects your purchase flow; it never auto-unlocks.
 -- Themes: Neron Dark / Graphite / OLED / Light; locales: English / Spanish / Russian / Portuguese.
@@ -131,11 +135,22 @@ local T = {
         PopoverOption = 12,
     },
     Motion = { Micro = 0.10, Fast = 0.16, Normal = 0.18, Structural = 0.24 },
-    Z = { Shell = 1, Content = 3, Dim = 20, Popover = 60, Search = 40, Settings = 50, Confirmation = 70, Toast = 80 },
+    Z = {
+        Shell = 1,
+        Content = 3,
+        Dim = 20,
+        Popover = 60,
+        Search = 40,
+        Settings = 50,
+        Confirmation = 70,
+        Toast = 80,
+        Tooltip = 90,
+    },
 }
 local U, Maid, Motion, Icons, Input, Overlay, Scroll = {}, {}, {}, {}, {}, {}, {}
 local Window, Tab, SubTab, Control, Components = {}, {}, {}, {}, {}
 local Presentation, Locale, Storage, Profiles, SettingsUI = {}, {}, {}, {}, {}
+local Tooltip, Geometry, Premium = {}, {}, {}
 local Library = { Version = "2.0.0", Tokens = T, Theme = Theme, Icons = {} }
 Window.__index = Window
 Tab.__index = Tab
@@ -560,6 +575,9 @@ end
 function Input.new(w)
     local self = setmetatable({ w = w }, { __index = Input })
     U.connect(w.bag, S.Input.InputChanged, function(event)
+        if w.tooltip then
+            w.tooltip:Changed(event)
+        end
         local cap = self.capture
         if not cap then
             return
@@ -572,6 +590,9 @@ function Input.new(w)
         end
     end)
     U.connect(w.bag, S.Input.InputEnded, function(event)
+        if w.tooltip then
+            w.tooltip:Ended(event)
+        end
         for control, input in pairs(w.pressed) do
             if
                 input == event
@@ -597,6 +618,9 @@ function Input.new(w)
         end
     end)
     U.connect(w.bag, S.Input.WindowFocusReleased, function()
+        if w.tooltip then
+            w.tooltip:Cancel()
+        end
         self:Cancel()
         for control in pairs(w.pressed) do
             control.state.Pressed = false
@@ -618,6 +642,9 @@ function Input:Start(owner, event, move, finish)
         return false
     end
     self:Cancel()
+    if self.w.tooltip then
+        self.w.tooltip:Cancel()
+    end
     self.capture = {
         owner = owner,
         input = event,
@@ -662,6 +689,9 @@ function Overlay:Place()
 end
 function Overlay:Open(owner, anchor, width, height, build, allowLocked)
     self:Close(true)
+    if self.w.tooltip then
+        self.w.tooltip:Cancel()
+    end
     local w = self.w
     local usable = owner:_usable() or (allowLocked and owner.state.Locked and owner._available and owner:_available())
     if w.destroyed or not w.visible or w.searchOpen or not usable then
@@ -809,6 +839,9 @@ function Scroll.make(w, parent, bag, inset, thin)
         scroll:Update()
     end)
     U.connect(bag, sf:GetPropertyChangedSignal("CanvasPosition"), function()
+        if w.tooltip then
+            w.tooltip:Cancel()
+        end
         scroll:Update()
         local a = w.overlay.active
         if a and a.owner.page and a.owner.page.scroll.frame == sf then
@@ -842,6 +875,10 @@ function Scroll.make(w, parent, bag, inset, thin)
 end
 
 function Window:_dimState(visible, transparency, immediate)
+    if visible and self.tooltip then
+        self.tooltip:Cancel()
+    end
+    Geometry.layout(self)
     if self.settingsOpen and not visible then
         visible = true
         transparency = 0.38
@@ -873,6 +910,9 @@ function Window:_canNavigate()
     return not self.destroyed and self.visible
 end
 function Window:_selectTab(tab)
+    if self.tooltip then
+        self.tooltip:Cancel()
+    end
     if not self:_canNavigate() or tab.destroyed or tab.disabled or not tab.visible then
         return
     end
@@ -955,6 +995,9 @@ function Window:SetVisible(value)
     end
     self.visible = value == true
     if not self.visible then
+        if self.tooltip then
+            self.tooltip:Cancel()
+        end
         self.overlay:Close(true)
         self:CloseSearch(true)
         self.input:Cancel()
@@ -964,6 +1007,7 @@ function Window:SetVisible(value)
         self:CloseSettings(true)
     end
     self.gui.Enabled = self.visible
+    Geometry.layout(self)
     if self.visible and not self.activeTab then
         for _, tab in ipairs(self.tabs) do
             if tab.visible and not tab.disabled then
@@ -984,36 +1028,47 @@ function Window:SetSidebarVisible(value)
     self.sidebar.ZIndex = self.compact and 12 or T.Z.Shell
     return self
 end
-function Window:_responsive()
+function Window:_responsive(preserveCapture)
     if self.destroyed then
         return
     end
     self.overlay:Close(true)
-    self.input:Cancel()
+    if self.tooltip then
+        self.tooltip:Cancel()
+    end
+    if not preserveCapture then
+        self.input:Cancel()
+    end
     local view = self.stage.AbsoluteSize
     if view.X <= 0 or view.Y <= 0 then
         return
     end
     local portrait = view.X < 600 or (view.Y > view.X and view.X < 900)
-    local width = portrait and math.max(320, view.X - 16) or self.baseWidth
-    local height = portrait and math.max(400, math.min(self.baseHeight, view.Y - 24)) or self.baseHeight
+    local width = portrait and math.max(320, self.manualSize and math.min(self.baseWidth, view.X - 16) or view.X - 16)
+        or self.baseWidth
+    local floorHeight = self.manualSize and math.min(400, self.baseHeight) or 400
+    local height = portrait and math.max(floorHeight, math.min(self.baseHeight, view.Y - 24)) or self.baseHeight
+    local drawer = portrait or width < 480
     self.scale = math.min(1, (view.X - 16) / width, (view.Y - 24) / height)
     self.scale = math.max(0.30, self.scale)
-    self.compact = portrait
+    self.compact = drawer
     self.root.Size = UDim2.fromOffset(width, height)
     self.uiScale.Scale = self.scale
-    local side = portrait and 0 or T.Geometry.Sidebar
+    local side = drawer and 0 or T.Geometry.Sidebar
     self.content.Position = UDim2.fromOffset(side, 0)
     self.content.Size = UDim2.new(1, -side, 1, 0)
-    self.menu.Visible = portrait
+    self.menu.Visible = drawer
     self.sidebar.Size = UDim2.new(0, T.Geometry.Sidebar, 1, 0)
-    self:SetSidebarVisible(self.sidebarOpen and portrait)
-    self.searchPanel.Position = UDim2.new(0, portrait and 12 or T.Geometry.SearchInset, 0, T.Geometry.Header)
-    self.searchPanel.Size = UDim2.new(1, -(portrait and 24 or T.Geometry.SearchInset * 2), 1, -T.Geometry.Header - 18)
+    self:SetSidebarVisible(self.sidebarOpen and drawer)
+    self.searchPanel.Position = UDim2.new(0, drawer and 12 or T.Geometry.SearchInset, 0, T.Geometry.Header)
+    self.searchPanel.Size = UDim2.new(1, -(drawer and 24 or T.Geometry.SearchInset * 2), 1, -T.Geometry.Header - 18)
     for _, tab in ipairs(self.tabs) do
-        tab.title.Position = UDim2.fromOffset(portrait and 48 or 16, 10)
-        tab.description.Position = UDim2.fromOffset(portrait and 48 or 16, 32)
+        tab.title.Position = UDim2.fromOffset(drawer and 48 or 16, 10)
+        tab.description.Position = UDim2.fromOffset(drawer and 48 or 16, 32)
         for _, sub in ipairs(tab.subtabs) do
+            local reserve = self.resizeEnabled and not self.compact and 44 or 0
+            sub.scroll.frame.Size = UDim2.new(1, -T.Geometry.ContentRight, 1, -reserve)
+            sub.scroll.rail.Size = UDim2.new(0, 18, 1, -reserve)
             for _, control in ipairs(sub.controls) do
                 control:_layout()
             end
@@ -1034,10 +1089,19 @@ function Window:_responsive()
     x = math.clamp(x, size.X * 0.5, math.max(size.X * 0.5, view.X - size.X * 0.5))
     y = math.clamp(y, size.Y * 0.5, math.max(size.Y * 0.5, view.Y - size.Y * 0.5))
     self.root.Position = UDim2.fromOffset(x, y)
+    Geometry.layout(self)
 end
 function Window:Destroy()
     if self.destroyed then
         return
+    end
+    if self.tooltip then
+        self.tooltip:Cancel()
+    end
+    if self.geometryCancel then
+        self.bag:Remove(self.geometryCancel, true)
+        self.geometryCancel = nil
+        Geometry.flush(self)
     end
     if self.persistence and self.persistence.presentationCancel then
         self.bag:Remove(self.persistence.presentationCancel, true)
@@ -1117,6 +1181,7 @@ function Window:AddTab(config)
         bag = Maid.new(self.motion),
         name = tostring(config.Name or "Tab"),
         descriptionText = tostring(config.Description or ""),
+        tooltipText = config.Tooltip or config.ToolTip,
         visible = config.Visible ~= false,
         disabled = config.Disabled == true,
         subtabs = {},
@@ -1200,7 +1265,15 @@ function Window:AddTab(config)
     }, self, "Accent")
     -- The shared indicator is outside the layout's sibling set.
     tab.indicator.Parent = tab.strip
+    Tooltip.bind(self, tab, tab.row, tab.bag, function()
+        return tab.tooltipText or tab.descriptionText
+    end, function()
+        return tab.visible and not tab.disabled and not self.settingsOpen
+    end)
     U.connect(tab.bag, tab.row.Activated, function()
+        if Tooltip.blocked(self, tab) then
+            return
+        end
         self:_selectTab(tab)
     end)
     U.connect(tab.bag, tab.row.MouseEnter, function()
@@ -1234,6 +1307,9 @@ function Tab:_render()
     )
 end
 function Tab:_selectSub(sub)
+    if self.window.tooltip then
+        self.window.tooltip:Cancel()
+    end
     local w = self.window
     if
         not w:_canNavigate()
@@ -1303,6 +1379,7 @@ function Tab:AddSubTab(config)
         visible = config.Visible ~= false,
         disabled = config.Disabled == true,
         controls = {},
+        tooltipText = config.Tooltip or config.ToolTip,
     }, SubTab)
     table.insert(self.subtabs, sub)
     self.subSerial = (self.subSerial or 0) + 1
@@ -1335,10 +1412,22 @@ function Tab:AddSubTab(config)
     }, w.content)
     sub.bag:Add(sub.host)
     sub.scroll = Scroll.make(w, sub.host, sub.bag)
-    sub.scroll.frame.Size = UDim2.new(1, -T.Geometry.ContentRight, 1, 0)
+    local reserve = w.resizeEnabled and not w.compact and 44 or 0
+    sub.scroll.frame.Size = UDim2.new(1, -T.Geometry.ContentRight, 1, -reserve)
+    sub.scroll.rail.Size = UDim2.new(0, 18, 1, -reserve)
     sub.scroll.frame.Position = UDim2.fromOffset(T.Geometry.ContentLeft, 0)
+    Tooltip.bind(w, sub, sub.button, sub.bag, function()
+        return sub.tooltipText or ""
+    end, function()
+        return sub.visible
+            and not sub.disabled
+            and self.visible
+            and not self.disabled
+            and w.activeTab == self
+            and not w.settingsOpen
+    end)
     U.connect(sub.bag, sub.button.Activated, function()
-        if not sub.disabled then
+        if not sub.disabled and not Tooltip.blocked(w, sub) then
             self:_selectSub(sub)
         end
     end)
@@ -1411,6 +1500,9 @@ function Tab:SetVisible(value)
     if self.destroyed then
         return self
     end
+    if self.window.tooltip then
+        self.window.tooltip:Cancel()
+    end
     self.visible = value == true
     self.row.Visible = self.visible
     if not self.visible then
@@ -1424,6 +1516,9 @@ end
 function Tab:SetDisabled(value)
     if self.destroyed then
         return self
+    end
+    if self.window.tooltip then
+        self.window.tooltip:Cancel()
     end
     self.disabled = value == true
     if self.disabled then
@@ -1516,6 +1611,9 @@ function SubTab:SetVisible(value)
     if self.destroyed then
         return self
     end
+    if self.window.tooltip then
+        self.window.tooltip:Cancel()
+    end
     self.visible = value == true
     self.button.Visible = self.visible
     if not self.visible then
@@ -1532,6 +1630,9 @@ end
 function SubTab:SetDisabled(value)
     if self.destroyed then
         return self
+    end
+    if self.window.tooltip then
+        self.window.tooltip:Cancel()
     end
     self.disabled = value == true
     if self.disabled then
@@ -1582,6 +1683,7 @@ function Components.row(page, config, kind)
         attachments = {},
         name = tostring(config.Name or kind),
         description = tostring(config.Description or ""),
+        tooltipText = config.Tooltip or config.ToolTip,
         value = nil,
         flag = config.Flag,
     }, Control)
@@ -1661,11 +1763,17 @@ function Components.row(page, config, kind)
         table.insert(self.inlineOwner.attachments, self)
     end
     self:_layout()
+    Tooltip.bind(w, self, self.row, self.bag, function()
+        return self.tooltipText or self.description
+    end, function()
+        return self:_available()
+    end)
     w:_indexChanged()
     return self
 end
 function Control:_available()
     return not self.destroyed
+        and not Tooltip.blocked(self.window, self)
         and (not self.inlineOwner or self.inlineOwner:_usable())
         and not self.state.Disabled
         and self.state.Visible
@@ -1824,6 +1932,9 @@ function Control:SetVisible(value)
     if self.destroyed then
         return self
     end
+    if self.window.tooltip then
+        self.window.tooltip:Cancel()
+    end
     self.state.Visible = value == true
     self.row.Visible = self.state.Visible
     if not self.state.Visible then
@@ -1845,6 +1956,9 @@ end
 function Control:SetDisabled(value)
     if self.destroyed then
         return self
+    end
+    if self.window.tooltip then
+        self.window.tooltip:Cancel()
     end
     self.state.Disabled = value == true
     self.state.Pressed = false
@@ -3313,6 +3427,631 @@ function Library:RegisterIcon(name, asset)
     self.Icons[name] = asset
     return self
 end
+-- Hover/hold hints are non-modal. One pending timer and one tooltip per window.
+function Tooltip.blocked(w, owner)
+    return w.tooltip and w.tooltip.suppressed[owner] == true
+end
+function Tooltip.init(w, config)
+    local self = setmetatable({ w = w, suppressed = setmetatable({}, { __mode = "k" }) }, { __index = Tooltip })
+    w.tooltip, w.tooltipsEnabled = self, config.Tooltips ~= false
+    w.bag:Add(function()
+        self:Cancel()
+    end)
+end
+function Tooltip:Hide()
+    if self.pending then
+        self.pending.bag:Destroy()
+        self.pending = nil
+    end
+    if self.active then
+        self.active.bag:Destroy()
+        self.active = nil
+    end
+end
+function Tooltip:Cancel()
+    self:Hide()
+    if self.touch then
+        self.suppressed[self.touch.entry.owner] = nil
+        self.touch = nil
+    end
+end
+function Tooltip:valid(entry)
+    local w = self.w
+    return w.tooltipsEnabled
+        and not w.destroyed
+        and w.visible
+        and entry.object.Parent
+        and not entry.bag.dead
+        and not w.searchOpen
+        and not w.overlay.active
+        and not w.confirmation
+        and not w.transfer
+        and not w.input.capture
+        and not S.Input:GetFocusedTextBox()
+        and entry.usable()
+end
+function Tooltip:Place()
+    local a = self.active
+    if not a then
+        return
+    end
+    local w = self.w
+    local view = w.stage.AbsoluteSize
+    local p = a.entry.object.AbsolutePosition - w.stage.AbsolutePosition
+    local sz = a.entry.object.AbsoluteSize
+    local width, height = a.width * w.scale, a.height * w.scale
+    local x = math.clamp(p.X, 8, math.max(8, view.X - width - 8))
+    local y = p.Y + sz.Y + 6 * w.scale
+    if y + height > view.Y - 8 then
+        y = p.Y - height - 6 * w.scale
+    end
+    a.holder.Position = UDim2.fromOffset(x, math.clamp(y, 8, math.max(8, view.Y - height - 8)))
+end
+function Tooltip:Show(entry)
+    if not self:valid(entry) then
+        return
+    end
+    local ok, text = pcall(entry.text)
+    if not ok or type(text) ~= "string" or text == "" then
+        return
+    end
+    self:Hide()
+    local w, bag = self.w, Maid.new(self.w.motion)
+    local width = math.min(280, math.max(100, w.stage.AbsoluteSize.X / w.scale - 16))
+    local bounds = S.Text:GetTextSize(text, T.Type.Value, Enum.Font.Gotham, Vector2.new(width - 24, 1000))
+    width = math.max(80, math.min(width, bounds.X + 24))
+    local height = math.min(164, math.max(32, bounds.Y + 20))
+    local holder = U.frame(
+        w.stage,
+        { Name = "TooltipLayer", Size = UDim2.fromOffset(width * w.scale, height * w.scale), ZIndex = T.Z.Tooltip },
+        w
+    )
+    bag:Add(holder)
+    local panel = U.new("CanvasGroup", {
+        Size = UDim2.fromOffset(width, height),
+        BackgroundTransparency = 0,
+        BackgroundColor3 = w.theme.PopoverBackground,
+        GroupTransparency = 1,
+        ZIndex = T.Z.Tooltip,
+    }, holder)
+    U.new("UIScale", { Scale = w.scale }, panel)
+    U.corner(panel, T.Radius.Popover)
+    local edge = U.stroke(panel, w.theme.SurfaceEdge, 1)
+    edge.Transparency = 0.55
+    U.bind(w, edge, "Color", "SurfaceEdge")
+    U.bind(w, panel, "BackgroundColor3", "PopoverBackground")
+    local label = U.label(panel, text, T.Type.Value, w.theme.SystemText, {
+        Position = UDim2.fromOffset(12, 10),
+        Size = UDim2.new(1, -24, 1, -20),
+        TextWrapped = true,
+        TextYAlignment = Enum.TextYAlignment.Top,
+    })
+    U.bind(w, label, "TextColor3", "SystemText")
+    self.active =
+        { entry = entry, bag = bag, holder = holder, panel = panel, label = label, width = width, height = height }
+    self:Place()
+    w.motion:To(panel, T.Motion.Micro, { GroupTransparency = 0 })
+    U.connect(bag, entry.object:GetPropertyChangedSignal("AbsolutePosition"), function()
+        self:Place()
+    end)
+end
+function Tooltip:Pend(entry, touch)
+    if not self:valid(entry) then
+        return
+    end
+    self:Cancel()
+    if touch then
+        self.touch = { entry = entry, input = touch, start = U.point(touch) }
+    end
+    local bag = Maid.new(self.w.motion)
+    self.pending = { entry = entry, bag = bag }
+    bag:After(touch and 0.55 or 0.35, function()
+        if self.pending and self.pending.entry == entry then
+            self:Show(entry)
+            if touch and self.active and self.touch then
+                self.suppressed[entry.owner] = true
+            end
+        end
+    end)
+end
+function Tooltip:Changed(event)
+    if self.touch and event == self.touch.input and (U.point(event) - self.touch.start).Magnitude > 10 then
+        self:Hide()
+    end
+end
+function Tooltip:Ended(event)
+    local touch = self.touch
+    if touch and event == touch.input then
+        self:Hide()
+        self.touch = nil
+        touch.entry.bag:After(0.20, function()
+            self.suppressed[touch.entry.owner] = nil
+        end)
+    end
+end
+function Tooltip.bind(w, owner, object, bag, text, usable)
+    local entry = { owner = owner, object = object, bag = bag, text = text, usable = usable }
+    U.connect(bag, object.MouseEnter, function()
+        w.tooltip:Pend(entry)
+    end)
+    U.connect(bag, object.MouseLeave, function()
+        if
+            (w.tooltip.pending and w.tooltip.pending.entry == entry)
+            or (w.tooltip.active and w.tooltip.active.entry == entry)
+        then
+            w.tooltip:Hide()
+        end
+    end)
+    U.connect(bag, object.InputBegan, function(event)
+        if event.UserInputType == Enum.UserInputType.Touch then
+            w.tooltip:Pend(entry, event)
+        end
+    end)
+    bag:Add(function()
+        if
+            (w.tooltip.pending and w.tooltip.pending.entry == entry)
+            or (w.tooltip.active and w.tooltip.active.entry == entry)
+            or (w.tooltip.touch and w.tooltip.touch.entry == entry)
+        then
+            w.tooltip:Cancel()
+        end
+        w.tooltip.suppressed[owner] = nil
+    end)
+end
+function Window:SetTooltipsEnabled(value)
+    if self.destroyed then
+        return self
+    end
+    self.tooltipsEnabled = value == true
+    if not self.tooltipsEnabled then
+        self.tooltip:Cancel()
+    end
+    if self.tooltipPreference then
+        self.tooltipPreference:Set(self.tooltipsEnabled, true)
+    end
+    return self
+end
+function Control:SetTooltip(text)
+    self.tooltipText = tostring(text or "")
+    if not self.destroyed then
+        self.window.tooltip:Cancel()
+    end
+    return self
+end
+function Tab:SetTooltip(text)
+    self.tooltipText = tostring(text or "")
+    if not self.destroyed then
+        self.window.tooltip:Cancel()
+    end
+    return self
+end
+function SubTab:SetTooltip(text)
+    self.tooltipText = tostring(text or "")
+    if not self.destroyed then
+        self.window.tooltip:Cancel()
+    end
+    return self
+end
+
+-- Window geometry is presentation, never a game profile or entitlement.
+function Geometry.dimensions(value)
+    local x, y
+    if typeof(value) == "Vector2" then
+        x, y = value.X, value.Y
+    elseif typeof(value) == "UDim2" and value.X.Scale == 0 and value.Y.Scale == 0 then
+        x, y = value.X.Offset, value.Y.Offset
+    elseif type(value) == "table" then
+        x, y = value[1] or value.Width, value[2] or value.Height
+    end
+    if type(x) ~= "number" or type(y) ~= "number" or not U.finite(x) or not U.finite(y) or x <= 0 or y <= 0 then
+        return nil
+    end
+    return Vector2.new(math.floor(x + 0.5), math.floor(y + 0.5))
+end
+function Geometry.layout(w)
+    if not w.resizeGrip then
+        return
+    end
+    w.resizeGrip.Visible = w.resizeEnabled
+        and w.visible
+        and not w.settingsOpen
+        and not w.searchOpen
+        and not w.confirmation
+        and not w.transfer
+        and not w.overlay.active
+end
+function Geometry.record(w, force)
+    if w.destroyed or not w.persistence or (not force and not w.rememberSize and not w.rememberPosition) then
+        return
+    end
+    Library.geometryPrefs = Library.geometryPrefs or {}
+    local view = w.stage.AbsoluteSize
+    Library.geometryPrefs[w.id] = {
+        rememberSize = w.rememberSize,
+        rememberPosition = w.rememberPosition,
+        size = w.rememberSize and { w.baseWidth, w.baseHeight } or nil,
+        position = w.rememberPosition and {
+            math.clamp(w.root.Position.X.Offset / math.max(1, view.X), 0, 1),
+            math.clamp(w.root.Position.Y.Offset / math.max(1, view.Y), 0, 1),
+        } or nil,
+    }
+    local ids = {}
+    for id in pairs(Library.geometryPrefs) do
+        table.insert(ids, id)
+    end
+    table.sort(ids)
+    while #ids > 64 do
+        local id = table.remove(ids, 1)
+        if id ~= w.id then
+            Library.geometryPrefs[id] = nil
+        else
+            table.insert(ids, id)
+        end
+    end
+    if w.geometryCancel then
+        w.bag:Remove(w.geometryCancel, true)
+    end
+    w.geometryCancel = w.bag:After(0.30, function()
+        w.geometryCancel = nil
+        Geometry.flush(w)
+    end)
+end
+function Geometry.flush(w)
+    local contents, failure = w.persistence.store:Read("Neron/End/Theme.json")
+    if not contents and failure == "InvalidJSON" then
+        return false, failure
+    end
+    local data = contents and Storage.decode(contents) or nil
+    if data and data.schemaVersion ~= 0 and data.schemaVersion ~= 1 then
+        return false, "InvalidJSON"
+    end
+    local overrides = {}
+    for token, color in pairs(w.themeOverrides) do
+        overrides[token] = Presentation.colorData(color)
+    end
+    data = data
+        or {
+            theme = w.themeName,
+            language = w.language,
+            overrides = overrides,
+            accent = w.customAccent and Presentation.colorData(w.customAccent),
+        }
+    data.schemaVersion, data.windows = 1, Library.geometryPrefs or {}
+    return w.persistence.store:Write("Neron/End/Theme.json", data)
+end
+function Geometry.restore(w, prefs, config)
+    Library.geometryPrefs = Library.geometryPrefs or {}
+    local count = 0
+    for id, record in pairs(type(prefs.windows) == "table" and prefs.windows or {}) do
+        count += 1
+        if count > 64 then
+            break
+        end
+        if type(id) == "string" and #id <= 128 and type(record) == "table" and not Library.geometryPrefs[id] then
+            local size = Geometry.dimensions(record.size)
+            local pos = record.position
+            local valid = type(pos) == "table"
+                and type(pos[1]) == "number"
+                and type(pos[2]) == "number"
+                and U.finite(pos[1])
+                and U.finite(pos[2])
+            Library.geometryPrefs[id] = {
+                rememberSize = record.rememberSize == true,
+                rememberPosition = record.rememberPosition == true,
+                size = size and { size.X, size.Y } or nil,
+                position = valid and { math.clamp(pos[1], 0, 1), math.clamp(pos[2], 0, 1) } or nil,
+            }
+        end
+    end
+    local record = Library.geometryPrefs[w.id]
+    if not record then
+        return
+    end
+    if config.RememberSize == nil then
+        w.rememberSize = record.rememberSize
+    end
+    if config.RememberPosition == nil then
+        w.rememberPosition = record.rememberPosition
+    end
+    local size = w.rememberSize and Geometry.dimensions(record.size)
+    if size then
+        w.baseWidth = math.clamp(size.X, w.minimumSize.X, w.maximumSize.X)
+        w.baseHeight = math.clamp(size.Y, w.minimumSize.Y, w.maximumSize.Y)
+        w.manualSize = true
+    end
+    if w.rememberPosition and record.position then
+        local view = w.stage.AbsoluteSize
+        w.root.Position = UDim2.fromOffset(record.position[1] * view.X, record.position[2] * view.Y)
+    end
+    w:_responsive()
+end
+function Geometry.apply(w, size, capture)
+    if w.destroyed then
+        return false, "WindowDestroyed"
+    end
+    size = Geometry.dimensions(size)
+    if not size then
+        return false, "Invalid window dimensions"
+    end
+    w.baseWidth, w.baseHeight =
+        math.clamp(size.X, w.minimumSize.X, w.maximumSize.X), math.clamp(size.Y, w.minimumSize.Y, w.maximumSize.Y)
+    w.manualSize = true
+    w:_responsive(capture)
+    if not capture then
+        Geometry.record(w)
+    end
+    return true
+end
+function Window:SetSize(size)
+    return Geometry.apply(self, size)
+end
+function Window:GetSize()
+    return Vector2.new(self.baseWidth, self.baseHeight)
+end
+function Window:SetPosition(position)
+    if self.destroyed or typeof(position) ~= "Vector2" or not U.finite(position.X) or not U.finite(position.Y) then
+        return false, "Invalid window position"
+    end
+    self.root.Position = UDim2.fromOffset(position.X, position.Y)
+    self:_responsive()
+    Geometry.record(self)
+    return true
+end
+function Window:GetPosition()
+    return Vector2.new(self.root.Position.X.Offset, self.root.Position.Y.Offset)
+end
+function Window:SetResizable(value)
+    if self.destroyed then
+        return self
+    end
+    self.resizeEnabled = value == true
+    if not self.resizeEnabled then
+        self.input:Cancel(self.resizeOwner)
+    end
+    if self.resizePreference then
+        self.resizePreference:Set(self.resizeEnabled, true)
+    end
+    self:_responsive()
+    return self
+end
+function Window:SetRememberSize(value)
+    if self.destroyed then
+        return self
+    end
+    self.rememberSize = value == true
+    if self.rememberSizePreference then
+        self.rememberSizePreference:Set(self.rememberSize, true)
+    end
+    Geometry.record(self, true)
+    return self
+end
+function Window:SetRememberPosition(value)
+    if self.destroyed then
+        return self
+    end
+    self.rememberPosition = value == true
+    if self.rememberPositionPreference then
+        self.rememberPositionPreference:Set(self.rememberPosition, true)
+    end
+    Geometry.record(self, true)
+    return self
+end
+function Geometry.init(w, config)
+    w.minimumSize = Geometry.dimensions(config.MinSize) or Vector2.new(320, 320)
+    w.maximumSize = Geometry.dimensions(config.MaxSize)
+        or Vector2.new(math.max(2048, w.baseWidth, w.minimumSize.X), math.max(1440, w.baseHeight, w.minimumSize.Y))
+    w.baseWidth = math.clamp(w.baseWidth, w.minimumSize.X, w.maximumSize.X)
+    w.baseHeight = math.clamp(w.baseHeight, w.minimumSize.Y, w.maximumSize.Y)
+    w.resizeEnabled, w.rememberSize, w.rememberPosition =
+        config.Resizable ~= false, config.RememberSize == true, config.RememberPosition == true
+    w.resizeGrip = U.button(w.root, {
+        Name = "ResizeGrip",
+        AnchorPoint = Vector2.new(1, 1),
+        Position = UDim2.fromScale(1, 1),
+        Size = UDim2.fromOffset(44, 44),
+        ZIndex = 15,
+    })
+    local glyph =
+        U.frame(w.resizeGrip, { Size = UDim2.fromOffset(14, 14), Position = UDim2.new(1, -19, 1, -19), ZIndex = 16 }, w)
+    Icons.line(glyph, 0.22, 0.82, 0.82, 0.22, w.theme.TextMuted)
+    Icons.line(glyph, 0.51, 0.82, 0.82, 0.51, w.theme.TextMuted)
+    local owner = { state = { Hovered = false, Pressed = false } }
+    w.resizeOwner = owner
+    function owner:_render()
+        Icons.color(
+            glyph,
+            self.state.Pressed and w.theme.Accent or (self.state.Hovered and w.theme.TextSecondary or w.theme.TextMuted)
+        )
+    end
+    w.systemRenders = w.systemRenders or {}
+    w.systemRenders[w.resizeGrip] = owner
+    w.bag:Add(function()
+        w.systemRenders[w.resizeGrip] = nil
+        w.input:Cancel(owner)
+    end)
+    U.connect(w.bag, w.resizeGrip.MouseEnter, function()
+        owner.state.Hovered = true
+        owner:_render()
+    end)
+    U.connect(w.bag, w.resizeGrip.MouseLeave, function()
+        owner.state.Hovered = false
+        owner:_render()
+    end)
+    U.connect(w.bag, w.resizeGrip.InputBegan, function(event)
+        if not U.primary(event) or not w.resizeGrip.Visible or not w.input:CanStart(event) then
+            return
+        end
+        local start, size, scale = U.point(event), w.root.Size, w.scale
+        local view = w.stage.AbsoluteSize
+        local p = w.root.AbsolutePosition - w.stage.AbsolutePosition
+        local left, top = math.max(8, p.X), math.max(12, p.Y)
+        local maxX =
+            math.max(w.minimumSize.X, math.min(w.maximumSize.X, (view.X - left - 8) / scale, (view.X - 16) / scale))
+        local maxY =
+            math.max(w.minimumSize.Y, math.min(w.maximumSize.Y, (view.Y - top - 12) / scale, (view.Y - 24) / scale))
+        owner.state.Pressed = true
+        owner:_render()
+        w.input:Start(owner, event, function(point)
+            local x = math.clamp(size.X.Offset + (point.X - start.X) / scale, w.minimumSize.X, maxX)
+            local y = math.clamp(size.Y.Offset + (point.Y - start.Y) / scale, w.minimumSize.Y, maxY)
+            Geometry.apply(w, Vector2.new(x, y), true)
+            w.root.Position =
+                UDim2.fromOffset(left + w.root.Size.X.Offset * w.scale / 2, top + w.root.Size.Y.Offset * w.scale / 2)
+        end, function()
+            owner.state.Pressed = false
+            owner:_render()
+            Geometry.record(w)
+        end)
+    end)
+    Tooltip.bind(w, owner, w.resizeGrip, w.bag, function()
+        return w:Translate("DragToResize")
+    end, function()
+        return w.resizeGrip.Visible
+    end)
+    owner:_render()
+    Geometry.layout(w)
+end
+
+-- Premium is supplied by the consumer's validation service; never inferred or saved as entitlement.
+function Premium.normalize(data)
+    if data == nil then
+        return {}
+    end
+    if type(data) ~= "table" or (data.Active ~= nil and type(data.Active) ~= "boolean") then
+        return nil
+    end
+    local expiry = data.ExpiresAt
+    if expiry ~= nil and (type(expiry) ~= "number" or not U.finite(expiry) or expiry <= 0 or expiry > 253402300799) then
+        return nil
+    end
+    if data.Plan ~= nil and (type(data.Plan) ~= "string" or #data.Plan > 80) then
+        return nil
+    end
+    return { Active = data.Active, ExpiresAt = expiry and math.floor(expiry), Plan = data.Plan }
+end
+function Window:GetPremiumStatus()
+    local data = self.premiumData or {}
+    local known = data.Active ~= nil
+    local expired = data.Active == true and data.ExpiresAt ~= nil and data.ExpiresAt <= os.time()
+    return {
+        Status = not known and "NotVerified" or (expired and "Expired" or (data.Active and "Active" or "Inactive")),
+        Active = data.Active == true and not expired,
+        Known = known,
+        ExpiresAt = data.ExpiresAt,
+        Plan = data.Plan,
+    }
+end
+function Premium.refresh(w)
+    if w.destroyed or not w.premiumStatusRow then
+        return
+    end
+    local data = w:GetPremiumStatus()
+    local theme = w.theme
+    w.premiumStatusRow:_commit(w:Translate(data.Status), true)
+    w.premiumStatusRow.valueLabel.Text = w:Translate(data.Status)
+    w.premiumStatusRow.valueLabel.TextColor3 = data.Active and theme.Success
+        or (data.Status == "Expired" and theme.Warning or theme.TextSecondary)
+    local expiry = w:Translate("NotProvided")
+    if data.ExpiresAt then
+        local ok, value = pcall(os.date, "!%Y-%m-%d %H:%M UTC", data.ExpiresAt)
+        if ok then
+            expiry = value
+        end
+    end
+    w.premiumExpiryRow.valueLabel.Text = expiry
+    w.premiumPlanRow.valueLabel.Text = data.Plan or w:Translate("NotProvided")
+    w.premiumPlanRow:SetVisible(data.Plan ~= nil)
+    w.premiumBuy:SetVisible(not data.Active)
+end
+function Premium.schedule(w)
+    if w.premiumCancel then
+        w.bag:Remove(w.premiumCancel, true)
+        w.premiumCancel = nil
+    end
+    local data = w:GetPremiumStatus()
+    if data.Active and data.ExpiresAt then
+        w.premiumCancel = w.bag:After(math.min(86400, data.ExpiresAt - os.time()), function()
+            w.premiumCancel = nil
+            Premium.refresh(w)
+            Premium.schedule(w)
+        end)
+    end
+end
+function Window:SetPremiumStatus(data)
+    if self.destroyed then
+        return false, "WindowDestroyed"
+    end
+    local parsed = Premium.normalize(data)
+    if not parsed then
+        return false, "Invalid Premium status"
+    end
+    self.premiumData = parsed
+    Premium.refresh(self)
+    Premium.schedule(self)
+    return true
+end
+function Premium.row(w, page, key)
+    local control = Components.row(page, { Name = w:Translate(key), Persistent = false }, "PremiumInfo")
+    w.systemControls[control] = { name = key }
+    control.valueLabel = U.label(
+        control.lane,
+        "",
+        11,
+        w.theme.SystemText,
+        { Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Right }
+    )
+    U.bind(w, control.valueLabel, "TextColor3", "SystemText")
+    function control:layoutVisual()
+        local width = self.row.AbsoluteSize.X / w.scale
+        local lane = math.max(72, (width - 32) * 0.58)
+        self.row.Size = UDim2.new(1, 0, 0, 40)
+        self.label.Position = UDim2.fromOffset(16, 10)
+        self.label.Size = UDim2.fromOffset(math.max(30, width - lane - 44), 20)
+        self.lane.Size = UDim2.fromOffset(lane, 40)
+        self.lane.Position = UDim2.new(1, -16, 0, 0)
+    end
+    control:_layout()
+    control:_render()
+    return control
+end
+function Premium.build(w, page)
+    SettingsUI.heading(w, page, "Premium", "PremiumBody")
+    w.premiumStatusRow = Premium.row(w, page, "PremiumStatus")
+    w.premiumExpiryRow = Premium.row(w, page, "PremiumExpiry")
+    w.premiumPlanRow = Premium.row(w, page, "PremiumPlan")
+    w.premiumBuy = SettingsUI.control(w, page, "AddButton", "BuyPremium", {
+        Primary = true,
+        Callback = function()
+            if w.premiumPurchaseBusy or w:GetPremiumStatus().Active then
+                return
+            end
+            if type(w.onBuyPremium) ~= "function" then
+                w:Notify("PremiumRequired", w:Translate("PurchaseNotConfigured"), "Warning")
+                return
+            end
+            w.premiumPurchaseBusy = true
+            local ok, err = xpcall(function()
+                w.onBuyPremium(nil, w)
+            end, debug.traceback)
+            w.premiumPurchaseBusy = false
+            if not ok then
+                U.warn("Buy Premium", err)
+                if not w.destroyed then
+                    w:Notify("Failed", nil, "Danger")
+                end
+            end
+        end,
+    })
+    local press = w.premiumBuy.Press
+    function w.premiumBuy:Press()
+        if self.emitting or w.premiumPurchaseBusy then
+            return self
+        end
+        return press(self)
+    end
+    Premium.refresh(w)
+end
+
 function Library:CreateWindow(config)
     config = config or {}
     assert(
@@ -3323,10 +4062,29 @@ function Library:CreateWindow(config)
         config.OnBuyPremium == nil or type(config.OnBuyPremium) == "function",
         "Neron OnBuyPremium expects a function"
     )
-    local size = config.ManualSize == true and Vector2.new(T.Geometry.ManualWidth, T.Geometry.ManualHeight)
-        or config.Size
-    local baseWidth = typeof(size) == "Vector2" and U.finite(size.X, 0) or T.Geometry.Width
-    local baseHeight = typeof(size) == "Vector2" and U.finite(size.Y, 0) or T.Geometry.Height
+    local manual = config.ManualSize
+    local size
+    if manual == true then
+        size = Vector2.new(T.Geometry.ManualWidth, T.Geometry.ManualHeight)
+    elseif manual == nil or manual == false then
+        size = config.Size or Vector2.new(T.Geometry.Width, T.Geometry.Height)
+    else
+        size = manual
+    end
+    size = Geometry.dimensions(size)
+    assert(size, "Neron ManualSize/Size expects Vector2, offset UDim2 or {width,height}")
+    local minimum = config.MinSize and Geometry.dimensions(config.MinSize)
+    local maximum = config.MaxSize and Geometry.dimensions(config.MaxSize)
+    assert(
+        config.MinSize == nil or (minimum and minimum.X >= 320 and minimum.Y >= 320),
+        "Neron MinSize must be at least320x320"
+    )
+    assert(
+        config.MaxSize == nil
+            or (maximum and maximum.X >= (minimum and minimum.X or 320) and maximum.Y >= (minimum and minimum.Y or 320)),
+        "Neron MaxSize must contain MinSize"
+    )
+    local baseWidth, baseHeight = size.X, size.Y
     assert(baseWidth >= 320 and baseHeight >= 320, "Neron window Size must be at least 320x320")
     assert(config.Accent == nil or typeof(config.Accent) == "Color3", "Neron window Accent expects Color3")
     local env = _G
@@ -3399,7 +4157,7 @@ function Library:CreateWindow(config)
         pressed = setmetatable({}, { __mode = "k" }),
         name = tostring(config.Name or "NERON"),
         searchEnabled = config.Search ~= false,
-        manualSize = config.ManualSize == true,
+        manualSize = config.ManualSize ~= nil and config.ManualSize ~= false,
         onBuyPremium = config.OnBuyPremium,
     }, Window)
     w.bag.motion = w.motion
@@ -3488,6 +4246,7 @@ function Library:CreateWindow(config)
     )
     w.input = Input.new(w)
     w.overlay = Overlay.new(w)
+    Tooltip.init(w, config)
     w.sidebarScroll = Scroll.make(w, sideHost, w.bag, 0, true)
     w.dragZone = U.button(w.content, { Name = "DragZone", Size = UDim2.new(1, -58, 0, 58), ZIndex = T.Z.Content + 5 })
     w.searchButton = U.button(w.content, {
@@ -3643,6 +4402,8 @@ function Library:CreateWindow(config)
                 x = math.clamp(x, 48 - size.X * 0.5, view.X - 48 + size.X * 0.5)
                 y = math.clamp(y, 16 + size.Y * 0.5, view.Y - 32 + size.Y * 0.5)
                 w.root.Position = UDim2.fromOffset(x, y)
+            end, function()
+                Geometry.record(w)
             end)
         end
         U.connect(w.bag, w.dragZone.InputBegan, drag)
@@ -3653,9 +4414,12 @@ function Library:CreateWindow(config)
     U.connect(w.bag, w.stage:GetPropertyChangedSignal("AbsoluteSize"), function()
         w:_responsive()
     end)
+    Geometry.init(w, config)
     w:_responsive()
     Presentation.init(w, config)
     Profiles.init(w, config)
+    w.premiumData = Premium.normalize(config.Premium) or {}
+    Premium.schedule(w)
     SettingsUI.init(w, config)
     if config.Accent then
         w:SetAccent(config.Accent)
@@ -3842,6 +4606,9 @@ function Presentation.apply(w)
     if SettingsUI.refreshStyle then
         SettingsUI.refreshStyle(w)
     end
+    if w.premiumData then
+        Premium.refresh(w)
+    end
 end
 function Presentation.remember(w)
     Library.themeName, Library.themeOverrides, Library.customAccent =
@@ -3976,6 +4743,45 @@ Locale.rows = {
         "La compra de Premium no está configurada.",
         "Покупка Premium не настроена.",
         "A compra do Premium não está configurada.",
+    },
+    Premium = { "Premium", "Premium", "Premium", "Premium" },
+    PremiumBody = {
+        "Status provided by your validation service.",
+        "Estado proporcionado por tu servicio de validación.",
+        "Статус предоставлен службой проверки.",
+        "Status fornecido pelo seu serviço de validação.",
+    },
+    PremiumStatus = { "Status", "Estado", "Статус", "Status" },
+    PremiumExpiry = { "Expires (UTC)", "Vence (UTC)", "Истекает (UTC)", "Expira (UTC)" },
+    PremiumPlan = { "Plan", "Plan", "План", "Plano" },
+    NotVerified = { "Not verified", "Sin verificar", "Не проверен", "Não verificado" },
+    Inactive = { "Inactive", "Inactivo", "Неактивен", "Inativo" },
+    Expired = { "Expired", "Vencido", "Истёк", "Expirado" },
+    NotProvided = { "Not provided", "No proporcionado", "Не указан", "Não informado" },
+    Tooltips = { "Tooltips", "Ayudas emergentes", "Подсказки", "Dicas" },
+    Resizable = {
+        "Allow window resizing",
+        "Permitir cambiar tamaño",
+        "Изменять размер окна",
+        "Permitir redimensionamento",
+    },
+    RememberSize = {
+        "Remember window size",
+        "Recordar tamaño",
+        "Запоминать размер",
+        "Lembrar tamanho",
+    },
+    RememberPosition = {
+        "Remember window position",
+        "Recordar posición",
+        "Запоминать положение",
+        "Lembrar posição",
+    },
+    DragToResize = {
+        "Drag to resize the window.",
+        "Arrastra para cambiar el tamaño.",
+        "Потяните, чтобы изменить размер.",
+        "Arraste para redimensionar a janela.",
     },
     Close = { "Close", "Cerrar", "Закрыть", "Fechar" },
     Create = { "Create", "Crear", "Создать", "Criar" },
@@ -4184,6 +4990,9 @@ function Window:BindLocalization(object, property, key)
     return self
 end
 function Window:SetLanguage(language, silent)
+    if self.tooltip then
+        self.tooltip:Cancel()
+    end
     if self.destroyed or not Locale.dictionaries[language] then
         return false, "Unknown language"
     end
@@ -4500,6 +5309,7 @@ function Profiles.init(w, config)
     local contents = self.store:Read("Neron/End/Theme.json")
     local prefs = contents and Storage.decode(contents)
     if prefs and (prefs.schemaVersion == 1 or prefs.schemaVersion == 0) then
+        Geometry.restore(w, prefs, config)
         if config.Theme == nil and Library.themeName == nil and Presentation.themes[prefs.theme] then
             w.themeName = prefs.theme
         end
@@ -4939,6 +5749,7 @@ function Profiles:SavePresentation()
         language = w.language,
         accent = w.customAccent and Presentation.colorData(w.customAccent),
         overrides = overrides,
+        windows = Library.geometryPrefs or {},
     })
     self.presentationError = ok and nil or err
     return ok, err
@@ -6105,6 +6916,30 @@ function SettingsUI.languages(w, page)
 end
 function SettingsUI.general(w, page)
     SettingsUI.heading(w, page, "General", "GeneralBody")
+    w.tooltipPreference = SettingsUI.control(w, page, "AddToggle", "Tooltips", {
+        Default = w.tooltipsEnabled,
+        Callback = function(value)
+            w:SetTooltipsEnabled(value)
+        end,
+    })
+    w.resizePreference = SettingsUI.control(w, page, "AddToggle", "Resizable", {
+        Default = w.resizeEnabled,
+        Callback = function(value)
+            w:SetResizable(value)
+        end,
+    })
+    w.rememberSizePreference = SettingsUI.control(w, page, "AddToggle", "RememberSize", {
+        Default = w.rememberSize,
+        Callback = function(value)
+            w:SetRememberSize(value)
+        end,
+    })
+    w.rememberPositionPreference = SettingsUI.control(w, page, "AddToggle", "RememberPosition", {
+        Default = w.rememberPosition,
+        Callback = function(value)
+            w:SetRememberPosition(value)
+        end,
+    })
     SettingsUI.control(w, page, "AddToggle", "SilentLoad", {
         Default = w.persistence.silentLoad,
         Callback = function(value)
@@ -6123,6 +6958,7 @@ function SettingsUI.general(w, page)
             w.systemNotifications = value
         end,
     })
+    Premium.build(w, page)
 end
 function SettingsUI.refreshStyle(w)
     for key, entry in pairs(w.settingsNav or {}) do
@@ -6147,6 +6983,7 @@ function SettingsUI.refreshStyle(w)
     end
 end
 function SettingsUI.refreshLanguage(w)
+    Premium.refresh(w)
     for control, keys in pairs(w.systemControls or {}) do
         if not control.destroyed then
             control:SetName(Locale.text(w, keys.name))
@@ -6320,6 +7157,11 @@ function SettingsUI.init(w, config)
     })
     U.corner(button, T.Radius.Row)
     w.settingsButton = button
+    Tooltip.bind(w, w, button, w.bag, function()
+        return w:Translate("Settings")
+    end, function()
+        return w.settingsEnabled
+    end)
     w.settingsIcon = Icons.make(button, "settings", 16, w.theme.TextSecondary, w)
     w.settingsIcon.Position = UDim2.fromOffset(14, 12)
     U.connect(w.bag, button.Activated, function()
