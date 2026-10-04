@@ -440,6 +440,7 @@ function U.warn(name, err)
 end
 
 -- Native vector icons are the deterministic fallback. Asset ids/registry entries override them.
+-- Geometry is normalized to a 24x24/Lucide-like visual grid and rendered through Neron's existing Frame/UIStroke pipeline.
 function Icons.line(parent, x1, y1, x2, y2, color, width)
     local dx, dy = x2 - x1, y2 - y1
     return U.new("Frame", {
@@ -463,11 +464,236 @@ function Icons.ring(parent, x, y, r, color, width)
     U.stroke(f, color, width or 1.4)
     return f
 end
+function Icons.poly(parent, points, color, width, closed)
+    for i = 1, #points - 1 do
+        local a, b = points[i], points[i + 1]
+        Icons.line(parent, a[1], a[2], b[1], b[2], color, width)
+    end
+    if closed and #points > 2 then
+        local a, b = points[#points], points[1]
+        Icons.line(parent, a[1], a[2], b[1], b[2], color, width)
+    end
+end
+function Icons.arc(parent, cx, cy, r, a1, a2, color, width, steps)
+    steps = steps or 6
+    local px, py
+    for i = 0, steps do
+        local t = a1 + (a2 - a1) * (i / steps)
+        local x, y = cx + math.cos(t) * r, cy + math.sin(t) * r
+        if px then Icons.line(parent, px, py, x, y, color, width) end
+        px, py = x, y
+    end
+end
+
+local function iconLine(x1,y1,x2,y2) return {"line",x1,y1,x2,y2} end
+local function iconRing(x,y,r) return {"ring",x,y,r} end
+local function iconPoly(points, closed) return {"poly",points,closed == true} end
+local function iconArc(cx,cy,r,a1,a2,steps) return {"arc",cx,cy,r,a1,a2,steps or 6} end
+local function iconBar(x,y,w,h,rotation) return {"bar",x,y,w,h,rotation or 0} end
+local function rect(x1,y1,x2,y2)
+    return {iconLine(x1,y1,x2,y1), iconLine(x2,y1,x2,y2), iconLine(x2,y2,x1,y2), iconLine(x1,y2,x1,y1)}
+end
+local function append(dst, src)
+    for _, v in ipairs(src) do dst[#dst+1] = v end
+    return dst
+end
+local function copy(src)
+    local out = {}
+    for _, v in ipairs(src) do out[#out+1] = v end
+    return out
+end
+local NativeIcons = {}
+local function define(name, commands) NativeIcons[name] = commands end
+local pi = math.pi
+
+local function gear(teeth)
+    local c = {iconRing(.5,.5,.16), iconRing(.5,.5,.31)}
+    for i=0,(teeth or 8)-1 do
+        local a=i*2*pi/(teeth or 8)
+        c[#c+1]=iconLine(.5+math.cos(a)*.33,.5+math.sin(a)*.33,.5+math.cos(a)*.43,.5+math.sin(a)*.43)
+    end
+    return c
+end
+local function shieldBase()
+    return {iconPoly({{.5,.12},{.8,.23},{.76,.58},{.66,.76},{.5,.88},{.34,.76},{.24,.58},{.2,.23}},true)}
+end
+local function chartAxes()
+    return {iconLine(.18,.16,.18,.82),iconLine(.18,.82,.84,.82)}
+end
+local function mapBase()
+    return {iconPoly({{.16,.24},{.38,.16},{.62,.25},{.84,.17},{.84,.76},{.62,.84},{.38,.75},{.16,.83}},true),iconLine(.38,.16,.38,.75),iconLine(.62,.25,.62,.84)}
+end
+local function pinBase()
+    return {iconRing(.5,.37,.13),iconPoly({{.37,.37},{.4,.56},{.5,.82},{.6,.56},{.63,.37}},false)}
+end
+local function packageBase(opened)
+    local c={iconPoly({{.2,.32},{.5,.16},{.8,.32},{.8,.72},{.5,.86},{.2,.72}},true),iconLine(.2,.32,.5,.48),iconLine(.8,.32,.5,.48),iconLine(.5,.48,.5,.86)}
+    if opened then c[#c+1]=iconLine(.2,.32,.12,.22); c[#c+1]=iconLine(.8,.32,.88,.22) end
+    return c
+end
+local function swordBase(flip)
+    if not flip then
+        return {iconLine(.28,.76,.72,.24),iconLine(.65,.2,.8,.16),iconLine(.8,.16,.76,.31),iconLine(.23,.67,.37,.81),iconLine(.2,.84,.3,.74)}
+    end
+    return {iconLine(.72,.76,.28,.24),iconLine(.35,.2,.2,.16),iconLine(.2,.16,.24,.31),iconLine(.77,.67,.63,.81),iconLine(.8,.84,.7,.74)}
+end
+local function eyeBase()
+    return {iconArc(.5,.5,.38,pi,2*pi,8),iconArc(.5,.5,.38,0,pi,8),iconRing(.5,.5,.11)}
+end
+local function gamepadBase()
+    return {iconArc(.5,.56,.36,pi,2*pi,8),iconPoly({{.14,.56},{.18,.76},{.3,.82},{.4,.7},{.6,.7},{.7,.82},{.82,.76},{.86,.56}},false),iconLine(.28,.5,.28,.66),iconLine(.2,.58,.36,.58),iconRing(.68,.54,.035),iconRing(.77,.62,.035)}
+end
+local function coinStack()
+    return {iconRing(.4,.62,.18),iconRing(.62,.38,.18),iconLine(.22,.62,.22,.73),iconLine(.58,.38,.58,.49),iconLine(.76,.38,.76,.49)}
+end
+
+-- Core / automation
+define("settings", gear(8))
+define("cog", append(gear(6), {iconRing(.5,.5,.07)}))
+define("wrench", {iconArc(.35,.3,.16,-.5,2.2,6),iconLine(.43,.42,.76,.75),iconRing(.78,.78,.07)})
+define("hammer", {iconPoly({{.22,.25},{.45,.12},{.58,.26},{.35,.39}},true),iconLine(.4,.36,.76,.78),iconLine(.7,.84,.82,.72)})
+define("toolbox", append(rect(.18,.35,.82,.78),{iconPoly({{.36,.35},{.39,.24},{.61,.24},{.64,.35}},false),iconLine(.18,.5,.82,.5),iconLine(.46,.5,.46,.6),iconLine(.54,.5,.54,.6)}))
+define("command", {iconArc(.35,.35,.14,pi/2,2*pi,6),iconArc(.65,.35,.14,pi,2.5*pi,6),iconArc(.35,.65,.14,-pi/2,pi,6),iconArc(.65,.65,.14,0,1.5*pi,6),iconLine(.35,.21,.65,.79),iconLine(.21,.35,.79,.65)})
+define("terminal", append(rect(.15,.2,.85,.8),{iconLine(.28,.38,.4,.5),iconLine(.4,.5,.28,.62),iconLine(.5,.63,.7,.63)}))
+define("code", {iconLine(.38,.28,.2,.5),iconLine(.2,.5,.38,.72),iconLine(.62,.28,.8,.5),iconLine(.8,.5,.62,.72),iconLine(.56,.2,.44,.8)})
+define("square-code", append(rect(.14,.14,.86,.86),{iconLine(.42,.34,.3,.5),iconLine(.3,.5,.42,.66),iconLine(.58,.34,.7,.5),iconLine(.7,.5,.58,.66)}))
+define("blocks", {iconPoly({{.2,.26},{.36,.18},{.52,.26},{.36,.34}},true),iconPoly({{.48,.48},{.64,.4},{.8,.48},{.64,.56}},true),iconPoly({{.2,.7},{.36,.62},{.52,.7},{.36,.78}},true),iconLine(.36,.34,.36,.62),iconLine(.52,.26,.64,.4)})
+define("bot", append(rect(.2,.3,.8,.76),{iconLine(.5,.3,.5,.18),iconRing(.5,.14,.04),iconRing(.36,.5,.045),iconRing(.64,.5,.045),iconLine(.36,.64,.64,.64),iconLine(.12,.44,.2,.44),iconLine(.8,.44,.88,.44)}))
+define("brain-circuit", {iconArc(.43,.5,.25,pi/2,3*pi/2,7),iconArc(.57,.5,.25,-pi/2,pi/2,7),iconLine(.5,.25,.5,.75),iconLine(.3,.42,.42,.42),iconLine(.58,.58,.72,.58),iconRing(.27,.42,.03),iconRing(.75,.58,.03),iconLine(.38,.7,.38,.82),iconRing(.38,.85,.03)})
+define("sparkles", {iconPoly({{.5,.14},{.56,.39},{.8,.45},{.56,.51},{.5,.76},{.44,.51},{.2,.45},{.44,.39}},true),iconPoly({{.77,.16},{.8,.25},{.89,.28},{.8,.31},{.77,.4},{.74,.31},{.65,.28},{.74,.25}},true)})
+define("zap", {iconPoly({{.56,.12},{.24,.55},{.47,.55},{.41,.88},{.76,.43},{.53,.43}},true)})
+define("flame", {iconPoly({{.5,.12},{.62,.34},{.58,.47},{.72,.42},{.78,.58},{.72,.76},{.58,.86},{.4,.84},{.25,.72},{.22,.55},{.34,.39},{.38,.58},{.5,.48}},true)})
+define("rocket", {iconPoly({{.5,.13},{.65,.27},{.7,.52},{.5,.7},{.3,.52},{.35,.27}},true),iconRing(.5,.38,.08),iconLine(.35,.57,.23,.72),iconLine(.65,.57,.77,.72),iconLine(.45,.73,.4,.87),iconLine(.55,.73,.6,.87)})
+define("wand-sparkles", {iconLine(.26,.78,.68,.36),iconLine(.2,.72,.32,.84),iconLine(.62,.3,.74,.42),iconPoly({{.76,.12},{.79,.21},{.88,.24},{.79,.27},{.76,.36},{.73,.27},{.64,.24},{.73,.21}},true)})
+
+-- Security / visual
+define("shield", shieldBase())
+define("shield-check", append(shieldBase(),{iconLine(.36,.5,.46,.6),iconLine(.46,.6,.66,.38)}))
+define("shield-alert", append(shieldBase(),{iconLine(.5,.35,.5,.57),iconRing(.5,.68,.025)}))
+define("shield-off", append(shieldBase(),{iconLine(.18,.18,.82,.82)}))
+define("lock", append({iconArc(.5,.37,.2,pi,2*pi,7),iconLine(.3,.37,.3,.47),iconLine(.7,.37,.7,.47)}, append(rect(.22,.46,.78,.84), {iconLine(.5,.58,.5,.7)})))
+define("lock-keyhole", append({iconArc(.5,.37,.2,pi,2*pi,7),iconLine(.3,.37,.3,.47),iconLine(.7,.37,.7,.47)}, append(rect(.22,.46,.78,.84), {iconRing(.5,.62,.04),iconLine(.5,.66,.5,.73)})))
+define("eye", eyeBase())
+define("eye-off", append(eyeBase(),{iconLine(.18,.18,.82,.82)}))
+define("scan-eye", append(eyeBase(),{iconLine(.15,.3,.15,.15),iconLine(.15,.15,.3,.15),iconLine(.85,.3,.85,.15),iconLine(.85,.15,.7,.15),iconLine(.15,.7,.15,.85),iconLine(.15,.85,.3,.85),iconLine(.85,.7,.85,.85),iconLine(.85,.85,.7,.85)}))
+define("fingerprint-pattern", {iconArc(.5,.55,.28,pi,2*pi,8),iconArc(.5,.55,.2,pi,2*pi,7),iconArc(.5,.55,.12,pi,2*pi,6),iconLine(.22,.55,.22,.68),iconLine(.78,.55,.78,.68),iconArc(.5,.68,.28,0,pi,8)})
+define("target", {iconRing(.5,.5,.35),iconRing(.5,.5,.18),iconRing(.5,.5,.04)})
+define("crosshair", {iconRing(.5,.5,.25),iconLine(.5,.12,.5,.34),iconLine(.5,.66,.5,.88),iconLine(.12,.5,.34,.5),iconLine(.66,.5,.88,.5)})
+define("focus", {iconLine(.18,.36,.18,.18),iconLine(.18,.18,.36,.18),iconLine(.82,.36,.82,.18),iconLine(.82,.18,.64,.18),iconLine(.18,.64,.18,.82),iconLine(.18,.82,.36,.82),iconLine(.82,.64,.82,.82),iconLine(.82,.82,.64,.82),iconRing(.5,.5,.1)})
+define("radar", {iconRing(.5,.5,.34),iconRing(.5,.5,.2),iconLine(.5,.5,.76,.27),iconRing(.62,.43,.035)})
+
+-- Combat / rewards
+define("sword", swordBase(false))
+define("swords", append(swordBase(false),swordBase(true)))
+define("skull", {iconArc(.5,.43,.3,pi,2*pi,8),iconLine(.2,.43,.24,.7),iconLine(.76,.7,.8,.43),iconLine(.24,.7,.38,.78),iconLine(.62,.78,.76,.7),iconRing(.38,.5,.055),iconRing(.62,.5,.055),iconLine(.45,.68,.45,.8),iconLine(.55,.68,.55,.8)})
+define("crown", {iconPoly({{.18,.3},{.34,.56},{.5,.28},{.66,.56},{.82,.3},{.76,.76},{.24,.76}},true),iconLine(.24,.66,.76,.66)})
+define("trophy", {iconPoly({{.3,.2},{.7,.2},{.66,.53},{.57,.63},{.43,.63},{.34,.53}},true),iconArc(.28,.35,.16,pi/2,3*pi/2,6),iconArc(.72,.35,.16,-pi/2,pi/2,6),iconLine(.5,.63,.5,.78),iconLine(.36,.82,.64,.82)})
+define("medal", {iconRing(.5,.62,.18),iconLine(.38,.46,.28,.18),iconLine(.48,.45,.4,.18),iconLine(.52,.45,.6,.18),iconLine(.62,.46,.72,.18),iconPoly({{.5,.52},{.54,.59},{.62,.6},{.56,.66},{.58,.74},{.5,.7},{.42,.74},{.44,.66},{.38,.6},{.46,.59}},true)})
+define("award", {iconRing(.5,.42,.2),iconPoly({{.38,.58},{.32,.86},{.5,.75},{.68,.86},{.62,.58}},false),iconPoly({{.5,.28},{.54,.38},{.65,.38},{.56,.45},{.59,.56},{.5,.5},{.41,.56},{.44,.45},{.35,.38},{.46,.38}},true)})
+define("gem", {iconPoly({{.3,.18},{.7,.18},{.84,.38},{.5,.84},{.16,.38}},true),iconLine(.16,.38,.84,.38),iconLine(.3,.18,.4,.38),iconLine(.7,.18,.6,.38),iconLine(.4,.38,.5,.84),iconLine(.6,.38,.5,.84)})
+define("coins", coinStack())
+define("hand-coins", append(coinStack(),{iconPoly({{.15,.72},{.34,.72},{.48,.82},{.72,.72},{.86,.64}},false),iconLine(.15,.72,.15,.84)}))
+define("wallet", append(rect(.16,.28,.84,.76),{iconLine(.16,.38,.72,.38),iconPoly({{.62,.46},{.86,.46},{.86,.66},{.62,.66}},true),iconRing(.69,.56,.025)}))
+define("banknote", append(rect(.14,.26,.86,.74),{iconRing(.5,.5,.13),iconLine(.2,.34,.3,.34),iconLine(.7,.66,.8,.66)}))
+define("dollar-sign", {iconLine(.5,.16,.5,.84),iconArc(.5,.38,.2,.55*pi,1.5*pi,7),iconArc(.5,.62,.2,-.45*pi,.5*pi,7)})
+
+-- Charts / progression
+define("chart-line", append(chartAxes(),{iconPoly({{.26,.68},{.4,.5},{.52,.59},{.72,.31}},false)}))
+define("chart-pie", {iconArc(.48,.52,.3,.08*pi,1.5*pi,10),iconLine(.48,.22,.48,.52),iconLine(.48,.52,.77,.52),iconArc(.55,.45,.3,-.5*pi,0,5)})
+define("chart-bar", append(chartAxes(),{iconLine(.3,.7,.3,.56),iconLine(.48,.7,.48,.4),iconLine(.66,.7,.66,.28)}))
+define("chart-area", append(chartAxes(),{iconPoly({{.22,.68},{.39,.48},{.52,.58},{.74,.3},{.74,.76},{.22,.76}},true)}))
+define("chart-column", append(chartAxes(),{iconPoly({{.27,.72},{.27,.57},{.37,.57},{.37,.72}},true),iconPoly({{.45,.72},{.45,.42},{.55,.42},{.55,.72}},true),iconPoly({{.63,.72},{.63,.3},{.73,.3},{.73,.72}},true)}))
+define("chart-column-increasing", append(chartAxes(),{iconPoly({{.25,.72},{.25,.62},{.35,.62},{.35,.72}},true),iconPoly({{.43,.72},{.43,.5},{.53,.5},{.53,.72}},true),iconPoly({{.61,.72},{.61,.35},{.71,.35},{.71,.72}},true),iconLine(.28,.46,.7,.22),iconLine(.7,.22,.62,.22),iconLine(.7,.22,.7,.3)}))
+define("chart-no-axes-combined", {iconPoly({{.2,.72},{.36,.55},{.5,.62},{.72,.34},{.82,.42}},false),iconLine(.25,.72,.25,.58),iconLine(.45,.72,.45,.48),iconLine(.65,.72,.65,.38)})
+define("activity", {iconPoly({{.14,.52},{.3,.52},{.39,.28},{.52,.74},{.62,.44},{.72,.52},{.86,.52}},false)})
+define("gauge", {iconArc(.5,.64,.32,pi,2*pi,9),iconLine(.5,.64,.68,.39),iconRing(.5,.64,.04),iconLine(.25,.66,.18,.66),iconLine(.75,.66,.82,.66)})
+define("circle-gauge", append({iconRing(.5,.5,.36)}, {iconArc(.5,.57,.24,pi,2*pi,8),iconLine(.5,.57,.66,.39),iconRing(.5,.57,.035)}))
+define("trending-up-down", {iconPoly({{.17,.63},{.35,.45},{.49,.57},{.7,.31},{.84,.31}},false),iconLine(.84,.31,.76,.23),iconLine(.84,.31,.76,.39),iconPoly({{.17,.76},{.32,.64},{.48,.73},{.65,.58},{.84,.74}},false)})
+
+-- World / teleport
+define("map", mapBase())
+define("map-pin", append(mapBase(),pinBase()))
+define("map-pinned", append(pinBase(),{iconLine(.18,.74,.38,.66),iconLine(.62,.66,.82,.74),iconLine(.38,.66,.5,.72),iconLine(.5,.72,.62,.66)}))
+define("map-pin-search", append(pinBase(),{iconRing(.72,.7,.1),iconLine(.79,.77,.87,.85)}))
+define("navigation", {iconPoly({{.5,.12},{.78,.82},{.5,.67},{.22,.82}},true),iconLine(.5,.67,.5,.36)})
+define("compass", {iconRing(.5,.5,.36),iconPoly({{.6,.3},{.54,.54},{.3,.6},{.46,.46}},true)})
+define("locate", {iconRing(.5,.5,.2),iconLine(.5,.1,.5,.25),iconLine(.5,.75,.5,.9),iconLine(.1,.5,.25,.5),iconLine(.75,.5,.9,.5)})
+define("locate-fixed", append({iconRing(.5,.5,.2),iconRing(.5,.5,.04)}, {iconLine(.5,.1,.5,.25),iconLine(.5,.75,.5,.9),iconLine(.1,.5,.25,.5),iconLine(.75,.5,.9,.5)}))
+define("signpost", {iconLine(.5,.15,.5,.86),iconPoly({{.24,.26},{.72,.26},{.82,.38},{.72,.5},{.24,.5}},true),iconLine(.38,.86,.62,.86)})
+define("signpost-big", {iconLine(.5,.12,.5,.88),iconPoly({{.16,.22},{.7,.22},{.84,.38},{.7,.54},{.16,.54}},true),iconLine(.34,.88,.66,.88)})
+define("milestone", {iconLine(.22,.18,.22,.84),iconPoly({{.22,.25},{.7,.25},{.82,.4},{.7,.55},{.22,.55}},true),iconRing(.22,.18,.035),iconRing(.22,.84,.035)})
+define("road", {iconLine(.37,.12,.28,.88),iconLine(.63,.12,.72,.88),iconLine(.5,.16,.5,.31),iconLine(.5,.42,.5,.58),iconLine(.5,.69,.5,.84)})
+define("waypoints", {iconRing(.25,.28,.09),iconRing(.75,.72,.09),iconLine(.25,.37,.25,.48),iconArc(.5,.5,.25,pi,0,7),iconLine(.75,.52,.75,.63)})
+define("house", {iconPoly({{.16,.45},{.5,.18},{.84,.45},{.84,.82},{.62,.82},{.62,.58},{.38,.58},{.38,.82},{.16,.82}},true)})
+define("castle", {iconPoly({{.18,.84},{.18,.36},{.28,.36},{.28,.24},{.38,.24},{.38,.36},{.62,.36},{.62,.24},{.72,.24},{.72,.36},{.82,.36},{.82,.84}},false),iconLine(.18,.84,.82,.84),iconArc(.5,.84,.12,pi,2*pi,6),iconLine(.5,.72,.5,.84)})
+define("mountain", {iconPoly({{.12,.8},{.39,.3},{.5,.47},{.6,.34},{.88,.8}},false),iconLine(.39,.3,.47,.45),iconLine(.47,.45,.52,.39)})
+define("mountain-snow", {iconPoly({{.1,.82},{.36,.28},{.5,.52},{.62,.34},{.9,.82}},false),iconPoly({{.29,.43},{.36,.28},{.44,.42},{.5,.52}},false),iconPoly({{.55,.45},{.62,.34},{.7,.47}},false)})
+
+-- Farming / resources
+define("tractor", {iconRing(.3,.72,.15),iconRing(.72,.7,.11),iconPoly({{.25,.57},{.25,.4},{.48,.4},{.58,.6},{.78,.6}},false),iconLine(.48,.4,.48,.24),iconLine(.48,.24,.65,.24),iconLine(.65,.24,.7,.6),iconLine(.2,.57,.12,.57),iconLine(.58,.6,.58,.72)})
+define("sprout", {iconLine(.5,.82,.5,.42),iconArc(.38,.42,.18,0,pi,6),iconArc(.62,.52,.18,pi,2*pi,6),iconLine(.5,.42,.32,.27),iconLine(.5,.52,.7,.37)})
+define("pickaxe", {iconArc(.48,.31,.28,pi,2*pi,8),iconLine(.48,.31,.72,.78),iconLine(.66,.82,.78,.74)})
+define("shovel", {iconLine(.5,.18,.5,.62),iconRing(.5,.18,.07),iconPoly({{.34,.62},{.66,.62},{.6,.82},{.5,.88},{.4,.82}},true)})
+define("axe", {iconLine(.56,.25,.38,.82),iconPoly({{.5,.28},{.62,.17},{.82,.27},{.68,.48}},true),iconLine(.32,.84,.45,.78)})
+define("leaf", {iconPoly({{.2,.72},{.28,.35},{.58,.18},{.82,.2},{.8,.48},{.58,.75},{.2,.72}},true),iconLine(.22,.72,.7,.3),iconLine(.45,.5,.45,.67),iconLine(.55,.43,.7,.43)})
+define("tree-palm", {iconLine(.5,.38,.42,.86),iconLine(.5,.38,.26,.24),iconLine(.5,.38,.72,.2),iconLine(.5,.38,.78,.43),iconLine(.5,.38,.29,.51),iconArc(.28,.26,.14,pi,2*pi,5),iconArc(.72,.22,.14,pi,2*pi,5)})
+define("plant-pot", {iconPoly({{.26,.58},{.74,.58},{.68,.84},{.32,.84}},true),iconLine(.5,.58,.5,.32),iconArc(.38,.32,.14,0,pi,5),iconArc(.62,.38,.14,pi,2*pi,5)})
+define("fishing-rod", {iconArc(.42,.42,.33,-pi/2,0,8),iconLine(.42,.09,.42,.72),iconLine(.75,.42,.75,.72),iconArc(.75,.78,.06,-pi/2,pi,5)})
+define("fishing-hook", {iconLine(.5,.16,.5,.64),iconArc(.5,.65,.2,0,pi,7),iconLine(.3,.65,.3,.56),iconLine(.3,.56,.39,.62)})
+
+-- Inventory / system
+define("package", packageBase(false))
+define("package-open", packageBase(true))
+define("package-search", append(packageBase(false),{iconRing(.72,.7,.1),iconLine(.79,.77,.88,.86)}))
+define("boxes", {iconPoly({{.14,.3},{.32,.2},{.5,.3},{.32,.4}},true),iconPoly({{.5,.3},{.68,.2},{.86,.3},{.68,.4}},true),iconPoly({{.32,.58},{.5,.48},{.68,.58},{.5,.68}},true),iconLine(.32,.4,.32,.58),iconLine(.68,.4,.68,.58),iconLine(.5,.3,.5,.48)})
+define("backpack", append({iconArc(.5,.34,.2,pi,2*pi,7)}, append(rect(.23,.34,.77,.84), {iconLine(.23,.5,.77,.5),iconPoly({{.36,.34},{.38,.2},{.62,.2},{.64,.34}},false),iconLine(.38,.66,.62,.66)})))
+define("shopping-bag", {iconPoly({{.22,.34},{.78,.34},{.74,.84},{.26,.84}},true),iconArc(.5,.36,.18,pi,2*pi,6)})
+define("shopping-cart", {iconLine(.14,.22,.24,.22),iconPoly({{.24,.22},{.32,.62},{.72,.62},{.82,.34},{.28,.34}},false),iconLine(.32,.62,.28,.72),iconLine(.28,.72,.72,.72),iconRing(.34,.82,.045),iconRing(.68,.82,.045)})
+define("archive", append(rect(.18,.28,.82,.8),{iconPoly({{.14,.18},{.86,.18},{.82,.3},{.18,.3}},true),iconLine(.4,.48,.6,.48)}))
+define("database", {iconArc(.5,.28,.3,0,2*pi,10),iconLine(.2,.28,.2,.72),iconLine(.8,.28,.8,.72),iconArc(.5,.5,.3,0,pi,8),iconArc(.5,.72,.3,0,pi,8)})
+define("hard-drive", append(rect(.16,.24,.84,.76),{iconLine(.2,.6,.8,.6),iconRing(.72,.68,.035),iconRing(.6,.68,.035)}))
+define("cpu", append(rect(.26,.26,.74,.74),{iconPoly({{.36,.36},{.64,.36},{.64,.64},{.36,.64}},true),iconLine(.34,.16,.34,.26),iconLine(.5,.16,.5,.26),iconLine(.66,.16,.66,.26),iconLine(.34,.74,.34,.84),iconLine(.5,.74,.5,.84),iconLine(.66,.74,.66,.84),iconLine(.16,.34,.26,.34),iconLine(.16,.5,.26,.5),iconLine(.16,.66,.26,.66),iconLine(.74,.34,.84,.34),iconLine(.74,.5,.84,.5),iconLine(.74,.66,.84,.66)}))
+define("memory-stick", append(rect(.2,.3,.8,.7),{iconLine(.28,.2,.28,.3),iconLine(.42,.2,.42,.3),iconLine(.58,.2,.58,.3),iconLine(.72,.2,.72,.3),iconLine(.28,.7,.28,.8),iconLine(.42,.7,.42,.8),iconLine(.58,.7,.58,.8),iconLine(.72,.7,.72,.8),iconPoly({{.36,.4},{.64,.4},{.64,.6},{.36,.6}},true)}))
+
+-- Player / game / utility
+define("gamepad", gamepadBase())
+define("gamepad-2", append(gamepadBase(),{iconLine(.43,.22,.57,.22),iconLine(.5,.15,.5,.29)}))
+define("joystick", {iconRing(.5,.78,.08),iconLine(.5,.7,.5,.36),iconRing(.5,.26,.12),iconPoly({{.25,.84},{.75,.84},{.7,.7},{.58,.66},{.42,.66},{.3,.7}},false)})
+define("dumbbell", {iconLine(.24,.5,.76,.5),iconLine(.22,.34,.22,.66),iconLine(.3,.38,.3,.62),iconLine(.78,.34,.78,.66),iconLine(.7,.38,.7,.62),iconLine(.12,.42,.12,.58),iconLine(.88,.42,.88,.58)})
+define("biceps-flexed", {iconArc(.42,.58,.26,.1*pi,1.15*pi,8),iconLine(.18,.64,.32,.78),iconLine(.32,.78,.58,.8),iconArc(.62,.54,.2,pi,2*pi,7),iconLine(.58,.34,.68,.2),iconLine(.68,.2,.8,.27),iconLine(.8,.27,.76,.43)})
+define("timer", {iconRing(.5,.55,.3),iconLine(.5,.55,.5,.34),iconLine(.5,.55,.66,.64),iconLine(.42,.16,.58,.16),iconLine(.5,.16,.5,.25),iconLine(.72,.25,.8,.33)})
+
+-- Existing internal icons retained in the same namespace.
+define("search", {iconRing(.42,.42,.25),iconLine(.60,.60,.85,.85)})
+define("chevron", {iconLine(.22,.38,.50,.65),iconLine(.50,.65,.78,.38)})
+define("pencil", {iconLine(.25,.75,.73,.27),iconLine(.32,.80,.80,.32),iconLine(.25,.75,.20,.85)})
+define("folder", {iconPoly({{.15,.27},{.4,.27},{.5,.38},{.87,.38},{.87,.8},{.15,.8}},true)})
+define("chart", {iconLine(.18,.2,.18,.8),iconLine(.18,.8,.85,.8),iconLine(.36,.66,.36,.5),iconLine(.55,.66,.55,.3),iconLine(.75,.66,.75,.4)})
+define("profile", {iconLine(.25,.18,.25,.88),iconPoly({{.25,.2},{.8,.2},{.63,.48},{.25,.48}},true)})
+define("flag", copy(NativeIcons.profile))
+define("misc", {iconRing(.5,.28,.12),iconLine(.5,.42,.5,.76),iconLine(.5,.76,.23,.76),iconLine(.5,.76,.77,.76)})
+define("empty", {iconRing(.5,.5,.40),iconRing(.36,.43,.025),iconRing(.64,.43,.025),iconPoly({{.35,.67},{.43,.61},{.57,.61},{.65,.67}},false)})
+define("menu", {iconLine(.18,.28,.82,.28),iconLine(.18,.5,.82,.5),iconLine(.18,.72,.82,.72)})
+define("discord", {iconRing(.5,.5,.32),iconRing(.37,.48,.025),iconRing(.63,.48,.025),iconLine(.33,.65,.67,.65)})
+define("brand", {iconBar(.24,.22,.58,.14,-28),iconBar(.18,.45,.58,.14,-28),iconBar(.12,.68,.58,.14,-28)})
+
+local function normalizeIconName(name)
+    if type(name) ~= "string" then return name end
+    local n = string.lower(name)
+    n = n:gsub("^%s+", ""):gsub("%s+$", "")
+    n = n:gsub("_", "-"):gsub("%s+", "-")
+    return n
+end
+Icons.normalizeName = normalizeIconName
+Icons.Native = NativeIcons
+
 function Icons.make(parent, name, size, color, w)
     local root = U.frame(parent, { Size = UDim2.fromOffset(size, size), ZIndex = parent.ZIndex + 1 }, w)
-    local asset = Library.Icons[name] or name
+    local normalized = normalizeIconName(name or "settings")
+    local asset = Library.Icons[normalized] or Library.Icons[name] or normalized
     if type(asset) == "number" or (type(asset) == "string" and (asset:match("^rbx") or asset:match("^%d+$"))) then
         U.new("ImageLabel", {
+            BackgroundTransparency = 1,
             Image = type(asset) == "number" and "rbxassetid://" .. asset
                 or (asset:match("^%d+$") and "rbxassetid://" .. asset or asset),
             ImageColor3 = color,
@@ -475,89 +701,25 @@ function Icons.make(parent, name, size, color, w)
             ZIndex = root.ZIndex,
         }, root)
     else
-        local function l(a, b, c, d)
-            Icons.line(root, a, b, c, d, color)
-        end
-        local function r(x, y, z)
-            Icons.ring(root, x, y, z, color)
-        end
-        if name == "search" then
-            r(0.42, 0.42, 0.25)
-            l(0.60, 0.60, 0.85, 0.85)
-        elseif name == "chevron" then
-            l(0.22, 0.38, 0.50, 0.65)
-            l(0.5, 0.65, 0.78, 0.38)
-        elseif name == "pencil" then
-            l(0.25, 0.75, 0.73, 0.27)
-            l(0.32, 0.80, 0.80, 0.32)
-            l(0.25, 0.75, 0.20, 0.85)
-        elseif name == "lock" then
-            r(0.5, 0.30, 0.18)
-            l(0.24, 0.42, 0.76, 0.42)
-            l(0.76, 0.42, 0.76, 0.84)
-            l(0.76, 0.84, 0.24, 0.84)
-            l(0.24, 0.84, 0.24, 0.42)
-            l(0.5, 0.57, 0.5, 0.69)
-        elseif name == "folder" then
-            l(0.15, 0.27, 0.40, 0.27)
-            l(0.4, 0.27, 0.50, 0.38)
-            l(0.5, 0.38, 0.87, 0.38)
-            l(0.87, 0.38, 0.87, 0.8)
-            l(0.87, 0.8, 0.15, 0.8)
-            l(0.15, 0.8, 0.15, 0.27)
-        elseif name == "chart" then
-            l(0.18, 0.2, 0.18, 0.8)
-            l(0.18, 0.8, 0.85, 0.8)
-            l(0.36, 0.66, 0.36, 0.50)
-            l(0.55, 0.66, 0.55, 0.3)
-            l(0.75, 0.66, 0.75, 0.4)
-        elseif name == "profile" or name == "flag" then
-            l(0.25, 0.18, 0.25, 0.88)
-            l(0.25, 0.20, 0.8, 0.20)
-            l(0.8, 0.20, 0.63, 0.48)
-            l(0.63, 0.48, 0.25, 0.48)
-        elseif name == "misc" then
-            r(0.5, 0.28, 0.12)
-            l(0.5, 0.42, 0.5, 0.76)
-            l(0.5, 0.76, 0.23, 0.76)
-            l(0.5, 0.76, 0.77, 0.76)
-        elseif name == "empty" then
-            r(0.5, 0.5, 0.40)
-            r(0.36, 0.43, 0.025)
-            r(0.64, 0.43, 0.025)
-            l(0.35, 0.67, 0.43, 0.61)
-            l(0.43, 0.61, 0.57, 0.61)
-            l(0.57, 0.61, 0.65, 0.67)
-        elseif name == "menu" then
-            l(0.18, 0.28, 0.82, 0.28)
-            l(0.18, 0.5, 0.82, 0.5)
-            l(0.18, 0.72, 0.82, 0.72)
-        elseif name == "brand" then
-            for i = 0, 2 do
+        local commands = NativeIcons[normalized] or NativeIcons.settings
+        for _, cmd in ipairs(commands) do
+            if cmd[1] == "line" then
+                Icons.line(root, cmd[2], cmd[3], cmd[4], cmd[5], color)
+            elseif cmd[1] == "ring" then
+                Icons.ring(root, cmd[2], cmd[3], cmd[4], color)
+            elseif cmd[1] == "poly" then
+                Icons.poly(root, cmd[2], color, nil, cmd[3])
+            elseif cmd[1] == "arc" then
+                Icons.arc(root, cmd[2], cmd[3], cmd[4], cmd[5], cmd[6], color, nil, cmd[7])
+            elseif cmd[1] == "bar" then
                 U.new("Frame", {
-                    Position = UDim2.fromScale(0.24 - i * 0.06, 0.22 + i * 0.23),
-                    Size = UDim2.fromScale(0.58, 0.14),
-                    Rotation = -28,
+                    Position = UDim2.fromScale(cmd[2], cmd[3]),
+                    Size = UDim2.fromScale(cmd[4], cmd[5]),
+                    Rotation = cmd[6],
                     BackgroundTransparency = 0,
                     BackgroundColor3 = color,
                     ZIndex = root.ZIndex,
                 }, root)
-            end
-        elseif name == "discord" then
-            r(0.5, 0.5, 0.32)
-            r(0.37, 0.48, 0.025)
-            r(0.63, 0.48, 0.025)
-            l(0.33, 0.65, 0.67, 0.65)
-        else
-            r(0.5, 0.5, 0.23)
-            for i = 0, 7 do
-                local a = i * math.pi / 4
-                l(
-                    0.5 + math.cos(a) * 0.27,
-                    0.5 + math.sin(a) * 0.27,
-                    0.5 + math.cos(a) * 0.39,
-                    0.5 + math.sin(a) * 0.39
-                )
             end
         end
     end
