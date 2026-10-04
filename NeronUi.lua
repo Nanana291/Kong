@@ -14,7 +14,6 @@
 -- Desktop automatic Size is912x543; mobile defaults unchanged.
 -- Tooltips/Tooltip/ToolTip provide hover/hold hints. Explicit sizing takes precedence over saved dimensions.
 -- Premium={Active=boolean,ExpiresAt=UnixSeconds,Plan=string}; SetPremiumStatus updates Settings > General.
--- ThemeTransition supports spatial left/right theme sweeps with reversible control micro-interactions; ReducedMotion is available.
 -- Premium is external display state, never a saved entitlement or automatic unlock.
 -- Toggle Locked=true stays OFF and opens a Premium callout; SetLocked(false) restores interaction.
 -- OnBuyPremium(toggle, window), on Window or Toggle, connects your purchase flow; it never auto-unlocks.
@@ -1494,9 +1493,6 @@ function Window:Destroy()
     end
     if self.tooltip then
         self.tooltip:Cancel()
-    end
-    if Presentation.cancelThemeTransition then
-        Presentation.cancelThemeTransition(self, false)
     end
     if self.geometryCancel then
         self.bag:Remove(self.geometryCancel, true)
@@ -4484,13 +4480,6 @@ function Library:CreateWindow(config)
         config.OnBuyPremium == nil or type(config.OnBuyPremium) == "function",
         "Neron OnBuyPremium expects a function"
     )
-    assert(
-        config.ThemeTransition == nil
-            or type(config.ThemeTransition) == "boolean"
-            or type(config.ThemeTransition) == "table",
-        "Neron ThemeTransition expects boolean or table"
-    )
-    assert(config.ReducedMotion == nil or type(config.ReducedMotion) == "boolean", "Neron ReducedMotion expects boolean")
     local manual = config.ManualSize
     local size
     if manual == true then
@@ -4516,10 +4505,6 @@ function Library:CreateWindow(config)
     local baseWidth, baseHeight = size.X, size.Y
     assert(baseWidth >= 320 and baseHeight >= 320, "Neron window Size must be at least 320x320")
     assert(config.Accent == nil or typeof(config.Accent) == "Color3", "Neron window Accent expects Color3")
-    local transitionConfig = type(config.ThemeTransition) == "table" and config.ThemeTransition or {}
-    local transitionDirection = transitionConfig.Direction == "RightToLeft" and "RightToLeft" or "LeftToRight"
-    local transitionDuration = math.clamp(U.finite(transitionConfig.Duration, 0.86), 0.35, 1.50)
-    local transitionIntensity = math.clamp(U.finite(transitionConfig.Intensity, 1), 0, 1)
     local env = _G
     if type(getgenv) == "function" then
         local ok, value = pcall(getgenv)
@@ -4595,14 +4580,6 @@ function Library:CreateWindow(config)
             and config.Size == nil
             and (not S.Input.TouchEnabled or (S.Input.KeyboardEnabled == true and S.Input.MouseEnabled == true)),
         onBuyPremium = config.OnBuyPremium,
-        themeTransitionEnabled = config.ThemeTransition ~= false and transitionConfig.Enabled ~= false,
-        themeTransitionDuration = transitionDuration,
-        themeTransitionDirection = transitionDirection,
-        themeTransitionFrontier = transitionConfig.Frontier ~= false,
-        themeTransitionInteractions = transitionConfig.Interactions ~= false,
-        themeTransitionIntensity = transitionIntensity,
-        reducedMotion = config.ReducedMotion == true,
-        themeTransitionGeneration = 0,
     }, Window)
     w.bag.motion = w.motion
     registry[id] = w
@@ -4998,355 +4975,9 @@ function Presentation.colors(name, overrides, accent)
     end
     return theme
 end
-
--- Theme transitions are spatial and event-driven: bound colors are swept in buckets,
--- while control chrome receives reversible micro-interactions. No frame loop is used.
-function Presentation.themeDiffers(a, b)
-    if type(a) ~= "table" or type(b) ~= "table" then
-        return true
-    end
-    for token in pairs(Theme) do
-        if a[token] ~= b[token] then
-            return true
-        end
-    end
-    return false
-end
-function Presentation.restoreThemeTransient(w, state)
-    if not state or not state.restores then
-        return
-    end
-    for obj, properties in pairs(state.restores) do
-        if typeof(obj) == "Instance" and obj.Parent then
-            for property, value in pairs(properties) do
-                w.motion:Cancel(obj, property)
-                local ok = pcall(function()
-                    obj[property] = value
-                end)
-                if not ok then
-                    -- A destroyed/replaced object is harmless during transition teardown.
-                end
-            end
-        end
-    end
-end
-function Presentation.cancelThemeTransition(w, settle)
-    local state = w.themeSweep
-    if not state then
-        return
-    end
-    w.themeSweep = nil
-    Presentation.restoreThemeTransient(w, state)
-    if state.frontierTween then
-        pcall(function()
-            state.frontierTween:Cancel()
-        end)
-    end
-    state.bag:Destroy()
-    if settle and not w.destroyed then
-        Presentation.apply(w, true)
-    end
-end
-function Presentation.themeRatio(w, object)
-    if not object or not object.Parent then
-        return 0.5
-    end
-    local width = math.max(1, w.root.AbsoluteSize.X)
-    local left = w.root.AbsolutePosition.X
-    local x = object.AbsolutePosition.X + object.AbsoluteSize.X * 0.5
-    local ratio = math.clamp((x - left) / width, 0, 1)
-    if w.themeTransitionDirection == "RightToLeft" then
-        ratio = 1 - ratio
-    end
-    return ratio
-end
-function Presentation.rememberThemeProperty(state, object, property)
-    if not object or not object.Parent then
-        return
-    end
-    local properties = state.restores[object]
-    if not properties then
-        properties = {}
-        state.restores[object] = properties
-    end
-    if properties[property] == nil then
-        local ok, value = pcall(function()
-            return object[property]
-        end)
-        if ok then
-            properties[property] = value
-        end
-    end
-end
-function Presentation.themePulse(w, state, entry)
-    if not w.themeTransitionInteractions or w.reducedMotion or w.destroyed then
-        return
-    end
-    local owner, kind = entry.owner, entry.kind
-    if not owner or owner.destroyed or not entry.root or not entry.root.Parent then
-        return
-    end
-    local intensity = w.themeTransitionIntensity or 1
-    if intensity <= 0 then
-        return
-    end
-    local touched = {}
-    local function pulse(object, property, value, duration)
-        if not object or not object.Parent then
-            return
-        end
-        Presentation.rememberThemeProperty(state, object, property)
-        touched[#touched + 1] = { object = object, property = property }
-        w.motion:To(object, duration or 0.055, { [property] = value })
-    end
-    if kind == "Tab" then
-        if owner.icon and owner.icon.Visible then
-            pulse(owner.icon, "Rotation", (w.themeTransitionDirection == "RightToLeft" and -1 or 1) * 3.2 * intensity)
-        end
-    elseif kind == "SubTab" then
-        if owner.icon and owner.icon.Visible then
-            pulse(owner.icon, "Rotation", (w.themeTransitionDirection == "RightToLeft" and -1 or 1) * 2.6 * intensity)
-        end
-    elseif kind == "Toggle" and owner.track then
-        pulse(owner.track, "Rotation", (w.themeTransitionDirection == "RightToLeft" and -1 or 1) * 1.5 * intensity)
-    elseif (kind == "Slider" or kind == "RangeSlider") and owner.thumbs then
-        for _, thumb in ipairs(owner.thumbs) do
-            if thumb.Parent then
-                Presentation.rememberThemeProperty(state, thumb, "Size")
-                local base = state.restores[thumb] and state.restores[thumb].Size or thumb.Size
-                local grow = math.max(1, math.floor(1.5 * intensity + 0.5))
-                pulse(thumb, "Size", UDim2.fromOffset(base.X.Offset + grow, base.Y.Offset + grow))
-            end
-        end
-    elseif (kind == "Dropdown" or kind == "MultiDropdown") and owner.trigger then
-        Presentation.rememberThemeProperty(state, owner.trigger, "Position")
-        local base = state.restores[owner.trigger].Position
-        local direction = w.themeTransitionDirection == "RightToLeft" and 1 or -1
-        pulse(owner.trigger, "Position", UDim2.new(base.X.Scale, base.X.Offset + direction * 1.5 * intensity, base.Y.Scale, base.Y.Offset))
-    elseif kind == "Textbox" and owner.edit then
-        pulse(owner.edit, "Rotation", -8 * intensity)
-    elseif kind == "Button" and owner.action then
-        pulse(owner.action, "Rotation", (w.themeTransitionDirection == "RightToLeft" and -1 or 1) * 0.45 * intensity)
-    elseif kind == "ColorPicker" and owner.swatch then
-        Presentation.rememberThemeProperty(state, owner.swatch, "Size")
-        local base = state.restores[owner.swatch].Size
-        local grow = math.max(1, math.floor(2 * intensity + 0.5))
-        pulse(owner.swatch, "Size", UDim2.fromOffset(base.X.Offset + grow, base.Y.Offset + grow))
-    elseif kind == "System" then
-        pulse(entry.root, "Rotation", (w.themeTransitionDirection == "RightToLeft" and -1 or 1) * 0.30 * intensity)
-    end
-    state.bag:After(0.09, function()
-        if w.themeSweep ~= state or w.destroyed then
-            return
-        end
-        for _, item in ipairs(touched) do
-            local object = item.object
-            local values = state.restores[object]
-            local value = values and values[item.property]
-            if object.Parent and value ~= nil then
-                w.motion:To(object, 0.075, { [item.property] = value })
-            end
-        end
-    end)
-end
-function Presentation.collectThemeParticipants(w)
-    local out, seen = {}, {}
-    local function add(root, owner, kind)
-        if not root or not root.Parent or seen[owner] then
-            return
-        end
-        seen[owner] = true
-        out[#out + 1] = { root = root, owner = owner, kind = kind }
-    end
-    for _, tab in ipairs(w.tabs) do
-        if not tab.destroyed and tab.row and tab.row.Visible then
-            add(tab.row, tab, "Tab")
-        end
-        for _, sub in ipairs(tab.subtabs) do
-            if not sub.destroyed and sub.button and sub.button.Visible then
-                add(sub.button, sub, "SubTab")
-            end
-            for _, control in ipairs(sub.controls) do
-                if not control.destroyed and control.row and control.row.Visible then
-                    add(control.row, control, control.kind)
-                end
-            end
-        end
-    end
-    for _, page in pairs(w.settingsPages or {}) do
-        for _, control in ipairs(page.controls) do
-            if not control.destroyed and control.row and control.row.Visible then
-                add(control.row, control, control.kind)
-            end
-        end
-    end
-    for button, owner in pairs(w.systemRenders or {}) do
-        if button.Parent and not seen[owner] then
-            add(button, owner, "System")
-        end
-    end
-    return out
-end
-function Presentation.renderThemeParticipant(entry)
-    local owner = entry.owner
-    if not owner or owner.destroyed then
-        return
-    end
-    if type(owner._render) == "function" then
-        owner:_render()
-    end
-end
-function Presentation.buildThemeFrontier(w, state, duration)
-    if not w.themeTransitionFrontier or w.reducedMotion or not w.root or not w.root.Parent then
-        return
-    end
-    local width = math.max(2, math.floor(6 * (w.themeTransitionIntensity or 1) + 2))
-    local startX = w.themeTransitionDirection == "RightToLeft" and w.root.Size.X.Offset + width or -width
-    local endX = w.themeTransitionDirection == "RightToLeft" and -width or w.root.Size.X.Offset + width
-    local frontier = U.new("Frame", {
-        Name = "ThemeFrontier",
-        Position = UDim2.fromOffset(startX, 0),
-        Size = UDim2.new(0, width, 1, 0),
-        BackgroundTransparency = 0.38,
-        BackgroundColor3 = w.theme.Accent,
-        ZIndex = T.Z.Tooltip - 1,
-    }, w.root)
-    state.bag:Add(frontier)
-    w.bindings[frontier] = nil
-    local gradient = U.new("UIGradient", {
-        Rotation = 0,
-        Transparency = NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 1),
-            NumberSequenceKeypoint.new(0.35, 0.55),
-            NumberSequenceKeypoint.new(0.5, 0.08),
-            NumberSequenceKeypoint.new(0.65, 0.55),
-            NumberSequenceKeypoint.new(1, 1),
-        }),
-    }, frontier)
-    w.bindings[gradient] = nil
-    local tween = S.Tween:Create(
-        frontier,
-        TweenInfo.new(duration, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
-        { Position = UDim2.fromOffset(endX, 0) }
-    )
-    state.frontierTween = tween
-    state.bag:Add(function()
-        pcall(function()
-            tween:Cancel()
-        end)
-    end)
-    tween:Play()
-end
-function Presentation.transition(w)
+function Presentation.apply(w)
     if w.destroyed then
         return
-    end
-    local target = Presentation.colors(w.themeName, w.themeOverrides, w.customAccent)
-    if not Presentation.themeDiffers(w.theme, target) then
-        w.theme = target
-        Presentation.apply(w)
-        return
-    end
-    if not w.themeTransitionEnabled then
-        w.theme = target
-        Presentation.apply(w)
-        return
-    end
-    Presentation.cancelThemeTransition(w, false)
-    w.themeTransitionGeneration = (w.themeTransitionGeneration or 0) + 1
-    local state = {
-        generation = w.themeTransitionGeneration,
-        bag = Maid.new(w.motion),
-        restores = setmetatable({}, { __mode = "k" }),
-    }
-    w.themeSweep = state
-    w.theme = target
-    local duration = w.reducedMotion and 0.18 or w.themeTransitionDuration
-    if w.compact and not w.reducedMotion then
-        duration *= 0.86
-    end
-    state.duration = duration
-    local buckets = w.reducedMotion and 1 or (w.compact and 18 or 28)
-    local travel = w.reducedMotion and 0 or math.max(0.12, duration - 0.13)
-    local localDuration = w.reducedMotion and 0.14 or math.min(0.14, duration * 0.18)
-    local boundBuckets = {}
-    for i = 1, buckets do
-        boundBuckets[i] = {}
-    end
-    for obj, bindings in pairs(w.bindings) do
-        if obj.Parent then
-            local ratio = Presentation.themeRatio(w, obj)
-            local bucket = math.clamp(math.floor(ratio * (buckets - 1) + 1.5), 1, buckets)
-            local goals = {}
-            for property, token in pairs(bindings) do
-                local value = target[token]
-                if value ~= nil then
-                    goals[property] = value
-                end
-            end
-            if next(goals) then
-                boundBuckets[bucket][#boundBuckets[bucket] + 1] = { object = obj, goals = goals }
-            end
-        else
-            w.bindings[obj] = nil
-        end
-    end
-    local participantBuckets = {}
-    for i = 1, buckets do
-        participantBuckets[i] = {}
-    end
-    for _, entry in ipairs(Presentation.collectThemeParticipants(w)) do
-        local ratio = Presentation.themeRatio(w, entry.root)
-        local bucket = math.clamp(math.floor(ratio * (buckets - 1) + 1.5), 1, buckets)
-        participantBuckets[bucket][#participantBuckets[bucket] + 1] = entry
-    end
-    Presentation.buildThemeFrontier(w, state, duration)
-    for i = 1, buckets do
-        local ratio = buckets == 1 and 0 or (i - 1) / (buckets - 1)
-        local hit = ratio * travel
-        if not w.reducedMotion and w.themeTransitionInteractions and #participantBuckets[i] > 0 then
-            state.bag:After(math.max(0, hit - 0.045), function()
-                if w.themeSweep ~= state or w.destroyed then
-                    return
-                end
-                for _, entry in ipairs(participantBuckets[i]) do
-                    Presentation.themePulse(w, state, entry)
-                end
-            end)
-        end
-        state.bag:After(hit, function()
-            if w.themeSweep ~= state or w.destroyed then
-                return
-            end
-            for _, item in ipairs(boundBuckets[i]) do
-                if item.object.Parent then
-                    w.motion:To(item.object, localDuration, item.goals)
-                end
-            end
-            for _, entry in ipairs(participantBuckets[i]) do
-                if entry.root.Parent then
-                    Presentation.renderThemeParticipant(entry)
-                end
-            end
-        end)
-    end
-    state.bag:After(duration + 0.10, function()
-        if w.themeSweep ~= state or w.destroyed then
-            return
-        end
-        Presentation.restoreThemeTransient(w, state)
-        w.themeSweep = nil
-        Presentation.apply(w, true)
-        state.bag:Destroy()
-    end)
-end
-
-function Presentation.apply(w, preserveTransition)
-    if w.destroyed then
-        return
-    end
-    if not preserveTransition then
-        Presentation.cancelThemeTransition(w, false)
     end
     w.theme = Presentation.colors(w.themeName, w.themeOverrides, w.customAccent)
     for obj, bindings in pairs(w.bindings) do
@@ -5426,7 +5057,7 @@ function Window:SetTheme(name, silent)
     end
     self.themeName, self.themeOverrides, self.customAccent = name, {}, nil
     Presentation.remember(self)
-    Presentation.transition(self)
+    Presentation.apply(self)
     if not silent and self.persistence then
         self.persistence:QueuePresentation()
     end
@@ -5434,36 +5065,6 @@ function Window:SetTheme(name, silent)
 end
 function Window:GetTheme()
     return self.themeName
-end
-function Window:SetThemeTransitionEnabled(value)
-    if self.destroyed then
-        return self
-    end
-    self.themeTransitionEnabled = value == true
-    if not self.themeTransitionEnabled and self.themeSweep then
-        Presentation.cancelThemeTransition(self, true)
-    end
-    return self
-end
-function Window:SetThemeTransitionDuration(seconds)
-    if self.destroyed then
-        return self
-    end
-    self.themeTransitionDuration = math.clamp(U.finite(seconds, self.themeTransitionDuration or 0.86), 0.35, 1.50)
-    return self
-end
-function Window:SetReducedMotion(value)
-    if self.destroyed then
-        return self
-    end
-    self.reducedMotion = value == true
-    if self.themeSweep then
-        Presentation.cancelThemeTransition(self, true)
-    end
-    return self
-end
-function Window:GetReducedMotion()
-    return self.reducedMotion == true
 end
 function Window:GetThemeTokens()
     return table.clone(self.theme)
