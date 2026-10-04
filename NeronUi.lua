@@ -9,7 +9,9 @@
 -- CreateWindow also accepts Theme, Language, Settings=false, Autoload=false, GameName, Filesystem.
 -- ManualSize accepts Vector2.new(w,h), offset UDim2 or {w,h}; nil/false keeps Size/default.
 -- Legacy ManualSize=true still selects500x480. Resizable defaults true; MinSize/MaxSize bound it.
--- RememberSize/RememberPosition opt in to Theme.json geometry; Tooltips/Tooltip/ToolTip provide hover/hold hints.
+-- RememberSize/RememberPosition default false, including when older preferences enabled them; startup is centered.
+-- Desktop automatic Size matches Nothing UI:445+10% viewport width,315+10% height; mobile defaults unchanged.
+-- Tooltips/Tooltip/ToolTip provide hover/hold hints. Explicit sizing takes precedence over saved dimensions.
 -- Premium={Active=boolean,ExpiresAt=UnixSeconds,Plan=string}; SetPremiumStatus updates Settings > General.
 -- Premium is external display state, never a saved entitlement or automatic unlock.
 -- Toggle Locked=true stays OFF and opens a Premium callout; SetLocked(false) restores interaction.
@@ -80,6 +82,9 @@ local T = {
     Geometry = {
         Width = 872,
         Height = 548,
+        DesktopWidthOffset = 445, -- Nothing-UI-Library/source.lua default Size
+        DesktopHeightOffset = 315,
+        DesktopViewportRatio = 0.1,
         ManualWidth = 500, -- UIs/FluentModded.lua CreateWindow Size
         ManualHeight = 480,
         Sidebar = 234,
@@ -1043,6 +1048,18 @@ function Window:_responsive(preserveCapture)
     if view.X <= 0 or view.Y <= 0 then
         return
     end
+    if self.defaultDesktopSize then
+        self.baseWidth = math.clamp(
+            T.Geometry.DesktopWidthOffset + view.X * T.Geometry.DesktopViewportRatio,
+            self.minimumSize.X,
+            self.maximumSize.X
+        )
+        self.baseHeight = math.clamp(
+            T.Geometry.DesktopHeightOffset + view.Y * T.Geometry.DesktopViewportRatio,
+            self.minimumSize.Y,
+            self.maximumSize.Y
+        )
+    end
     local portrait = view.X < 600 or (view.Y > view.X and view.X < 900)
     local width = portrait and math.max(320, self.manualSize and math.min(self.baseWidth, view.X - 16) or view.X - 16)
         or self.baseWidth
@@ -1809,7 +1826,7 @@ function Control:_layout()
         return
     end
     local width = self.row.AbsoluteSize.X / self.window.scale
-    local narrow = self.window.compact or (self.window.manualSize and width < 400)
+    local narrow = self.window.compact or ((self.window.manualSize or self.window.defaultDesktopSize) and width < 400)
     local hasDesc = self.description ~= ""
     local h = T.Geometry.Row
     local descriptionHeight = 0
@@ -3747,18 +3764,13 @@ function Geometry.restore(w, prefs, config)
     if not record then
         return
     end
-    if config.RememberSize == nil then
-        w.rememberSize = record.rememberSize
-    end
-    if config.RememberPosition == nil then
-        w.rememberPosition = record.rememberPosition
-    end
     -- Explicit constructor sizing wins over remembered geometry, including false (automatic).
     local size = config.ManualSize == nil and config.Size == nil and w.rememberSize and Geometry.dimensions(record.size)
     if size then
         w.baseWidth = math.clamp(size.X, w.minimumSize.X, w.maximumSize.X)
         w.baseHeight = math.clamp(size.Y, w.minimumSize.Y, w.maximumSize.Y)
         w.manualSize = true
+        w.defaultDesktopSize = false
     end
     if w.rememberPosition and record.position then
         local view = w.stage.AbsoluteSize
@@ -3777,6 +3789,7 @@ function Geometry.apply(w, size, capture)
     w.baseWidth, w.baseHeight =
         math.clamp(size.X, w.minimumSize.X, w.maximumSize.X), math.clamp(size.Y, w.minimumSize.Y, w.maximumSize.Y)
     w.manualSize = true
+    w.defaultDesktopSize = false
     w:_responsive(capture)
     if not capture then
         Geometry.record(w)
@@ -4159,6 +4172,9 @@ function Library:CreateWindow(config)
         name = tostring(config.Name or "NERON"),
         searchEnabled = config.Search ~= false,
         manualSize = config.ManualSize ~= nil and config.ManualSize ~= false,
+        defaultDesktopSize = (config.ManualSize == nil or config.ManualSize == false)
+            and config.Size == nil
+            and (not S.Input.TouchEnabled or (S.Input.KeyboardEnabled == true and S.Input.MouseEnabled == true)),
         onBuyPremium = config.OnBuyPremium,
     }, Window)
     w.bag.motion = w.motion
