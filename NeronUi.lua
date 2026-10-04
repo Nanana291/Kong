@@ -3753,7 +3753,8 @@ function Geometry.restore(w, prefs, config)
     if config.RememberPosition == nil then
         w.rememberPosition = record.rememberPosition
     end
-    local size = w.rememberSize and Geometry.dimensions(record.size)
+    -- Explicit constructor sizing wins over remembered geometry, including false (automatic).
+    local size = config.ManualSize == nil and config.Size == nil and w.rememberSize and Geometry.dimensions(record.size)
     if size then
         w.baseWidth = math.clamp(size.X, w.minimumSize.X, w.maximumSize.X)
         w.baseHeight = math.clamp(size.Y, w.minimumSize.Y, w.maximumSize.Y)
