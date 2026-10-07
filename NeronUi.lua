@@ -1,4 +1,4 @@
--- NeronUi 2.0 — reference-measured, client-only, dependency-free.
+-- NeronUi 2.1 — reference-measured, client-only, dependency-free.
 -- require(ModuleScript) or loadstring(readfile(...))() returns the library; nothing auto-opens.
 -- Set(value [, silent]) fires Callback only on change. Defaults are silent.
 -- Range:Set(low, high [, silent]); Color:Set(color [, silent]); callbacks receive snapshots.
@@ -15,9 +15,17 @@
 -- Tooltips/Tooltip/ToolTip provide hover/hold hints. Explicit sizing takes precedence over saved dimensions.
 -- Premium={Active=boolean,ExpiresAt=UnixSeconds,Plan=string}; SetPremiumStatus updates Settings > General.
 -- Premium is external display state, never a saved entitlement or automatic unlock.
+-- Toggle:AddSettings({Mode="Reveal"|"Disable"}) owns dependent controls; GetSettings returns its group.
+-- Groups preserve values/Flags, gate input, fold without toggling runtime, and never invent runtime shutdown.
 -- Toggle Locked=true stays OFF and opens a Premium callout; SetLocked(false) restores interaction.
 -- OnBuyPremium(toggle, window), on Window or Toggle, connects your purchase flow; it never auto-unlocks.
 -- Themes: Neron Dark / Graphite / OLED / Light; locales: English / Spanish / Russian / Portuguese.
+-- AddNumericStepper returns numeric state with +/- controls and SetBounds; same Flag/hydration path.
+-- AddDynamicSection owns retained controls and Loader/OnLoaded with skeleton/empty/error/retry states.
+-- Dynamic request state/data are not profile state; callbacks remain consumer runtime owners.
+-- AddWebhook composes one switch/settings group, masked URL, preview/editor and explicit Send/Test.
+-- Webhook Flag is a child-prefix; URL is never persisted unless PersistURL=true (plain text).
+-- HTTP adapters are capability-resolved; syntax validity is not delivery; no automatic send/retry.
 -- Stateful controls with string Flag are saved unless Persistent=false. No flag is generated implicitly.
 -- Window:CreateProfile/SaveProfile/LoadProfile(name [, silent]) return success, error or load counts.
 -- LoadProfile(name,true) is silent; false/nil restores callbacks. Options: {FireCallbacks=false,Animate=false}.
@@ -30,6 +38,10 @@
 -- ImportProfile(name,json [, overwrite]); ExportProfile([name]); Rename/Duplicate/Delete/RefreshProfiles.
 -- SetAutoload(name), DisableAutoload(), GetAutoload(), ApplyAutoload(); OpenSettings([category]).
 -- SetTheme/GetTheme/GetThemeTokens; ImportTheme/ExportTheme; SetLanguage/GetLanguage/Translate.
+-- Localization is presentation-only: Translations={Spanish={["Source text"]="Traducción"}}.
+-- Window/Library:RegisterTranslations(language, dictionary) refreshes enrolled UI immediately.
+-- Optional LocaleKey/DescriptionKey/TooltipKey/TextKey/PlaceholderKey/OptionKeys; Localize=false opts out.
+-- Custom text without a dictionary entry falls back to its original source; user-entered values never translate.
 -- Preferences: Neron/End/{Theme,Autoload}.json; profiles: Neron/<sanitized game>/Settings/<name>.json.
 -- Without filesystem APIs the entire UI still works; persistence returns a descriptive failure.
 -- Readback/rollback protects saves where possible; executor APIs cannot guarantee crash-atomic writes.
@@ -105,6 +117,8 @@ local T = {
         RowGap = 10,
         Control = 142,
         ValueGap = 16,
+        DependentIndent = 18,
+        DependentDim = 0.55,
         ControlLane = 228,
         Track = 10,
         Thumb = 10,
@@ -129,6 +143,29 @@ local T = {
         Button = 44,
         SidebarTab = 44,
         Category = 28,
+        SettingsHeader = 64,
+        SettingsNav = 156,
+        SettingsHit = 44,
+        SettingsReveal = 6,
+    },
+    Stepper = { Width = 142, Height = 26, HitWidth = 32, InputLimit = 32 },
+    Dynamic = { Timeout = 15, Rows = 2, MinimumHeight = 84 },
+    Radial = {
+        Diameter = 320,
+        InnerRatio = 0.36,
+        Maximum = 8,
+        GapAngle = 0.012,
+        ScanStep = 1,
+        HoldDelay = 0.14,
+        DragThreshold = 8,
+    },
+    Spatial = {
+        Breakpoint = 600,
+        Inspector = 248,
+        CanvasWidth = 360,
+        CanvasHeight = 420,
+        MaximumRegions = 32,
+        InspectorHeight = 404,
     },
     Radius = { Window = 6, Row = 2, Popover = 3, Input = 2, Button = 3 },
     Spacing = { Tiny = 4, Small = 8, Normal = 12, Medium = 16, Large = 24, Wide = 32 },
@@ -161,7 +198,8 @@ local T = {
 local U, Maid, Motion, Icons, Input, Overlay, Scroll = {}, {}, {}, {}, {}, {}, {}
 local Window, Tab, SubTab, Control, Components = {}, {}, {}, {}, {}
 local Presentation, Locale, Storage, Profiles, SettingsUI = {}, {}, {}, {}, {}
-local Tooltip, Geometry, Premium = {}, {}, {}
+local Tooltip, Geometry, Premium, Dependency, Async, Webhook = {}, {}, {}, {}, {}, {}
+local Visual, Radial, Spatial = {}, {}, {}
 local Library = { Version = "2.1.0", Tokens = T, Theme = Theme, Icons = {} }
 Window.__index = Window
 Tab.__index = Tab
@@ -495,11 +533,14 @@ function Icons.arc(parent, cx, cy, r, a1, a2, color, width, steps)
     for i = 0, steps do
         local t = a1 + (a2 - a1) * (i / steps)
         local x, y = cx + math.cos(t) * r, cy + math.sin(t) * r
-        if px then Icons.line(parent, px, py, x, y, color, width) end
+        if px then
+            Icons.line(parent, px, py, x, y, color, width)
+        end
         px, py = x, y
     end
 end
 
+-- stylua: ignore start
 local function iconLine(x1,y1,x2,y2) return {"line",x1,y1,x2,y2} end
 local function iconRing(x,y,r) return {"ring",x,y,r} end
 local function iconPoly(points, closed) return {"poly",points,closed == true} end
@@ -901,6 +942,8 @@ Icons.normalizeName = normalizeIconName
 Icons.Native = NativeIcons
 Icons.Meta = IconMeta
 
+-- stylua: ignore end
+
 function Icons.make(parent, name, size, color, w)
     local root = U.frame(parent, { Size = UDim2.fromOffset(size, size), ZIndex = parent.ZIndex + 1 }, w)
     local normalized = normalizeIconName(name or "settings")
@@ -1015,7 +1058,7 @@ function Input.new(w)
                 or (not cap.touch and event.UserInputType == Enum.UserInputType.MouseButton1)
             )
         then
-            self:Cancel()
+            self:Cancel(nil, event.UserInputState ~= Enum.UserInputState.Cancel)
         end
     end)
     U.connect(w.bag, S.Input.WindowFocusReleased, function()
@@ -1056,12 +1099,12 @@ function Input:Start(owner, event, move, finish)
     move(U.point(event))
     return true
 end
-function Input:Cancel(owner)
+function Input:Cancel(owner, released)
     local cap = self.capture
     if cap and (not owner or cap.owner == owner) then
         self.capture = nil
         if cap.finish then
-            cap.finish()
+            cap.finish(released == true)
         end
     end
 end
@@ -1072,6 +1115,10 @@ end
 function Overlay:Place()
     local a = self.active
     if not a then
+        return
+    end
+    if a.place then
+        a.place()
         return
     end
     local w = self.w
@@ -1361,7 +1408,7 @@ function Window:SetTitle(name)
         return self
     end
     self.name = tostring(name or "")
-    self.brand.Text = self.name
+    Locale.refreshOwner(self)
     self:_brandLayout()
     return self
 end
@@ -1369,12 +1416,14 @@ function Window:SetSuffix(text)
     if self.destroyed then
         return self
     end
-    self.suffixLabel.Text = tostring(text or "")
+    self.suffix = tostring(text or "")
+    Locale.refreshOwner(self)
     self:_brandLayout()
     return self
 end
 function Window:_brandLayout()
-    local width = math.min(110, math.ceil(U.width(self.name, T.Type.Brand, Enum.Font.GothamBold)) + 2)
+    local width =
+        math.min(110, math.ceil(U.width(self.displayName or self.name, T.Type.Brand, Enum.Font.GothamBold)) + 2)
     self.brand.Size = UDim2.fromOffset(width, 28)
     self.suffixLabel.Position = UDim2.fromOffset(82 + width, 23)
 end
@@ -1553,6 +1602,9 @@ function Window:Destroy()
     if self.localeBindings then
         table.clear(self.localeBindings)
     end
+    if self.localeOwners then
+        table.clear(self.localeOwners)
+    end
 end
 function Window:AddTab(config)
     assert(not self.destroyed, "Neron window is destroyed")
@@ -1577,7 +1629,8 @@ function Window:AddTab(config)
         })
         U.new("UIPadding", { PaddingLeft = UDim.new(0, 10) }, box)
         U.bind(self, heading, "TextColor3", "TextSecondary")
-        category = { box = box, layout = layout, tabs = {} }
+        category = { box = box, layout = layout, tabs = {}, heading = heading, name = categoryName }
+        Locale.enroll(self, category, { LocaleKey = config.CategoryKey, Localize = config.Localize }, "Category")
         self.categories[categoryName] = category
         table.insert(self.categoryOrder, category)
     end
@@ -1585,6 +1638,7 @@ function Window:AddTab(config)
         window = self,
         bag = Maid.new(self.motion),
         name = tostring(config.Name or "Tab"),
+        config = config,
         descriptionText = tostring(config.Description or ""),
         tooltipText = config.Tooltip or config.ToolTip,
         visible = config.Visible ~= false,
@@ -1671,7 +1725,7 @@ function Window:AddTab(config)
     -- The shared indicator is outside the layout's sibling set.
     tab.indicator.Parent = tab.strip
     Tooltip.bind(self, tab, tab.row, tab.bag, function()
-        return tab.tooltipText or tab.descriptionText
+        return tab.displayTooltip or tab.displayDescription or tab.descriptionText
     end, function()
         return tab.visible and not tab.disabled and not self.settingsOpen
     end)
@@ -1689,6 +1743,7 @@ function Window:AddTab(config)
         tab.hover = false
         tab:_render()
     end)
+    Locale.enroll(self, tab, config, "Tab")
     tab:_render()
     if not self.activeTab and tab.visible and not tab.disabled then
         self:_selectTab(tab)
@@ -1757,6 +1812,7 @@ function Tab:_selectSub(sub)
         other:_render()
     end
     self:_indicator()
+    Radial.refresh(w)
 end
 function Tab:_indicator()
     local sub = self.activeSub
@@ -1780,6 +1836,7 @@ function Tab:AddSubTab(config)
         window = w,
         tab = self,
         bag = Maid.new(w.motion),
+        config = config,
         name = tostring(config.Name or "General"),
         visible = config.Visible ~= false,
         disabled = config.Disabled == true,
@@ -1822,7 +1879,7 @@ function Tab:AddSubTab(config)
     sub.scroll.rail.Size = UDim2.new(0, 18, 1, -reserve)
     sub.scroll.frame.Position = UDim2.fromOffset(T.Geometry.ContentLeft, 0)
     Tooltip.bind(w, sub, sub.button, sub.bag, function()
-        return sub.tooltipText or ""
+        return sub.displayTooltip or sub.tooltipText or ""
     end, function()
         return sub.visible
             and not sub.disabled
@@ -1849,6 +1906,7 @@ function Tab:AddSubTab(config)
             self:_indicator()
         end
     end)
+    Locale.enroll(w, sub, config, "SubTab")
     sub:_render()
     if not self.activeSub and sub.visible and not sub.disabled then
         self.activeSub = sub
@@ -1867,9 +1925,8 @@ function Tab:SetName(name)
         return self
     end
     self.name = tostring(name)
-    self.label.Text = self.name
+    Locale.refreshOwner(self)
     self.window:_indexChanged()
-    self.title.Text = self.name
     return self
 end
 function Tab:SetDescription(text)
@@ -1877,7 +1934,7 @@ function Tab:SetDescription(text)
         return self
     end
     self.descriptionText = tostring(text or "")
-    self.description.Text = self.descriptionText
+    Locale.refreshOwner(self)
     self.window:_indexChanged()
     return self
 end
@@ -1970,7 +2027,9 @@ function SubTab:_render()
     self.label.Position = UDim2.fromOffset(withIcon and 25 or 8, 0)
     self.label.Size = UDim2.new(1, -(withIcon and 25 or 8), 1, 0)
     self.button.Size = UDim2.fromOffset(
-        math.ceil(U.width(self.name, T.Type.SubTab, Enum.Font.GothamMedium)) + 20 + (withIcon and 20 or 0),
+        math.ceil(U.width(self.displayName or self.name, T.Type.SubTab, Enum.Font.GothamMedium))
+            + 20
+            + (withIcon and 20 or 0),
         T.Geometry.Strip - 1
     )
     if self.icon then
@@ -1987,10 +2046,8 @@ function SubTab:SetName(name)
         return self
     end
     self.name = tostring(name)
-    self.label.Text = self.name
+    Locale.refreshOwner(self)
     self.window:_indexChanged()
-    self:_render()
-    self.tab:_indicator()
     return self
 end
 function SubTab:_fallback()
@@ -2067,6 +2124,8 @@ function Components.row(page, config, kind)
     assert(not page.destroyed, "Neron subtab is destroyed")
     config = config or {}
     local w = page.window
+    local dependency = config._DependentGroup
+    assert(not dependency or (not dependency.destroyed and dependency.owner.page == page), "Invalid dependent owner")
     if config.Flag ~= nil then
         assert(
             type(config.Flag) == "string" and #config.Flag > 0 and #config.Flag <= 256,
@@ -2090,6 +2149,7 @@ function Components.row(page, config, kind)
             Open = false,
         },
         inlineOwner = config.InlineWith,
+        dependentGroup = dependency,
         attachments = {},
         name = tostring(config.Name or kind),
         description = tostring(config.Description or ""),
@@ -2112,9 +2172,12 @@ function Components.row(page, config, kind)
         Name = self.name,
         Size = UDim2.new(1, 0, 0, T.Geometry.Row),
         Visible = self.state.Visible,
-        LayoutOrder = page.controlSerial,
+        LayoutOrder = page.controlSerial * 2,
         ZIndex = page.scroll.frame.ZIndex + 1,
-    }, page.scroll.frame)
+    }, dependency and dependency.body or page.scroll.frame)
+    if dependency then
+        table.insert(dependency.controls, self)
+    end
     self.row.BackgroundTransparency = 0
     self.row.BackgroundColor3 = w.theme.RowBackground
     U.corner(self.row, T.Radius.Row)
@@ -2133,6 +2196,15 @@ function Components.row(page, config, kind)
         Size = UDim2.new(1, -T.Geometry.LabelInset * 2, 0, 1),
         ZIndex = self.row.ZIndex + 1,
     }, w, "Separator")
+    if dependency then
+        self.dependencyBranch = U.frame(self.row, {
+            Name = "DependentBranch",
+            Position = UDim2.fromOffset(-2, 32),
+            Size = UDim2.fromOffset(T.Spacing.Tiny * 2, 1),
+            BackgroundTransparency = 0.5,
+            ZIndex = self.row.ZIndex + 1,
+        }, w, "AccentMuted")
+    end
     self.lane = U.frame(self.row, {
         AnchorPoint = Vector2.new(1, 0),
         Position = UDim2.new(1, -16, 0, 0),
@@ -2177,15 +2249,19 @@ function Components.row(page, config, kind)
     end
     self:_layout()
     Tooltip.bind(w, self, self.row, self.bag, function()
-        return self.tooltipText or self.description
+        return self.displayTooltip or self.displayDescription or self.description
     end, function()
         return self:_available()
     end)
+    if not page.system then
+        Locale.enroll(w, self, config, "Control")
+    end
     w:_indexChanged()
     return self
 end
 function Control:_available()
     return not self.destroyed
+        and Dependency.available(self)
         and not Tooltip.blocked(self.window, self)
         and (not self.inlineOwner or self.inlineOwner:_usable())
         and not self.state.Disabled
@@ -2210,6 +2286,11 @@ function Control:_layout()
     if self.destroyed then
         return
     end
+    if self.webhookLayout then
+        self.webhookLayout(self)
+        Dependency.changed(self)
+        return
+    end
     if self.inlineOwner then
         self.row.Size = UDim2.fromScale(1, 1)
         self.lane.Size = UDim2.fromOffset(32, self.inlineOwner.lane.Size.Y.Offset)
@@ -2221,15 +2302,16 @@ function Control:_layout()
         )
         return
     end
-    local width = self.row.AbsoluteSize.X / self.window.scale
-    local narrow = self.window.compact or ((self.window.manualSize or self.window.defaultDesktopSize) and width < 400)
-    local hasDesc = self.description ~= ""
+    local width = self.layoutWidth or self.row.AbsoluteSize.X / self.window.scale
+    local narrow = self.window.compact
+        or ((self.window.manualSize or self.window.defaultDesktopSize) and not self.columnInline and width < 400)
+    local description = self.displayDescription or self.description
+    local hasDesc = description ~= ""
     local h = T.Geometry.Row
     local descriptionHeight = 0
     if hasDesc then
         local width = math.max(80, self.row.AbsoluteSize.X / self.window.scale - 32)
-        local lines =
-            S.Text:GetTextSize(self.description, T.Type.Description, Enum.Font.Gotham, Vector2.new(width, 1000)).Y
+        local lines = S.Text:GetTextSize(description, T.Type.Description, Enum.Font.Gotham, Vector2.new(width, 1000)).Y
         descriptionHeight = math.ceil(lines)
         h = math.max(h, descriptionHeight + 44)
     end
@@ -2238,7 +2320,7 @@ function Control:_layout()
         h = hasDesc and math.max(106, descriptionHeight + 82) or 90
         laneWidth = math.min(T.Geometry.ControlLane, width - 32)
     end
-    self.row.Size = UDim2.new(1, 0, 0, h)
+    self.row.Size = self.layoutWidth and UDim2.fromOffset(self.layoutWidth, h) or UDim2.new(1, 0, 0, h)
     self.lane.Size = UDim2.fromOffset(laneWidth, narrow and 34 or (hasDesc and 44 or h))
     self.lane.Position = narrow and UDim2.new(1, -16, 1, -40) or UDim2.new(1, -16, 0, 0)
     local titleWidth = narrow and width - 32 or math.max(40, width - laneWidth - 40)
@@ -2253,6 +2335,13 @@ function Control:_layout()
     for _, attached in ipairs(self.attachments) do
         attached:_layout()
     end
+    if self.dependencyBranch then
+        self.dependencyBranch.Position = UDim2.fromOffset(-2, self.label.Position.Y.Offset + 10)
+    end
+    if self.settingsGroup then
+        self.settingsGroup:Layout()
+    end
+    Dependency.changed(self)
 end
 function Control:_render()
     if self.destroyed then
@@ -2283,6 +2372,12 @@ function Control:_render()
     )
     if self.renderVisual then
         self:renderVisual()
+    end
+    if self.settingsGroup then
+        self.settingsGroup:Sync(self.applyOptions and self.applyOptions.Animate == false)
+    end
+    if self.webhookOwner then
+        self.webhookOwner:_render()
     end
 end
 function Control:_emit()
@@ -2365,7 +2460,26 @@ function Control:VerifyHydration(expected)
         return false, "Flag differs"
     end
     local kind = self.kind
-    if kind == "Toggle" then
+    if kind == "SpatialSelector" then
+        local id = self.value.Selected
+        if id then
+            local region = self:FindRegion(id)
+            local settings = self:GetRegion(id)
+            if self.inspectorTitle.Text ~= Spatial.name(self.window, region) then
+                return false, "Spatial context label differs"
+            end
+            for key, control in pairs(self.inspectorControls) do
+                local expected = key == "Opacity" and math.round(settings[key] * 100) or settings[key]
+                if not U.equal(control:Get(), expected) then
+                    return false, "Spatial inspector " .. key .. " differs"
+                end
+            end
+            local visual = self.visuals[id]
+            if not visual or self.window.motion:Target(self.marker, "Position").X.Offset ~= visual.center.X then
+                return false, "Spatial marker differs"
+            end
+        end
+    elseif kind == "Toggle" then
         local inset = T.Geometry.ToggleInset + T.Geometry.ToggleKnob / 2
         local position = self.window.motion:Target(self.knob, "Position")
         if position.X.Offset ~= (self.value and T.Geometry.Toggle - inset or inset) then
@@ -2419,11 +2533,7 @@ function Control:VerifyHydration(expected)
         end
     elseif kind == "Dropdown" or kind == "MultiDropdown" then
         local multi = kind == "MultiDropdown"
-        local text = multi
-                and (#self.value > 0 and table.concat(self.value, ", ") or tostring(
-                    self.config.Placeholder or Locale.text(self.window, "None")
-                ))
-            or tostring(self.value or self.config.Placeholder or Locale.text(self.window, "Select"))
+        local text = Locale.selection(self)
         if self.valueLabel.Text ~= text then
             return false, "Dropdown label differs"
         end
@@ -2433,6 +2543,10 @@ function Control:VerifyHydration(expected)
             if option.dot.Visible ~= selected then
                 return false, "Dropdown popup selection differs"
             end
+        end
+    elseif kind == "NumericStepper" then
+        if self.box.Text ~= self:_text(self.value) then
+            return false, "Numeric field differs"
         end
     elseif kind == "Textbox" then
         if self.box.Text ~= self.value then
@@ -2467,12 +2581,14 @@ function Control:GetValue()
 end
 function Control:Normalize(value)
     local kind = self.kind
-    if kind == "Toggle" then
+    if kind == "SpatialSelector" then
+        return self:normalize(value)
+    elseif kind == "Toggle" then
         if type(value) ~= "boolean" then
             return nil, false, "Expected boolean"
         end
         return not self.state.Locked and value, true
-    elseif kind == "Slider" then
+    elseif kind == "Slider" or kind == "NumericStepper" then
         if type(value) ~= "number" or U.finite(value, nil) == nil then
             return nil, false, "Expected finite number"
         end
@@ -2649,6 +2765,7 @@ function Control:SetVisible(value)
         self.state.Pressed = false
         self.window.pressed[self] = nil
     end
+    Dependency.changed(self)
     self.page.scroll:Update()
     self.window:_indexChanged()
     return self
@@ -2684,14 +2801,14 @@ function Control:SetName(name)
         return self
     end
     self.name = tostring(name)
-    self.label.Text = self.name
+    Locale.refreshOwner(self)
     self.window:_indexChanged()
     self.row.Name = self.name
     if self.kind == "Label" or self.kind == "Section" then
         self:_commit(self.name, true)
     end
     if self.actionLabel and not self.config.Text then
-        self.actionLabel.Text = self.name
+        self.actionLabel.Text = self.displayName or self.name
     end
     if self.premiumBadge then
         self:_layout()
@@ -2703,7 +2820,7 @@ function Control:SetDescription(text)
         return self
     end
     self.description = tostring(text or "")
-    self.desc.Text = self.description
+    Locale.refreshOwner(self)
     if self.kind == "Paragraph" or self.kind == "Notice" then
         self:_commit(self.description, true)
     end
@@ -2723,6 +2840,13 @@ function Control:Destroy()
         return
     end
     self.destroyed = true
+    if self.settingsGroup then
+        self.settingsGroup:Destroy()
+    end
+    local dependency = self.dependentGroup
+    if dependency then
+        U.remove(dependency.controls, self)
+    end
     for i = #self.attachments, 1, -1 do
         self.attachments[i]:Destroy()
     end
@@ -2751,6 +2875,9 @@ function Control:Destroy()
         self.window.persistence:EndControl(self)
     end
     self.bag:Destroy()
+    if dependency then
+        dependency:Sync()
+    end
     self.window:_indexChanged()
 end
 
@@ -2765,6 +2892,714 @@ function Components.circle(parent, diameter, color)
     U.corner(f, 100)
     return f
 end
+-- An owned settings branch keeps the real SubTab, Flag and callback owners unchanged.
+function Dependency.available(control)
+    local group = control.dependentGroup
+    return not group or (not group.destroyed and group.shown and group:IsActive())
+end
+function Dependency.searchable(control)
+    local group = control.dependentGroup
+    while group do
+        if group.destroyed or not group.visible or group.owner.destroyed or not group.owner.state.Visible then
+            return false
+        end
+        group = group.owner.dependentGroup
+    end
+    return true
+end
+function Dependency.cancel(control)
+    control:Close()
+    local w = control.window
+    w.input:Cancel(control)
+    w.pressed[control] = nil
+    control.state.Hovered, control.state.Pressed, control.state.Focused = false, false, false
+    if control.box and control.box:IsFocused() then
+        -- Visibility changes are not a user commit; retain the edit without dispatching it.
+        control.editStart = nil
+        control.box:ReleaseFocus()
+    end
+    for _, attached in ipairs(control.attachments) do
+        Dependency.cancel(attached)
+    end
+end
+function Dependency.changed(control)
+    if control.settingsGroup then
+        control.settingsGroup:Sync()
+    end
+    if control.dependentGroup then
+        control.dependentGroup:Sync()
+    end
+end
+function Dependency:Layout()
+    if self.destroyed or self.owner.destroyed then
+        return
+    end
+    if self.webhook then
+        self.webhook:_layoutHeader()
+        return
+    end
+    local c = self.owner
+    c.label.Position = UDim2.fromOffset(T.Geometry.LabelInset + T.Geometry.DependentIndent, c.label.Position.Y.Offset)
+    c.label.Size =
+        UDim2.fromOffset(math.max(1, c.label.Size.X.Offset - T.Geometry.DependentIndent), c.label.Size.Y.Offset)
+    c.desc.Position = UDim2.fromOffset(T.Geometry.LabelInset + T.Geometry.DependentIndent, 34)
+    c.desc.Size = UDim2.new(1, -32 - T.Geometry.DependentIndent, 0, c.desc.Size.Y.Offset)
+    if c.premiumBadge then
+        local position = c.premiumBadge.Position
+        c.premiumBadge.Position = UDim2.new(
+            position.X.Scale,
+            position.X.Offset + T.Geometry.DependentIndent,
+            position.Y.Scale,
+            position.Y.Offset
+        )
+    end
+    self.chevronButton.Position = UDim2.fromOffset(0, c.label.Position.Y.Offset - 12)
+end
+function Dependency:IsActive()
+    if self.destroyed or self.owner.destroyed then
+        return false
+    end
+    local c = self.owner
+    return c.value == true
+        and not c.state.Disabled
+        and not c.state.Locked
+        and (not c.dependentGroup or c.dependentGroup:IsActive())
+end
+function Dependency:IsExpanded()
+    return not self.destroyed and self.expanded
+end
+function Dependency:GetMode()
+    return self.mode
+end
+function Dependency:GetControls()
+    local snapshot = {}
+    for _, control in ipairs(self.controls) do
+        table.insert(snapshot, control.publicController or control)
+    end
+    return snapshot
+end
+function Dependency:_render(immediate)
+    if self.destroyed then
+        return
+    end
+    local w = self.owner.window
+    Icons.color(self.chevron, self:IsActive() and w.theme.TextSecondary or w.theme.TextMuted)
+    w.motion:To(self.chevron, immediate and 0 or T.Motion.Fast, { Rotation = self.shown and 0 or -90 })
+end
+function Dependency:Sync(immediate)
+    if self.webhook then
+        self.webhook:_sync(immediate)
+        return
+    end
+    if self.destroyed or self.syncing then
+        return
+    end
+    self.syncing = true
+    if self.dynamic then
+        self:_render(immediate)
+    end
+    local owner, w = self.owner, self.owner.window
+    local active = self:IsActive()
+    local ancestor = owner.dependentGroup
+    local shown = self.visible
+        and owner.state.Visible
+        and not owner.destroyed
+        and (not ancestor or ancestor.shown)
+        and self.expanded
+        and (self.mode == "Disable" or active)
+    -- Reactivating the master reveals its settings, independently of old manual folding.
+    if active and self.lastActive == false then
+        self.expanded = true
+        shown = self.visible and owner.state.Visible and (not ancestor or ancestor.shown)
+    end
+    local changed = self.shown ~= shown or self.lastActive ~= active
+    self.shown, self.lastActive = shown, active
+    if not shown or not active then
+        if changed and w.tooltip then
+            w.tooltip:Cancel()
+        end
+        for _, c in ipairs(self.controls) do
+            Dependency.cancel(c)
+        end
+    end
+    if changed then
+        for _, c in ipairs(self.controls) do
+            c:_render()
+        end
+    end
+    local height = 0
+    for _, c in ipairs(self.controls) do
+        if not c.destroyed and not c.inlineOwner and c.state.Visible then
+            height += c.row.Size.Y.Offset
+            if c.settingsGroup then
+                c.settingsGroup:Sync(immediate)
+                height += c.settingsGroup.targetHeight or 0
+            end
+        end
+    end
+    self.body.Position = UDim2.fromOffset(self.dynamic and 0 or T.Geometry.DependentIndent * 2, 0)
+    self.body.Size = UDim2.new(1, self.dynamic and 0 or -T.Geometry.DependentIndent * 2, 0, height)
+    if self.dynamic and self.contentState ~= "Ready" then
+        height = self.statusHeight or 0
+    end
+    self.targetHeight = shown and height or 0
+    if self.hideCancel then
+        self.bag:Remove(self.hideCancel, true)
+        self.hideCancel = nil
+    end
+    if shown and height > 0 then
+        self.row.Visible = true
+    end
+    local duration = immediate and 0 or T.Motion.Normal
+    w.motion:To(self.row, duration, {
+        Size = UDim2.new(1, 0, 0, self.targetHeight),
+        GroupTransparency = shown
+                and ((self.dynamic and not owner.state.Disabled or active) and 0 or T.Geometry.DependentDim)
+            or 1,
+    })
+    if not shown or height == 0 then
+        if immediate then
+            self.row.Visible = false
+        else
+            self.hideCancel = self.bag:After(duration, function()
+                self.hideCancel = nil
+                if not self.shown or self.targetHeight == 0 then
+                    self.row.Visible = false
+                end
+            end)
+        end
+    end
+    self:_render(immediate)
+    self.syncing = false
+    owner.page.scroll:Update()
+    if ancestor and not ancestor.syncing then
+        ancestor:Sync(immediate)
+    end
+end
+function Dependency:SetExpanded(value)
+    if not self.destroyed then
+        self.expanded = value == true
+        self:Sync()
+    end
+    return self
+end
+function Dependency:SetMode(mode)
+    assert(mode == "Reveal" or mode == "Disable", "Neron dependent Mode expects Reveal or Disable")
+    if not self.destroyed then
+        self.mode = mode
+        self:Sync()
+    end
+    return self
+end
+function Dependency:SetVisible(value)
+    if not self.destroyed then
+        self.visible = value == true
+        self:Sync()
+    end
+    return self
+end
+function Dependency:Destroy()
+    if self.destroyed then
+        return
+    end
+    self.destroyed = true
+    for i = #self.controls, 1, -1 do
+        self.controls[i]:Destroy()
+    end
+    local owner, w = self.owner, self.owner.window
+    if owner.settingsGroup == self then
+        owner.settingsGroup = nil
+    end
+    self.bag:Destroy()
+    if not owner.destroyed then
+        owner:_layout()
+        owner:_render()
+    end
+    owner.page.scroll:Update()
+    if owner.dependentGroup then
+        owner.dependentGroup:Sync(true)
+    end
+end
+function Dependency.target(control)
+    local group = control.dependentGroup
+    if not group then
+        return control
+    end
+    local ancestorTarget = Dependency.target(group.owner)
+    if ancestorTarget ~= group.owner or not group:IsActive() or not group.visible or not group.owner.state.Visible then
+        return ancestorTarget
+    end
+    group.expanded = true
+    group:Sync(true)
+    return control
+end
+function Control:GetSettings()
+    return self.settingsGroup
+end
+function Control:AddSettings(config)
+    assert(not self.destroyed and self.kind == "Toggle", "Neron AddSettings requires a live Toggle")
+    assert(not self.settingsGroup, "Neron toggle already owns a settings group")
+    config = config or {}
+    assert(type(config) == "table", "Neron AddSettings expects a config table")
+    local mode = config.Mode or "Reveal"
+    assert(mode == "Reveal" or mode == "Disable", "Neron dependent Mode expects Reveal or Disable")
+    return Dependency.create(self, config)
+end
+function Dependency.create(owner, config, dynamic)
+    local w = owner.window
+    local group = setmetatable({
+        owner = owner,
+        controls = {},
+        bag = Maid.new(w.motion),
+        mode = config.Mode or "Reveal",
+        dynamic = dynamic == true,
+        contentState = dynamic and "Idle" or nil,
+        state = dynamic and { Hovered = false, Pressed = false } or nil,
+        generation = 0,
+        expanded = config.Expanded ~= false,
+        visible = config.Visible ~= false,
+        shown = false,
+    }, { __index = dynamic and Async or Dependency })
+    owner.settingsGroup = group
+    local parent = owner.dependentGroup and owner.dependentGroup.body or owner.page.scroll.frame
+    group.row = U.new("CanvasGroup", {
+        Name = "DependentSettings",
+        Size = UDim2.new(1, 0, 0, 0),
+        LayoutOrder = owner.row.LayoutOrder + 1,
+        Visible = false,
+        ClipsDescendants = true,
+        GroupTransparency = 1,
+        ZIndex = owner.row.ZIndex,
+        BackgroundTransparency = 0,
+        BackgroundColor3 = w.theme.ContentBackground,
+    }, parent)
+    group.bag:Add(group.row)
+    U.bind(w, group.row, "BackgroundColor3", "ContentBackground")
+    group.body = U.frame(group.row, {
+        Position = UDim2.fromOffset(T.Geometry.DependentIndent * 2, 0),
+        Size = UDim2.new(1, -T.Geometry.DependentIndent * 2, 0, 0),
+        ZIndex = group.row.ZIndex,
+    }, w)
+    group.layout =
+        U.new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 0) }, group.body)
+    if not dynamic then
+        group.connector = U.frame(group.row, {
+            Position = UDim2.fromOffset(T.Geometry.LabelInset + T.Geometry.DependentIndent, 0),
+            Size = UDim2.new(0, 1, 1, -8),
+            BackgroundTransparency = 0.5,
+            ZIndex = group.row.ZIndex + 1,
+        }, w, "AccentMuted")
+        group.chevronButton = U.button(
+            owner.row,
+            { Name = "SettingsChevronHitbox", Size = UDim2.fromOffset(32, 44), ZIndex = owner.lane.ZIndex + 3 }
+        )
+        group.bag:Add(group.chevronButton)
+        group.chevron = Icons.make(group.chevronButton, "chevron", 8, w.theme.TextMuted, w)
+        group.chevron.Position = UDim2.fromOffset(12, 18)
+    end
+    w.systemRenders = w.systemRenders or {}
+    w.systemRenders[group.row] = group
+    group.bag:Add(function()
+        w.systemRenders[group.row] = nil
+    end)
+    if not dynamic then
+        U.connect(group.bag, group.chevronButton.Activated, function()
+            if owner:_usable() and group:IsActive() then
+                group:SetExpanded(not group.expanded)
+            end
+        end)
+    end
+    U.connect(group.bag, group.row:GetPropertyChangedSignal("Size"), function()
+        owner.page.scroll:Update()
+    end)
+    owner:_layout()
+    group:Sync(true)
+    return group
+end
+for _, name in ipairs({
+    "AddToggle",
+    "AddSlider",
+    "AddNumericStepper",
+    "AddDynamicSection",
+    "AddWebhook",
+    "AddActionWheel",
+    "AddSpatialSelector",
+    "AddRangeSlider",
+    "AddDropdown",
+    "AddMultiDropdown",
+    "AddColorPicker",
+    "AddTextbox",
+    "AddButton",
+    "AddLabel",
+    "AddParagraph",
+    "AddSeparator",
+    "AddSection",
+    "AddNotice",
+}) do
+    Dependency[name] = function(self, config)
+        assert(not self.destroyed and not self.owner.destroyed, "Neron settings group is destroyed")
+        if type(config) == "string" then
+            config = { Name = config }
+        end
+        local options = table.clone(config or {})
+        assert(options.InlineWith == nil, "Use Toggle:AddColorPicker for an inline swatch")
+        options._DependentGroup = self
+        local control = self.owner.page[name](self.owner.page, options)
+        self:Sync(true)
+        return control
+    end
+    Async[name] = Dependency[name]
+end
+
+-- Dynamic sections retain their real controls; network presentation is never profile state.
+Async.states = { Idle = true, Loading = true, Ready = true, Empty = true, Error = true }
+function Async:IsActive()
+    local c = self.owner
+    return not self.destroyed
+        and not c.destroyed
+        and self.contentState == "Ready"
+        and not c.state.Disabled
+        and (not c.dependentGroup or c.dependentGroup:IsActive())
+end
+function Async:GetState()
+    return self.contentState
+end
+function Async:IsLoading()
+    return not self.destroyed and self.contentState == "Loading"
+end
+function Async:GetData()
+    return U.copy(self.data)
+end
+function Async:GetError()
+    return self.error
+end
+function Async:Layout()
+    if self.caption then
+        self.caption.Position = UDim2.fromScale(0, 0.5)
+        self.caption.Size = UDim2.new(1, -12, 0, 18)
+    end
+end
+function Async:_stop()
+    self.generation += 1
+    if self.requestCancel then
+        self.bag:Remove(self.requestCancel, true)
+        self.requestCancel = nil
+    end
+    if self.timeoutCancel then
+        self.bag:Remove(self.timeoutCancel, true)
+        self.timeoutCancel = nil
+    end
+end
+function Async:SetState(state, message)
+    assert(Async.states[state], "Neron dynamic state expects Idle, Loading, Ready, Empty or Error")
+    if self.destroyed then
+        return self
+    end
+    self:_stop()
+    self.contentState = state
+    self.contentStateMessage = type(message) == "string" and message:sub(1, 240) or nil
+    self.error = state == "Error" and self.contentStateMessage or nil
+    self:Sync()
+    return self
+end
+function Async:SetLoading(message)
+    return self:SetState("Loading", message)
+end
+function Async:SetReady(data)
+    if not self.destroyed then
+        self.data = U.copy(data)
+    end
+    return self:SetState("Ready")
+end
+function Async:SetEmpty(message)
+    return self:SetState("Empty", message)
+end
+function Async:SetError(message)
+    return self:SetState("Error", message)
+end
+function Async:Cancel()
+    return self:SetState("Idle")
+end
+function Async:Retry()
+    return self:Load()
+end
+function Async:Load()
+    if self.destroyed then
+        return false, "Destroyed"
+    end
+    if type(self.config.Loader) ~= "function" then
+        return false, "NoLoader"
+    end
+    self:_stop()
+    self.contentState = "Loading"
+    self.contentStateMessage = nil
+    self.error = nil
+    self:Sync()
+    local generation = self.generation
+    local section = self
+    local request = {}
+    function request:IsCurrent()
+        return not section.destroyed
+            and not section.owner.destroyed
+            and not section.owner.window.destroyed
+            and section.generation == generation
+            and section.contentState == "Loading"
+    end
+    function request:SetMessage(message)
+        if self:IsCurrent() then
+            section.contentStateMessage = tostring(message):sub(1, 240)
+            section:Sync()
+        end
+    end
+    if self.timeout > 0 then
+        self.timeoutCancel = self.bag:After(self.timeout, function()
+            if request:IsCurrent() then
+                section:SetError(section.owner.window:Translate("DynamicTimeout"))
+            end
+        end)
+    end
+    self.requestCancel = self.bag:Spawn(function()
+        local ok, data = xpcall(function()
+            return section.config.Loader(request)
+        end, debug.traceback)
+        if not request:IsCurrent() then
+            return
+        end
+        if not ok then
+            U.warn("Dynamic loader", data)
+            section:SetError()
+            section.error = tostring(data)
+            return
+        end
+        if type(section.config.OnLoaded) == "function" then
+            local rendered, err = xpcall(function()
+                section.config.OnLoaded(data, section, request)
+            end, debug.traceback)
+            if not request:IsCurrent() then
+                return
+            end
+            if not rendered then
+                U.warn("Dynamic OnLoaded", err)
+                section:SetError()
+                section.error = tostring(err)
+                return
+            end
+        end
+        section.data = U.copy(data)
+        if data == nil or (type(data) == "table" and next(data) == nil) then
+            section:SetEmpty()
+        else
+            section:SetReady(data)
+        end
+    end)
+    return true
+end
+function Async:_render(immediate)
+    if not self.statusHost or self.destroyed then
+        return
+    end
+    local w = self.owner.window
+    local state = self.contentState
+    local loading = state == "Loading"
+    local ready = state == "Ready"
+    local key = "Dynamic" .. state
+    self.caption.Text = loading and self.contentStateMessage or w:Translate(key)
+    self.caption.TextColor3 = state == "Error" and w.theme.Warning or (loading and w.theme.Accent or w.theme.TextMuted)
+    self.dot.BackgroundColor3 = state == "Error" and w.theme.Warning
+        or (ready and w.theme.Success or w.theme.AccentMuted)
+    self.statusHost.Visible = not ready
+    self.body.Visible = ready
+    self.skeleton.Visible = loading
+    self.notice.Visible = not loading and not ready
+    self.title.Text = w:Translate(key)
+    self.message.Text = self.contentStateMessage or w:Translate(key .. "Body")
+    self.message.TextColor3 = w.theme.TextMuted
+    self.title.TextColor3 = w.theme.TextSecondary
+    self.actionLabel.Text = w:Translate(state == "Idle" and "DynamicLoad" or "DynamicRetry")
+    self.actionLabel.TextColor3 = w.theme.TextSecondary
+    self.action.Visible = not loading and not ready and type(self.config.Loader) == "function"
+    w.motion:To(self.actionSurface, T.Motion.Micro, {
+        BackgroundColor3 = self.state.Pressed and w.theme.RowPressed
+            or (self.state.Hovered and w.theme.RowHover or w.theme.InputBackground),
+        BackgroundTransparency = self.state.Pressed and 0.1 or (self.state.Hovered and 0.2 or 0.35),
+    })
+    Icons.color(self.emptyIcon, w.theme.TextMuted)
+    Icons.color(self.errorIcon, w.theme.Warning)
+    self.emptyIcon.Visible = state ~= "Error"
+    self.errorIcon.Visible = state == "Error"
+    local width = math.max(140, self.owner.row.AbsoluteSize.X / w.scale)
+    local narrow = width < 400
+    local textWidth = math.max(64, width - 64 - (not narrow and self.action.Visible and 104 or 0))
+    local bounds =
+        S.Text:GetTextSize(self.message.Text, T.Type.Description, Enum.Font.Gotham, Vector2.new(textWidth, 1000))
+    local textHeight = math.min(80, bounds.Y)
+    self.message.Size = UDim2.fromOffset(textWidth, textHeight)
+    self.title.Size = UDim2.fromOffset(textWidth, 20)
+    self.statusHeight = loading and self.loadingRows * T.Geometry.Row
+        or math.max(T.Dynamic.MinimumHeight, textHeight + 52 + (narrow and self.action.Visible and 36 or 0))
+    self.statusHost.Size = UDim2.new(1, 0, 0, self.statusHeight)
+    self.action.Position = narrow and UDim2.new(1, -16, 1, -10) or UDim2.new(1, -16, 0.5, 22)
+    if self.lastPaintState ~= state then
+        self.lastPaintState = state
+        w.motion:Cancel(self.statusHost, "GroupTransparency")
+        self.statusHost.GroupTransparency = 1
+        w.motion:To(self.statusHost, immediate and 0 or T.Motion.Fast, { GroupTransparency = 0 })
+    end
+end
+function Async:Destroy()
+    if self.destroyed then
+        return
+    end
+    if not self.owner.destroyed then
+        self.owner:Destroy()
+        return
+    end
+    self:_stop()
+    self.owner.window.pressed[self] = nil
+    Dependency.Destroy(self)
+end
+function SubTab:AddDynamicSection(config)
+    config = config or {}
+    assert(type(config) == "table", "Neron DynamicSection expects a config table")
+    assert(config.Flag == nil, "DynamicSection presentation is not a Flag; flag its child controls")
+    assert(config.Loader == nil or type(config.Loader) == "function", "DynamicSection Loader expects a function")
+    assert(config.OnLoaded == nil or type(config.OnLoaded) == "function", "DynamicSection OnLoaded expects a function")
+    local timeout = config.Timeout == nil and T.Dynamic.Timeout or config.Timeout
+    assert(
+        type(timeout) == "number" and U.finite(timeout, nil) and timeout >= 0,
+        "DynamicSection Timeout expects a finite nonnegative number"
+    )
+    local owner = Components.row(self, config, "DynamicSection")
+    owner.systemHeading = true
+    local s = Dependency.create(owner, { Mode = "Disable" }, true)
+    owner.publicController = s
+    s.config = config
+    s.timeout = timeout
+    s.loadingRows = math.clamp(math.floor(U.finite(config.LoadingRows, T.Dynamic.Rows)), 1, 6)
+    local w = owner.window
+    s.caption = U.label(
+        owner.lane,
+        "",
+        T.Type.Description,
+        w.theme.TextMuted,
+        { AnchorPoint = Vector2.new(0, 0.5), TextXAlignment = Enum.TextXAlignment.Right }
+    )
+    s.dot = Components.circle(owner.lane, 4, w.theme.AccentMuted)
+    s.dot.Position = UDim2.new(1, -2, 0.5, 0)
+    s.statusHost = U.new(
+        "CanvasGroup",
+        { Name = "DynamicState", Size = UDim2.new(1, 0, 0, 0), GroupTransparency = 0, ZIndex = s.row.ZIndex },
+        s.row
+    )
+    s.skeleton = U.frame(s.statusHost, { Size = UDim2.fromScale(1, 1), ZIndex = s.row.ZIndex }, w)
+    for i = 1, s.loadingRows do
+        local row = U.frame(s.skeleton, {
+            Position = UDim2.fromOffset(0, (i - 1) * T.Geometry.Row),
+            Size = UDim2.new(1, 0, 0, T.Geometry.Row),
+            ZIndex = s.row.ZIndex,
+        }, w)
+        local label = U.frame(row, {
+            Position = UDim2.fromOffset(16, 20),
+            Size = UDim2.new(0.24 + (i % 3) * 0.05, 0, 0, 7),
+            BackgroundTransparency = 0.78,
+        }, w, "TextMuted")
+        U.corner(label, 2)
+        local description = U.frame(row, {
+            Position = UDim2.fromOffset(16, 35),
+            Size = UDim2.new(0.18 + (i % 2) * 0.07, 0, 0, 5),
+            BackgroundTransparency = 0.86,
+        }, w, "TextMuted")
+        U.corner(description, 2)
+        local value = U.frame(row, {
+            AnchorPoint = Vector2.new(1, 0.5),
+            Position = UDim2.new(1, -16, 0.5, 0),
+            Size = UDim2.fromOffset(76, 18),
+            BackgroundTransparency = 0.55,
+        }, w, "InputBackground")
+        U.corner(value, T.Radius.Input)
+        U.frame(row, { Position = UDim2.new(0, 16, 1, -1), Size = UDim2.new(1, -32, 0, 1) }, w, "Separator")
+    end
+    s.notice = U.frame(s.statusHost, { Size = UDim2.fromScale(1, 1), ZIndex = s.row.ZIndex }, w)
+    s.emptyIcon = Icons.make(s.notice, "folder", 14, w.theme.TextMuted, w)
+    s.errorIcon = Icons.make(s.notice, "triangle-alert", 14, w.theme.Warning, w)
+    s.emptyIcon.Position = UDim2.fromOffset(16, 18)
+    s.errorIcon.Position = s.emptyIcon.Position
+    s.title = U.label(
+        s.notice,
+        "",
+        T.Type.ElementTitle,
+        w.theme.TextSecondary,
+        { Position = UDim2.fromOffset(44, 14), Size = UDim2.new(1, -64, 0, 20) }
+    )
+    s.message = U.label(s.notice, "", T.Type.Description, w.theme.TextMuted, {
+        Position = UDim2.fromOffset(44, 36),
+        Size = UDim2.new(1, -64, 0, 32),
+        TextWrapped = true,
+        TextYAlignment = Enum.TextYAlignment.Top,
+        TextTruncate = Enum.TextTruncate.None,
+    })
+    s.action = U.button(
+        s.notice,
+        { Name = "Retry", AnchorPoint = Vector2.new(1, 1), Size = UDim2.fromOffset(88, 44), ZIndex = s.row.ZIndex + 3 }
+    )
+    s.actionSurface = U.frame(s.action, {
+        Position = UDim2.new(0, 0, 0.5, -13),
+        Size = UDim2.new(1, 0, 0, 26),
+        BackgroundTransparency = 0.35,
+        ZIndex = s.action.ZIndex,
+    }, w, "InputBackground")
+    U.corner(s.actionSurface, T.Radius.Button)
+    s.actionLabel =
+        U.label(s.action, "", T.Type.Value, w.theme.TextSecondary, { TextXAlignment = Enum.TextXAlignment.Center })
+    U.connect(s.bag, s.action.Activated, function()
+        s.state.Pressed = false
+        w.pressed[s] = nil
+        if owner:_usable() and not s:IsLoading() then
+            s:Retry()
+        end
+        s:_render()
+    end)
+    U.connect(s.bag, s.action.InputBegan, function(event)
+        if U.primary(event) and owner:_usable() and not s:IsLoading() then
+            s.state.Pressed = true
+            w.pressed[s] = event
+            s:_render()
+        end
+    end)
+    U.connect(s.bag, s.action.MouseEnter, function()
+        s.state.Hovered = true
+        s:_render()
+    end)
+    U.connect(s.bag, s.action.MouseLeave, function()
+        s.state.Hovered = false
+        s:_render()
+    end)
+    owner:_layout()
+    owner:_render()
+    s:Sync(true)
+    if config.AutoLoad ~= false and config.Loader then
+        s:Load()
+    end
+    return s
+end
+function Async:SetVisible(value)
+    if not self.destroyed then
+        self.owner:SetVisible(value)
+    end
+    return self
+end
+for _, name in ipairs({ "SetName", "SetDescription", "SetTooltip", "SetDisabled" }) do
+    Async[name] = function(self, value)
+        if not self.destroyed then
+            self.owner[name](self.owner, value)
+        end
+        return self
+    end
+end
+for _, name in ipairs({ "Sync", "GetControls" }) do
+    Async[name] = Dependency[name]
+end
+
 function SubTab:AddToggle(config)
     config = config or {}
     assert(
@@ -2814,7 +3649,12 @@ function SubTab:AddToggle(config)
         end
         local available = self.label.Size.X.Offset
         local badge = T.Geometry.PremiumBadge
-        local text = S.Text:GetTextSize(self.name, T.Type.ElementTitle, Enum.Font.GothamBold, Vector2.new(10000, 20)).X
+        local text = S.Text:GetTextSize(
+            self.displayName or self.name,
+            T.Type.ElementTitle,
+            Enum.Font.GothamBold,
+            Vector2.new(10000, 20)
+        ).X
         local x = math.min(text + 10, math.max(0, available - badge))
         self.premiumBadge.Position = UDim2.fromOffset(T.Geometry.LabelInset + x, self.label.Position.Y.Offset + 1)
         if self.state.Locked then
@@ -2954,7 +3794,7 @@ function Components.premium(control, group, bag)
     }, "TextPrimary")
     local copy = U.label(
         group,
-        string.format(w:Translate("UnlockPremiumFeature"), control.name),
+        string.format(w:Translate("UnlockPremiumFeature"), control.displayName or control.name),
         T.Type.Value,
         w.theme.SystemText,
         {
@@ -3040,6 +3880,3237 @@ function Components.premium(control, group, bag)
     end)
     owner:_render()
 end
+function Webhook:_layoutURL()
+    self.urlControl.row.Size = UDim2.new(1, 0, 0, 94)
+    self.urlControl.label.Position = UDim2.fromOffset(16, 8)
+    self.urlControl.label.Size = UDim2.new(1, -32, 0, 20)
+    self.urlControl.desc.Visible = false
+    self.urlControl.lane.Size = UDim2.new(1, -32, 0, 30)
+    self.urlControl.lane.Position = UDim2.new(1, -16, 0, 34)
+    self.urlControl.box.Size = UDim2.new(1, 0, 1, 0)
+    self.statusLabel.Position = UDim2.fromOffset(26, 70)
+    self.statusDot.Position = UDim2.fromOffset(18, 79)
+    self.urlMask.Size = UDim2.new(1, -66, 1, 0)
+    self.eyeHit.Position = UDim2.new(1, -26, 0.5, 0)
+    self.pasteHit.Position = UDim2.new(1, 2, 0.5, 0)
+end
+-- Incoming webhooks are explicit user-owned endpoints. Never infer delivery from URL syntax.
+Webhook.buckets = {}
+function Webhook.url(value)
+    if type(value) ~= "string" or #value > 512 then
+        return nil
+    end
+    value = value:match("^%s*(.-)%s*$")
+    local host, id, token = value:match("^https://([%w%.%-]+)/api/webhooks/(%d+)/([%w_%-]+)$")
+    if
+        not host
+        or (host ~= "discord.com" and host ~= "discordapp.com" and host ~= "canary.discord.com" and host ~= "ptb.discord.com")
+        or #id < 5
+        or #id > 22
+        or #token < 16
+        or #token > 200
+    then
+        return nil
+    end
+    return "https://discord.com/api/webhooks/" .. id .. "/" .. token, token
+end
+function Webhook.transport(config)
+    if type(config.Request) == "function" then
+        return config.Request
+    end
+    for _, name in ipairs({ "request", "http_request" }) do
+        local fn = Storage.resolve(name)
+        if fn then
+            return fn
+        end
+    end
+    local envs = { _G }
+    if type(getgenv) == "function" then
+        local ok, e = pcall(getgenv)
+        if ok and type(e) == "table" then
+            table.insert(envs, 1, e)
+        end
+    end
+    for _, env in ipairs(envs) do
+        for _, key in ipairs({ "syn", "http", "fluxus" }) do
+            local t = rawget(env, key)
+            if type(t) == "table" and type(t.request) == "function" then
+                return t.request
+            end
+        end
+    end
+end
+function Webhook.text(value, limit)
+    value = tostring(value or "")
+    local ok, offset = pcall(utf8.offset, value, limit + 1)
+    if ok and offset then
+        return value:sub(1, offset - 1)
+    end
+    return ok and value or value:sub(1, limit)
+end
+function Webhook:Redact(value)
+    local text = tostring(value or "")
+    local url = self.urlControl and self.urlControl:Get() or ""
+    local function replace(needle)
+        if needle ~= "" then
+            local escaped = needle:gsub("([^%w])", "%%%1")
+            text = text:gsub(escaped, function()
+                return "[REDACTED]"
+            end)
+        end
+    end
+    replace(url)
+    local _, token = Webhook.url(url)
+    if token then
+        replace(token)
+    end
+    for _, oldURL in ipairs(self.redactions or {}) do
+        replace(oldURL)
+        local _, oldToken = Webhook.url(oldURL)
+        if oldToken then
+            replace(oldToken)
+        end
+    end
+    return text
+end
+function Webhook:Get()
+    return {
+        Enabled = self.master:Get(),
+        URL = self.urlControl:Get(),
+        Events = self.eventsControl:Get(),
+        Mentions = self.mentionsControl:Get(),
+        Interval = self.intervalControl:Get(),
+        Title = self.titleControl:Get(),
+        Message = self.messageControl:Get(),
+    }
+end
+function Webhook:GetURL()
+    return self.urlControl:Get()
+end
+function Webhook:ValidateURL(value)
+    return Webhook.url(value or self:GetURL()) ~= nil
+end
+function Webhook:GetStatus()
+    local normalized = Webhook.url(self:GetURL())
+    local bucket = normalized and Webhook.buckets[normalized]
+    return {
+        State = self.status or "MissingURL",
+        Detail = self.detail,
+        StatusCode = self.lastCode,
+        Cooldown = math.max(0, (bucket and bucket.untilTime or 0) - os.clock()),
+        Busy = self.busy == true,
+    }
+end
+function Webhook:_emit()
+    if self.batch or self.emitting or self.destroyed or type(self.config.Callback) ~= "function" then
+        return
+    end
+    self.emitting = true
+    local ok, err = xpcall(function()
+        self.config.Callback(self:Get())
+    end, debug.traceback)
+    self.emitting = false
+    if not ok then
+        U.warn("Webhook callback", self:Redact(err))
+    end
+end
+function Webhook:_changed()
+    self:_render()
+    self:_emit()
+end
+function Webhook:Set(data, silent)
+    if self.destroyed then
+        return self, false, "Destroyed"
+    end
+    if type(data) ~= "table" then
+        return self, false, "Expected configuration table"
+    end
+    local staged = {}
+    local fields = {
+        Enabled = self.master,
+        URL = self.urlControl,
+        Events = self.eventsControl,
+        Mentions = self.mentionsControl,
+        Interval = self.intervalControl,
+        Title = self.titleControl,
+        Message = self.messageControl,
+    }
+    for key, c in pairs(fields) do
+        if data[key] ~= nil then
+            local value, valid, reason = c:Normalize(data[key])
+            if not valid then
+                return self, false, reason
+            end
+            staged[key] = value
+        end
+    end
+    local changed = false
+    self.batch = true
+    for key, value in pairs(staged) do
+        local c = fields[key]
+        changed = changed or not U.equal(c:Get(), value)
+        c:Set(value, true)
+    end
+    self.batch = false
+    self:_render()
+    if changed and not silent then
+        self:_emit()
+    end
+    return self, true
+end
+function Webhook:SetEnabled(value, silent)
+    return self:Set({ Enabled = value }, silent)
+end
+function Webhook:SetURL(value, silent)
+    return self:Set({ URL = value }, silent)
+end
+function Webhook:SetURLVisible(value)
+    if not self.destroyed then
+        self.revealURL = value == true
+        self:_render()
+    end
+    return self
+end
+function Webhook:SetVisible(value)
+    if not self.destroyed then
+        self.master:SetVisible(value)
+    end
+    return self
+end
+function Webhook:SetDisabled(value)
+    if not self.destroyed then
+        self.master:SetDisabled(value)
+    end
+    return self
+end
+function Webhook:SetName(value)
+    if not self.destroyed then
+        self.master:SetName(value)
+    end
+    return self
+end
+function Webhook:SetDescription(value)
+    if not self.destroyed then
+        self.master:SetDescription(value)
+    end
+    return self
+end
+function Webhook:SetTooltip(value)
+    if not self.destroyed then
+        self.master:SetTooltip(value)
+    end
+    return self
+end
+function Webhook:SetLocked(value, silent)
+    if not self.destroyed then
+        self.master:SetLocked(value, silent)
+        self:_render()
+    end
+    return self
+end
+function Webhook:GetLocked()
+    return self.master:GetLocked()
+end
+function Webhook:GetSettings()
+    return self.group
+end
+function Webhook:SetExpanded(value)
+    if not self.destroyed then
+        self.group:SetExpanded(value)
+    end
+    return self
+end
+function Webhook:IsExpanded()
+    return self.group:IsExpanded()
+end
+function Webhook:Close()
+    self.footer:Close()
+    return self
+end
+function Webhook:BuildPayload(data)
+    data = type(data) == "table" and data or {}
+    local values = {
+        status = tostring(data.Status or "Completed"),
+        duration = tostring(data.Duration or "—"),
+        game = tostring(self.window.persistence and self.window.persistence.gameName or game.PlaceId),
+    }
+    for k, v in pairs(type(data.Values) == "table" and data.Values or {}) do
+        if type(k) == "string" and k ~= "url" and k ~= "token" and (type(v) == "string" or type(v) == "number") then
+            values[k] = tostring(v)
+        end
+    end
+    local function format(value, limit)
+        local text = tostring(value):gsub("{([%w_]+)}", function(key)
+            return values[key] or ("{" .. key .. "}")
+        end)
+        return Webhook.text(self:Redact(text), limit)
+    end
+    local title = format(data.Title or self.titleControl:Get(), 256)
+    local description = format(data.Message or self.messageControl:Get(), 4096)
+    if title == "" and description == "" then
+        title = self.window:Translate("WebhookTestTitle")
+    end
+    local embed = {
+        title = title,
+        description = description,
+        color = math.floor(self.window.theme.Accent.R * 255) * 65536
+            + math.floor(self.window.theme.Accent.G * 255) * 256
+            + math.floor(self.window.theme.Accent.B * 255),
+    }
+    local function length(text)
+        local ok, n = pcall(utf8.len, text)
+        return ok and n or #text
+    end
+    local total = length(title) + length(description)
+    if type(data.Fields) == "table" then
+        local fields = {}
+        for _, f in ipairs(data.Fields) do
+            if #fields >= 25 then
+                break
+            end
+            if type(f) == "table" then
+                local name = format(f.Name or f.name or "", 256)
+                local value = format(f.Value or f.value or "", math.min(1024, math.max(0, 6000 - total - length(name))))
+                if name ~= "" and value ~= "" and total + length(name) + length(value) <= 6000 then
+                    table.insert(fields, { name = name, value = value, inline = f.Inline == true or f.inline == true })
+                    total += length(name) + length(value)
+                end
+            end
+        end
+        if #fields > 0 then
+            embed.fields = fields
+        end
+    end
+    local mention = self.mentionsControl:Get()
+    return {
+        embeds = { embed },
+        allowed_mentions = { parse = mention == "None" and {} or { "everyone" } },
+        content = mention == "Here" and "@here" or (mention == "Everyone" and "@everyone" or nil),
+    }
+end
+function Webhook:_cancel(state)
+    self.generation += 1
+    self.busy = false
+    if self.sendCancel then
+        self.bag:Remove(self.sendCancel, true)
+        self.sendCancel = nil
+    end
+    if self.timeoutCancel then
+        self.bag:Remove(self.timeoutCancel, true)
+        self.timeoutCancel = nil
+    end
+    if self.bucket and self.bucket.owner == self then
+        self.bucket.owner = nil
+    end
+    self.bucket = nil
+    if state then
+        self.status = state
+    end
+end
+function Webhook:CancelSend()
+    if not self.destroyed then
+        self:_cancel("Cancelled")
+        self:_render()
+    end
+    return self
+end
+function Webhook:_delivery(result, callback)
+    local functions = { self.config.OnSent, callback }
+    for i = 1, 2 do
+        local fn = functions[i]
+        if type(fn) == "function" then
+            local ok, err = xpcall(function()
+                fn(table.clone(result))
+            end, debug.traceback)
+            if not ok then
+                U.warn("Webhook delivery callback", self:Redact(err))
+            end
+        end
+    end
+end
+function Webhook:_scheduleCooldown()
+    if self.cooldownCancel then
+        self.bag:Remove(self.cooldownCancel, true)
+        self.cooldownCancel = nil
+    end
+    local remaining = self:GetStatus().Cooldown
+    if remaining > 0 then
+        self.cooldownCancel = self.bag:After(math.min(remaining, 86400), function()
+            self.cooldownCancel = nil
+            if self:GetStatus().Cooldown > 0 then
+                self:_scheduleCooldown()
+                return
+            end
+            if self.status == "RateLimited" then
+                self.status = "RetryReady"
+            end
+            self:_render()
+        end)
+    end
+end
+function Webhook:_send(data, callback, test)
+    if self.destroyed then
+        return false, "Destroyed"
+    end
+    if callback ~= nil and type(callback) ~= "function" then
+        return false, "Invalid callback"
+    end
+    if self.master:GetLocked() then
+        return false, "Locked"
+    end
+    if self.master.state.Disabled then
+        return false, "Disabled"
+    end
+    if not test and not self.master:Get() then
+        return false, "Disabled"
+    end
+    if self.master.dependentGroup and not self.master.dependentGroup:IsActive() then
+        return false, "Ancestor disabled"
+    end
+    data = type(data) == "table" and data or {}
+    if not test and not table.find(self.eventsControl:Get(), tostring(data.Event or "Results")) then
+        return false, "Filtered"
+    end
+    local url = Webhook.url(self:GetURL())
+    if not url then
+        self.status = self:GetURL() == "" and "MissingURL" or "InvalidURL"
+        self:_render()
+        return false, self.status
+    end
+    if not self.request then
+        self.status = "Unsupported"
+        self:_render()
+        return false, "Unsupported"
+    end
+    local bucket = Webhook.buckets[url]
+    if self.busy or (bucket and bucket.owner) then
+        return false, "Busy"
+    end
+    if bucket and bucket.untilTime > os.clock() then
+        return false, "Cooldown"
+    end
+    local payload = self:BuildPayload(test and {
+        Title = self.window:Translate("WebhookTestTitle"),
+        Message = self.window:Translate("WebhookTestBody"),
+    } or data)
+    local body = Storage.encode(payload)
+    if not body then
+        return false, "Invalid payload"
+    end
+    if not bucket then
+        for key, b in pairs(Webhook.buckets) do
+            if not b.owner and b.untilTime <= os.clock() then
+                Webhook.buckets[key] = nil
+            end
+        end
+        local count = 0
+        for _ in pairs(Webhook.buckets) do
+            count += 1
+        end
+        if count >= 64 then
+            return false, "Too many active destinations"
+        end
+        bucket = { untilTime = 0 }
+        Webhook.buckets[url] = bucket
+    end
+    self:_cancel()
+    self.bucket = bucket
+    bucket.owner = self
+    bucket.untilTime = os.clock() + self.intervalControl:Get()
+    self.busy = true
+    self.status = "Sending"
+    self.detail = nil
+    self.lastCode = nil
+    self.sendURL = url
+    self.sendTest = test
+    local generation = self.generation
+    self:_render()
+    local function current()
+        return not self.destroyed and self.generation == generation and self.busy
+    end
+    local function finish(success, state, code, detail, retry)
+        if not current() then
+            return
+        end
+        self:_cancel(state)
+        self.lastCode = code
+        self.detail = detail
+        if retry then
+            bucket.untilTime = math.max(bucket.untilTime, os.clock() + retry)
+        end
+        self:_render()
+        self:_scheduleCooldown()
+        self:_delivery({
+            Success = success,
+            State = state,
+            StatusCode = code,
+            Reason = detail,
+            RetryAfter = retry,
+            Test = test == true,
+        }, callback)
+    end
+    self.timeoutCancel = self.bag:After(self.timeout, function()
+        finish(false, "Timeout", nil, self.window:Translate("WebhookTimeout"))
+    end)
+    self.sendCancel = self.bag:Spawn(function()
+        if not current() then
+            return
+        end
+        local ok, response = pcall(self.request, {
+            Url = url .. "?wait=true" .. (self.config.ThreadId and "&thread_id=" .. self.config.ThreadId or ""),
+            Method = "POST",
+            Headers = { ["Content-Type"] = "application/json" },
+            Body = body,
+        })
+        if not current() then
+            return
+        end
+        if not ok then
+            finish(false, "Failed", nil, Webhook.text(self:Redact(response), 240))
+            return
+        end
+        if type(response) ~= "table" then
+            finish(false, "Failed", nil, "Invalid response")
+            return
+        end
+        local code = U.finite(response.StatusCode or response.Status, nil)
+        if not code or code % 1 ~= 0 then
+            finish(false, "Failed", nil, "Invalid status code")
+            return
+        end
+        if code >= 200 and code < 300 then
+            finish(true, "Sent", code)
+        elseif code == 429 then
+            local decoded = Storage.decode(type(response.Body) == "string" and response.Body or "")
+            local retry = decoded and U.finite(decoded.retry_after, nil)
+            for key, value in pairs(type(response.Headers) == "table" and response.Headers or {}) do
+                if type(key) == "string" and key:lower() == "retry-after" then
+                    retry = retry or U.finite(value, nil)
+                end
+            end
+            finish(false, "RateLimited", code, nil, math.max(1, retry or 15))
+        else
+            finish(
+                false,
+                code == 404 and "Unavailable" or (code == 401 or code == 403) and "Rejected" or "Failed",
+                code
+            )
+        end
+    end)
+    return true
+end
+function Webhook:Send(data, callback)
+    return self:_send(data, callback, false)
+end
+function Webhook:Test(callback)
+    return self:_send({}, callback, true)
+end
+function Webhook:Destroy()
+    if self.destroyed then
+        return
+    end
+    self.destroyed = true
+    self:_cancel()
+    self.bag:Destroy()
+    self.master.webhookOwner = nil
+    if not self.master.destroyed then
+        self.master:Destroy()
+    end
+end
+function Webhook:_layoutHeader()
+    local c, g = self.master, self.group
+    if not g.chevronButton then
+        return
+    end
+    local y = c.label.Position.Y.Offset
+    c.label.Position = UDim2.fromOffset(44, y)
+    c.label.Size = UDim2.fromOffset(math.max(32, c.label.Size.X.Offset - 28), 20)
+    c.desc.Position = UDim2.fromOffset(44, 34)
+    c.desc.Size = UDim2.new(1, -60, 0, c.desc.Size.Y.Offset)
+    self.headerIcon.Position = UDim2.fromOffset(16, y + 2)
+    c.track.Position = UDim2.new(1, -32, 0.5, 0)
+    c.hitbox.Position = UDim2.new(1, -24, 0.5, 0)
+    if c.lockIcon then
+        c.lockIcon.Position = UDim2.new(1, -T.Geometry.Toggle - 42, 0.5, 0)
+    end
+    g.chevronButton.AnchorPoint = Vector2.new(1, 0)
+    g.chevronButton.Position = UDim2.new(1, 0, 0, y - 12)
+    if c.premiumBadge then
+        c.premiumBadge.Position = UDim2.fromOffset(
+            44
+                + math.min(
+                    U.width(c.displayName or c.name, T.Type.ElementTitle) + 10,
+                    math.max(0, c.label.Size.X.Offset - T.Geometry.PremiumBadge)
+                ),
+            y + 1
+        )
+    end
+end
+function Webhook:_sync(immediate)
+    if self.layoutBusy or not self.initialized or self.destroyed then
+        return
+    end
+    self.layoutBusy = true
+    local g, w = self.group, self.window
+    local active = g:IsActive()
+    local ancestor = self.master.dependentGroup
+    local shown = g.visible and self.master.state.Visible and active and (not ancestor or ancestor.shown) and g.expanded
+    if active and g.lastActive == false then
+        g.expanded = true
+        shown = g.visible and self.master.state.Visible and (not ancestor or ancestor.shown)
+    end
+    g.lastActive, g.shown = active, shown
+    if not shown then
+        if w.tooltip then
+            w.tooltip:Cancel()
+        end
+        for _, c in ipairs(g.controls) do
+            Dependency.cancel(c)
+        end
+    end
+    local width = math.max(220, self.master.row.AbsoluteSize.X / w.scale)
+    g.body.Position = UDim2.fromOffset(0, 0)
+    g.body.Size = UDim2.new(1, 0, 0, 1)
+    local columns = width >= 600 and not w.compact
+    local left = columns and math.floor(width * 0.64) - 12 or width
+    local y = 0
+    self:_layoutURL()
+    y = 94
+    for _, c in ipairs({ self.eventsControl, self.mentionsControl, self.intervalControl }) do
+        c.columnInline = columns
+        c.layoutWidth = left
+        c:_layout()
+        c.row.Position = UDim2.fromOffset(0, y)
+        y += c.row.Size.Y.Offset
+    end
+    local settingsHeight = y - 94
+    local previewWidth = columns and width - left - 24 or width - 32
+    self.preview.Size = UDim2.fromOffset(previewWidth, 210)
+    self.preview.Position = UDim2.fromOffset(columns and left + 16 or 16, columns and 94 or y + 8)
+    self.preview.Visible = true
+    y = 94 + (columns and math.max(settingsHeight, 210) or settingsHeight + 226)
+    self.footer.row.Position = UDim2.fromOffset(0, y)
+    self.footer.row.Size = UDim2.new(1, 0, 0, w.compact and 90 or 64)
+    self.footer.label.Visible = false
+    self.footer.desc.Visible = false
+    self.testHit.Position = UDim2.fromOffset(16, 10)
+    self.editHit.Position = UDim2.fromOffset(142, 10)
+    self.privacy.Position = w.compact and UDim2.fromOffset(16, 56) or UDim2.new(0, 286, 0, 22)
+    self.privacy.Size = w.compact and UDim2.new(1, -32, 0, 20) or UDim2.new(1, -302, 0, 20)
+    local height = y + self.footer.row.Size.Y.Offset
+    g.body.Size = UDim2.new(1, 0, 0, height)
+    g.targetHeight = shown and height or 0
+    if g.hideCancel then
+        g.bag:Remove(g.hideCancel, true)
+        g.hideCancel = nil
+    end
+    if shown then
+        g.row.Visible = true
+    end
+    w.motion:To(
+        g.row,
+        immediate and 0 or T.Motion.Normal,
+        { Size = UDim2.new(1, 0, 0, g.targetHeight), GroupTransparency = shown and 0 or 1 }
+    )
+    if not shown then
+        if immediate then
+            g.row.Visible = false
+        else
+            g.hideCancel = g.bag:After(T.Motion.Normal, function()
+                g.hideCancel = nil
+                if not g.shown then
+                    g.row.Visible = false
+                end
+            end)
+        end
+    end
+    Icons.color(g.chevron, active and w.theme.TextSecondary or w.theme.TextMuted)
+    w.motion:To(g.chevron, immediate and 0 or T.Motion.Fast, { Rotation = shown and 180 or 0 })
+    self.layoutBusy = false
+    self.master.page.scroll:Update()
+    self:_render()
+    if ancestor then
+        ancestor:Sync(immediate)
+    end
+end
+function Webhook:_render()
+    if self.rendering or not self.initialized or self.destroyed then
+        return
+    end
+    self.rendering = true
+    local w = self.window
+    local url = Webhook.url(self:GetURL())
+    if
+        self.busy
+        and (
+            url ~= self.sendURL
+            or self.master:GetLocked()
+            or self.master.state.Disabled
+            or (self.master.dependentGroup and not self.master.dependentGroup:IsActive())
+            or (not self.sendTest and not self.master:Get())
+        )
+    then
+        self:_cancel("Cancelled")
+    end
+    if self.observedURL ~= self:GetURL() then
+        self.redactions = self.redactions or {}
+        if self.observedURL and self.observedURL ~= "" then
+            table.insert(self.redactions, self.observedURL)
+            if #self.redactions > 8 then
+                table.remove(self.redactions, 1)
+            end
+        end
+        self.observedURL = self:GetURL()
+        self.detail = nil
+        self.lastCode = nil
+        self.status = url and "NotTested" or (self:GetURL() == "" and "MissingURL" or "InvalidURL")
+    end
+    if not self.request then
+        self.status = "Unsupported"
+    end
+    self.status = self.status or (url and "NotTested" or "MissingURL")
+    self.statusLabel.Text = w:Translate("Webhook" .. self.status)
+    self.statusLabel.TextColor3 = self.status == "Sent" and w.theme.Success
+        or (
+            (
+                    self.status == "Failed"
+                    or self.status == "RateLimited"
+                    or self.status == "Rejected"
+                    or self.status == "InvalidURL"
+                )
+                and w.theme.Warning
+            or w.theme.TextMuted
+        )
+    self.statusDot.BackgroundColor3 = self.statusLabel.TextColor3
+    local revealed = self.revealURL or self.urlControl.state.Focused
+    self.urlControl.box.TextTransparency = revealed and 0 or 1
+    self.urlMask.Visible = not revealed
+    local _, id = self:GetURL():match("^(https://.-/api/webhooks/)(%d+)/")
+    self.urlMask.Text = self:GetURL() == "" and w:Translate("WebhookURLPlaceholder")
+        or ("https://discord.com/api/webhooks/" .. (id or "…") .. "/••••••••")
+    self.urlMask.TextColor3 = w.theme.TextSecondary
+    self.pasteHit.Visible = self.clipboard ~= nil
+    Icons.color(self.eyeIcon, self.revealURL and w.theme.Accent or w.theme.TextMuted)
+    local payload = self:BuildPayload({ Status = "Completed", Duration = "02:34" })
+    self.previewTitle.Text = payload.embeds[1].title
+    self.previewMessage.Text = payload.embeds[1].description
+    self.previewTitle.TextColor3 = w.theme.TextPrimary
+    self.previewMessage.TextColor3 = w.theme.TextMuted
+    self.previewCaption.TextColor3 = w.theme.TextMuted
+    self.previewFooter.TextColor3 = w.theme.TextMuted
+    self.previewCaption.Text = w:Translate("WebhookPreview")
+    self.previewFooter.Text = w:Translate("WebhookPreviewOnly")
+    self.previewFields.Text = w:Translate("WebhookSampleFields")
+    self.previewFields.TextColor3 = w.theme.TextMuted
+    self.privacy.Text = w:Translate(self.config.PersistURL and "WebhookPlaintext" or "WebhookPrivate")
+    self.privacy.TextColor3 = self.config.PersistURL and w.theme.Warning or w.theme.TextMuted
+    self.testLabel.Text = w:Translate(self.busy and "WebhookSending" or "WebhookSendTest")
+    self.editLabel.Text = w:Translate("WebhookEditMessage")
+    local canTest = self.footer:_usable()
+        and url ~= nil
+        and self.request ~= nil
+        and not self.busy
+        and self:GetStatus().Cooldown <= 0
+    self.testLabel.TextColor3 = canTest and w.theme.ButtonText or w.theme.TextDisabled
+    w.motion:To(self.testSurface, T.Motion.Micro, {
+        BackgroundColor3 = canTest
+                and (self.footer.state.Pressed and self.activeAction == "Test" and w.theme.AccentPressed or self.hoveredAction == "Test" and w.theme.AccentHover or w.theme.Accent)
+            or w.theme.InputBackground,
+    })
+    w.motion:To(self.editSurface, T.Motion.Micro, {
+        BackgroundColor3 = w.theme.RowHover,
+        BackgroundTransparency = self.footer.state.Pressed and self.activeAction == "Edit" and 0.15
+            or self.hoveredAction == "Edit" and 0.5
+            or 1,
+    })
+    self.editLabel.TextColor3 = self.footer:_usable() and w.theme.TextSecondary or w.theme.TextDisabled
+    if not self.footer.state.Pressed then
+        self.activeAction = nil
+    end
+    Icons.color(self.headerIcon, self.master:GetLocked() and w.theme.TextMuted or w.theme.Accent)
+    self.rendering = false
+end
+function Webhook:OpenEditor()
+    if self.destroyed or not self.footer:_usable() then
+        return false, "Unavailable"
+    end
+    local w = self.window
+    local width = math.min(390, math.max(220, w.stage.AbsoluteSize.X / w.scale - 24))
+    w.overlay:Open(self.footer, self.editHit, width, 276, function(panel, bag)
+        local editor = {}
+        self.editor = editor
+        bag:Add(function()
+            if self.editor == editor then
+                self.editor = nil
+            end
+        end)
+        local function textBox(y, height, text)
+            local box = U.new("TextBox", {
+                Position = UDim2.fromOffset(14, y),
+                Size = UDim2.new(1, -28, 0, height),
+                Text = text,
+                TextSize = T.Type.Value,
+                Font = Enum.Font.Gotham,
+                TextColor3 = w.theme.TextPrimary,
+                ClearTextOnFocus = false,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextYAlignment = Enum.TextYAlignment.Top,
+                TextWrapped = true,
+                MultiLine = height > 40,
+                BackgroundTransparency = 0.25,
+                BackgroundColor3 = w.theme.InputBackground,
+                ZIndex = panel.ZIndex + 1,
+            }, panel)
+            U.corner(box, T.Radius.Input)
+            U.bind(w, box, "TextColor3", "TextPrimary")
+            U.bind(w, box, "BackgroundColor3", "InputBackground")
+            U.new(
+                "UIPadding",
+                { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingTop = UDim.new(0, 8) },
+                box
+            )
+            return box
+        end
+        U.label(
+            panel,
+            w:Translate("WebhookEditMessage"),
+            T.Type.ElementTitle,
+            w.theme.TextPrimary,
+            { Position = UDim2.fromOffset(14, 12), Size = UDim2.new(1, -28, 0, 20) }
+        )
+        editor.Title = textBox(42, 32, self.titleControl:Get())
+        editor.Message = textBox(84, 104, self.messageControl:Get())
+        U.label(
+            panel,
+            "{status}   {duration}   {game}",
+            T.Type.Description,
+            w.theme.TextMuted,
+            { Position = UDim2.fromOffset(14, 198), Size = UDim2.new(1, -28, 0, 20) }
+        )
+        editor.Apply = U.button(panel, {
+            Position = UDim2.new(0, 14, 1, -44),
+            Size = UDim2.new(1, -28, 0, 30),
+            BackgroundTransparency = 0,
+            BackgroundColor3 = w.theme.Accent,
+            ZIndex = panel.ZIndex + 2,
+        })
+        U.corner(editor.Apply, T.Radius.Button)
+        U.bind(w, editor.Apply, "BackgroundColor3", "Accent")
+        local applyLabel = U.label(
+            editor.Apply,
+            w:Translate("Apply"),
+            T.Type.Value,
+            w.theme.ButtonText,
+            { TextXAlignment = Enum.TextXAlignment.Center }
+        )
+        U.bind(w, applyLabel, "TextColor3", "ButtonText")
+        U.connect(bag, editor.Apply.Activated, function()
+            local a = w.overlay.active
+            if not bag.dead and a and a.owner == self.footer and a.group == panel and self.footer:_usable() then
+                self:Set({
+                    Title = Webhook.text(editor.Title.Text, 256),
+                    Message = Webhook.text(editor.Message.Text, 4096),
+                })
+                w.overlay:Close()
+            end
+        end)
+    end)
+    return w.overlay.active ~= nil
+end
+function SubTab:AddWebhook(config)
+    config = config or {}
+    assert(type(config) == "table", "Neron Webhook expects config table")
+    for _, key in ipairs({ "Request", "Callback", "OnSent" }) do
+        assert(config[key] == nil or type(config[key]) == "function", "Webhook " .. key .. " expects function")
+    end
+    local prefix = config.Flag
+    assert(
+        prefix == nil or (type(prefix) == "string" and #prefix > 0 and #prefix < 220),
+        "Webhook Flag expects a nonempty prefix"
+    )
+    local keys = { "Enabled", "Events", "Mentions", "Interval", "Title", "Message" }
+    if config.PersistURL then
+        table.insert(keys, "URL")
+    end
+    if prefix then
+        for _, key in ipairs(keys) do
+            assert(not self.window.flagOwners[prefix .. "." .. key], "Duplicate Webhook Flag")
+        end
+    end
+    local defaults = type(config.Default) == "table" and config.Default or {}
+    assert(config.PersistURL == nil or type(config.PersistURL) == "boolean", "Webhook PersistURL expects boolean")
+    assert(
+        config.Timeout == nil or (type(config.Timeout) == "number" and U.finite(config.Timeout, nil)),
+        "Webhook Timeout expects finite number"
+    )
+    assert(defaults.Enabled == nil or type(defaults.Enabled) == "boolean", "Webhook Enabled expects boolean")
+    for _, key in ipairs({ "URL", "Title", "Message" }) do
+        assert(defaults[key] == nil or type(defaults[key]) == "string", "Webhook " .. key .. " expects string")
+    end
+    assert(config.URL == nil or type(config.URL) == "string", "Webhook URL expects string")
+    assert(
+        config.ThreadId == nil
+            or (type(config.ThreadId) == "string" and config.ThreadId:match("^%d+$") and #config.ThreadId <= 22),
+        "Webhook ThreadId expects a numeric string"
+    )
+    assert(
+        defaults.Interval == nil or (type(defaults.Interval) == "number" and U.finite(defaults.Interval, nil)),
+        "Webhook Interval expects finite number"
+    )
+    assert(
+        defaults.Mentions == nil
+            or defaults.Mentions == "None"
+            or defaults.Mentions == "Here"
+            or defaults.Mentions == "Everyone",
+        "Webhook Mentions expects None, Here or Everyone"
+    )
+    for _, list in pairs({ config.Events or {}, defaults.Events or {} }) do
+        assert(type(list) == "table", "Webhook events expect array")
+        local count = 0
+        for k, v in pairs(list) do
+            assert(
+                type(k) == "number" and k % 1 == 0 and k > 0 and type(v) == "string",
+                "Webhook events expect dense string array"
+            )
+            count += 1
+        end
+        assert(count == #list, "Webhook events expect dense string array")
+    end
+    local timeout = U.finite(config.Timeout, 15)
+    assert(timeout > 0, "Webhook Timeout must be positive")
+    local c = setmetatable(
+        { window = self.window, config = config, bag = Maid.new(self.window.motion), generation = 0, timeout = timeout },
+        { __index = Webhook }
+    )
+    c.request = Webhook.transport(config)
+    c.clipboard = Storage.resolve("getclipboard") or Storage.resolve("readclipboard")
+    local function flag(key)
+        return prefix and (prefix .. "." .. key) or nil
+    end
+    local function changed()
+        if c.initialized then
+            c:_changed()
+        end
+    end
+    c.master = self:AddToggle({
+        Name = config.Name or "Discord Webhook",
+        Description = config.Description,
+        Tooltip = config.Tooltip,
+        Flag = flag("Enabled"),
+        Default = defaults.Enabled == true,
+        Locked = config.Locked,
+        OnBuyPremium = config.OnBuyPremium,
+        Visible = config.Visible,
+        Disabled = config.Disabled,
+        Callback = changed,
+        _DependentGroup = config._DependentGroup,
+    })
+    c.master.publicController = c
+    c.group = c.master:AddSettings({ Mode = "Reveal" })
+    c.group.webhook = c
+    c.group.layout:Destroy()
+    c.group.connector:Destroy()
+    c.headerIcon = Icons.make(c.master.row, "discord", 16, c.window.theme.Accent, c.window)
+    local g = c.group
+    local function cfg(key, name, extra)
+        local t = extra or {}
+        t.Name = c.window:Translate(name)
+        t.LocaleKey = name
+        if key ~= "URL" or config.PersistURL == true then
+            t.Flag = flag(key)
+        end
+        t.Callback = changed
+        return t
+    end
+    c.urlControl = g:AddTextbox(cfg("URL", "WebhookURL", {
+        Default = defaults.URL or config.URL or "",
+        MaxLength = 512,
+        Live = true,
+        Persistent = config.PersistURL == true,
+    }))
+    c.urlControl.edit.Visible = false
+    c.urlMask = U.label(
+        c.urlControl.box,
+        "",
+        T.Type.Value,
+        c.window.theme.TextSecondary,
+        { Position = UDim2.fromOffset(0, 0), Size = UDim2.new(1, -66, 1, 0) }
+    )
+    c.eyeHit = U.button(
+        c.urlControl.box,
+        { AnchorPoint = Vector2.new(1, 0.5), Size = UDim2.fromOffset(28, 44), ZIndex = c.urlControl.box.ZIndex + 2 }
+    )
+    c.eyeIcon = Icons.make(c.eyeHit, "eye", 12, c.window.theme.TextMuted, c.window)
+    c.eyeIcon.Position = UDim2.new(0.5, -6, 0.5, -6)
+    c.pasteHit = U.button(
+        c.urlControl.box,
+        { AnchorPoint = Vector2.new(1, 0.5), Size = UDim2.fromOffset(28, 44), ZIndex = c.urlControl.box.ZIndex + 2 }
+    )
+    local paste = Icons.make(c.pasteHit, "clipboard-check", 12, c.window.theme.TextMuted, c.window)
+    paste.Position = UDim2.new(0.5, -6, 0.5, -6)
+    U.connect(c.urlControl.bag, c.eyeHit.Activated, function()
+        if c.urlControl:_usable() then
+            c:SetURLVisible(not c.revealURL)
+        end
+    end)
+    U.connect(c.urlControl.bag, c.pasteHit.Activated, function()
+        if c.urlControl:_usable() and c.clipboard then
+            local ok, value = pcall(c.clipboard)
+            if ok and type(value) == "string" then
+                c:SetURL(value)
+            end
+        end
+    end)
+    c.statusLabel =
+        U.label(c.urlControl.row, "", T.Type.Description, c.window.theme.TextMuted, { Size = UDim2.new(1, -42, 0, 20) })
+    c.statusDot = Components.circle(c.urlControl.row, 4, c.window.theme.TextMuted)
+    c.eventsControl = g:AddMultiDropdown(cfg("Events", "WebhookEvents", {
+        Values = config.Events or { "Results", "Errors", "Started" },
+        Default = defaults.Events or { "Results", "Errors" },
+        DescriptionKey = "WebhookEventsBody",
+        Description = c.window:Translate("WebhookEventsBody"),
+    }))
+    c.mentionsControl = g:AddDropdown(cfg("Mentions", "WebhookMentions", {
+        Values = { "None", "Here", "Everyone" },
+        Default = defaults.Mentions or "None",
+        DescriptionKey = "WebhookMentionsBody",
+        Description = c.window:Translate("WebhookMentionsBody"),
+    }))
+    c.intervalControl = g:AddNumericStepper(cfg("Interval", "WebhookInterval", {
+        Min = 1,
+        Max = 3600,
+        Step = 1,
+        Default = defaults.Interval or 15,
+        Suffix = " s",
+        DescriptionKey = "WebhookIntervalBody",
+        Description = c.window:Translate("WebhookIntervalBody"),
+    }))
+    c.titleControl = g:AddTextbox(
+        cfg(
+            "Title",
+            "WebhookMessageTitle",
+            { Default = defaults.Title or "Task completed", MaxLength = 256, Visible = false }
+        )
+    )
+    c.messageControl = g:AddTextbox(
+        cfg(
+            "Message",
+            "WebhookMessageBody",
+            { Default = defaults.Message or "Your task finished successfully.", MaxLength = 4096, Visible = false }
+        )
+    )
+    c.footer =
+        Components.row(self, { Name = "Webhook actions", Persistent = false, _DependentGroup = g }, "WebhookActions")
+    local function button(x, width, primary)
+        local hit = U.button(c.footer.row, {
+            Position = UDim2.fromOffset(x, 10),
+            Size = UDim2.fromOffset(width, 44),
+            ZIndex = c.footer.lane.ZIndex + 2,
+        })
+        local surface = U.frame(hit, {
+            Position = UDim2.new(0, 0, 0.5, -14),
+            Size = UDim2.new(1, 0, 0, 28),
+            BackgroundTransparency = primary and 0 or 1,
+        }, c.window, primary and "Accent" or "InputBackground")
+        U.corner(surface, T.Radius.Button)
+        local label =
+            U.label(hit, "", T.Type.Value, c.window.theme.TextPrimary, { TextXAlignment = Enum.TextXAlignment.Center })
+        return hit, surface, label
+    end
+    c.testHit, c.testSurface, c.testLabel = button(16, 116, true)
+    c.editHit, c.editSurface, c.editLabel = button(142, 130, false)
+    c.privacy = U.label(c.footer.row, "", 10, c.window.theme.TextMuted)
+    for _, pair in ipairs({ { c.testHit, "Test" }, { c.editHit, "Edit" } }) do
+        U.connect(c.footer.bag, pair[1].MouseEnter, function()
+            c.hoveredAction = pair[2]
+            c:_render()
+        end)
+        U.connect(c.footer.bag, pair[1].MouseLeave, function()
+            if c.hoveredAction == pair[2] then
+                c.hoveredAction = nil
+            end
+            c:_render()
+        end)
+        U.connect(c.footer.bag, pair[1].InputBegan, function(event)
+            if U.primary(event) and c.footer:_usable() then
+                c.activeAction = pair[2]
+                c.footer.state.Pressed = true
+                c.window.pressed[c.footer] = event
+                c:_render()
+            end
+        end)
+    end
+    U.connect(c.footer.bag, c.testHit.Activated, function()
+        c.footer.state.Pressed = false
+        c.window.pressed[c.footer] = nil
+        if c.footer:_usable() then
+            c:Test()
+        end
+        c:_render()
+    end)
+    U.connect(c.footer.bag, c.editHit.Activated, function()
+        c.footer.state.Pressed = false
+        c.window.pressed[c.footer] = nil
+        c:OpenEditor()
+        c:_render()
+    end)
+    c.preview = U.frame(
+        g.body,
+        { Name = "MessagePreview", Size = UDim2.fromOffset(200, 174), ZIndex = g.row.ZIndex + 2 },
+        c.window
+    )
+    c.previewCaption = U.label(c.preview, "", 10, c.window.theme.TextMuted, { Size = UDim2.new(1, -8, 0, 20) })
+    U.frame(c.preview, { Position = UDim2.fromOffset(0, 28), Size = UDim2.new(0, 2, 1, -28) }, c.window, "Accent")
+    local author = U.label(
+        c.preview,
+        "Neron notifications",
+        11,
+        c.window.theme.TextSecondary,
+        { Position = UDim2.fromOffset(14, 32), Size = UDim2.new(1, -28, 0, 20) }
+    )
+    U.bind(c.window, author, "TextColor3", "TextSecondary")
+    c.previewTitle = U.label(
+        c.preview,
+        "",
+        T.Type.ElementTitle,
+        c.window.theme.TextPrimary,
+        { Position = UDim2.fromOffset(14, 58), Size = UDim2.new(1, -28, 0, 20) }
+    )
+    c.previewMessage = U.label(c.preview, "", T.Type.Description, c.window.theme.TextMuted, {
+        Position = UDim2.fromOffset(14, 86),
+        Size = UDim2.new(1, -28, 0, 44),
+        TextWrapped = true,
+        TextYAlignment = Enum.TextYAlignment.Top,
+    })
+    c.previewFooter = U.label(
+        c.preview,
+        "",
+        10,
+        c.window.theme.TextMuted,
+        { Position = UDim2.fromOffset(14, 184), Size = UDim2.new(1, -28, 0, 20) }
+    )
+    c.previewFields = U.label(c.preview, "", 10, c.window.theme.TextMuted, {
+        Position = UDim2.fromOffset(14, 140),
+        Size = UDim2.new(1, -28, 0, 34),
+        TextWrapped = true,
+    })
+    for _, control in ipairs({
+        c.master,
+        c.urlControl,
+        c.eventsControl,
+        c.mentionsControl,
+        c.intervalControl,
+        c.titleControl,
+        c.messageControl,
+        c.footer,
+    }) do
+        control.webhookOwner = c
+    end
+    c.master.bag:Add(function()
+        c:Destroy()
+    end)
+    c.urlControl.webhookLayout = function()
+        c:_layoutURL()
+    end
+    c.initialized = true
+    c.master:_layout()
+    c:_sync(true)
+    c:_render()
+    return c
+end
+
+-- Cached native silhouettes. Geometry is built only when definitions change, never during pointer motion.
+-- Feature-local essential glyphs; existing global icon catalog/overrides remain untouched.
+function Visual.glyph(parent, name, size, color, w)
+    if
+        type(name) ~= "string"
+        or not table.find({ "brand", "x", "close", "window", "hard-hat", "shirt", "footprints", "circle" }, name)
+    then
+        return Icons.make(parent, name, size, color, w)
+    end
+    local root = U.frame(parent, { Size = UDim2.fromOffset(size, size), ZIndex = parent.ZIndex + 1 }, w)
+    root:SetAttribute("NeronIconName", name)
+    local function line(a, b, c, d, width)
+        return Icons.line(root, a, b, c, d, color, width or 1.4)
+    end
+    if name == "brand" then
+        line(0.18, 0.15, 0.18, 0.85, 3)
+        line(0.18, 0.2, 0.82, 0.8, 3)
+        line(0.82, 0.15, 0.82, 0.85, 3)
+    elseif name == "x" or name == "close" then
+        line(0.23, 0.23, 0.77, 0.77)
+        line(0.77, 0.23, 0.23, 0.77)
+    elseif name == "window" then
+        Icons.poly(root, { { 0.16, 0.2 }, { 0.84, 0.2 }, { 0.84, 0.8 }, { 0.16, 0.8 } }, color, 1.4, true)
+        line(0.16, 0.38, 0.84, 0.38)
+    elseif name == "hard-hat" then
+        Icons.arc(root, 0.5, 0.6, 0.28, math.pi, math.pi * 2, color, 1.4, 12)
+        line(0.13, 0.62, 0.87, 0.62)
+        line(0.13, 0.62, 0.13, 0.75)
+        line(0.13, 0.75, 0.87, 0.75)
+        line(0.87, 0.75, 0.87, 0.62)
+        line(0.46, 0.28, 0.46, 0.53)
+        line(0.54, 0.28, 0.54, 0.53)
+    elseif name == "shirt" then
+        Icons.poly(root, {
+            { 0.35, 0.2 },
+            { 0.2, 0.25 },
+            { 0.09, 0.43 },
+            { 0.25, 0.54 },
+            { 0.32, 0.44 },
+            { 0.32, 0.83 },
+            { 0.68, 0.83 },
+            { 0.68, 0.44 },
+            { 0.75, 0.54 },
+            { 0.91, 0.43 },
+            { 0.8, 0.25 },
+            { 0.65, 0.2 },
+        }, color, 1.4, true)
+        Icons.arc(root, 0.5, 0.2, 0.15, 0, math.pi, color, 1.4, 8)
+    elseif name == "footprints" then
+        Icons.poly(root, {
+            { 0.21, 0.2 },
+            { 0.39, 0.23 },
+            { 0.39, 0.6 },
+            { 0.46, 0.73 },
+            { 0.43, 0.82 },
+            { 0.2, 0.82 },
+            { 0.17, 0.67 },
+        }, color, 1.4, true)
+        Icons.poly(root, {
+            { 0.62, 0.3 },
+            { 0.79, 0.33 },
+            { 0.79, 0.65 },
+            { 0.87, 0.76 },
+            { 0.84, 0.85 },
+            { 0.62, 0.85 },
+            { 0.58, 0.69 },
+        }, color, 1.4, true)
+    else
+        Icons.ring(root, 0.5, 0.5, 0.35, color, 1.4)
+    end
+    return root
+end
+
+function Visual.dense(list, minimum, maximum, label)
+    assert(type(list) == "table" and #list >= minimum and #list <= maximum, label)
+    local count = 0
+    for key in pairs(list) do
+        assert(type(key) == "number" and key % 1 == 0 and key >= 1 and key <= #list, label)
+        count += 1
+    end
+    assert(count == #list, label)
+end
+function Visual.copy(value)
+    if type(value) ~= "table" then
+        return value
+    end
+    local result = {}
+    for k, v in pairs(value) do
+        result[k] = Visual.copy(v)
+    end
+    return result
+end
+function Visual.call(name, fn, ...)
+    if type(fn) ~= "function" then
+        return true
+    end
+    local args = table.pack(...)
+    local ok, err = xpcall(function()
+        fn(table.unpack(args, 1, args.n))
+    end, debug.traceback)
+    if not ok then
+        U.warn(name, err)
+    end
+    return ok, err
+end
+function Visual.line(parent, a, b, color, width)
+    local delta = b - a
+    return U.new("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromOffset((a.X + b.X) / 2, (a.Y + b.Y) / 2),
+        Size = UDim2.fromOffset(delta.Magnitude, width or 1),
+        Rotation = math.deg(math.atan2(delta.Y, delta.X)),
+        BackgroundTransparency = 0,
+        BackgroundColor3 = color,
+        ZIndex = parent.ZIndex + 1,
+    }, parent)
+end
+function Visual.white(parent, props)
+    props.BackgroundTransparency = 0
+    props.BackgroundColor3 = Color3.new(1, 1, 1)
+    local frame = U.new("Frame", props, parent)
+    local owner = U.owners[frame]
+    if owner and owner.bindings[frame] then
+        owner.bindings[frame].BackgroundColor3 = nil
+    end
+    return frame
+end
+function Visual.polygon(parent, points, step)
+    -- Even-odd scan conversion supports convex or concave user-defined regions.
+    local minY, maxY = math.huge, -math.huge
+    for _, p in ipairs(points) do
+        minY = math.min(minY, p.Y)
+        maxY = math.max(maxY, p.Y)
+    end
+    for y = minY, maxY - 0.01, step or 2 do
+        local scan = math.min(maxY - 0.001, y + (step or 2) / 2)
+        local intersections = {}
+        for i, a in ipairs(points) do
+            local b = points[i % #points + 1]
+            if (a.Y <= scan and b.Y > scan) or (b.Y <= scan and a.Y > scan) then
+                table.insert(intersections, a.X + (scan - a.Y) * (b.X - a.X) / (b.Y - a.Y))
+            end
+        end
+        table.sort(intersections)
+        for i = 1, #intersections - 1, 2 do
+            Visual.white(parent, {
+                Position = UDim2.fromOffset(intersections[i], y),
+                Size = UDim2.fromOffset(intersections[i + 1] - intersections[i], math.min(step or 2, maxY - y)),
+                BackgroundTransparency = 0,
+                BackgroundColor3 = Color3.new(1, 1, 1),
+                ZIndex = parent.ZIndex,
+            })
+        end
+    end
+end
+function Visual.angle(delta)
+    return (math.atan2(delta.Y, delta.X) + math.pi * 2) % (math.pi * 2)
+end
+function Visual.sector(parent, index, count, diameter)
+    Visual.sectorCache = Visual.sectorCache or { entries = {}, order = {} }
+    local cache = Visual.sectorCache
+    local key = tostring(diameter) .. ":" .. count .. ":" .. index
+    local function draw(cells)
+        for _, cell in ipairs(cells) do
+            Visual.white(parent, {
+                Position = UDim2.fromOffset(cell[1], cell[2]),
+                Size = UDim2.fromOffset(cell[3], cell[4]),
+                ZIndex = parent.ZIndex,
+            })
+        end
+    end
+    if cache.entries[key] then
+        draw(cache.entries[key])
+        return
+    end
+    local cells = {}
+    local r = diameter / 2 - 3
+    local inner = r * T.Radial.InnerRatio
+    local start = -math.pi / 2 + (index - 2) * math.pi * 2 / count + T.Radial.GapAngle
+    local finish = -math.pi / 2 + (index - 1) * math.pi * 2 / count - T.Radial.GapAngle
+    local function within(x, y)
+        local angle = (Visual.angle(Vector2.new(x, y)) - start) % (math.pi * 2)
+        return angle <= finish - start
+    end
+    -- Exact circle intersections and radial boundaries, rather than overlapping rotated bars.
+    for y = -r, r - 0.01, T.Radial.ScanStep do
+        local sy = math.min(r - 0.001, y + T.Radial.ScanStep / 2)
+        local outer = math.sqrt(math.max(0, r * r - sy * sy))
+        local xs = { -outer, outer }
+        if math.abs(sy) < inner then
+            local inside = math.sqrt(inner * inner - sy * sy)
+            table.insert(xs, -inside)
+            table.insert(xs, inside)
+        end
+        for _, angle in ipairs({ start, finish }) do
+            if math.abs(math.sin(angle)) > 0.000001 then
+                local t = sy / math.sin(angle)
+                local x = t * math.cos(angle)
+                if t >= inner and t <= r and x > -outer and x < outer then
+                    table.insert(xs, x)
+                end
+            end
+        end
+        table.sort(xs)
+        for i = 1, #xs - 1 do
+            local x = (xs[i] + xs[i + 1]) / 2
+            if x * x + sy * sy >= inner * inner and within(x, sy) and xs[i + 1] - xs[i] > 0.01 then
+                table.insert(
+                    cells,
+                    { diameter / 2 + xs[i], diameter / 2 + y, xs[i + 1] - xs[i], math.min(T.Radial.ScanStep, r - y) }
+                )
+            end
+        end
+    end
+    cache.entries[key] = cells
+    table.insert(cache.order, key)
+    if #cache.order > 48 then
+        cache.entries[table.remove(cache.order, 1)] = nil
+    end
+    draw(cells)
+end
+function Radial.actions(input)
+    assert(type(input) == "table" and #input >= 1 and #input <= T.Radial.Maximum, "ActionWheel expects 1–8 actions")
+    local result, seen = {}, {}
+    local count = 0
+    for k in pairs(input) do
+        assert(type(k) == "number" and k % 1 == 0 and k >= 1 and k <= #input, "Actions expect dense array")
+        count += 1
+    end
+    assert(count == #input, "Actions expect dense array")
+    for _, a in ipairs(input) do
+        assert(
+            type(a) == "table" and type(a.Id) == "string" and #a.Id > 0 and #a.Id <= 64 and not seen[a.Id],
+            "Action Id must be unique string"
+        )
+        assert(a.Callback == nil or type(a.Callback) == "function", "Action Callback expects function")
+        assert(a.Name == nil or type(a.Name) == "string", "Action Name expects string")
+        seen[a.Id] = true
+        table.insert(result, {
+            Id = a.Id,
+            Name = a.Name or a.Id,
+            Icon = a.Icon or "circle",
+            Disabled = a.Disabled == true,
+            Callback = a.Callback,
+            LocaleKey = a.LocaleKey,
+        })
+    end
+    return result
+end
+function Radial:_present()
+    local w = self.window
+    if self.destroyed or not self.state.Visible or w.destroyed or not w.visible or w.settingsOpen or w.searchOpen then
+        return false
+    end
+    local c = self.control
+    return not c
+        or not c.destroyed
+            and c.state.Visible
+            and Dependency.available(c)
+            and c.page.visible
+            and c.page.tab.visible
+            and not c.page.disabled
+            and not c.page.tab.disabled
+            and w.activeTab == c.page.tab
+            and c.page.tab.activeSub == c.page
+end
+function Radial:_usable()
+    local w = self.window
+    return not self.destroyed
+        and self.state.Visible
+        and not self.state.Disabled
+        and w.visible
+        and not w.destroyed
+        and not w.searchOpen
+        and not w.settingsOpen
+        and not w.confirmation
+        and not w.transfer
+        and (not self.control or self.control:_usable())
+end
+function Radial.refresh(w)
+    if w.refreshingWheels then
+        return
+    end
+    w.refreshingWheels = true
+    local dock = {}
+    for wheel in pairs(w.actionWheels or {}) do
+        if not wheel.destroyed then
+            wheel:_render()
+            if wheel.floating and not wheel.manualTriggerPosition and wheel:_present() then
+                table.insert(dock, wheel)
+            end
+        end
+    end
+    table.sort(dock, function(a, b)
+        return a.order < b.order
+    end)
+    local pitch = 44 + T.Spacing.Small
+    local columns = math.max(1, math.floor((w.stage.AbsoluteSize.X - 48) / pitch))
+    for i, wheel in ipairs(dock) do
+        wheel.trigger.Position =
+            UDim2.new(1, -24 - ((i - 1) % columns) * pitch, 1, -24 - math.floor((i - 1) / columns) * pitch)
+    end
+    w.refreshingWheels = false
+end
+function Radial:_render()
+    if self.destroyed then
+        return
+    end
+    local w = self.window
+    self.trigger.Visible = self.floating and self:_present()
+    w.motion:To(self.trigger, T.Motion.Micro, {
+        BackgroundColor3 = self.state.Disabled and w.theme.InputBackground
+            or self.state.Pressed and w.theme.RowPressed
+            or self.state.Open and w.theme.SurfaceSelected
+            or self.hovered and w.theme.RowHover
+            or w.theme.PopoverBackground,
+    })
+    Icons.color(
+        self.triggerIcon,
+        self.state.Disabled and w.theme.TextDisabled or self.state.Open and w.theme.Accent or w.theme.SystemText
+    )
+    if self.control then
+        self.control.actionCount.Text = tostring(#self.actions) .. " · " .. w:Translate("RadialOpen")
+        self.control.actionCount.TextColor3 = w.theme.TextSecondary
+    end
+    if self.state.Open and not self:_usable() then
+        self:Close(true)
+        return
+    end
+    local a = w.overlay.active
+    if not a or a.radial ~= self then
+        return
+    end
+    a.centerLabel.Text = w:Translate("RadialCancel")
+    a.centerLabel.TextColor3 = w.theme.SystemText
+    a.hint.Text = w:Translate("RadialHint")
+    for i, visual in ipairs(a.sectors) do
+        local action = self.actions[i]
+        local selected = self.selection == i and not action.Disabled
+        w.motion:To(visual.shape, T.Motion.Micro, {
+            GroupColor3 = action.Disabled and w.theme.InputBackground
+                or selected and w.theme.AccentMuted
+                or w.theme.SurfaceSecondary,
+            GroupTransparency = action.Disabled and 0.45 or 0,
+        })
+        visual.label.Text = action.LocaleKey and w:Translate(action.LocaleKey) or action.Name
+        visual.label.TextColor3 = action.Disabled and w.theme.TextDisabled
+            or selected and w.theme.TextPrimary
+            or w.theme.SystemText
+        Icons.color(
+            visual.icon,
+            action.Disabled and w.theme.TextDisabled or selected and w.theme.Accent or w.theme.SystemText
+        )
+        visual.arc.Visible = selected
+        if selected then
+            for _, line in ipairs(visual.arc:GetChildren()) do
+                line.BackgroundColor3 = w.theme.Accent
+            end
+        end
+    end
+    a.pointer.Visible = self.selection ~= nil
+    if self.selection then
+        local angle = -math.pi / 2 + (self.selection - 1.5) * math.pi * 2 / #self.actions
+        local radius = a.diameter * 0.235
+        local center = Vector2.new(a.diameter / 2, a.diameter / 2)
+        local unit = Vector2.new(math.cos(angle), math.sin(angle))
+        local origin = center + unit * (a.diameter * T.Radial.InnerRatio / 2 - 10)
+        local point = center + unit * radius
+        local delta = point - origin
+        a.pointer.Position = UDim2.fromOffset((origin.X + point.X) / 2, (origin.Y + point.Y) / 2)
+        w.motion:To(a.pointer, T.Motion.Fast, {
+            Rotation = w.motion:Target(a.pointer, "Rotation")
+                + ((math.deg(angle) - w.motion:Target(a.pointer, "Rotation") + 180) % 360 - 180),
+            Size = UDim2.fromOffset(delta.Magnitude, 1),
+            BackgroundColor3 = w.theme.Accent,
+        })
+        a.dot.Position = UDim2.fromOffset(point.X, point.Y)
+        a.dot.BackgroundColor3 = w.theme.Accent
+    end
+    a.dot.Visible = self.selection ~= nil
+end
+function Radial:HitTest(point)
+    local a = self.window.overlay.active
+    if not a or a.radial ~= self or typeof(point) ~= "Vector2" then
+        return nil
+    end
+    local d = (point - a.wheel.AbsolutePosition) / (a.wheel.AbsoluteSize.X / a.diameter)
+        - Vector2.new(a.diameter / 2, a.diameter / 2)
+    local r = a.diameter / 2 - 3
+    if d.Magnitude < r * T.Radial.InnerRatio or d.Magnitude > r then
+        return nil
+    end
+    local angle = (Visual.angle(d) + math.pi / 2 + math.pi * 2 / #self.actions) % (math.pi * 2)
+    local slice = math.pi * 2 / #self.actions
+    local offset = angle % slice
+    if offset < T.Radial.GapAngle or offset > slice - T.Radial.GapAngle then
+        return nil
+    end
+    local index = math.min(#self.actions, math.floor(angle / slice) + 1)
+    return not self.actions[index].Disabled and index or nil
+end
+function Radial:_move(point)
+    local selected = self:HitTest(point)
+    if selected ~= self.selection then
+        self.selection = selected
+        self:_render()
+    end
+end
+function Radial:Execute(id)
+    if not self:_usable() or self.executing then
+        return false, "Unavailable"
+    end
+    local selected
+    for _, a in ipairs(self.actions) do
+        if a.Id == id then
+            selected = table.clone(a)
+            break
+        end
+    end
+    if not selected or selected.Disabled then
+        return false, "Unavailable action"
+    end
+    self:Close(true)
+    self.executing = true
+    Visual.call("ActionWheel " .. selected.Id, selected.Callback, selected.Id, self)
+    if not self.destroyed then
+        Visual.call("ActionWheel", self.config.Callback, selected.Id, self)
+    end
+    self.executing = false
+    return true
+end
+function Radial:Open(point)
+    if not self:_usable() then
+        return false, "Unavailable"
+    end
+    local w = self.window
+    w.overlay:Close(true)
+    if w.tooltip then
+        w.tooltip:Cancel()
+    end
+    local view = w.stage.AbsoluteSize
+    local diameter = math.min(self.diameter, math.max(180, math.min(view.X, view.Y) / w.scale - 48))
+    local bag = Maid.new(w.motion)
+    local holder = U.frame(w.popoverLayer, {
+        Name = "ActionWheelAnchor",
+        Size = UDim2.fromOffset(diameter * w.scale, (diameter + 32) * w.scale),
+        ZIndex = T.Z.Popover,
+    }, w)
+    bag:Add(holder)
+    local group = U.new("CanvasGroup", {
+        Name = "ActionWheel",
+        Size = UDim2.fromOffset(diameter, diameter + 32),
+        GroupTransparency = 1,
+        Position = UDim2.fromOffset(0, 4),
+        ZIndex = T.Z.Popover,
+    }, holder)
+    U.new("UIScale", { Scale = w.scale }, group)
+    local wheel = U.button(group, { Size = UDim2.fromOffset(diameter, diameter), ZIndex = T.Z.Popover + 1 })
+    local active = {
+        owner = self.owner,
+        anchor = self.trigger.Visible and self.trigger or self.control and self.control.row or self.trigger,
+        holder = holder,
+        group = group,
+        bag = bag,
+        width = diameter,
+        height = diameter + 32,
+        radial = self,
+        diameter = diameter,
+        wheel = wheel,
+        sectors = {},
+    }
+    active.place = function()
+        local p = typeof(point) == "Vector2" and point - w.stage.AbsolutePosition
+            or active.anchor.AbsolutePosition - w.stage.AbsolutePosition + active.anchor.AbsoluteSize / 2
+        holder.Position = UDim2.fromOffset(
+            math.clamp(p.X - diameter * w.scale / 2, 8, math.max(8, view.X - diameter * w.scale - 8)),
+            math.clamp(p.Y - diameter * w.scale / 2, 8, math.max(8, view.Y - (diameter + 32) * w.scale - 8))
+        )
+    end
+    local base = Components.circle(wheel, diameter - 2, w.theme.PopoverBackground)
+    base.Name = "WheelSurface"
+    base.Position = UDim2.fromScale(0.5, 0.5)
+    base:FindFirstChildOfClass("UICorner").CornerRadius = UDim.new(0.5, 0)
+    U.bind(w, base, "BackgroundColor3", "PopoverBackground")
+    w.overlay.active = active
+    self.state.Open = true
+    self.selection = nil
+    for i, action in ipairs(self.actions) do
+        local shape = U.new("CanvasGroup", {
+            Size = UDim2.fromOffset(diameter, diameter),
+            GroupColor3 = w.theme.SurfaceSecondary,
+            ZIndex = wheel.ZIndex + 1,
+        }, wheel)
+        Visual.sector(shape, i, #self.actions, diameter)
+        local angle = -math.pi / 2 + (i - 1.5) * math.pi * 2 / #self.actions
+        local radius = diameter * 0.335
+        local x = diameter / 2 + math.cos(angle) * radius
+        local y = diameter / 2 + math.sin(angle) * radius
+        local icon = Visual.glyph(wheel, action.Icon, 18, w.theme.TextSecondary, w)
+        icon.Position = UDim2.fromOffset(x - 9, y - 17)
+        icon.ZIndex = wheel.ZIndex + 3
+        local label = U.label(wheel, action.Name, 11, w.theme.TextSecondary, {
+            Position = UDim2.fromOffset(x - 43, y + 7),
+            Size = UDim2.fromOffset(86, 20),
+            TextXAlignment = Enum.TextXAlignment.Center,
+            ZIndex = wheel.ZIndex + 4,
+        })
+        local arc = U.frame(wheel, { Size = UDim2.fromOffset(diameter, diameter), ZIndex = wheel.ZIndex + 2 }, w)
+        local start = -math.pi / 2 + (i - 2) * math.pi * 2 / #self.actions + T.Radial.GapAngle
+        local span = math.pi * 2 / #self.actions - T.Radial.GapAngle * 2
+        for j = 0, 11 do
+            local a = start + span * j / 12
+            local b = start + span * (j + 1) / 12
+            local r = diameter / 2 - 1
+            Visual.line(
+                arc,
+                Vector2.new(diameter / 2 + math.cos(a) * r, diameter / 2 + math.sin(a) * r),
+                Vector2.new(diameter / 2 + math.cos(b) * r, diameter / 2 + math.sin(b) * r),
+                w.theme.Accent,
+                2
+            )
+        end
+        active.sectors[i] = { shape = shape, label = label, icon = icon, arc = arc }
+    end
+    for _, radius in ipairs({ 0.49, T.Radial.InnerRatio / 2 }) do
+        local rim = Icons.ring(wheel, 0.5, 0.5, radius, w.theme.BorderStrong, 1)
+        rim.ZIndex = wheel.ZIndex + 2
+        rim:FindFirstChildOfClass("UICorner").CornerRadius = UDim.new(0.5, 0)
+        local stroke = rim:FindFirstChildOfClass("UIStroke")
+        stroke.Transparency = 0.55
+        U.bind(w, stroke, "Color", "BorderStrong")
+    end
+    local center = Components.circle(wheel, diameter * T.Radial.InnerRatio - 6, w.theme.PopoverBackground)
+    center.Position = UDim2.fromScale(0.5, 0.5)
+    U.bind(w, center, "BackgroundColor3", "PopoverBackground")
+    local brand = Visual.glyph(center, "brand", 20, w.theme.Accent, w)
+    brand.Position = UDim2.new(0.5, -10, 0.5, -21)
+    active.centerLabel = U.label(center, "", 10, w.theme.TextSecondary, {
+        Position = UDim2.new(0, 0, 0.5, 4),
+        Size = UDim2.new(1, 0, 0, 20),
+        TextXAlignment = Enum.TextXAlignment.Center,
+    })
+    active.pointer = Visual.line(
+        wheel,
+        Vector2.new(diameter / 2, diameter / 2),
+        Vector2.new(diameter / 2, diameter * 0.3),
+        w.theme.Accent,
+        1
+    )
+    active.pointer.ZIndex = wheel.ZIndex + 5
+    active.dot = Components.circle(wheel, 4, w.theme.Accent)
+    active.dot.ZIndex = wheel.ZIndex + 6
+    active.hint = U.label(group, "", 10, w.theme.TextMuted, {
+        Position = UDim2.fromOffset(0, diameter + 6),
+        Size = UDim2.new(1, 0, 0, 22),
+        TextXAlignment = Enum.TextXAlignment.Center,
+    })
+    bag:Add(function()
+        self.selection = nil
+        self.state.Open = false
+    end)
+    U.connect(bag, wheel.InputBegan, function(event)
+        if w.overlay.active == active and U.primary(event) and self:_usable() then
+            w.input:Start(self.owner, event, function(p)
+                self:_move(p)
+            end, function(released)
+                local choice = self.selection and self.actions[self.selection] and self.actions[self.selection].Id
+                self:Close()
+                if released and choice then
+                    self:Execute(choice)
+                end
+            end)
+        end
+    end)
+    U.connect(bag, S.Input.InputChanged, function(event)
+        if event.UserInputType == Enum.UserInputType.MouseMovement and not w.input.capture then
+            self:_move(U.point(event))
+        end
+    end)
+    active.place()
+    w:_dimState(true, 0.48)
+    self:_render()
+    w.motion:To(group, T.Motion.Normal, { GroupTransparency = 0, Position = UDim2.fromOffset(0, 0) })
+    return true
+end
+function Radial:Close(immediate)
+    self.generation += 1
+    if self.holdCancel then
+        self.bag:Remove(self.holdCancel, true)
+        self.holdCancel = nil
+    end
+    local active = self.window.overlay.active
+    if active and active.radial == self then
+        self.window.overlay:Close(immediate)
+    end
+    self.window.input:Cancel(self.owner)
+    self.state.Open = false
+    self.state.Pressed = false
+    self.window.pressed[self.owner] = nil
+    self.selection = nil
+    self:_render()
+    return self
+end
+function Radial:_press(event)
+    if not U.primary(event) or not self:_usable() or not self.window.input:CanStart(event) then
+        return
+    end
+    if self.activation == "Click" then
+        self.state.Pressed = true
+        self.window.pressed[self.owner] = event
+        self:_render()
+        return
+    end
+    self:Close(true)
+    self.state.Pressed = true
+    self.window.pressed[self.owner] = event
+    self:_render()
+    local origin = U.point(event)
+    local generation = self.generation
+    local opened = false
+    local moved = false
+    self.window.input:Start(self.owner, event, function(p)
+        if opened then
+            if (p - origin).Magnitude > T.Radial.DragThreshold then
+                moved = true
+            end
+            if moved then
+                self:_move(p)
+            end
+        elseif (p - origin).Magnitude > T.Radial.DragThreshold then
+            self:Close(true)
+        end
+    end, function(released)
+        local selected = opened
+            and moved
+            and self.selection
+            and self.actions[self.selection]
+            and self.actions[self.selection].Id
+        self:Close()
+        if released and selected then
+            self:Execute(selected)
+        end
+    end)
+    self.holdCancel = self.bag:After(self.holdDelay, function()
+        self.holdCancel = nil
+        if
+            generation == self.generation
+            and self.window.input.capture
+            and self.window.input.capture.owner == self.owner
+        then
+            opened = self:Open(origin) == true
+        end
+    end)
+end
+function Radial:GetActions()
+    local actions = {}
+    for _, a in ipairs(self.actions) do
+        table.insert(
+            actions,
+            { Id = a.Id, Name = a.Name, Icon = a.Icon, Disabled = a.Disabled, LocaleKey = a.LocaleKey }
+        )
+    end
+    return actions
+end
+function Radial:SetActions(actions)
+    local nextActions = Radial.actions(actions)
+    self:Close(true)
+    self.actions = nextActions
+    self:_render()
+    return self
+end
+function Radial:SetActionEnabled(id, value)
+    for _, a in ipairs(self.actions) do
+        if a.Id == id then
+            a.Disabled = value ~= true
+            if self.selection and self.actions[self.selection] == a and a.Disabled then
+                self.selection = nil
+            end
+            self:_render()
+            return self, true
+        end
+    end
+    return self, false, "Unknown action"
+end
+function Radial:SetActivation(value)
+    assert(value == "Hold" or value == "Click", "ActionWheel Activation expects Hold or Click")
+    self:Close(true)
+    self.activation = value
+    return self
+end
+function Radial:SetFloating(value)
+    self.floating = value == true
+    Radial.refresh(self.window)
+    return self
+end
+function Radial:SetTriggerPosition(position)
+    assert(typeof(position) == "UDim2", "ActionWheel position expects UDim2")
+    self.manualTriggerPosition = true
+    self.trigger.Position = position
+    self:Close(true)
+    return self
+end
+function Radial:SetVisible(value)
+    self.state.Visible = value == true
+    if self.control then
+        self.control:SetVisible(value)
+    end
+    if not self.state.Visible then
+        self:Close(true)
+    end
+    self:_render()
+    return self
+end
+function Radial:SetDisabled(value)
+    self.state.Disabled = value == true
+    if self.control then
+        self.control:SetDisabled(value)
+    end
+    if self.state.Disabled then
+        self:Close(true)
+    end
+    self:_render()
+    return self
+end
+function Radial:IsOpen()
+    return self.state.Open == true
+end
+function Radial:GetSelection()
+    return self.selection and self.actions[self.selection] and self.actions[self.selection].Id or nil
+end
+function Radial:SetName(value)
+    if self.control then
+        self.control:SetName(value)
+    end
+    return self
+end
+function Radial:SetDescription(value)
+    if self.control then
+        self.control:SetDescription(value)
+    end
+    return self
+end
+function Radial:SetTooltip(value)
+    if self.control then
+        self.control:SetTooltip(value)
+    end
+    return self
+end
+function Radial:Destroy()
+    if self.destroyed then
+        return
+    end
+    self:Close(true)
+    self.destroyed = true
+    self.bag:Destroy()
+    if self.control and not self.control.destroyed then
+        self.control:Destroy()
+    end
+end
+function Radial.make(w, page, config)
+    assert(not w.destroyed, "Neron window is destroyed")
+    config = config or {}
+    assert(type(config) == "table", "ActionWheel expects config")
+    local actions = Radial.actions(config.Actions)
+    assert(config.Callback == nil or type(config.Callback) == "function", "ActionWheel Callback expects function")
+    assert(
+        config.Activation == nil or config.Activation == "Hold" or config.Activation == "Click",
+        "Invalid Activation"
+    )
+    assert(config.TriggerPosition == nil or typeof(config.TriggerPosition) == "UDim2", "Invalid TriggerPosition")
+    assert(
+        config.Diameter == nil or type(config.Diameter) == "number" and U.finite(config.Diameter, nil) ~= nil,
+        "Diameter expects finite number"
+    )
+    assert(
+        config.HoldDelay == nil or type(config.HoldDelay) == "number" and U.finite(config.HoldDelay, nil) ~= nil,
+        "HoldDelay expects finite number"
+    )
+    local diameter = U.finite(config.Diameter, T.Radial.Diameter)
+    assert(diameter >= 220 and diameter <= 420, "ActionWheel Diameter expects220..420")
+    local delay = U.finite(config.HoldDelay, T.Radial.HoldDelay)
+    assert(delay >= 0.08 and delay <= 1, "HoldDelay expects .08..1")
+    local self = setmetatable({
+        window = w,
+        config = config,
+        actions = actions,
+        bag = Maid.new(w.motion),
+        state = { Visible = config.Visible ~= false, Disabled = config.Disabled == true, Open = false },
+        generation = 0,
+        diameter = diameter,
+        holdDelay = delay,
+        activation = config.Activation or "Hold",
+        floating = config.Floating ~= false,
+    }, { __index = Radial })
+    if page then
+        local rowConfig = table.clone(config)
+        rowConfig.Flag = nil
+        rowConfig.Persistent = false
+        self.control = Components.row(page, rowConfig, "ActionWheel")
+        self.control.publicController = self
+        self.owner = self.control
+        self.state = self.control.state
+        self.control.actionCount = U.label(
+            self.control.lane,
+            "",
+            T.Type.Value,
+            w.theme.TextSecondary,
+            { TextXAlignment = Enum.TextXAlignment.Right }
+        )
+        self.control.renderVisual = function()
+            self:_render()
+        end
+        self.control.Close = function()
+            self:Close()
+            return self.control
+        end
+        self.control.bag:Add(function()
+            self:Destroy()
+        end)
+        U.connect(self.control.bag, self.control.row.InputBegan, function(event)
+            self:_press(event)
+        end)
+        U.connect(self.control.bag, self.control.row.Activated, function()
+            if self.activation == "Click" then
+                self:Open()
+            end
+        end)
+    else
+        self.owner = self
+        w.bag:Add(self)
+    end
+    self.trigger = U.button(w.stage, {
+        Name = "ActionWheelTrigger",
+        AnchorPoint = Vector2.new(1, 1),
+        Position = config.TriggerPosition or UDim2.new(1, -24, 1, -24),
+        Size = UDim2.fromOffset(44, 44),
+        BackgroundTransparency = 0,
+        BackgroundColor3 = w.theme.PopoverBackground,
+        ZIndex = T.Z.Dim - 1,
+    })
+    self.bag:Add(self.trigger)
+    U.corner(self.trigger, T.Radius.Window)
+    local edge = U.stroke(self.trigger, w.theme.BorderStrong, 1)
+    edge.Transparency = 0.45
+    U.bind(w, edge, "Color", "BorderStrong")
+    self.triggerIcon = Visual.glyph(self.trigger, config.TriggerIcon or "brand", 20, w.theme.TextSecondary, w)
+    self.triggerIcon.Position = UDim2.fromOffset(12, 12)
+    U.connect(self.bag, self.trigger.MouseEnter, function()
+        self.hovered = true
+        self:_render()
+    end)
+    U.connect(self.bag, self.trigger.MouseLeave, function()
+        self.hovered = false
+        self:_render()
+    end)
+    U.connect(self.bag, self.trigger.InputBegan, function(event)
+        self:_press(event)
+    end)
+    U.connect(self.bag, self.trigger.Activated, function()
+        if self.activation == "Click" then
+            self:Open()
+        end
+    end)
+    w.actionWheels = w.actionWheels or {}
+    w.radialSerial = (w.radialSerial or 0) + 1
+    self.order = w.radialSerial
+    self.manualTriggerPosition = config.TriggerPosition ~= nil
+    w.actionWheels[self] = true
+    w.systemRenders = w.systemRenders or {}
+    w.systemRenders[self.trigger] = self
+    self.bag:Add(function()
+        w.systemRenders[self.trigger] = nil
+        w.actionWheels[self] = nil
+        if not self.control then
+            w.bag:Remove(self)
+        end
+        Radial.refresh(w)
+    end)
+    Radial.refresh(w)
+    return self
+end
+function Window:AddActionWheel(config)
+    return Radial.make(self, nil, config)
+end
+function SubTab:AddActionWheel(config)
+    return Radial.make(self.window, self, config)
+end
+
+function Spatial.builtins()
+    local function r(id, x, y, w, h, rotation, icon)
+        return {
+            Id = id,
+            Name = id,
+            LocaleKey = "Spatial" .. id,
+            Bounds = { x, y, w, h },
+            Rotation = rotation or 0,
+            Icon = icon,
+        }
+    end
+    local modes = {
+        {
+            Id = "Character",
+            Name = "Character",
+            LocaleKey = "SpatialCharacter",
+            Regions = {
+                r("Head", 0.405, 0.09, 0.19, 0.17),
+                r("Torso", 0.36, 0.28, 0.28, 0.23),
+                r("Hip", 0.37, 0.52, 0.26, 0.07),
+                r("LeftUpperArm", 0.20, 0.29, 0.12, 0.15, 12),
+                r("LeftForearm", 0.17, 0.46, 0.12, 0.14, 12),
+                r("LeftHand", 0.15, 0.61, 0.10, 0.07),
+                r("RightUpperArm", 0.68, 0.29, 0.12, 0.15, -12),
+                r("RightForearm", 0.71, 0.46, 0.12, 0.14, -12),
+                r("RightHand", 0.75, 0.61, 0.10, 0.07),
+                r("LeftThigh", 0.35, 0.60, 0.13, 0.18, 5),
+                r("LeftShin", 0.33, 0.79, 0.13, 0.15, 5),
+                r("LeftFoot", 0.30, 0.95, 0.16, 0.04),
+                r("RightThigh", 0.52, 0.60, 0.13, 0.18, -5),
+                r("RightShin", 0.54, 0.79, 0.13, 0.15, -5),
+                r("RightFoot", 0.54, 0.95, 0.16, 0.04),
+            },
+        },
+        {
+            Id = "Map",
+            Name = "Map",
+            LocaleKey = "SpatialMap",
+            Regions = {
+                {
+                    Id = "North",
+                    Name = "North",
+                    LocaleKey = "SpatialNorth",
+                    Shape = "Polygon",
+                    Points = { { 0.24, 0.14 }, { 0.68, 0.14 }, { 0.68, 0.30 }, { 0.43, 0.30 }, { 0.24, 0.38 } },
+                },
+                {
+                    Id = "Courtyard",
+                    Name = "Courtyard",
+                    LocaleKey = "SpatialCourtyard",
+                    Shape = "Polygon",
+                    Points = { { 0.30, 0.39 }, { 0.65, 0.31 }, { 0.78, 0.51 }, { 0.59, 0.72 }, { 0.30, 0.63 } },
+                },
+                {
+                    Id = "West",
+                    Name = "West",
+                    LocaleKey = "SpatialWest",
+                    Shape = "Polygon",
+                    Points = {
+                        { 0.08, 0.36 },
+                        { 0.28, 0.38 },
+                        { 0.28, 0.69 },
+                        { 0.40, 0.69 },
+                        { 0.40, 0.87 },
+                        {
+                            0.08,
+                            0.87,
+                        },
+                    },
+                },
+                {
+                    Id = "East",
+                    Name = "East",
+                    LocaleKey = "SpatialEast",
+                    Shape = "Polygon",
+                    Points = {
+                        { 0.78, 0.31 },
+                        { 0.93, 0.31 },
+                        { 0.93, 0.79 },
+                        { 0.67, 0.79 },
+                        { 0.67, 0.70 },
+                        {
+                            0.82,
+                            0.51,
+                        },
+                    },
+                },
+            },
+        },
+        {
+            Id = "Equipment",
+            Name = "Equipment",
+            LocaleKey = "SpatialEquipment",
+            Regions = {
+                r("Head", 0.38, 0.14, 0.24, 0.20, 0, "hard-hat"),
+                r("Chest", 0.38, 0.39, 0.24, 0.20, 0, "shirt"),
+                r("Legs", 0.08, 0.39, 0.24, 0.20, 0, "person-standing"),
+                r("Feet", 0.38, 0.64, 0.24, 0.20, 0, "footprints"),
+                r("Accessory", 0.68, 0.14, 0.24, 0.20, 0, "backpack"),
+                r("Weapon", 0.68, 0.39, 0.24, 0.20, 0, "swords"),
+            },
+        },
+    }
+    for _, region in ipairs(modes[1].Regions) do
+        region.Bounds[2] = 0.07 + region.Bounds[2] * 0.84
+        region.Bounds[4] *= 0.84
+    end
+    return modes
+end
+function Spatial.modes(input)
+    Visual.dense(input, 1, 8, "SpatialSelector expects dense1..8 modes")
+    local result, seen = {}, {}
+    for _, mode in ipairs(input) do
+        assert(
+            type(mode) == "table"
+                and type(mode.Id) == "string"
+                and #mode.Id > 0
+                and #mode.Id <= 64
+                and mode.Id:match("^[%w_%-]+$")
+                and not seen[mode.Id],
+            "Unique mode Id required"
+        )
+        assert(
+            type(mode.Regions) == "table" and #mode.Regions > 0 and #mode.Regions <= T.Spatial.MaximumRegions,
+            "Mode expects1..32 regions"
+        )
+        Visual.dense(mode.Regions, 1, T.Spatial.MaximumRegions, "Mode expects dense regions")
+        assert(mode.Name == nil or type(mode.Name) == "string", "Mode Name expects string")
+        assert(mode.LocaleKey == nil or type(mode.LocaleKey) == "string", "Mode LocaleKey expects string")
+        assert(
+            mode.Image == nil or type(mode.Image) == "string" or type(mode.Image) == "number",
+            "Mode Image expects asset"
+        )
+        local out = {
+            Id = mode.Id,
+            Name = mode.Name or mode.Id,
+            LocaleKey = mode.LocaleKey,
+            Image = type(mode.Image) == "number" and "rbxassetid://" .. mode.Image or mode.Image,
+            Regions = {},
+        }
+        seen[mode.Id] = true
+        local ids = {}
+        for _, region in ipairs(mode.Regions) do
+            assert(
+                type(region) == "table"
+                    and type(region.Id) == "string"
+                    and #region.Id > 0
+                    and #region.Id <= 64
+                    and region.Id:match("^[%w_%-]+$")
+                    and not ids[region.Id],
+                "Unique region Id required"
+            )
+            local item = {
+                Id = region.Id,
+                Name = region.Name or region.Id,
+                LocaleKey = region.LocaleKey,
+                Shape = region.Shape or "Rect",
+                Rotation = region.Rotation or 0,
+                Icon = region.Icon,
+                Disabled = region.Disabled == true,
+            }
+            assert(
+                type(item.Name) == "string"
+                    and (item.Shape == "Rect" or item.Shape == "Ellipse" or item.Shape == "Polygon"),
+                "Invalid region shape/name"
+            )
+            assert(
+                type(item.Rotation) == "number"
+                    and U.finite(item.Rotation, nil) ~= nil
+                    and math.abs(item.Rotation) <= 180,
+                "Invalid region rotation"
+            )
+            if item.Shape == "Polygon" then
+                assert(
+                    type(region.Points) == "table" and #region.Points >= 3 and #region.Points <= 24,
+                    "Polygon expects3..24 points"
+                )
+                Visual.dense(region.Points, 3, 24, "Polygon expects dense points")
+                item.Points = {}
+                for _, p in ipairs(region.Points) do
+                    local x, y
+                    if typeof(p) == "Vector2" then
+                        x, y = p.X, p.Y
+                    elseif type(p) == "table" then
+                        x, y = p[1], p[2]
+                    end
+                    assert(
+                        type(x) == "number"
+                            and type(y) == "number"
+                            and U.finite(x, nil)
+                            and U.finite(y, nil)
+                            and x >= 0
+                            and x <= 1
+                            and y >= 0
+                            and y <= 1,
+                        "Polygon points must be normalized"
+                    )
+                    table.insert(item.Points, { x, y })
+                end
+                local area = 0
+                for i, p in ipairs(item.Points) do
+                    local q = item.Points[i % #item.Points + 1]
+                    area += p[1] * q[2] - q[1] * p[2]
+                end
+                assert(math.abs(area) > 0.000001, "Polygon must have nonzero area")
+            else
+                local b = region.Bounds
+                assert(type(b) == "table" and #b == 4, "Region Bounds expects{x,y,w,h}")
+                for _, n in ipairs(b) do
+                    assert(type(n) == "number" and U.finite(n, nil) ~= nil, "Finite Bounds required")
+                end
+                assert(
+                    b[1] >= 0
+                        and b[2] >= 0
+                        and b[3] > 0
+                        and b[4] > 0
+                        and b[1] + b[3] <= 1.00001
+                        and b[2] + b[4] <= 1.00001,
+                    "Bounds outside canvas"
+                )
+                item.Bounds = table.clone(b)
+            end
+            ids[item.Id] = true
+            table.insert(out.Regions, item)
+        end
+        table.insert(result, out)
+    end
+    return result
+end
+function Spatial:FindMode(id)
+    for _, mode in ipairs(self.modes) do
+        if mode.Id == id then
+            return mode
+        end
+    end
+end
+function Spatial:FindRegion(id, mode)
+    local m = self:FindMode(mode or self.value and self.value.Mode)
+    if m then
+        for _, region in ipairs(m.Regions) do
+            if region.Id == id then
+                return region, m
+            end
+        end
+    end
+end
+function Spatial.key(mode, id)
+    return mode .. "/" .. id
+end
+function Spatial:Defaults()
+    return {
+        Enabled = true,
+        Priority = "Normal",
+        Radius = 24,
+        Color = Presentation.colorData(self.window.theme.Accent),
+        Opacity = 0.7,
+    }
+end
+function Spatial:NormalizeRegion(value, base)
+    if type(value) ~= "table" then
+        return nil, false, "Expected region settings"
+    end
+    local result = Visual.copy(base or self:Defaults())
+    if value.Enabled ~= nil then
+        if type(value.Enabled) ~= "boolean" then
+            return nil, false, "Enabled expects boolean"
+        end
+        result.Enabled = value.Enabled
+    end
+    if value.Priority ~= nil then
+        if not table.find({ "Low", "Normal", "High" }, value.Priority) then
+            return nil, false, "Invalid Priority"
+        end
+        result.Priority = value.Priority
+    end
+    for _, field in ipairs({ "Radius", "Opacity" }) do
+        if value[field] ~= nil then
+            if type(value[field]) ~= "number" or U.finite(value[field], nil) == nil then
+                return nil, false, "Expected finite " .. field
+            end
+            result[field] = field == "Radius" and math.clamp(math.round(value[field]), 1, 100)
+                or math.round(math.clamp(value[field], 0, 1) * 100) / 100
+        end
+    end
+    if value.Color ~= nil then
+        local color = Presentation.decodeColor(value.Color)
+        if not color then
+            return nil, false, "Invalid color"
+        end
+        result.Color = Presentation.colorData(color)
+    end
+    return result, true
+end
+function Spatial:normalize(value)
+    if type(value) ~= "table" then
+        return nil, false, "Expected spatial state"
+    end
+    local mode = value.Mode or self.value and self.value.Mode or self.modes[1].Id
+    if type(mode) ~= "string" or not self:FindMode(mode) then
+        return nil, false, "Unknown mode"
+    end
+    local selected = value.Selected
+        or self.value and self.value.Mode == mode and self.value.Selected
+        or self:FindMode(mode).Regions[1].Id
+    local region = self:FindRegion(selected, mode)
+    if not region or region.Disabled then
+        if value.Selected ~= nil then
+            return nil, false, "Unavailable region"
+        end
+        for _, item in ipairs(self:FindMode(mode).Regions) do
+            if not item.Disabled then
+                selected = item.Id
+                region = item
+                break
+            end
+        end
+        if not region or region.Disabled then
+            selected = nil
+        end
+    end
+    local requested = value.Regions
+    if requested ~= nil and type(requested) ~= "table" then
+        return nil, false, "Expected Regions map"
+    end
+    local state = { Mode = mode, Selected = selected, Regions = {} }
+    for _, m in ipairs(self.modes) do
+        for _, r in ipairs(m.Regions) do
+            local key = Spatial.key(m.Id, r.Id)
+            local base = self.value and self.value.Regions[key] or self:Defaults()
+            local incoming = requested and requested[key]
+            if incoming == nil then
+                incoming = {}
+            end
+            local v, ok, reason = self:NormalizeRegion(incoming, base)
+            if not ok then
+                return nil, false, reason
+            end
+            state.Regions[key] = v
+        end
+    end
+    return state, true
+end
+function Spatial:Get()
+    return Visual.copy(self.value)
+end
+function Spatial:Serialize()
+    return { kind = "SpatialSelector", value = self:Get() }
+end
+function Spatial:GetRegion(id, mode)
+    local _, m = self:FindRegion(id, mode)
+    if not m then
+        return nil
+    end
+    local state = Visual.copy(self.value.Regions[Spatial.key(m.Id, id)])
+    state.Color = Presentation.decodeColor(state.Color)
+    return state
+end
+function Spatial:Set(value, silent)
+    if self.destroyed then
+        return self, false, "Destroyed"
+    end
+    local normalized, valid, reason = self:normalize(value)
+    if not valid then
+        return self, false, reason
+    end
+    local oldMode, oldSelected = self.value and self.value.Mode, self.value and self.value.Selected
+    if oldMode ~= normalized.Mode or oldSelected ~= normalized.Selected then
+        self:Close()
+    end
+    local options = self.applyOptions
+    local notify = not silent
+        or options and options.Silent ~= true and options.FireCallback ~= false and options.FireCallbacks ~= false
+    self.pendingSelection = notify
+            and (oldMode ~= normalized.Mode or oldSelected ~= normalized.Selected)
+            and { Mode = normalized.Mode, Selected = normalized.Selected }
+        or nil
+    Control._commit(self, normalized, silent)
+    return self, true
+end
+function Spatial:Close()
+    for _, control in pairs(self.inspectorControls or {}) do
+        if not control.destroyed then
+            control:Close()
+            self.window.input:Cancel(control)
+        end
+    end
+    Control.Close(self)
+    return self
+end
+function Spatial:Select(id, silent)
+    return self:Set({ Mode = self.value.Mode, Selected = id }, silent)
+end
+function Spatial:SetMode(id, silent)
+    return self:Set({ Mode = id }, silent)
+end
+function Spatial:SetRegion(id, partial, silent, mode)
+    local region, m = self:FindRegion(id, mode)
+    if not region then
+        return self, false, "Unknown region"
+    end
+    local key = Spatial.key(m.Id, id)
+    local result, valid, reason = self:NormalizeRegion(partial, self.value.Regions[key])
+    if not valid then
+        return self, false, reason
+    end
+    return self:Set({ Regions = { [key] = result } }, silent)
+end
+function Spatial:ApplyToAll(silent)
+    if not self.value.Selected then
+        return self, false, "No selection"
+    end
+    local regions = {}
+    local source = self.value.Regions[Spatial.key(self.value.Mode, self.value.Selected)]
+    for _, r in ipairs(self:FindMode(self.value.Mode).Regions) do
+        regions[Spatial.key(self.value.Mode, r.Id)] = Visual.copy(source)
+    end
+    return self:Set({ Regions = regions }, silent)
+end
+function Spatial:GetModes()
+    return Visual.copy(self.modes)
+end
+function Spatial:GetInspectorControls()
+    return table.clone(self.inspectorControls)
+end
+function Spatial:SetRegions(mode, list, silent)
+    local definitions = Visual.copy(self.modes)
+    local found = false
+    for _, m in ipairs(definitions) do
+        if m.Id == mode then
+            m.Regions = list
+            found = true
+        end
+    end
+    if not found then
+        return self, false, "Unknown mode"
+    end
+    local ok, result = pcall(Spatial.modes, definitions)
+    if not ok then
+        return self, false, tostring(result)
+    end
+    local prototype = setmetatable({ modes = result, value = self.value, window = self.window }, { __index = Spatial })
+    local state = self:Get()
+    local selected = prototype:FindRegion(state.Selected, state.Mode)
+    if not selected or selected.Disabled then
+        state.Selected = nil
+    end
+    local normalized, valid, reason = prototype:normalize(state)
+    if not valid then
+        return self, false, reason
+    end
+    self:Close()
+    self.modes = result
+    self.drawnMode = nil
+    return self:Set(normalized, silent)
+end
+function Spatial.name(w, item)
+    return item.LocaleKey and w:Translate(item.LocaleKey) or item.Name
+end
+function Spatial.inside(points, x, y)
+    local inside = false
+    for i, a in ipairs(points) do
+        local b = points[i % #points + 1]
+        if (a[2] > y) ~= (b[2] > y) and x < (b[1] - a[1]) * (y - a[2]) / (b[2] - a[2]) + a[1] then
+            inside = not inside
+        end
+    end
+    return inside
+end
+function Spatial:HitTest(point)
+    if typeof(point) ~= "Vector2" or not self.canvas then
+        return nil
+    end
+    local size = self.canvas.AbsoluteSize
+    local delta = point - self.canvas.AbsolutePosition
+    local x, y = delta.X / size.X, delta.Y / size.Y
+    if x < 0 or y < 0 or x > 1 or y > 1 then
+        return nil
+    end
+    local regions = self:FindMode(self.value.Mode).Regions
+    for i = #regions, 1, -1 do
+        local r = regions[i]
+        local hit = false
+        if r.Shape == "Polygon" then
+            hit = Spatial.inside(r.Points, x, y)
+        else
+            local b = r.Bounds
+            local cx, cy = b[1] + b[3] / 2, b[2] + b[4] / 2
+            local angle = math.rad(-r.Rotation)
+            local dx, dy = (x - cx) * T.Spatial.CanvasWidth, (y - cy) * T.Spatial.CanvasHeight
+            local rx, ry = dx * math.cos(angle) - dy * math.sin(angle), dx * math.sin(angle) + dy * math.cos(angle)
+            if r.Shape == "Ellipse" then
+                hit = (rx / (b[3] * T.Spatial.CanvasWidth / 2)) ^ 2 + (ry / (b[4] * T.Spatial.CanvasHeight / 2)) ^ 2
+                    <= 1
+            else
+                hit = math.abs(rx) <= b[3] * T.Spatial.CanvasWidth / 2
+                    and math.abs(ry) <= b[4] * T.Spatial.CanvasHeight / 2
+            end
+        end
+        if hit and not r.Disabled then
+            return r.Id
+        end
+    end
+end
+function Spatial:_buildRegions()
+    if self.modeBag then
+        self.bag:Remove(self.modeBag, true)
+    end
+    self.modeBag = Maid.new(self.window.motion)
+    self.bag:Add(self.modeBag)
+    self.visuals = {}
+    local mode = self:FindMode(self.value.Mode)
+    self.drawnMode = mode.Id
+    local width, height = T.Spatial.CanvasWidth, T.Spatial.CanvasHeight
+    if mode.Image then
+        local image = U.new(
+            "ImageLabel",
+            { Image = mode.Image, Size = UDim2.fromScale(1, 1), ImageTransparency = 0.65, ZIndex = self.canvas.ZIndex },
+            self.canvas
+        )
+        self.modeBag:Add(image)
+    end
+    for _, region in ipairs(mode.Regions) do
+        local center, shape, piece, stroke
+        local edges = {}
+        if region.Shape == "Polygon" then
+            local minX, minY, maxX, maxY = math.huge, math.huge, -math.huge, -math.huge
+            local x, y = 0, 0
+            for _, p in ipairs(region.Points) do
+                minX = math.min(minX, p[1] * width)
+                maxX = math.max(maxX, p[1] * width)
+                minY = math.min(minY, p[2] * height)
+                maxY = math.max(maxY, p[2] * height)
+                x += p[1] * width
+                y += p[2] * height
+            end
+            shape = U.new("CanvasGroup", {
+                Name = region.Id,
+                Position = UDim2.fromOffset(minX, minY),
+                Size = UDim2.fromOffset(maxX - minX, maxY - minY),
+                GroupColor3 = self.window.theme.SurfaceSecondary,
+                ZIndex = self.canvas.ZIndex + 1,
+            }, self.canvas)
+            self.modeBag:Add(shape)
+            local points = {}
+            for _, p in ipairs(region.Points) do
+                table.insert(points, Vector2.new(p[1] * width - minX, p[2] * height - minY))
+            end
+            Visual.polygon(shape, points, T.Radial.ScanStep)
+            center = Vector2.new(x / #points, y / #points)
+            local edge =
+                U.frame(self.canvas, { Size = UDim2.fromScale(1, 1), ZIndex = self.canvas.ZIndex + 2 }, self.window)
+            self.modeBag:Add(edge)
+            for i, p in ipairs(region.Points) do
+                local q = region.Points[i % #region.Points + 1]
+                table.insert(
+                    edges,
+                    Visual.line(
+                        edge,
+                        Vector2.new(p[1] * width, p[2] * height),
+                        Vector2.new(q[1] * width, q[2] * height),
+                        self.window.theme.BorderStrong,
+                        1
+                    )
+                )
+            end
+        elseif region.Shape == "Ellipse" then
+            local b = region.Bounds
+            local rw, rh = b[3] * width, b[4] * height
+            center = Vector2.new((b[1] + b[3] / 2) * width, (b[2] + b[4] / 2) * height)
+            shape = U.new("CanvasGroup", {
+                Name = region.Id,
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                Position = UDim2.fromOffset(center.X, center.Y),
+                Size = UDim2.fromOffset(rw, rh),
+                Rotation = region.Rotation,
+                GroupColor3 = self.window.theme.SurfaceSecondary,
+                ZIndex = self.canvas.ZIndex + 1,
+            }, self.canvas)
+            self.modeBag:Add(shape)
+            for y = 0, rh - 0.001 do
+                local normalized = (y + 0.5 - rh / 2) / (rh / 2)
+                local half = rw / 2 * math.sqrt(math.max(0, 1 - normalized * normalized))
+                Visual.white(shape, {
+                    Position = UDim2.fromOffset(rw / 2 - half, y),
+                    Size = UDim2.fromOffset(half * 2, math.min(1, rh - y)),
+                    ZIndex = shape.ZIndex,
+                })
+            end
+            local outline = U.frame(self.canvas, {
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                Position = shape.Position,
+                Size = shape.Size,
+                Rotation = region.Rotation,
+                ZIndex = self.canvas.ZIndex + 2,
+            }, self.window)
+            self.modeBag:Add(outline)
+            for i = 0, 47 do
+                local a, b = i * math.pi * 2 / 48, (i + 1) * math.pi * 2 / 48
+                table.insert(
+                    edges,
+                    Visual.line(
+                        outline,
+                        Vector2.new(rw / 2 + math.cos(a) * rw / 2, rh / 2 + math.sin(a) * rh / 2),
+                        Vector2.new(rw / 2 + math.cos(b) * rw / 2, rh / 2 + math.sin(b) * rh / 2),
+                        self.window.theme.BorderStrong,
+                        1
+                    )
+                )
+            end
+        else
+            local b = region.Bounds
+            center = Vector2.new((b[1] + b[3] / 2) * width, (b[2] + b[4] / 2) * height)
+            shape = U.frame(
+                self.canvas,
+                { Name = region.Id, Size = UDim2.fromOffset(width, height), ZIndex = self.canvas.ZIndex + 1 },
+                self.window
+            )
+            self.modeBag:Add(shape)
+            piece = U.new("Frame", {
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                Position = UDim2.fromOffset(center.X, center.Y),
+                Size = UDim2.fromOffset(b[3] * width, b[4] * height),
+                Rotation = region.Rotation,
+                BackgroundTransparency = 0,
+                BackgroundColor3 = self.window.theme.SurfaceSecondary,
+                ZIndex = shape.ZIndex,
+            }, shape)
+            U.corner(piece, T.Radius.Popover)
+            local outline = U.frame(self.canvas, {
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                Position = piece.Position,
+                Size = piece.Size,
+                Rotation = piece.Rotation,
+                ZIndex = self.canvas.ZIndex + 2,
+            }, self.window)
+            self.modeBag:Add(outline)
+            U.corner(outline, T.Radius.Popover)
+            stroke = U.stroke(outline, self.window.theme.BorderStrong, 1)
+            stroke.Transparency = 0.35
+            if region.Icon then
+                local icon = Visual.glyph(outline, region.Icon, 24, self.window.theme.TextSecondary, self.window)
+                icon.Position = UDim2.new(0.5, -12, 0.5, -12)
+            end
+        end
+        self.visuals[region.Id] =
+            { shape = shape, piece = piece, stroke = stroke, edges = edges, center = center, region = region }
+    end
+end
+
+function Spatial:_layoutSpatial()
+    if not self.spatialReady or self.layoutBusy or self.destroyed then
+        return
+    end
+    self.layoutBusy = true
+    local width = self.row.AbsoluteSize.X / self.window.scale
+    local description = self.displayDescription or self.description
+    local descriptionHeight = description ~= ""
+            and math.max(
+                18,
+                math.ceil(
+                    S.Text:GetTextSize(
+                        description,
+                        T.Type.Description,
+                        Enum.Font.Gotham,
+                        Vector2.new(math.max(80, width - 32), 1000)
+                    ).Y
+                )
+            )
+        or 0
+    self.desc.Visible = description ~= ""
+    local bodyTop = math.max(66, 34 + descriptionHeight + 8)
+    self.body.Position = UDim2.fromOffset(0, bodyTop)
+    local columns = width >= T.Spatial.Breakpoint and not self.window.compact
+    local canvasWidth = columns and width - T.Spatial.Inspector - 48 or math.min(width - 32, 420)
+    canvasWidth = math.max(220, canvasWidth)
+    local canvasHeight = canvasWidth * T.Spatial.CanvasHeight / T.Spatial.CanvasWidth
+    self.canvasHolder.Size = UDim2.fromOffset(canvasWidth, canvasHeight)
+    self.canvasHolder.Position = UDim2.fromOffset(16, 46)
+    self.canvasScale.Scale = canvasWidth / T.Spatial.CanvasWidth
+    self.inspector.Position = UDim2.fromOffset(columns and canvasWidth + 32 or 16, columns and 46 or canvasHeight + 66)
+    local inspectorWidth = columns and T.Spatial.Inspector or width - 32
+    self.inspector.Size = UDim2.fromOffset(inspectorWidth, T.Spatial.InspectorHeight)
+    local y = 44
+    for _, key in ipairs({ "Enabled", "Priority", "Radius", "Color", "Opacity" }) do
+        local control = self.inspectorControls[key]
+        if control then
+            control.layoutWidth = inspectorWidth
+            control.columnInline = true
+            control:_layout()
+            control.row.Size = UDim2.fromOffset(inspectorWidth, 54)
+            control.row.Position = UDim2.fromOffset(0, y)
+            control.label.Position = UDim2.fromOffset(4, 17)
+            control.label.Size = UDim2.fromOffset(math.max(50, inspectorWidth - 132), 20)
+            control.desc.Visible = false
+            control.lane.Size = UDim2.fromOffset(112, 54)
+            control.lane.Position = UDim2.new(1, -4, 0, 0)
+            if control.track and control.kind == "Slider" then
+                control.track.AnchorPoint = Vector2.new(0, 0.5)
+                control.track.Position = UDim2.fromScale(0, 0.5)
+                control.track.Size = UDim2.fromOffset(72, 44)
+                control.valueLabel.AnchorPoint = Vector2.new(1, 0)
+                control.valueLabel.Position = UDim2.fromScale(1, 0)
+                control.valueLabel.Size = UDim2.fromOffset(34, 54)
+                control:renderVisual()
+                control.rail.Size = UDim2.new(1, 0, 0, 3)
+                control.fill.Size = UDim2.fromOffset(control.fill.Size.X.Offset, 3)
+            end
+            y += 54
+        end
+    end
+    self.applyHit.Position = UDim2.fromOffset(0, y + 8)
+    self.applyHit.Size = UDim2.new(1, 0, 0, 44)
+    self.localHint.Position = UDim2.fromOffset(4, y + 58)
+    local contentHeight = columns and math.max(canvasHeight, T.Spatial.InspectorHeight)
+        or canvasHeight + T.Spatial.InspectorHeight + 20
+    self.body.Size = UDim2.new(1, 0, 0, contentHeight + 46)
+    self.row.Size = self.layoutWidth and UDim2.fromOffset(self.layoutWidth, contentHeight + 46 + bodyTop)
+        or UDim2.new(1, 0, 0, contentHeight + 46 + bodyTop)
+    self.label.Position = UDim2.fromOffset(16, 12)
+    self.label.Size = UDim2.new(1, -32, 0, 20)
+    self.desc.Position = UDim2.fromOffset(16, 34)
+    self.desc.Size = UDim2.new(1, -32, 0, descriptionHeight)
+    self.separator.Position = UDim2.new(0, 16, 1, -1)
+    for i, button in ipairs(self.modeButtons) do
+        button.hit.Position = UDim2.fromOffset((i - 1) * math.min(100, (width - 32) / #self.modeButtons), 0)
+        button.hit.Size = UDim2.fromOffset(math.min(100, (width - 32) / #self.modeButtons), 40)
+    end
+    for _, button in ipairs(self.modeButtons) do
+        if self.value and button.mode.Id == self.value.Mode then
+            self.window.motion:To(self.modeIndicator, T.Motion.Fast, {
+                Position = UDim2.fromOffset(button.hit.Position.X.Offset + 4, 38),
+                Size = UDim2.fromOffset(
+                    math.min(button.hit.Size.X.Offset - 8, U.width(button.label.Text, T.Type.SubTab) + 4),
+                    2
+                ),
+            })
+        end
+    end
+    self.layoutBusy = false
+    self.page.scroll:Update()
+end
+function Spatial:Draw()
+    if self.destroyed or not self.body or not self.value then
+        return
+    end
+    local w = self.window
+    if self.flag then
+        w.Flags[self.flag] = self:Get()
+    end
+    if self.drawnMode ~= self.value.Mode then
+        self:_buildRegions()
+    end
+    self.body.GroupTransparency = self.state.Disabled and 0.55 or 0
+    if not self:_usable() then
+        self.hoveredRegion = nil
+        self.actionHovered = nil
+    end
+    for id, visual in pairs(self.visuals) do
+        local settings = self.value.Regions[Spatial.key(self.value.Mode, id)]
+        local selected = id == self.value.Selected
+        local color = Presentation.decodeColor(settings.Color)
+        local fill = selected and color
+            or self.hoveredRegion == id and w.theme.BorderStrong
+            or w.theme.SurfaceSecondary:Lerp(w.theme.BorderStrong, 0.18)
+        local transparency = visual.region.Disabled and 0.65
+            or selected and 1 - settings.Opacity * 0.65
+            or settings.Enabled and 0.12
+            or 0.55
+        if visual.piece then
+            w.motion:To(visual.piece, T.Motion.Fast, { BackgroundColor3 = fill, BackgroundTransparency = transparency })
+        else
+            w.motion:To(visual.shape, T.Motion.Fast, { GroupColor3 = fill, GroupTransparency = transparency })
+        end
+        if visual.stroke then
+            w.motion:To(
+                visual.stroke,
+                T.Motion.Fast,
+                { Color = selected and color or w.theme.BorderStrong, Transparency = selected and 0.25 or 0.45 }
+            )
+        end
+        for _, edge in ipairs(visual.edges) do
+            w.motion:To(edge, T.Motion.Fast, {
+                BackgroundColor3 = selected and color or w.theme.BorderStrong,
+                BackgroundTransparency = selected and 0.15 or 0.4,
+            })
+        end
+    end
+    local selected = self.value.Selected and self.visuals[self.value.Selected]
+    self.marker.Visible = selected ~= nil
+    self.leader.Visible = selected ~= nil
+    self.regionCaption.Visible = selected ~= nil
+    if selected then
+        local center = selected.center
+        local target =
+            Vector2.new(T.Spatial.CanvasWidth * 0.76, math.clamp(center.Y - 35, 30, T.Spatial.CanvasHeight - 28))
+        w.motion:To(self.marker, T.Motion.Fast, { Position = UDim2.fromOffset(center.X, center.Y) })
+        local color =
+            Presentation.decodeColor(self.value.Regions[Spatial.key(self.value.Mode, self.value.Selected)].Color)
+        self.marker.BackgroundColor3 = color
+        self.leader.BackgroundColor3 = color
+        w.motion:To(self.leader, T.Motion.Fast, {
+            Position = UDim2.fromOffset((center.X + target.X) / 2, (center.Y + target.Y) / 2),
+            Size = UDim2.fromOffset((target - center).Magnitude, 1),
+            Rotation = math.deg(math.atan2(target.Y - center.Y, target.X - center.X)),
+        })
+        self.regionCaption.Position = UDim2.fromOffset(target.X + 6, target.Y - 9)
+        self.regionCaption.Size = UDim2.fromOffset(T.Spatial.CanvasWidth - target.X - 12, 18)
+        self.regionCaption.Text = Spatial.name(w, selected.region)
+        self.regionCaption.TextColor3 = color
+        self.inspectorTitle.Text = Spatial.name(w, selected.region)
+    else
+        self.inspectorTitle.Text = w:Translate("SpatialNoSelection")
+    end
+    local active = self.inspectorOwner:IsActive()
+    for _, control in pairs(self.inspectorControls) do
+        if not control.destroyed then
+            control.state.Disabled = not active
+        end
+    end
+    self.editing = true
+    local settings = self.value.Selected and self:GetRegion(self.value.Selected)
+    if settings then
+        for key, control in pairs(self.inspectorControls) do
+            if not control.destroyed then
+                control:Set(key == "Opacity" and settings[key] * 100 or settings[key], true)
+            end
+        end
+    end
+    self.editing = false
+    for _, control in pairs(self.inspectorControls) do
+        if not control.destroyed then
+            if not settings then
+                control:_render()
+            end
+            control.row.Active = active
+        end
+    end
+    if not self.state.Pressed then
+        self.actionPressed = nil
+    end
+    w.motion:To(self.applySurface, T.Motion.Micro, {
+        BackgroundColor3 = w.theme.RowHover,
+        BackgroundTransparency = self.actionPressed == "Apply" and 0.15 or self.actionHovered == "Apply" and 0.5 or 1,
+    })
+    self.applyLabel.TextColor3 = self:_usable() and w.theme.Accent or w.theme.TextDisabled
+    self.resetLabel.TextColor3 = self.actionPressed == "Reset" and w.theme.AccentPressed
+        or self.actionHovered == "Reset" and w.theme.Accent
+        or w.theme.TextSecondary
+    self.inspectorSubtitle.Text = w:Translate("SpatialInspectorHint")
+    self.applyLabel.Text = w:Translate("SpatialApplyAll")
+    self.localHint.Text = w:Translate("SpatialLocalHint")
+    self.canvasHint.Text = w:Translate("SpatialTap")
+    self.resetLabel.Text = w:Translate("SpatialReset")
+    self.viewCaption.Text = w:Translate("Spatial" .. self.value.Mode)
+    for _, b in ipairs(self.modeButtons) do
+        b.label.Text = Spatial.name(w, b.mode)
+        b.label.TextColor3 = b.mode.Id == self.value.Mode and w.theme.TextPrimary
+            or b.hovered and w.theme.TextSecondary
+            or w.theme.TextMuted
+        if b.mode.Id == self.value.Mode then
+            w.motion:To(self.modeIndicator, T.Motion.Fast, {
+                Position = UDim2.fromOffset(b.hit.Position.X.Offset + 4, 38),
+                Size = UDim2.fromOffset(math.min(b.hit.Size.X.Offset - 8, U.width(b.label.Text, T.Type.SubTab) + 4), 2),
+                BackgroundColor3 = w.theme.Accent,
+            })
+        end
+    end
+    self:_layoutSpatial()
+end
+function SubTab:AddSpatialSelector(config)
+    config = config or {}
+    assert(type(config) == "table", "SpatialSelector expects config")
+    assert(config.Callback == nil or type(config.Callback) == "function", "Callback expects function")
+    assert(config.OnSelect == nil or type(config.OnSelect) == "function", "OnSelect expects function")
+    assert(config.Default == nil or type(config.Default) == "table", "Spatial Default expects state table")
+    assert(config.Modes == nil or type(config.Modes) == "table", "Spatial Modes expects array")
+    local modes = Spatial.modes(config.Modes or Spatial.builtins())
+    -- Validate complete defaults before any flags/rows exist.
+    local prototype = setmetatable({ modes = modes, window = self.window }, { __index = Spatial })
+    local default, valid, reason = prototype:normalize(
+        config.Default or { Mode = modes[1].Id, Selected = modes[1].Id == "Character" and "Torso" or nil }
+    )
+    assert(valid, reason)
+    local c = Components.row(self, config, "SpatialSelector")
+    for key, fn in pairs(Spatial) do
+        if type(fn) == "function" and key ~= "modes" and key ~= "builtins" then
+            c[key] = fn
+        end
+    end
+    local callback, onSelect = config.Callback, config.OnSelect
+    c.config = table.clone(config)
+    c.config.Callback = function(state)
+        local transition = c.pendingSelection
+        c.pendingSelection = nil
+        local ok, err = Visual.call("Spatial callback", callback, state)
+        if not ok then
+            c.callbackError = tostring(err)
+        end
+        if
+            transition
+            and not c.destroyed
+            and c.value.Mode == transition.Mode
+            and c.value.Selected == transition.Selected
+        then
+            local selectionOK, selectionError = Visual.call(
+                "Spatial selection",
+                onSelect,
+                transition.Selected,
+                transition.Mode,
+                c:GetRegion(transition.Selected)
+            )
+            if not selectionOK then
+                c.callbackError = tostring(selectionError)
+            end
+        end
+    end
+    c.modes = modes
+    c.systemHeading = true
+    c.inspectorControls = {}
+    c.value = default
+    c.lane.Visible = false
+    c.body = U.new("CanvasGroup", {
+        Name = "SpatialBody",
+        Position = UDim2.fromOffset(0, 66),
+        Size = UDim2.new(1, 0, 0, 420),
+        ZIndex = c.row.ZIndex + 2,
+    }, c.row)
+    c.modeButtons = {}
+    c.modeIndicator = U.frame(
+        c.body,
+        { Size = UDim2.fromOffset(50, 2), Position = UDim2.fromOffset(4, 38), ZIndex = c.body.ZIndex + 3 },
+        c.window,
+        "Accent"
+    )
+    for i, mode in ipairs(modes) do
+        local hit = U.button(c.body, {
+            Size = UDim2.fromOffset(100, 40),
+            Position = UDim2.fromOffset((i - 1) * 100, 0),
+            ZIndex = c.body.ZIndex + 2,
+        })
+        local label = U.label(
+            hit,
+            mode.Name,
+            T.Type.SubTab,
+            c.window.theme.TextMuted,
+            { Position = UDim2.fromOffset(4, 0), Size = UDim2.new(1, -8, 1, 0) }
+        )
+        c.modeButtons[i] = { hit = hit, label = label, mode = mode }
+        U.connect(c.bag, hit.Activated, function()
+            if c:_usable() then
+                c:Close()
+                c:SetMode(mode.Id)
+            end
+        end)
+    end
+    c.canvasHolder = U.frame(c.body, {
+        Name = "SpatialCanvas",
+        Position = UDim2.fromOffset(16, 46),
+        Size = UDim2.fromOffset(340, 397),
+        ZIndex = c.body.ZIndex + 1,
+    }, c.window, "ContentBackground")
+    U.corner(c.canvasHolder, T.Radius.Popover)
+    local edge = U.stroke(c.canvasHolder, c.window.theme.BorderWeak, 1)
+    U.bind(c.window, edge, "Color", "BorderWeak")
+    c.canvas = U.button(
+        c.canvasHolder,
+        { Size = UDim2.fromOffset(T.Spatial.CanvasWidth, T.Spatial.CanvasHeight), ZIndex = c.canvasHolder.ZIndex + 1 }
+    )
+    c.canvasScale = U.new("UIScale", { Scale = 1 }, c.canvas)
+    for x = 30, T.Spatial.CanvasWidth - 1, 30 do
+        local line = U.frame(
+            c.canvas,
+            { Position = UDim2.fromOffset(x, 0), Size = UDim2.new(0, 1, 1, 0), BackgroundTransparency = 0.7 },
+            c.window,
+            "Separator"
+        )
+        line.BackgroundTransparency = 0.7
+    end
+    for y = 30, T.Spatial.CanvasHeight - 1, 30 do
+        local line = U.frame(
+            c.canvas,
+            { Position = UDim2.fromOffset(0, y), Size = UDim2.new(1, 0, 0, 1), BackgroundTransparency = 0.7 },
+            c.window,
+            "Separator"
+        )
+        line.BackgroundTransparency = 0.7
+    end
+    c.viewCaption = U.label(
+        c.canvas,
+        "",
+        10,
+        c.window.theme.TextMuted,
+        { Position = UDim2.fromOffset(12, 6), Size = UDim2.fromOffset(190, 20), ZIndex = c.canvas.ZIndex + 4 }
+    )
+    c.resetHit = U.button(
+        c.canvas,
+        { Position = UDim2.new(1, -96, 0, 0), Size = UDim2.fromOffset(92, 44), ZIndex = c.canvas.ZIndex + 5 }
+    )
+    c.resetLabel =
+        U.label(c.resetHit, "", 10, c.window.theme.TextSecondary, { TextXAlignment = Enum.TextXAlignment.Right })
+    U.connect(c.bag, c.resetHit.Activated, function()
+        if c:_usable() then
+            for _, r in ipairs(c:FindMode(c.value.Mode).Regions) do
+                if not r.Disabled then
+                    c:Select(r.Id)
+                    break
+                end
+            end
+        end
+    end)
+    c.canvasHint = U.label(
+        c.canvas,
+        "",
+        9,
+        c.window.theme.TextMuted,
+        { Position = UDim2.new(0, 10, 1, -24), Size = UDim2.new(1, -20, 0, 20), ZIndex = c.canvas.ZIndex + 4 }
+    )
+    c.marker = Components.circle(c.canvas, 7, c.window.theme.Accent)
+    c.marker.ZIndex = c.canvas.ZIndex + 5
+    c.leader = Visual.line(c.canvas, Vector2.new(100, 100), Vector2.new(170, 80), c.window.theme.Accent, 1)
+    c.leader.ZIndex = c.canvas.ZIndex + 4
+    c.regionCaption = U.label(c.canvas, "", 9, c.window.theme.Accent, { ZIndex = c.canvas.ZIndex + 4 })
+    c.inspector = U.frame(
+        c.body,
+        { Name = "RegionInspector", Size = UDim2.fromOffset(T.Spatial.Inspector, 380), ZIndex = c.body.ZIndex + 2 },
+        c.window
+    )
+    c.inspectorTitle = U.label(
+        c.inspector,
+        "",
+        T.Type.ElementTitle,
+        c.window.theme.TextPrimary,
+        { Font = Enum.Font.GothamBold, Size = UDim2.new(1, -8, 0, 24), Position = UDim2.fromOffset(4, 0) }
+    )
+    local g = setmetatable({
+        owner = c,
+        body = c.inspector,
+        row = c.inspector,
+        bag = Maid.new(c.window.motion),
+        controls = {},
+        shown = true,
+        visible = true,
+        expanded = true,
+        targetHeight = 0,
+        mode = "Disable",
+    }, { __index = Dependency })
+    g.IsActive = function()
+        return not c.destroyed
+            and c.state.Visible
+            and not c.state.Disabled
+            and c.value.Selected ~= nil
+            and Dependency.available(c)
+    end
+    g.Sync = function()
+        if not g.destroyed then
+            c:_layoutSpatial()
+        end
+    end
+    c.inspectorOwner = g
+    c.settingsGroup = g
+    local function option(key, locale, defaultValue)
+        return {
+            Name = c.window:Translate(locale),
+            LocaleKey = locale,
+            Default = defaultValue,
+            _DependentGroup = g,
+            Callback = function(value)
+                if not c.editing and not c.destroyed and c.value.Selected and c:_usable() then
+                    c:SetRegion(c.value.Selected, { [key] = key == "Opacity" and value / 100 or value })
+                end
+            end,
+        }
+    end
+    c.inspectorControls.Enabled = self:AddToggle(option("Enabled", "SpatialEnabled", true))
+    local priority = option("Priority", "SpatialPriority", "Normal")
+    priority.Values = { "Low", "Normal", "High" }
+    c.inspectorControls.Priority = self:AddDropdown(priority)
+    local radius = option("Radius", "SpatialRadius", 24)
+    radius.Min = 1
+    radius.Max = 100
+    radius.Step = 1
+    radius.Suffix = " px"
+    c.inspectorControls.Radius = self:AddSlider(radius)
+    c.inspectorControls.Color = self:AddColorPicker(option("Color", "SpatialColor", c.window.theme.Accent))
+    local opacity = option("Opacity", "SpatialOpacity", 70)
+    opacity.Min = 0
+    opacity.Max = 100
+    opacity.Step = 1
+    opacity.Suffix = "%"
+    c.inspectorControls.Opacity = self:AddSlider(opacity)
+    c.applyHit = U.button(c.inspector, { Size = UDim2.new(1, 0, 0, 44), ZIndex = c.inspector.ZIndex + 4 })
+    c.inspectorSubtitle = U.label(
+        c.inspector,
+        "",
+        10,
+        c.window.theme.TextMuted,
+        { Position = UDim2.fromOffset(4, 23), Size = UDim2.new(1, -8, 0, 18) }
+    )
+    c.applySurface = U.frame(
+        c.applyHit,
+        { Position = UDim2.new(0, 0, 0.5, -14), Size = UDim2.new(1, 0, 0, 28), BackgroundTransparency = 1 },
+        c.window
+    )
+    U.corner(c.applySurface, T.Radius.Button)
+    for _, control in pairs(c.inspectorControls) do
+        control.systemHeading = true
+        if control.kind == "Slider" then
+            local original = control.renderVisual
+            control.renderVisual = function(field)
+                original(field)
+                field.rail.Size = UDim2.new(1, 0, 0, 3)
+                field.fill.Size = UDim2.fromOffset(field.fill.Size.X.Offset, 3)
+            end
+        end
+        if control.dependencyBranch then
+            control.dependencyBranch.Visible = false
+        end
+        control.separator.Position = UDim2.new(0, 4, 1, -1)
+        control.separator.Size = UDim2.new(1, -8, 0, 1)
+    end
+    c.applyLabel =
+        U.label(c.applyHit, "", 11, c.window.theme.TextSecondary, { TextXAlignment = Enum.TextXAlignment.Right })
+    c.localHint =
+        U.label(c.inspector, "", 10, c.window.theme.TextMuted, { Size = UDim2.new(1, -8, 0, 30), TextWrapped = true })
+    U.connect(c.bag, c.applyHit.Activated, function()
+        if c:_usable() then
+            c:ApplyToAll()
+        end
+    end)
+    U.connect(c.bag, c.canvas.InputBegan, function(event)
+        if U.primary(event) and c:_usable() then
+            local start = U.point(event)
+            local region = c:HitTest(start)
+            local moved = false
+            c.window.input:Start(c, event, function(point)
+                if (point - start).Magnitude > 8 then
+                    moved = true
+                end
+            end, function(released)
+                if released and not moved and region and c:_usable() then
+                    c:Select(region)
+                end
+            end)
+        end
+    end)
+    U.connect(c.bag, c.canvas.MouseLeave, function()
+        c.hoveredRegion = nil
+        c:Draw()
+    end)
+    U.connect(c.bag, S.Input.InputChanged, function(event)
+        if
+            event.UserInputType == Enum.UserInputType.MouseMovement
+            and c:_usable()
+            and U.inside(c.canvasHolder, U.point(event))
+        then
+            local hover = c:HitTest(U.point(event))
+            if hover ~= c.hoveredRegion then
+                c.hoveredRegion = hover
+                c:Draw()
+            end
+        end
+    end)
+    c.webhookLayout = function()
+        c:_layoutSpatial()
+    end
+    c.renderVisual = function()
+        c:Draw()
+    end
+    for _, pair in ipairs({ { c.applyHit, "Apply" }, { c.resetHit, "Reset" } }) do
+        U.connect(c.bag, pair[1].MouseEnter, function()
+            c.actionHovered = pair[2]
+            c:Draw()
+        end)
+        U.connect(c.bag, pair[1].MouseLeave, function()
+            if c.actionHovered == pair[2] then
+                c.actionHovered = nil
+            end
+            c:Draw()
+        end)
+        U.connect(c.bag, pair[1].InputBegan, function(event)
+            if U.primary(event) and c:_usable() then
+                c.actionPressed = pair[2]
+                c.state.Pressed = true
+                c.window.pressed[c] = event
+                c:Draw()
+            end
+        end)
+    end
+    for _, button in ipairs(c.modeButtons) do
+        U.connect(c.bag, button.hit.MouseEnter, function()
+            button.hovered = true
+            c:Draw()
+        end)
+        U.connect(c.bag, button.hit.MouseLeave, function()
+            button.hovered = false
+            c:Draw()
+        end)
+    end
+    c.spatialReady = true
+    c:Set(default, true)
+    c:_layout()
+    return c:_ready()
+end
+
 function Components.numeric(config)
     local min = U.finite(config.Min, 0)
     local max = U.finite(config.Max, 100)
@@ -3074,6 +7145,281 @@ end
 function Components.format(n, value)
     return n.prefix .. string.format("%." .. n.rounding .. "f", value) .. n.suffix
 end
+-- A compact numeric field: canonical numbers and drafts are separate states.
+function SubTab:AddNumericStepper(config)
+    config = config or {}
+    for _, key in ipairs({ "Min", "Max", "Step", "Increment", "Default", "Rounding" }) do
+        assert(
+            config[key] == nil or (type(config[key]) == "number" and U.finite(config[key], nil) ~= nil),
+            "Neron NumericStepper " .. key .. " expects a finite number"
+        )
+    end
+    local number = Components.numeric(config)
+    assert(
+        U.finite(number.max - number.min, nil) and U.finite((number.max - number.min) / number.step, nil),
+        "Neron NumericStepper range/step span must be finite"
+    )
+    local c = Components.row(self, config, "NumericStepper")
+    c.number, c.stepHovered = number, {}
+    local w = c.window
+    c.surface = U.frame(c.lane, {
+        Name = "NumericField",
+        AnchorPoint = Vector2.new(1, 0.5),
+        Position = UDim2.fromScale(1, 0.5),
+        Size = UDim2.fromOffset(T.Stepper.Width, T.Stepper.Height),
+        BackgroundTransparency = 0.35,
+        ZIndex = c.lane.ZIndex + 1,
+    }, w, "InputBackground")
+    U.corner(c.surface, T.Radius.Input)
+    c.edge = U.stroke(c.surface, w.theme.BorderMuted, 1)
+    c.edge.Transparency = 0.7
+    c.box = U.new("TextBox", {
+        Name = "NumericValue",
+        Position = UDim2.fromOffset(T.Stepper.HitWidth, 0),
+        Size = UDim2.new(1, -T.Stepper.HitWidth * 2, 1, 0),
+        ClearTextOnFocus = false,
+        Text = "",
+        TextSize = T.Type.Value,
+        Font = Enum.Font.GothamMedium,
+        TextColor3 = w.theme.TextPrimary,
+        TextXAlignment = Enum.TextXAlignment.Center,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+        ZIndex = c.surface.ZIndex + 1,
+    }, c.surface)
+    c.valueLabel = c.box
+    local function hit(key, plus)
+        local b = U.button(c.surface, {
+            Name = key,
+            AnchorPoint = Vector2.new(plus and 1 or 0, 0.5),
+            Position = UDim2.fromScale(plus and 1 or 0, 0.5),
+            Size = UDim2.fromOffset(T.Stepper.HitWidth, 44),
+            ZIndex = c.surface.ZIndex + 2,
+        })
+        local shade = U.frame(b, {
+            Position = UDim2.new(0.5, -12, 0.5, -12),
+            Size = UDim2.fromOffset(24, 24),
+            BackgroundTransparency = 1,
+            ZIndex = b.ZIndex,
+        }, w, "RowHover")
+        U.corner(shade, T.Radius.Input)
+        local icon = U.frame(
+            b,
+            { Position = UDim2.new(0.5, -4, 0.5, -4), Size = UDim2.fromOffset(8, 8), ZIndex = b.ZIndex + 1 },
+            w
+        )
+        Icons.line(icon, 0.1, 0.5, 0.9, 0.5, w.theme.TextSecondary, 1.2)
+        if plus then
+            Icons.line(icon, 0.5, 0.1, 0.5, 0.9, w.theme.TextSecondary, 1.2)
+        end
+        U.connect(c.bag, b.MouseEnter, function()
+            c.stepHovered[key] = true
+            c:_render()
+        end)
+        U.connect(c.bag, b.MouseLeave, function()
+            c.stepHovered[key] = false
+            c:_render()
+        end)
+        U.connect(c.bag, b.InputBegan, function(event)
+            if U.primary(event) and c:_usable() and c:CanStep(plus and 1 or -1) then
+                c.stepPressed = key
+                c.state.Pressed = true
+                w.pressed[c] = event
+                c:_render()
+            end
+        end)
+        U.connect(c.bag, b.Activated, function()
+            c.state.Pressed = false
+            w.pressed[c] = nil
+            if c:_usable() then
+                if plus then
+                    c:Increment()
+                else
+                    c:Decrement()
+                end
+            end
+            c:_render()
+        end)
+        return b, icon, shade
+    end
+    c.minusHit, c.minusIcon, c.minusShade = hit("Minus", false)
+    c.plusHit, c.plusIcon, c.plusShade = hit("Plus", true)
+    c.stepParts = {
+        { "Minus", c.minusIcon, c.minusShade, -1 },
+        { "Plus", c.plusIcon, c.plusShade, 1 },
+    }
+    function c:CanStep(direction)
+        return self.value ~= nil
+            and (direction > 0 and self.value < self.number.max or direction < 0 and self.value > self.number.min)
+    end
+    function c:_text(value)
+        return self.state.Focused and string.format("%." .. self.number.rounding .. "f", value)
+            or Components.format(self.number, value)
+    end
+    function c:_write(value)
+        self.writing = true
+        self.box.Text = self:_text(value)
+        self.writing = false
+    end
+    function c:layoutVisual(laneWidth)
+        self.surface.Size = UDim2.fromOffset(math.min(T.Stepper.Width, math.max(96, laneWidth)), T.Stepper.Height)
+    end
+    function c:renderVisual()
+        if self.value == nil then
+            return
+        end
+        if not self.state.Focused then
+            self:_write(self.value)
+        end
+        if not self.state.Pressed then
+            self.stepPressed = nil
+        end
+        local usable = self:_usable()
+        self.box.TextEditable = usable
+        self.box.TextColor3 = self.state.Disabled and w.theme.TextDisabled or w.theme.TextPrimary
+        w.motion:To(
+            self.surface,
+            T.Motion.Micro,
+            { BackgroundColor3 = w.theme.InputBackground, BackgroundTransparency = self.state.Focused and 0.1 or 0.35 }
+        )
+        w.motion:To(self.edge, T.Motion.Micro, {
+            Color = self.invalidDraft and w.theme.Danger
+                or (self.state.Focused and w.theme.Accent or w.theme.BorderMuted),
+            Transparency = self.invalidDraft and 0.2 or (self.state.Focused and 0.4 or 0.7),
+        })
+        for _, item in ipairs(self.stepParts) do
+            local available = usable and self:CanStep(item[4])
+            Icons.color(
+                item[2],
+                available and (self.stepHovered[item[1]] and w.theme.TextPrimary or w.theme.TextSecondary)
+                    or w.theme.TextDisabled
+            )
+            w.motion:To(item[3], T.Motion.Micro, {
+                BackgroundColor3 = w.theme.RowHover,
+                BackgroundTransparency = available
+                        and (self.stepPressed == item[1] and 0.1 or (self.stepHovered[item[1]] and 0.5 or 1))
+                    or 1,
+            })
+        end
+    end
+    function c:Set(value, silent)
+        if self.destroyed then
+            return self
+        end
+        local v, valid = self:Normalize(value)
+        if not valid then
+            return self
+        end
+        self.editStart = nil
+        self.invalidDraft = false
+        self:_write(v)
+        return self:_commit(v, silent)
+    end
+    function c:Increment(steps, silent)
+        steps = steps == nil and 1 or steps
+        if type(steps) == "number" and U.finite(steps, nil) and steps >= 0 then
+            local remaining = self.number.max - self.value
+            self:Set(
+                steps >= remaining / self.number.step and self.number.max or self.value + self.number.step * steps,
+                silent
+            )
+        end
+        return self
+    end
+    function c:Decrement(steps, silent)
+        steps = steps == nil and 1 or steps
+        if type(steps) == "number" and U.finite(steps, nil) and steps >= 0 then
+            local remaining = self.value - self.number.min
+            self:Set(
+                steps >= remaining / self.number.step and self.number.min or self.value - self.number.step * steps,
+                silent
+            )
+        end
+        return self
+    end
+    function c:SetBounds(minimum, maximum, step, silent)
+        if
+            self.destroyed
+            or type(minimum) ~= "number"
+            or type(maximum) ~= "number"
+            or not U.finite(minimum, nil)
+            or not U.finite(maximum, nil)
+            or maximum <= minimum
+            or (step ~= nil and (type(step) ~= "number" or not U.finite(step, nil) or step <= 0))
+            or not U.finite(maximum - minimum, nil)
+            or not U.finite((maximum - minimum) / (step or self.number.step), nil)
+        then
+            return false, "Invalid numeric bounds"
+        end
+        local options = table.clone(self.config)
+        options.Min, options.Max, options.Step = minimum, maximum, step or self.number.step
+        self.number = Components.numeric(options)
+        self.config.Min, self.config.Max, self.config.Step = minimum, maximum, options.Step
+        self:Set(self.value, silent)
+        return true
+    end
+    function c:Focus()
+        if self:_usable() then
+            self.box:CaptureFocus()
+        end
+        return self
+    end
+    U.connect(c.bag, c.box.Focused, function()
+        if not c:_usable() then
+            c.box:ReleaseFocus()
+            return
+        end
+        c.state.Focused = true
+        c.editStart = c.value
+        c.invalidDraft = false
+        c:_write(c.value)
+        c:_render()
+    end)
+    U.connect(c.bag, c.box:GetPropertyChangedSignal("Text"), function()
+        if c.writing or c.destroyed or not c.state.Focused then
+            return
+        end
+        if #c.box.Text > T.Stepper.InputLimit then
+            c.writing = true
+            c.box.Text = c.box.Text:sub(1, T.Stepper.InputLimit)
+            c.writing = false
+        end
+        local value = tonumber(c.box.Text)
+        if value and U.finite(value, nil) then
+            c.invalidDraft = false
+            c:_commit(Components.quantize(c.number, value), config.Live ~= true)
+        end
+    end)
+    U.connect(c.bag, c.box.FocusLost, function()
+        if c.destroyed then
+            return
+        end
+        local previous = c.editStart
+        local value = tonumber(c.box.Text)
+        local valid = value and U.finite(value, nil)
+        c.state.Focused = false
+        c.editStart = nil
+        c:Set(valid and value or c.value, true)
+        if config.Live ~= true and previous ~= nil and previous ~= c.value and c:_usable() then
+            c:_emit()
+        end
+        if not valid and c:_usable() then
+            c.invalidDraft = true
+            if c.invalidCancel then
+                c.bag:Remove(c.invalidCancel, true)
+            end
+            c.invalidCancel = c.bag:After(1.2, function()
+                c.invalidCancel = nil
+                c.invalidDraft = false
+                c:_render()
+            end)
+        end
+        c:_render()
+    end)
+    c:Set(config.Default == nil and number.min or config.Default, true)
+    c:_layout()
+    return c:_ready()
+end
+
 function Components.slider(page, config, range)
     config = config or {}
     local number = Components.numeric(config)
@@ -3249,11 +7595,7 @@ function Components.dropdown(page, config, multi)
     self.chevron.Position = UDim2.new(1, -18, 0.5, -4)
     function self:renderVisual()
         local w = self.window
-        self.valueLabel.Text = multi
-                and ((self.value and #self.value > 0) and table.concat(self.value, ", ") or tostring(
-                    config.Placeholder or Locale.text(w, "None")
-                ))
-            or tostring(self.value or config.Placeholder or Locale.text(w, "Select"))
+        self.valueLabel.Text = Locale.selection(self)
         self.valueLabel.TextColor3 = self.state.Disabled and w.theme.TextDisabled or w.theme.TextPrimary
         Icons.color(self.chevron, self.valueLabel.TextColor3)
         w.motion:To(self.chevron, T.Motion.Fast, { Rotation = self.state.Open and 180 or 0 })
@@ -3267,6 +7609,7 @@ function Components.dropdown(page, config, multi)
             for _, option in ipairs(self.optionRows) do
                 local selected = multi and self.value and table.find(self.value, option.value) ~= nil
                     or (not multi and option.value == self.value)
+                option.label.Text = Locale.option(self, option.value)
                 option.dot.Visible = selected
                 option.label.TextColor3 = (selected or option.hover) and w.theme.TextPrimary or w.theme.TextMuted
                 option.dot.BackgroundColor3 = w.theme.Accent
@@ -3339,7 +7682,7 @@ function Components.dropdown(page, config, multi)
                 )
                 local label = U.label(
                     button,
-                    value,
+                    Locale.option(self, value),
                     T.Type.PopoverOption,
                     self.window.theme.TextMuted,
                     { Position = UDim2.fromOffset(6, 0), Size = UDim2.new(1, -22, 1, 0) }
@@ -3652,7 +7995,7 @@ function SubTab:AddTextbox(config)
         Position = UDim2.fromScale(1, 0.5),
         Size = UDim2.fromOffset(152, 30),
         Text = "",
-        PlaceholderText = tostring(config.Placeholder or ""),
+        PlaceholderText = Locale.source(self.window, config.Placeholder or "", config.PlaceholderKey, config.Localize),
         PlaceholderColor3 = self.window.theme.TextMuted,
         TextSize = T.Type.Value,
         TextColor3 = self.window.theme.TextPrimary,
@@ -3719,7 +8062,7 @@ function SubTab:AddTextbox(config)
             self.box.Text = self.value
             self.writing = false
         end
-        self.box.TextEditable = not self.state.Disabled
+        self.box.TextEditable = not self.state.Disabled and Dependency.available(self)
         self.box.TextColor3 = self.state.Disabled and self.window.theme.TextDisabled or self.window.theme.TextPrimary
         Icons.color(self.edit, self.box.TextColor3)
         self.window.motion:To(self.focusStroke, T.Motion.Micro, { Transparency = self.state.Focused and 0.15 or 1 })
@@ -3801,7 +8144,7 @@ function SubTab:AddButton(config)
     U.corner(self.action, T.Radius.Button)
     self.actionLabel = U.label(
         self.action,
-        config.Text or self.name,
+        Locale.source(self.window, config.Text or self.name, config.TextKey or config.LocaleKey, config.Localize),
         T.Type.Value,
         self.window.theme.TextMuted,
         { TextXAlignment = Enum.TextXAlignment.Center, Font = Enum.Font.GothamMedium }
@@ -3834,7 +8177,9 @@ function SubTab:AddButton(config)
     function self:SetText(text)
         if not self.destroyed then
             self.config.Text = tostring(text)
-            self.actionLabel.Text = self.config.Text
+            Locale.refreshOwner(self)
+            self.actionLabel.Text =
+                Locale.source(self.window, self.config.Text, self.config.TextKey, self.config.Localize)
         end
         return self
     end
@@ -3898,11 +8243,11 @@ function Components.info(page, config, kind)
         end
         if kind == "Paragraph" or kind == "Notice" then
             self.description = tostring(text or "")
-            self.desc.Text = self.description
+            Locale.refreshOwner(self)
             self.window:_indexChanged()
         else
             self.name = tostring(text or "")
-            self.label.Text = self.name
+            Locale.refreshOwner(self)
         end
         self.window:_indexChanged()
         self:_layout()
@@ -3926,8 +8271,8 @@ end
 function SubTab:AddParagraph(config)
     return Components.info(self, config, "Paragraph")
 end
-function SubTab:AddSeparator()
-    return Components.info(self, {}, "Separator")
+function SubTab:AddSeparator(config)
+    return Components.info(self, config or {}, "Separator")
 end
 function SubTab:AddSection(config)
     return Components.info(self, config, "Section")
@@ -3975,6 +8320,14 @@ function Window:_searchResults(query)
                 .. control.description
                 .. " "
                 .. tostring(keywords or "")
+                .. " "
+                .. (tab.displayName or tab.name)
+                .. " "
+                .. (page.displayName or page.name)
+                .. " "
+                .. (control.displayName or control.name)
+                .. " "
+                .. (control.displayDescription or control.description)
             ):lower()
             local match = true
             for word in query:gmatch("%S+") do
@@ -3985,6 +8338,7 @@ function Window:_searchResults(query)
             end
             if
                 match
+                and Dependency.searchable(control)
                 and control.state.Visible
                 and not control.destroyed
                 and page.visible
@@ -4003,14 +8357,21 @@ function Window:_searchResults(query)
                     ZIndex = T.Z.Search + 3,
                 })
                 bag:Add(row)
-                U.label(row, control.name, T.Type.ElementTitle, self.theme.TextPrimary, {
+                U.label(row, control.displayName or control.name, T.Type.ElementTitle, self.theme.TextPrimary, {
                     Position = UDim2.fromOffset(16, 12),
                     Size = UDim2.new(1, -32, 0, 20),
                     Font = Enum.Font.GothamMedium,
                 })
                 U.label(
                     row,
-                    tab.name .. " / " .. page.name,
+                    (tab.displayName or tab.name)
+                        .. " / "
+                        .. (page.displayName or page.name)
+                        .. (
+                            control.dependentGroup
+                                and " / " .. (control.dependentGroup.owner.displayName or control.dependentGroup.owner.name)
+                            or ""
+                        ),
                     T.Type.Description,
                     self.theme.TextMuted,
                     { Position = UDim2.fromOffset(16, 38), Size = UDim2.new(1, -32, 0, 18) }
@@ -4030,6 +8391,7 @@ function Window:_searchResults(query)
                 U.connect(bag, row.Activated, function()
                     if
                         control.destroyed
+                        or not Dependency.searchable(control)
                         or not self.searchOpen
                         or not control.state.Visible
                         or not page.visible
@@ -4042,9 +8404,11 @@ function Window:_searchResults(query)
                     self:CloseSearch(true)
                     tab:Select()
                     page:Select()
-                    control.bag:After(0, function()
+                    local target = Dependency.target(control)
+                    target.bag:After(0, function()
                         if
                             control.destroyed
+                            or target.destroyed
                             or page.destroyed
                             or self.destroyed
                             or not control.state.Visible
@@ -4055,18 +8419,18 @@ function Window:_searchResults(query)
                         end
                         local sf = page.scroll.frame
                         page.scroll:Update()
-                        local y = (control.row.AbsolutePosition.Y - sf.AbsolutePosition.Y) / self.scale
+                        local y = (target.row.AbsolutePosition.Y - sf.AbsolutePosition.Y) / self.scale
                             + sf.CanvasPosition.Y
                         sf.CanvasPosition = Vector2.new(0, math.clamp(y - 8, 0, page.scroll.maximum))
-                        if control.highlightCancel then
-                            control.bag:Remove(control.highlightCancel, true)
+                        if target.highlightCancel then
+                            target.bag:Remove(target.highlightCancel, true)
                         end
-                        control.state.Highlight = true
-                        control:_render()
-                        control.highlightCancel = control.bag:After(0.6, function()
-                            control.highlightCancel = nil
-                            control.state.Highlight = false
-                            control:_render()
+                        target.state.Highlight = true
+                        target:_render()
+                        target.highlightCancel = target.bag:After(0.6, function()
+                            target.highlightCancel = nil
+                            target.state.Highlight = false
+                            target:_render()
                         end)
                     end, true)
                 end)
@@ -4348,6 +8712,7 @@ function Window:SetTooltipsEnabled(value)
 end
 function Control:SetTooltip(text)
     self.tooltipText = tostring(text or "")
+    Locale.refreshOwner(self)
     if not self.destroyed then
         self.window.tooltip:Cancel()
     end
@@ -4355,6 +8720,7 @@ function Control:SetTooltip(text)
 end
 function Tab:SetTooltip(text)
     self.tooltipText = tostring(text or "")
+    Locale.refreshOwner(self)
     if not self.destroyed then
         self.window.tooltip:Cancel()
     end
@@ -4362,6 +8728,7 @@ function Tab:SetTooltip(text)
 end
 function SubTab:SetTooltip(text)
     self.tooltipText = tostring(text or "")
+    Locale.refreshOwner(self)
     if not self.destroyed then
         self.window.tooltip:Cancel()
     end
@@ -4384,6 +8751,7 @@ function Geometry.dimensions(value)
     return Vector2.new(math.floor(x + 0.5), math.floor(y + 0.5))
 end
 function Geometry.layout(w)
+    Radial.refresh(w)
     if not w.resizeGrip then
         return
     end
@@ -4888,6 +9256,7 @@ function Library:CreateWindow(config)
         scale = 1,
         pressed = setmetatable({}, { __mode = "k" }),
         name = tostring(config.Name or "NERON"),
+        suffix = tostring(config.Suffix or "CORP."),
         searchEnabled = config.Search ~= false,
         manualSize = config.ManualSize ~= nil and config.ManualSize ~= false,
         defaultDesktopSize = (config.ManualSize == nil or config.ManualSize == false)
@@ -4966,7 +9335,7 @@ function Library:CreateWindow(config)
     )
     w.suffixLabel = U.label(
         w.sidebar,
-        config.Suffix or "CORP.",
+        w.suffix,
         T.Type.Suffix,
         w.theme.TextSecondary,
         { Size = UDim2.fromOffset(45, 20), Font = Enum.Font.GothamBold }
@@ -5359,8 +9728,11 @@ function Presentation.init(w, config)
     w.themeOverrides = config.Theme == nil and table.clone(Library.themeOverrides or {}) or {}
     w.customAccent = config.Accent or (config.Theme == nil and Library.customAccent or nil)
     w.localeBindings = setmetatable({}, { __mode = "k" })
+    w.localeOwners = setmetatable({}, { __mode = "k" })
+    w.translations = Locale.copyTranslations(config.Translations)
     w.language = Locale.dictionaries[config.Language] and config.Language or Library.language or "English"
     Presentation.apply(w)
+    Locale.enroll(w, w, config, "Window")
     Locale.bind(w, w.searchBox, "PlaceholderText", "Search")
     for _, obj in ipairs(w.searchEmpty:GetDescendants()) do
         if obj:IsA("TextLabel") then
@@ -5469,6 +9841,262 @@ end
 -- System labels only. Consumer labels remain untouched unless explicitly bound by the consumer.
 Locale.order = { "English", "Spanish", "Russian", "Portuguese" }
 Locale.rows = {
+    SpatialInspectorHint = {
+        "Settings for this region",
+        "Ajustes de esta zona",
+        "Настройки этой области",
+        "Ajustes desta região",
+    },
+    SpatialCharacter = { "Character", "Personaje", "Персонаж", "Personagem" },
+    SpatialMap = { "Map", "Mapa", "Карта", "Mapa" },
+    SpatialEquipment = { "Equipment", "Equipamiento", "Снаряжение", "Equipamento" },
+    SpatialEnabled = { "Enabled", "Activado", "Включено", "Ativado" },
+    SpatialPriority = { "Priority", "Prioridad", "Приоритет", "Prioridade" },
+    SpatialRadius = { "Radius", "Radio", "Радиус", "Raio" },
+    SpatialColor = { "Color", "Color", "Цвет", "Cor" },
+    SpatialOpacity = { "Opacity", "Opacidad", "Непрозрачность", "Opacidade" },
+    SpatialApplyAll = {
+        "Apply to all regions",
+        "Aplicar a todas las zonas",
+        "Применить ко всем областям",
+        "Aplicar a todas as regiões",
+    },
+    SpatialLocalHint = {
+        "Changes affect the selected region only.",
+        "Los cambios afectan solo a esta zona.",
+        "Изменения только для выбранной области.",
+        "Alterações apenas nesta região.",
+    },
+    SpatialTap = {
+        "Tap a region to edit its settings.",
+        "Toca una zona para editar sus ajustes.",
+        "Нажмите на область для настройки.",
+        "Toque em uma região para editar.",
+    },
+    SpatialReset = { "Reset selection", "Restablecer", "Сброс выбора", "Restaurar" },
+    SpatialNoSelection = { "No selection", "Sin selección", "Нет выбора", "Sem seleção" },
+    SpatialHead = { "Head", "Cabeza", "Голова", "Cabeça" },
+    SpatialTorso = { "Torso", "Torso", "Торс", "Tronco" },
+    SpatialHip = { "Hip", "Cadera", "Таз", "Quadril" },
+    SpatialLeftUpperArm = { "Left upper arm", "Brazo izquierdo", "Левое плечо", "Braço esquerdo" },
+    SpatialLeftForearm = {
+        "Left forearm",
+        "Antebrazo izquierdo",
+        "Левое предплечье",
+        "Antebraço esquerdo",
+    },
+    SpatialLeftHand = { "Left hand", "Mano izquierda", "Левая кисть", "Mão esquerda" },
+    SpatialRightUpperArm = { "Right upper arm", "Brazo derecho", "Правое плечо", "Braço direito" },
+    SpatialRightForearm = {
+        "Right forearm",
+        "Antebrazo derecho",
+        "Правое предплечье",
+        "Antebraço direito",
+    },
+    SpatialRightHand = { "Right hand", "Mano derecha", "Правая кисть", "Mão direita" },
+    SpatialLeftThigh = { "Left thigh", "Muslo izquierdo", "Левое бедро", "Coxa esquerda" },
+    SpatialLeftShin = { "Left shin", "Pierna izquierda", "Левая голень", "Perna esquerda" },
+    SpatialLeftFoot = { "Left foot", "Pie izquierdo", "Левая стопа", "Pé esquerdo" },
+    SpatialRightThigh = { "Right thigh", "Muslo derecho", "Правое бедро", "Coxa direita" },
+    SpatialRightShin = { "Right shin", "Pierna derecha", "Правая голень", "Perna direita" },
+    SpatialRightFoot = { "Right foot", "Pie derecho", "Правая стопа", "Pé direito" },
+    SpatialNorth = { "North", "Norte", "Север", "Norte" },
+    SpatialCourtyard = { "Courtyard", "Patio", "Двор", "Pátio" },
+    SpatialWest = { "West", "Oeste", "Запад", "Oeste" },
+    SpatialEast = { "East", "Este", "Восток", "Leste" },
+    SpatialChest = { "Chest", "Pecho", "Грудь", "Peito" },
+    SpatialLegs = { "Legs", "Piernas", "Ноги", "Pernas" },
+    SpatialFeet = { "Feet", "Pies", "Стопы", "Pés" },
+    SpatialAccessory = { "Accessory", "Accesorio", "Аксессуар", "Acessório" },
+    SpatialWeapon = { "Weapon", "Arma", "Оружие", "Arma" },
+    RadialOpen = { "Open wheel", "Abrir rueda", "Открыть меню", "Abrir roda" },
+    RadialCancel = { "Cancel", "Cancelar", "Отмена", "Cancelar" },
+    RadialHint = {
+        "Hold · Drag · Release",
+        "Mantén · Desliza · Suelta",
+        "Удерживайте · Переместите · Отпустите",
+        "Segure · Arraste · Solte",
+    },
+    WebhookSampleFields = {
+        "Status: Completed   •   Duration: 02:34",
+        "Estado: Completado   •   Duración: 02:34",
+        "Статус: Готово   •   Длительность: 02:34",
+        "Status: Concluído   •   Duração: 02:34",
+    },
+    WebhookURL = { "Webhook URL", "URL del webhook", "URL вебхука", "URL do webhook" },
+    WebhookURLPlaceholder = {
+        "Paste your Discord webhook URL",
+        "Pega la URL de Discord",
+        "Вставьте URL вебхука Discord",
+        "Cole a URL do Discord",
+    },
+    WebhookEvents = { "Notify on", "Notificar al", "Уведомления", "Notificar em" },
+    WebhookEventsBody = {
+        "Choose the events to send.",
+        "Elige los eventos a enviar.",
+        "Выберите события.",
+        "Escolha os eventos.",
+    },
+    WebhookMentions = { "Mentions", "Menciones", "Упоминания", "Menções" },
+    WebhookMentionsBody = {
+        "Avoid unwanted mentions.",
+        "Evita menciones no deseadas.",
+        "Без нежелательных упоминаний.",
+        "Evite menções indesejadas.",
+    },
+    WebhookInterval = {
+        "Minimum interval",
+        "Intervalo mínimo",
+        "Минимальный интервал",
+        "Intervalo mínimo",
+    },
+    WebhookIntervalBody = {
+        "Prevent duplicate or rapid notifications.",
+        "Evita envíos duplicados o rápidos.",
+        "Без повторных и частых уведомлений.",
+        "Evite envios duplicados ou rápidos.",
+    },
+    WebhookMessageTitle = {
+        "Message title",
+        "Título del mensaje",
+        "Заголовок сообщения",
+        "Título da mensagem",
+    },
+    WebhookMessageBody = {
+        "Message body",
+        "Contenido del mensaje",
+        "Текст сообщения",
+        "Corpo da mensagem",
+    },
+    WebhookPreview = { "PREVIEW", "VISTA PREVIA", "ПРЕДПРОСМОТР", "PRÉVIA" },
+    WebhookPreviewOnly = {
+        "Preview only · Nothing sent",
+        "Vista previa · Sin enviar",
+        "Предпросмотр · Не отправлено",
+        "Prévia · Nada enviado",
+    },
+    WebhookPrivate = {
+        "Private URL · Not saved to profiles",
+        "URL privada · No se guarda en perfiles",
+        "URL не сохраняется в профилях",
+        "URL privada · Não salva em perfis",
+    },
+    WebhookPlaintext = {
+        "URL saved as plain text",
+        "URL guardada en texto plano",
+        "URL сохраняется открытым текстом",
+        "URL salva como texto simples",
+    },
+    WebhookSendTest = { "Send test", "Enviar prueba", "Отправить тест", "Enviar teste" },
+    WebhookEditMessage = { "Edit message", "Editar mensaje", "Изменить сообщение", "Editar mensagem" },
+    WebhookSending = { "Sending…", "Enviando…", "Отправка…", "Enviando…" },
+    WebhookNotTested = {
+        "URL valid · Not tested",
+        "URL válida · Sin probar",
+        "URL верен · Не проверен",
+        "URL válida · Não testada",
+    },
+    WebhookMissingURL = { "Add a webhook URL", "Añade una URL", "Добавьте URL", "Adicione uma URL" },
+    WebhookInvalidURL = {
+        "Invalid Discord webhook URL",
+        "URL de Discord inválida",
+        "Неверный URL Discord",
+        "URL do Discord inválida",
+    },
+    WebhookUnsupported = {
+        "HTTP request unavailable",
+        "Solicitud HTTP no disponible",
+        "HTTP недоступен",
+        "Solicitação HTTP indisponível",
+    },
+    WebhookSent = { "Sent successfully", "Enviado correctamente", "Отправлено", "Enviado com sucesso" },
+    WebhookFailed = { "Send failed", "Falló el envío", "Ошибка отправки", "Falha no envio" },
+    WebhookUnavailable = {
+        "Webhook unavailable",
+        "Webhook no disponible",
+        "Вебхук недоступен",
+        "Webhook indisponível",
+    },
+    WebhookRejected = {
+        "Request rejected",
+        "Solicitud rechazada",
+        "Запрос отклонён",
+        "Solicitação rejeitada",
+    },
+    WebhookRateLimited = {
+        "Rate limited · Please wait",
+        "Límite de envíos · Espera",
+        "Лимит запросов · Подождите",
+        "Limite de envios · Aguarde",
+    },
+    WebhookRetryReady = {
+        "Ready to retry",
+        "Listo para reintentar",
+        "Можно повторить",
+        "Pronto para tentar novamente",
+    },
+    WebhookCancelled = { "Send cancelled", "Envío cancelado", "Отправка отменена", "Envio cancelado" },
+    WebhookTimeout = {
+        "Request timed out",
+        "La solicitud tardó demasiado",
+        "Время запроса истекло",
+        "Tempo da solicitação esgotado",
+    },
+    WebhookTestTitle = { "Webhook test", "Prueba de webhook", "Тест вебхука", "Teste de webhook" },
+    WebhookTestBody = {
+        "Test message from Neron.",
+        "Mensaje de prueba de Neron.",
+        "Тестовое сообщение Neron.",
+        "Mensagem de teste do Neron.",
+    },
+    DynamicIdle = { "Not loaded", "Sin cargar", "Не загружено", "Não carregado" },
+    DynamicIdleBody = {
+        "Load the content when you are ready.",
+        "Carga el contenido cuando quieras.",
+        "Загрузите данные, когда будете готовы.",
+        "Carregue o conteúdo quando quiser.",
+    },
+    DynamicLoading = { "Loading", "Cargando", "Загрузка", "Carregando" },
+    DynamicLoadingBody = {
+        "Retrieving content…",
+        "Obteniendo contenido…",
+        "Получение данных…",
+        "Buscando conteúdo…",
+    },
+    DynamicReady = { "Ready", "Listo", "Готово", "Pronto" },
+    DynamicReadyBody = {
+        "Content is ready.",
+        "El contenido está listo.",
+        "Данные готовы.",
+        "O conteúdo está pronto.",
+    },
+    DynamicEmpty = { "No results", "Sin resultados", "Нет результатов", "Nenhum resultado" },
+    DynamicEmptyBody = {
+        "Nothing to show yet. You can try again.",
+        "Aún no hay contenido. Puedes reintentar.",
+        "Пока нет данных. Попробуйте ещё раз.",
+        "Ainda não há conteúdo. Tente novamente.",
+    },
+    DynamicError = {
+        "Unable to load",
+        "No se pudo cargar",
+        "Не удалось загрузить",
+        "Não foi possível carregar",
+    },
+    DynamicErrorBody = {
+        "Try again. Details are available in the script log.",
+        "Reintenta. Hay detalles en el registro del script.",
+        "Повторите попытку. Подробности в журнале скрипта.",
+        "Tente novamente. Consulte o registro do script.",
+    },
+    DynamicLoad = { "Load", "Cargar", "Загрузить", "Carregar" },
+    DynamicRetry = { "Retry", "Reintentar", "Повторить", "Tentar novamente" },
+    DynamicTimeout = {
+        "The request took too long. Try again.",
+        "La solicitud tardó demasiado. Reintenta.",
+        "Запрос занял слишком много времени. Повторите попытку.",
+        "A solicitação demorou demais. Tente novamente.",
+    },
     Settings = { "Settings", "Configuración", "Настройки", "Configurações" },
     Profiles = { "Profiles", "Perfiles", "Профили", "Perfis" },
     Themes = { "Themes", "Temas", "Темы", "Temas" },
@@ -5618,10 +10246,10 @@ Locale.rows = {
         "A aparência muda ao vivo; controles e valores são preservados.",
     },
     LanguageBody = {
-        "System text changes immediately. Developer labels are preserved.",
-        "El texto del sistema cambia al instante. Tus etiquetas se conservan.",
-        "Текст системы меняется сразу. Названия разработчика сохраняются.",
-        "O texto do sistema muda imediatamente. Seus rótulos são preservados.",
+        "Translate the whole interface locally. Custom labels use your translation dictionary; values stay unchanged.",
+        "Traduce toda la interfaz sin conexión. Las etiquetas propias usan tu diccionario; los valores no cambian.",
+        "Локальный перевод всего интерфейса. Свои подписи берутся из словаря; значения не меняются.",
+        "Traduza toda a interface localmente. Rótulos próprios usam seu dicionário; os valores não mudam.",
     },
     GeneralBody = {
         "Window preferences and persistence capabilities.",
@@ -5730,6 +10358,387 @@ Locale.rows.RestoreSummary = {
     "%d восстановлено · %d недоступно · %d ошибок",
     "%d restaurados · %d indisponíveis · %d falhas",
 }
+-- Shared vocabulary applies to every enrolled page, not just the Settings overlay.
+Locale.rows["Basic Settings"] =
+    { "Basic Settings", "Configuración básica", "Основные настройки", "Configurações básicas" }
+Locale.rows["Here are the main configuration parameters for the application or system."] = {
+    "Here are the main configuration parameters for the application or system.",
+    "Parámetros principales de la aplicación o del sistema.",
+    "Основные параметры приложения или системы.",
+    "Parâmetros principais da aplicação ou do sistema.",
+}
+Locale.rows["Additional"] = { "Additional", "Adicional", "Дополнительно", "Adicional" }
+Locale.rows["Misc"] = { "Misc", "Otros", "Прочее", "Outros" }
+Locale.rows["Enable autostart on system boot"] = {
+    "Enable autostart on system boot",
+    "Iniciar con el sistema",
+    "Запускать вместе с системой",
+    "Iniciar com o sistema",
+}
+Locale.rows["Show popup notifications"] = {
+    "Show popup notifications",
+    "Mostrar notificaciones emergentes",
+    "Показывать всплывающие уведомления",
+    "Mostrar notificações pop-up",
+}
+Locale.rows["Interface Language"] =
+    { "Interface Language", "Idioma de la interfaz", "Язык интерфейса", "Idioma da interface" }
+Locale.rows["Theme"] = { "Theme", "Tema", "Тема", "Tema" }
+Locale.rows["English"] = { "English", "Inglés", "Английский", "Inglês" }
+Locale.rows["Russian"] = { "Russian", "Ruso", "Русский", "Russo" }
+Locale.rows["Deutsch"] = { "Deutsch", "Alemán", "Немецкий", "Alemão" }
+Locale.rows["Dark"] = { "Dark", "Oscuro", "Тёмный", "Escuro" }
+Locale.rows["Light"] = { "Light", "Claro", "Светлый", "Claro" }
+Locale.rows["System"] = { "System", "Sistema", "Системный", "Sistema" }
+Locale.rows["Username"] = { "Username", "Nombre de usuario", "Имя пользователя", "Nome de usuário" }
+Locale.rows["Maximum concurrent downloads"] = {
+    "Maximum concurrent downloads",
+    "Descargas simultáneas máximas",
+    "Максимум одновременных загрузок",
+    "Máximo de downloads simultâneos",
+}
+Locale.rows["Log detail level"] = {
+    "Log detail level",
+    "Nivel de detalle del registro",
+    "Уровень детализации журнала",
+    "Nível de detalhe do registro",
+}
+Locale.rows["Controls how much information is written to the log file. Higher values mean more details."] = {
+    "Controls how much information is written to the log file. Higher values mean more details.",
+    "Controla la información del registro. Un valor mayor añade más detalles.",
+    "Определяет объём информации в журнале. Большее значение добавляет детали.",
+    "Controla as informações do registro. Valores maiores adicionam detalhes.",
+}
+Locale.rows["Allowed port range"] = {
+    "Allowed port range",
+    "Rango de puertos permitidos",
+    "Диапазон разрешённых портов",
+    "Intervalo de portas permitidas",
+}
+Locale.rows["Preferred server regions"] = {
+    "Preferred server regions",
+    "Regiones de servidor preferidas",
+    "Предпочитаемые регионы серверов",
+    "Regiões de servidor preferidas",
+}
+Locale.rows["Select regions for potentially faster connection speeds."] = {
+    "Select regions for potentially faster connection speeds.",
+    "Selecciona regiones para mejorar la conexión.",
+    "Выберите регионы для более быстрого соединения.",
+    "Selecione regiões para melhorar a conexão.",
+}
+Locale.rows["America (North)"] =
+    { "America (North)", "América del Norte", "Северная Америка", "América do Norte" }
+Locale.rows["America (South)"] =
+    { "America (South)", "América del Sur", "Южная Америка", "América do Sul" }
+Locale.rows["Europe (Frankfurt)"] =
+    { "Europe (Frankfurt)", "Europa (Fráncfort)", "Европа (Франкфурт)", "Europa (Frankfurt)" }
+Locale.rows["Europe (London)"] =
+    { "Europe (London)", "Europa (Londres)", "Европа (Лондон)", "Europa (Londres)" }
+Locale.rows["Asia (Tokyo)"] = { "Asia (Tokyo)", "Asia (Tokio)", "Азия (Токио)", "Ásia (Tóquio)" }
+Locale.rows["Asia (Singapore)"] =
+    { "Asia (Singapore)", "Asia (Singapur)", "Азия (Сингапур)", "Ásia (Singapura)" }
+Locale.rows["Active element color"] = {
+    "Active element color",
+    "Color del elemento activo",
+    "Цвет активного элемента",
+    "Cor do elemento ativo",
+}
+Locale.rows["Use custom background color"] = {
+    "Use custom background color",
+    "Usar color de fondo personalizado",
+    "Использовать свой цвет фона",
+    "Usar cor de fundo personalizada",
+}
+Locale.rows["Overrides the theme's default background color when checked."] = {
+    "Overrides the theme's default background color when checked.",
+    "Reemplaza el color de fondo del tema al activarlo.",
+    "При включении заменяет стандартный цвет фона темы.",
+    "Substitui a cor de fundo do tema quando ativado.",
+}
+Locale.rows["Custom background color"] = {
+    "Custom background color",
+    "Color de fondo personalizado",
+    "Свой цвет фона",
+    "Cor de fundo personalizada",
+}
+Locale.rows["Reset all settings to default"] = {
+    "Reset all settings to default",
+    "Restablecer la configuración",
+    "Сбросить все настройки",
+    "Restaurar configurações padrão",
+}
+Locale.rows["Response timeout range"] = {
+    "Response timeout range",
+    "Rango de tiempo de respuesta",
+    "Диапазон времени ожидания ответа",
+    "Intervalo de tempo de resposta",
+}
+Locale.rows["Enable update checks"] = {
+    "Enable update checks",
+    "Buscar actualizaciones",
+    "Проверять обновления",
+    "Verificar atualizações",
+}
+Locale.rows["Check for updates when the application starts."] = {
+    "Check for updates when the application starts.",
+    "Busca actualizaciones al iniciar la aplicación.",
+    "Проверять обновления при запуске приложения.",
+    "Verifica atualizações ao iniciar a aplicação.",
+}
+Locale.rows["Updates"] = { "Updates", "Actualizaciones", "Обновления", "Atualizações" }
+Locale.rows["Additional settings use their own page and scroll position."] = {
+    "Additional settings use their own page and scroll position.",
+    "Los ajustes adicionales tienen su propia página y desplazamiento.",
+    "Дополнительные настройки имеют свою страницу и прокрутку.",
+    "Configurações adicionais têm sua própria página e rolagem.",
+}
+Locale.rows["INFORMATION"] = { "INFORMATION", "INFORMACIÓN", "ИНФОРМАЦИЯ", "INFORMAÇÕES" }
+Locale.rows["Local UI only"] = {
+    "Local UI only",
+    "Solo interfaz local",
+    "Только локальный интерфейс",
+    "Apenas interface local",
+}
+Locale.rows["The showcase does not alter gameplay."] = {
+    "The showcase does not alter gameplay.",
+    "La muestra no modifica el juego.",
+    "Демонстрация не изменяет игровой процесс.",
+    "A demonstração não altera o jogo.",
+}
+Locale.rows["Accessibility"] =
+    { "Accessibility", "Accesibilidad", "Специальные возможности", "Acessibilidade" }
+Locale.rows["Input and presentation preferences."] = {
+    "Input and presentation preferences.",
+    "Preferencias de entrada y apariencia.",
+    "Настройки ввода и оформления.",
+    "Preferências de entrada e aparência.",
+}
+Locale.rows["Enable keyboard navigation"] = {
+    "Enable keyboard navigation",
+    "Activar navegación por teclado",
+    "Включить навигацию с клавиатуры",
+    "Ativar navegação por teclado",
+}
+Locale.rows["Display Settings"] = {
+    "Display Settings",
+    "Configuración visual",
+    "Настройки отображения",
+    "Configurações visuais",
+}
+Locale.rows["VISUALIZATION"] = { "VISUALIZATION", "VISUALIZACIÓN", "ВИЗУАЛИЗАЦИЯ", "VISUALIZAÇÃO" }
+Locale.rows["Parameters affecting the visual representation of data and the interface."] = {
+    "Parameters affecting the visual representation of data and the interface.",
+    "Parámetros de visualización de datos e interfaz.",
+    "Параметры отображения данных и интерфейса.",
+    "Parâmetros de visualização dos dados e da interface.",
+}
+Locale.rows["Enable secondary display"] = {
+    "Enable secondary display",
+    "Activar pantalla secundaria",
+    "Включить второй экран",
+    "Ativar tela secundária",
+}
+Locale.rows["Display information"] = {
+    "Display information",
+    "Información de pantalla",
+    "Информация об отображении",
+    "Informações da tela",
+}
+Locale.rows["Color and layout controls follow the same design tokens."] = {
+    "Color and layout controls follow the same design tokens.",
+    "Los colores y la distribución mantienen el mismo estilo.",
+    "Цвета и расположение используют единый стиль.",
+    "Cores e layout seguem o mesmo estilo.",
+}
+Locale.rows["Display grid on charts"] = {
+    "Display grid on charts",
+    "Mostrar cuadrícula en gráficos",
+    "Показывать сетку на графиках",
+    "Mostrar grade nos gráficos",
+}
+Locale.rows["Automatically starts the application when your computer boots up."] = {
+    "Automatically starts the application when your computer boots up.",
+    "Inicia la aplicación automáticamente al encender el equipo.",
+    "Запускает приложение при включении компьютера.",
+    "Inicia a aplicação automaticamente ao ligar o computador.",
+}
+Locale.rows["Use font anti-aliasing"] =
+    { "Use font anti-aliasing", "Suavizar las fuentes", "Сглаживать шрифты", "Suavizar fontes" }
+Locale.rows["Makes text appear smoother on screen; may slightly impact performance."] = {
+    "Makes text appear smoother on screen; may slightly impact performance.",
+    "Suaviza el texto; puede afectar ligeramente al rendimiento.",
+    "Сглаживает текст; может немного влиять на производительность.",
+    "Suaviza o texto; pode afetar um pouco o desempenho.",
+}
+Locale.rows["Default chart type"] = {
+    "Default chart type",
+    "Tipo de gráfico predeterminado",
+    "Тип графика по умолчанию",
+    "Tipo de gráfico padrão",
+}
+Locale.rows["Line"] = { "Line", "Línea", "Линия", "Linha" }
+Locale.rows["Bar"] = { "Bar", "Barras", "Столбцы", "Barras" }
+Locale.rows["Pie"] = { "Pie", "Circular", "Круговой", "Circular" }
+Locale.rows["Scatter"] = { "Scatter", "Dispersión", "Точечный", "Dispersão" }
+Locale.rows["Chart line thickness"] = {
+    "Chart line thickness",
+    "Grosor de línea del gráfico",
+    "Толщина линий графика",
+    "Espessura da linha do gráfico",
+}
+Locale.rows["Inactive element opacity"] = {
+    "Inactive element opacity",
+    "Opacidad de elementos inactivos",
+    "Непрозрачность неактивных элементов",
+    "Opacidade de elementos inativos",
+}
+Locale.rows["Adjusts transparency of UI elements that are not currently active or hovered over."] = {
+    "Adjusts transparency of UI elements that are not currently active or hovered over.",
+    "Ajusta la transparencia de los elementos inactivos.",
+    "Меняет прозрачность неактивных элементов интерфейса.",
+    "Ajusta a transparência dos elementos inativos.",
+}
+Locale.rows["Interface color scheme"] = {
+    "Interface color scheme",
+    "Esquema de colores",
+    "Цветовая схема интерфейса",
+    "Esquema de cores",
+}
+Locale.rows["Contrast"] = { "Contrast", "Contraste", "Контраст", "Contraste" }
+Locale.rows["Soft"] = { "Soft", "Suave", "Мягкий", "Suave" }
+Locale.rows["Controls the visual effects when switching between views"] = {
+    "Controls the visual effects when switching between views",
+    "Efectos al cambiar de vista",
+    "Эффекты при смене вида",
+    "Efeitos ao trocar de visualização",
+}
+Locale.rows["Fast"] = { "Fast", "Rápido", "Быстро", "Rápido" }
+Locale.rows["Smooth"] = { "Smooth", "Suave", "Плавно", "Suave" }
+Locale.rows["Chart background color"] = {
+    "Chart background color",
+    "Color de fondo del gráfico",
+    "Цвет фона графика",
+    "Cor de fundo do gráfico",
+}
+Locale.rows["Data highlight color"] = {
+    "Data highlight color",
+    "Color de resaltado de datos",
+    "Цвет выделения данных",
+    "Cor de destaque dos dados",
+}
+Locale.rows["Font size range"] = {
+    "Font size range",
+    "Rango de tamaño de fuente",
+    "Диапазон размера шрифта",
+    "Intervalo de tamanho da fonte",
+}
+Locale.rows["Table columns to display"] = {
+    "Table columns to display",
+    "Columnas visibles de la tabla",
+    "Отображаемые столбцы таблицы",
+    "Colunas visíveis da tabela",
+}
+Locale.rows["Name"] = { "Name", "Nombre", "Название", "Nome" }
+Locale.rows["Status"] = { "Status", "Estado", "Статус", "Status" }
+Locale.rows["Date"] = { "Date", "Fecha", "Дата", "Data" }
+Locale.rows["Type"] = { "Type", "Tipo", "Тип", "Tipo" }
+Locale.rows["Watermark text"] =
+    { "Watermark text", "Texto de marca de agua", "Текст водяного знака", "Texto da marca d'água" }
+Locale.rows["Apply visual settings"] = {
+    "Apply visual settings",
+    "Aplicar ajustes visuales",
+    "Применить настройки отображения",
+    "Aplicar configurações visuais",
+}
+Locale.rows["Contrast range"] =
+    { "Contrast range", "Rango de contraste", "Диапазон контраста", "Intervalo de contraste" }
+Locale.rows["Adjusts the difference between light and dark areas for better visibility."] = {
+    "Adjusts the difference between light and dark areas for better visibility.",
+    "Ajusta la diferencia entre zonas claras y oscuras.",
+    "Меняет разницу между светлыми и тёмными областями.",
+    "Ajusta a diferença entre áreas claras e escuras.",
+}
+Locale.rows["Profile Management"] = {
+    "Profile Management",
+    "Gestión de perfiles",
+    "Управление профилями",
+    "Gerenciamento de perfis",
+}
+Locale.rows["Advanced Parameters"] = {
+    "Advanced Parameters",
+    "Parámetros avanzados",
+    "Дополнительные параметры",
+    "Parâmetros avançados",
+}
+Locale.rows["MISCELLANEOUS"] = { "MISCELLANEOUS", "VARIOS", "ПРОЧЕЕ", "DIVERSOS" }
+Locale.rows["Various settings not included in the main categories."] = {
+    "Various settings not included in the main categories.",
+    "Otros ajustes fuera de las categorías principales.",
+    "Настройки вне основных категорий.",
+    "Outras configurações fora das categorias principais.",
+}
+Locale.rows["Interface scale"] =
+    { "Interface scale", "Escala de interfaz", "Масштаб интерфейса", "Escala da interface" }
+Locale.rows["Enable debug mode"] = {
+    "Enable debug mode",
+    "Activar modo de depuración",
+    "Включить режим отладки",
+    "Ativar modo de depuração",
+}
+Locale.rows["Provides more detailed error messages and logging for troubleshooting."] = {
+    "Provides more detailed error messages and logging for troubleshooting.",
+    "Añade detalles a los errores y registros de diagnóstico.",
+    "Добавляет подробности в сообщения об ошибках и журнал.",
+    "Adiciona detalhes aos erros e registros de diagnóstico.",
+}
+Locale.rows["Send anonymous usage statistics"] = {
+    "Send anonymous usage statistics",
+    "Enviar estadísticas anónimas",
+    "Отправлять анонимную статистику",
+    "Enviar estatísticas anônimas",
+}
+Locale.rows["Help improve the application by sending non-personal data about how features are used."] = {
+    "Help improve the application by sending non-personal data about how features are used.",
+    "Ayuda a mejorar la aplicación con datos de uso no personales.",
+    "Помогает улучшить приложение, отправляя обезличенные данные об использовании.",
+    "Ajuda a melhorar a aplicação com dados de uso não pessoais.",
+}
+Locale.rows["Temporary files path"] = {
+    "Temporary files path",
+    "Ruta de archivos temporales",
+    "Путь временных файлов",
+    "Caminho de arquivos temporários",
+}
+Locale.rows["Autosave interval"] = {
+    "Autosave interval",
+    "Intervalo de guardado automático",
+    "Интервал автосохранения",
+    "Intervalo de salvamento automático",
+}
+Locale.rows["Data Sync & Backup"] = {
+    "Data Sync & Backup",
+    "Sincronización y respaldo",
+    "Синхронизация и резервирование",
+    "Sincronização e backup",
+}
+Locale.rows["Back up settings"] = {
+    "Back up settings",
+    "Respaldar configuración",
+    "Создать резервную копию настроек",
+    "Fazer backup das configurações",
+}
+Locale.rows["Sword"] = { "Sword", "Espada", "Меч", "Espada" }
+Locale.rows["Melee"] = { "Melee", "Cuerpo a cuerpo", "Ближний бой", "Corpo a corpo" }
+Locale.rows["Fruit"] = { "Fruit", "Fruta", "Фрукт", "Fruta" }
+Locale.rows["Auto Farm"] = { "Auto Farm", "Farmeo automático", "Автофарм", "Farm automático" }
+Locale.rows["Combat"] = { "Combat", "Combate", "Бой", "Combate" }
+Locale.rows["Distance"] = { "Distance", "Distancia", "Расстояние", "Distância" }
+Locale.rows["Speed"] = { "Speed", "Velocidad", "Скорость", "Velocidade" }
+Locale.rows["Player"] = { "Player", "Jugador", "Игрок", "Jogador" }
+Locale.rows["Players"] = { "Players", "Jugadores", "Игроки", "Jogadores" }
+Locale.rows["Interface"] = { "Interface", "Interfaz", "Интерфейс", "Interface" }
+Locale.rows["Behavior"] = { "Behavior", "Comportamiento", "Поведение", "Comportamento" }
 Locale.dictionaries = {}
 for i, language in ipairs(Locale.order) do
     local dictionary = {}
@@ -5738,8 +10747,188 @@ for i, language in ipairs(Locale.order) do
     end
     Locale.dictionaries[language] = dictionary
 end
+-- Source strings are retained on their owners; only display fields/GUI properties change.
+-- This registry is separate from state ownership and never calls Set/SetValue/_commit.
+Locale.aliases = {}
+for key, value in pairs(Locale.dictionaries.English) do
+    Locale.aliases[value:lower()] = key
+end
+function Locale.copyTranslations(translations)
+    local copy = {}
+    for language, dictionary in pairs(type(translations) == "table" and translations or {}) do
+        if Locale.dictionaries[language] and type(dictionary) == "table" then
+            copy[language] = {}
+            for key, value in pairs(dictionary) do
+                if type(key) == "string" and type(value) == "string" then
+                    copy[language][key] = value
+                end
+            end
+        end
+    end
+    return copy
+end
+function Locale.lookup(w, key, language)
+    language = language or w.language or "English"
+    return (w.translations and w.translations[language] or {})[key]
+        or (Library.translations and Library.translations[language] or {})[key]
+        or (Locale.dictionaries[language] or {})[key]
+end
 function Locale.text(w, key)
-    return (Locale.dictionaries[w.language or "English"] or {})[key] or Locale.dictionaries.English[key] or key
+    return Locale.lookup(w, key) or Locale.lookup(w, key, "English") or key
+end
+function Locale.source(w, source, key, enabled)
+    source = tostring(source or "")
+    if enabled == false or source == "" and key == nil then
+        return source
+    end
+    local alias = Locale.aliases[source:lower()]
+    return (key and Locale.lookup(w, key)) or Locale.lookup(w, source) or (alias and Locale.lookup(w, alias)) or source
+end
+function Locale.option(control, value)
+    local config = control.config
+    -- Native language names/themes, raw profile names and user text intentionally remain stable.
+    if control.page.system then
+        return tostring(value)
+    end
+    local key = type(config.OptionKeys) == "table" and config.OptionKeys[value] or nil
+    return Locale.source(control.window, value, key, config.Localize)
+end
+function Locale.selection(control)
+    local config, w = control.config, control.window
+    if control.kind == "MultiDropdown" then
+        if control.value and #control.value > 0 then
+            local labels = {}
+            for i, value in ipairs(control.value) do
+                labels[i] = Locale.option(control, value)
+            end
+            return table.concat(labels, ", ")
+        end
+        return config.Placeholder and Locale.source(w, config.Placeholder, config.PlaceholderKey, config.Localize)
+            or Locale.text(w, "None")
+    end
+    if control.value ~= nil then
+        return Locale.option(control, control.value)
+    end
+    return config.Placeholder and Locale.source(w, config.Placeholder, config.PlaceholderKey, config.Localize)
+        or Locale.text(w, "Select")
+end
+function Locale.refreshOwner(owner)
+    local kind, w, config = owner.localeKind, owner.localeWindow, owner.localeConfig or {}
+    if not kind or owner.destroyed then
+        return
+    end
+    owner.displayName = Locale.source(w, owner.name, config.LocaleKey, config.Localize)
+    owner.displayDescription =
+        Locale.source(w, owner.descriptionText or owner.description or "", config.DescriptionKey, config.Localize)
+    owner.displayTooltip = owner.tooltipText ~= nil
+            and Locale.source(w, owner.tooltipText, config.TooltipKey, config.Localize)
+        or nil
+    if kind == "Category" then
+        if owner.box.Parent then
+            owner.heading.Text = owner.displayName:upper()
+        end
+    elseif kind == "Window" then
+        owner.brand.Text = owner.displayName
+        owner.suffixLabel.Text = Locale.source(w, owner.suffix, config.SuffixKey, config.Localize)
+        owner:_brandLayout()
+    else
+        owner.label.Text = owner.displayName
+        if kind == "Tab" then
+            owner.title.Text = owner.displayName
+            owner.description.Text = owner.displayDescription
+        elseif kind == "SubTab" then
+            owner:_render()
+            owner.tab:_indicator()
+        else
+            owner.desc.Text = owner.displayDescription
+            if owner.actionLabel then
+                owner.actionLabel.Text =
+                    Locale.source(w, config.Text or owner.name, config.TextKey or config.LocaleKey, config.Localize)
+            end
+            if owner.kind == "Textbox" and owner.box then
+                owner.box.PlaceholderText =
+                    Locale.source(w, config.Placeholder or "", config.PlaceholderKey, config.Localize)
+            elseif (owner.kind == "Dropdown" or owner.kind == "MultiDropdown") and owner.renderVisual then
+                owner:renderVisual()
+            end
+            if owner.kind == "SpatialSelector" then
+                owner:_render()
+            else
+                owner:_layout()
+            end
+        end
+    end
+end
+function Locale.enroll(w, owner, config, kind)
+    w.localeOwners = w.localeOwners or setmetatable({}, { __mode = "k" })
+    owner.localeWindow, owner.localeConfig, owner.localeKind = w, config, kind
+    w.localeOwners[owner] = true
+    Locale.refreshOwner(owner)
+end
+function Locale.refresh(w)
+    if w.destroyed then
+        return
+    end
+    if w.tooltip then
+        w.tooltip:Cancel()
+    end
+    w.overlay:Close(true)
+    for owner in pairs(w.localeOwners or {}) do
+        if owner.destroyed or owner.localeKind == "Category" and not owner.box.Parent then
+            w.localeOwners[owner] = nil
+        else
+            Locale.refreshOwner(owner)
+        end
+    end
+    for object, properties in pairs(w.localeBindings or {}) do
+        if object.Parent then
+            for property, key in pairs(properties) do
+                object[property] = Locale.text(w, key)
+            end
+        else
+            w.localeBindings[object] = nil
+        end
+    end
+    if SettingsUI.refreshLanguage then
+        SettingsUI.refreshLanguage(w)
+    end
+    w:_indexChanged()
+end
+function Locale.register(target, language, dictionary)
+    if not Locale.dictionaries[language] or type(dictionary) ~= "table" then
+        return false, "Expected a supported language and a string dictionary"
+    end
+    -- Validate before mutation; copy so caller edits cannot silently alter presentation.
+    for key, value in pairs(dictionary) do
+        if type(key) ~= "string" or type(value) ~= "string" then
+            return false, "Translation keys and values must be strings"
+        end
+    end
+    target.translations = target.translations or {}
+    target.translations[language] = target.translations[language] or {}
+    for key, value in pairs(dictionary) do
+        target.translations[language][key] = value
+    end
+    return true
+end
+function Window:RegisterTranslations(language, dictionary)
+    if self.destroyed then
+        return false, "Window is destroyed"
+    end
+    local ok, err = Locale.register(self, language, dictionary)
+    if ok then
+        Locale.refresh(self)
+    end
+    return ok, err
+end
+function Library:RegisterTranslations(language, dictionary)
+    local ok, err = Locale.register(self, language, dictionary)
+    if ok then
+        for w in pairs(self.windows or {}) do
+            Locale.refresh(w)
+        end
+    end
+    return ok, err
 end
 function Locale.bind(w, object, property, key)
     local bindings = w.localeBindings[object] or {}
@@ -5765,21 +10954,9 @@ function Window:SetLanguage(language, silent)
     if self.destroyed or not Locale.dictionaries[language] then
         return false, "Unknown language"
     end
-    self.overlay:Close(true)
     self.language = language
     Library.language = language
-    for object, properties in pairs(self.localeBindings) do
-        if object.Parent then
-            for property, key in pairs(properties) do
-                object[property] = Locale.text(self, key)
-            end
-        else
-            self.localeBindings[object] = nil
-        end
-    end
-    if SettingsUI.refreshLanguage then
-        SettingsUI.refreshLanguage(self)
-    end
+    Locale.refresh(self)
     if not silent and self.persistence then
         self.persistence:QueuePresentation()
     end
@@ -6065,11 +11242,13 @@ end
 Profiles.stateful = {
     Toggle = true,
     Slider = true,
+    NumericStepper = true,
     RangeSlider = true,
     Dropdown = true,
     MultiDropdown = true,
     ColorPicker = true,
     Textbox = true,
+    SpatialSelector = true,
 }
 function Profiles.init(w, config)
     local self = setmetatable({
@@ -7271,6 +12450,92 @@ function SettingsUI.interactive(w, object)
     end
     return true
 end
+-- Navigation, theme, language and profile rows share one latest-state-wins renderer.
+function SettingsUI.choice(w, entry, bag, selected)
+    entry.choiceState = { Hovered = false, Pressed = false }
+    entry.selected = selected
+    local interactive = entry.usable or function()
+        return SettingsUI.interactive(w, entry.row)
+    end
+    entry.pressOwner = {
+        state = entry.choiceState,
+        _render = function()
+            entry:_render()
+        end,
+    }
+    function entry:_render()
+        if not self.row.Parent then
+            return
+        end
+        local on, state = self.selected(), self.choiceState
+        w.motion:To(self.row, T.Motion.Micro, {
+            BackgroundTransparency = self.transparent and ((on or state.Hovered or state.Pressed) and 0 or 1) or 0,
+            BackgroundColor3 = state.Pressed and w.theme.RowPressed
+                or (on and w.theme.SurfaceSelected or (state.Hovered and w.theme.RowHover or w.theme.RowBackground)),
+        })
+        if self.label then
+            w.motion:To(
+                self.label,
+                T.Motion.Micro,
+                { TextColor3 = (on or state.Hovered) and w.theme.TextPrimary or w.theme.SystemText }
+            )
+        end
+        if self.icon then
+            Icons.color(
+                self.icon,
+                on and w.theme.Accent
+                    or (state.Hovered and w.theme.TextPrimary or w.theme[self.idleIcon or "SystemText"])
+            )
+        end
+        if self.dot then
+            self.dot.Visible = on
+            self.dot.BackgroundColor3 = w.theme.Accent
+        end
+        if self.indicator then
+            self.indicator.Visible = on
+            self.indicator.BackgroundColor3 = w.theme.Accent
+        end
+        if self.stroke then
+            w.motion:To(self.stroke, T.Motion.Micro, {
+                Color = on and w.theme.Accent or w.theme.SurfaceEdge,
+                Transparency = on and 0.5 or (state.Hovered and 0.3 or 0.75),
+            })
+        end
+    end
+    w.systemRenders = w.systemRenders or {}
+    w.systemRenders[entry.row] = entry
+    bag:Add(function()
+        w.systemRenders[entry.row] = nil
+        w.pressed[entry.pressOwner] = nil
+    end)
+    U.connect(bag, entry.row.MouseEnter, function()
+        if interactive() then
+            entry.choiceState.Hovered = true
+            entry:_render()
+        end
+    end)
+    U.connect(bag, entry.row.MouseLeave, function()
+        entry.choiceState.Hovered, entry.choiceState.Pressed = false, false
+        w.pressed[entry.pressOwner] = nil
+        entry:_render()
+    end)
+    U.connect(bag, entry.row.InputBegan, function(event)
+        if U.primary(event) and interactive() then
+            entry.choiceState.Pressed = true
+            w.pressed[entry.pressOwner] = event
+            entry:_render()
+        end
+    end)
+    U.connect(bag, entry.row.InputEnded, function(event)
+        if U.primary(event) then
+            entry.choiceState.Pressed = false
+            w.pressed[entry.pressOwner] = nil
+            entry:_render()
+        end
+    end)
+    entry:_render()
+    return entry
+end
 function SettingsUI.button(w, parent, key, props, bag, callback, primary)
     local button = U.button(parent, props)
     U.corner(button, T.Radius.Button)
@@ -7281,9 +12546,16 @@ function SettingsUI.button(w, parent, key, props, bag, callback, primary)
         { TextXAlignment = Enum.TextXAlignment.Center, Font = Enum.Font.GothamMedium },
         primary and "ButtonText" or "SystemText"
     )
+    local stroke = U.stroke(button, w.theme.SurfaceEdge)
+    stroke.Transparency = primary and 1 or 0.55
     local owner = { state = { Hovered = false, Pressed = false } }
     function owner:_render()
         local state = self.state
+        w.motion:To(
+            stroke,
+            T.Motion.Micro,
+            { Color = w.theme.SurfaceEdge, Transparency = primary and 1 or (state.Hovered and 0.2 or 0.55) }
+        )
         w.motion:To(button, T.Motion.Micro, {
             BackgroundTransparency = 0,
             BackgroundColor3 = state.Pressed and (primary and w.theme.AccentPressed or w.theme.RowPressed)
@@ -7301,11 +12573,14 @@ function SettingsUI.button(w, parent, key, props, bag, callback, primary)
         w.pressed[owner] = nil
     end)
     U.connect(bag, button.MouseEnter, function()
-        owner.state.Hovered = true
-        owner:_render()
+        if SettingsUI.interactive(w, button) then
+            owner.state.Hovered = true
+            owner:_render()
+        end
     end)
     U.connect(bag, button.MouseLeave, function()
         owner.state.Hovered, owner.state.Pressed = false, false
+        w.pressed[owner] = nil
         owner:_render()
     end)
     U.connect(bag, button.InputBegan, function(event)
@@ -7787,7 +13062,10 @@ function SettingsUI.updateProfileStates(w)
             widgets.name.TextColor3 = w.theme.TextPrimary
             U.bind(w, widgets.row, "BackgroundColor3", (active or selected) and "SurfaceSelected" or "RowBackground")
             widgets.edge.BackgroundColor3 = w.theme.Accent
-            widgets.edge.Visible = selected
+            widgets.edge.Visible = selected or active
+            if widgets._render then
+                widgets:_render()
+            end
         end
     end
 end
@@ -7868,7 +13146,12 @@ function SettingsUI.refreshProfiles(w)
                 BackgroundTransparency = 0,
                 ZIndex = row.ZIndex + 1,
             }, w, "Accent")
-            w.profileRows[name] = { row = row, name = title, state = state, autoload = badge, edge = edge }
+            local widgets = { row = row, name = title, state = state, autoload = badge, edge = edge }
+            -- Keep the public/internal status label separate from interaction state.
+            SettingsUI.choice(w, widgets, bag, function()
+                return w.persistence.activeProfile == name or w.selectedProfile == name
+            end)
+            w.profileRows[name] = widgets
             local menu = U.button(row, {
                 Name = "ProfileActions",
                 Position = UDim2.new(1, -44, 0, 2),
@@ -7878,25 +13161,21 @@ function SettingsUI.refreshProfiles(w)
             local icon = Icons.make(menu, "chevron", 8, w.theme.SystemText, w)
             icon.Position = UDim2.fromOffset(16, 18)
             U.connect(bag, row.Activated, function()
+                if not SettingsUI.interactive(w, row) then
+                    return
+                end
                 w.selectedProfile = name
                 w.profileName:Set(name, true)
                 SettingsUI.updateProfileStates(w)
             end)
             U.connect(bag, menu.Activated, function()
+                if not SettingsUI.interactive(w, menu) then
+                    return
+                end
                 w.selectedProfile = name
                 w.profileName:Set(name, true)
                 SettingsUI.updateProfileStates(w)
                 SettingsUI.context(w, menu, name)
-            end)
-            U.connect(bag, row.MouseEnter, function()
-                w.motion:To(row, T.Motion.Micro, { BackgroundColor3 = w.theme.RowHover })
-            end)
-            U.connect(bag, row.MouseLeave, function()
-                w.motion:To(row, T.Motion.Micro, {
-                    BackgroundColor3 = (w.persistence.activeProfile == name or w.selectedProfile == name)
-                            and w.theme.SurfaceSelected
-                        or w.theme.RowBackground,
-                })
             end)
         end
     end
@@ -8001,14 +13280,14 @@ function SettingsUI.profiles(w, page)
         local width = toolbar.AbsoluteSize.X / w.scale
         local columns = width >= 540 and 4 or 2
         local rows = math.ceil(#buttons / columns)
-        local height = rows * 36 + (rows - 1) * 8
+        local height = rows * T.Geometry.SettingsHit + (rows - 1) * 8
         if toolbar.Size.Y.Offset ~= height then
             toolbar.Size = UDim2.new(1, 0, 0, height)
         end
         for i, button in ipairs(buttons) do
             local col, row = (i - 1) % columns, math.floor((i - 1) / columns)
-            button.Size = UDim2.new(1 / columns, -6, 0, 36)
-            button.Position = UDim2.new(col / columns, col > 0 and 2 or 0, 0, row * 44)
+            button.Size = UDim2.new(1 / columns, -6, 0, T.Geometry.SettingsHit)
+            button.Position = UDim2.new(col / columns, col > 0 and 2 or 0, 0, row * (T.Geometry.SettingsHit + 8))
         end
         page.scroll:Update()
     end
@@ -8091,7 +13370,7 @@ function SettingsUI.preview(w, page, name, order)
     for _, obj in ipairs(preview:GetDescendants()) do
         w.bindings[obj] = nil
     end
-    U.label(
+    local label = U.label(
         card,
         name,
         T.Type.Tab,
@@ -8100,19 +13379,20 @@ function SettingsUI.preview(w, page, name, order)
     )
     local selected = Components.circle(card, 5, w.theme.Accent)
     selected.Position = UDim2.new(1, -18, 0.5, 0)
-    w.themeCards[name] = { row = card, dot = selected }
+    w.themeCards[name] = SettingsUI.choice(
+        w,
+        { row = card, dot = selected, label = label, stroke = U.stroke(card, w.theme.SurfaceEdge) },
+        page.bag,
+        function()
+            return name == w.themeName
+        end
+    )
     U.connect(page.bag, card.Activated, function()
         if not SettingsUI.interactive(w, card) then
             return
         end
         w:SetTheme(name)
         w:Notify("ThemeChanged")
-    end)
-    U.connect(page.bag, card.MouseEnter, function()
-        w.motion:To(card, T.Motion.Micro, { BackgroundColor3 = w.theme.RowHover })
-    end)
-    U.connect(page.bag, card.MouseLeave, function()
-        SettingsUI.refreshStyle(w)
     end)
 end
 function SettingsUI.themes(w, page)
@@ -8232,7 +13512,7 @@ function SettingsUI.languages(w, page)
         page.bag:Add(card)
         U.corner(card, T.Radius.Row)
         SettingsUI.flag(w, card, language)
-        U.label(
+        local label = U.label(
             card,
             names[language],
             T.Type.Tab,
@@ -8248,22 +13528,24 @@ function SettingsUI.languages(w, page)
         )
         local dot = Components.circle(card, 5, w.theme.Accent)
         dot.Position = UDim2.new(1, -18, 0.5, 0)
-        w.languageCards[language] = { row = card, dot = dot }
+        w.languageCards[language] = SettingsUI.choice(
+            w,
+            { row = card, dot = dot, label = label, stroke = U.stroke(card, w.theme.SurfaceEdge) },
+            page.bag,
+            function()
+                return language == w.language
+            end
+        )
         U.connect(page.bag, card.Activated, function()
             if SettingsUI.interactive(w, card) then
                 w:SetLanguage(language)
             end
         end)
-        U.connect(page.bag, card.MouseEnter, function()
-            w.motion:To(card, T.Motion.Micro, { BackgroundColor3 = w.theme.RowHover })
-        end)
-        U.connect(page.bag, card.MouseLeave, function()
-            SettingsUI.refreshStyle(w)
-        end)
     end
 end
 function SettingsUI.general(w, page)
     SettingsUI.heading(w, page, "General", "GeneralBody")
+    SettingsUI.control(w, page, "AddSection", "Interface")
     w.tooltipPreference = SettingsUI.control(w, page, "AddToggle", "Tooltips", {
         Default = w.tooltipsEnabled,
         Callback = function(value)
@@ -8288,6 +13570,7 @@ function SettingsUI.general(w, page)
             w:SetRememberPosition(value)
         end,
     })
+    SettingsUI.control(w, page, "AddSection", "Behavior")
     SettingsUI.control(w, page, "AddToggle", "SilentLoad", {
         Default = w.persistence.silentLoad,
         Callback = function(value)
@@ -8309,24 +13592,17 @@ function SettingsUI.general(w, page)
     Premium.build(w, page)
 end
 function SettingsUI.refreshStyle(w)
-    for key, entry in pairs(w.settingsNav or {}) do
-        local selected = w.settingsCategory == key
-        entry.row.BackgroundColor3 = selected and w.theme.SurfaceSelected or w.theme.SidebarBackground
-        entry.label.TextColor3 = selected and w.theme.TextPrimary or w.theme.SystemText
-        entry.indicator.Visible = selected
-        entry.indicator.BackgroundColor3 = w.theme.Accent
+    for _, entries in ipairs({ w.settingsNav or {}, w.themeCards or {}, w.languageCards or {} }) do
+        for _, entry in pairs(entries) do
+            entry:_render()
+        end
     end
-    for name, card in pairs(w.themeCards or {}) do
-        card.row.BackgroundColor3 = name == w.themeName and w.theme.SurfaceSelected or w.theme.RowBackground
-        card.dot.Visible = name == w.themeName
-        card.dot.BackgroundColor3 = w.theme.Accent
+    if w.settingsContext then
+        Locale.bind(w, w.settingsContext, "Text", w.settingsCategory or "Profiles")
     end
-    for language, card in pairs(w.languageCards or {}) do
-        card.row.BackgroundColor3 = language == w.language and w.theme.SurfaceSelected or w.theme.RowBackground
-        card.dot.Visible = language == w.language
-        card.dot.BackgroundColor3 = w.theme.Accent
-    end
-    if w.settingsIcon then
+    if w.settingsFooter then
+        w.settingsFooter:_render()
+    elseif w.settingsIcon then
         Icons.color(w.settingsIcon, w.settingsOpen and w.theme.Accent or w.theme.TextSecondary)
     end
     SettingsUI.updateProfileStates(w)
@@ -8344,6 +13620,7 @@ function SettingsUI.refreshLanguage(w)
         end
     end
     SettingsUI.layout(w)
+    SettingsUI.refreshStyle(w)
     if w.settingsPages then
         SettingsUI.refreshProfiles(w)
     end
@@ -8361,21 +13638,36 @@ function SettingsUI.layout(w)
         return
     end
     local compact = w.compact or w.root.Size.X.Offset < 640
-    w.settingsPanel.Position = UDim2.fromOffset(compact and 8 or 18, compact and 12 or 28)
+    local x, y = compact and 8 or 18, compact and 12 or 28
+    local rest = UDim2.fromOffset(x, y)
+    if not U.equal(w.settingsRestPosition, rest) then
+        w.settingsRestPosition = rest
+        w.motion:To(w.settingsPanel, w.settingsPanel.Visible and T.Motion.Fast or 0, {
+            Position = UDim2.fromOffset(x, y + (w.settingsOpen and 0 or T.Geometry.SettingsReveal)),
+        })
+    end
     w.settingsPanel.Size = UDim2.new(1, -(compact and 16 or 36), 1, -(compact and 24 or 56))
-    w.settingsNavHost.Position = UDim2.fromOffset(8, 56)
-    w.settingsNavHost.Size = compact and UDim2.new(1, -16, 0, 40) or UDim2.new(0, 140, 1, -64)
+    w.settingsNavHost.Position = UDim2.fromOffset(12, T.Geometry.SettingsHeader + 8)
+    w.settingsNavHost.Size = compact and UDim2.new(1, -24, 0, 48) or UDim2.new(0, T.Geometry.SettingsNav, 1, -88)
     w.settingsNavLayout.FillDirection = compact and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical
     w.settingsNavHost.ScrollingDirection = compact and Enum.ScrollingDirection.X or Enum.ScrollingDirection.Y
     w.settingsNavHost.AutomaticCanvasSize = compact and Enum.AutomaticSize.X or Enum.AutomaticSize.Y
     for key, entry in pairs(w.settingsNav) do
-        entry.row.Size =
-            UDim2.fromOffset(compact and math.max(80, U.width(Locale.text(w, key), T.Type.Value) + 32) or 140, 36)
-        entry.indicator.Size = compact and UDim2.new(1, -16, 0, 1) or UDim2.new(0, 2, 1, -16)
-        entry.indicator.Position = compact and UDim2.new(0, 8, 1, -1) or UDim2.fromOffset(0, 8)
+        entry.row.Size = UDim2.fromOffset(
+            compact and math.max(104, U.width(Locale.text(w, key), T.Type.Value) + 56) or T.Geometry.SettingsNav,
+            T.Geometry.SettingsHit
+        )
+        entry.indicator.Size = compact and UDim2.new(1, -20, 0, 1) or UDim2.new(0, 2, 1, -20)
+        entry.indicator.Position = compact and UDim2.new(0, 10, 1, -1) or UDim2.fromOffset(0, 10)
     end
-    w.settingsBody.Position = UDim2.fromOffset(compact and 12 or 164, compact and 106 or 60)
-    w.settingsBody.Size = UDim2.new(1, -(compact and 24 or 180), 1, -(compact and 120 or 74))
+    w.settingsDivider.Visible = not compact
+    w.settingsDivider.Position = UDim2.fromOffset(T.Geometry.SettingsNav + 24, T.Geometry.SettingsHeader + 12)
+    w.settingsDivider.Size = UDim2.new(0, 1, 1, -96)
+    w.settingsBody.Position = UDim2.fromOffset(
+        compact and 12 or T.Geometry.SettingsNav + 36,
+        compact and 132 or T.Geometry.SettingsHeader + 8
+    )
+    w.settingsBody.Size = UDim2.new(1, -(compact and 24 or T.Geometry.SettingsNav + 52), 1, -(compact and 148 or 88))
     if w.profileToolbarLayout then
         w.profileToolbarLayout()
     end
@@ -8397,11 +13689,20 @@ function Window:SetSettingsCategory(key)
     SettingsUI.dismissTransfer(self)
     self.settingsCategory = key
     for name, page in pairs(self.settingsPages) do
-        self.motion:Cancel(page.host)
-        page.host.Visible = name == key
         if name == key then
-            page.host.GroupTransparency = 0.35
-            self.motion:To(page.host, T.Motion.Normal, { GroupTransparency = 0 })
+            local entering = not page.host.Visible
+            page.host.Visible = true
+            if entering then
+                self.motion:To(
+                    page.host,
+                    0,
+                    { GroupTransparency = 0.35, Position = UDim2.fromOffset(T.Geometry.SettingsReveal, 0) }
+                )
+            end
+            self.motion:To(page.host, T.Motion.Normal, { GroupTransparency = 0, Position = UDim2.fromOffset(0, 0) })
+        else
+            self.motion:Cancel(page.host)
+            page.host.Visible = false
         end
     end
     if key == "Profiles" then
@@ -8426,29 +13727,42 @@ function SettingsUI.build(w)
     U.corner(panel, T.Radius.Window)
     U.bind(w, panel, "BackgroundColor3", "WindowBackground")
     local stroke = U.stroke(panel, w.theme.SurfaceEdge, 1)
-    stroke.Transparency = 0.4
+    stroke.Transparency = 0.25
+    U.bind(w, stroke, "Color", "SurfaceEdge")
+    local glyph = Icons.make(panel, "settings", 16, w.theme.Accent, w)
+    glyph.Position = UDim2.fromOffset(16, 18)
     SettingsUI.text(w, panel, "Settings", {
-        Position = UDim2.fromOffset(16, 10),
-        Size = UDim2.new(1, -160, 0, 30),
+        Position = UDim2.fromOffset(40, 10),
+        Size = UDim2.new(1, -152, 0, 22),
         Font = Enum.Font.GothamBold,
         TextSize = T.Type.PageTitle,
     }, "TextPrimary")
+    w.settingsContext = SettingsUI.text(
+        w,
+        panel,
+        "Profiles",
+        { Position = UDim2.fromOffset(40, 34), Size = UDim2.new(1, -152, 0, 16), TextSize = T.Type.PageSubtitle },
+        "TextSecondary"
+    )
     SettingsUI.button(
         w,
         panel,
         "Close",
-        { Position = UDim2.new(1, -100, 0, 8), Size = UDim2.fromOffset(88, 36), ZIndex = panel.ZIndex + 3 },
+        {
+            Position = UDim2.new(1, -100, 0, 10),
+            Size = UDim2.fromOffset(88, T.Geometry.SettingsHit),
+            ZIndex = panel.ZIndex + 3,
+        },
         w.bag,
         function()
             w:CloseSettings()
         end
     )
-    U.frame(
-        panel,
-        { Position = UDim2.fromOffset(0, 48), Size = UDim2.new(1, 0, 0, 1), ZIndex = panel.ZIndex + 1 },
-        w,
-        "Separator"
-    )
+    U.frame(panel, {
+        Position = UDim2.fromOffset(0, T.Geometry.SettingsHeader),
+        Size = UDim2.new(1, 0, 0, 1),
+        ZIndex = panel.ZIndex + 1,
+    }, w, "Separator")
     w.settingsNavHost = U.new(
         "ScrollingFrame",
         { Name = "SettingsCategories", ScrollBarThickness = 0, CanvasSize = UDim2.new(), ZIndex = panel.ZIndex + 1 },
@@ -8456,28 +13770,37 @@ function SettingsUI.build(w)
     )
     w.settingsNavLayout =
         U.new("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }, w.settingsNavHost)
+    local icons = { Profiles = "folder", Themes = "sun", Language = "flag", General = "settings" }
     for i, key in ipairs({ "Profiles", "Themes", "Language", "General" }) do
         local row = U.button(
             w.settingsNavHost,
             { Name = key, LayoutOrder = i, BackgroundTransparency = 0, ZIndex = panel.ZIndex + 2 }
         )
         U.corner(row, T.Radius.Row)
-        local label =
-            SettingsUI.text(w, row, key, { Position = UDim2.fromOffset(16, 0), Size = UDim2.new(1, -24, 1, 0) })
+        local label = SettingsUI.text(
+            w,
+            row,
+            key,
+            { Position = UDim2.fromOffset(38, 0), Size = UDim2.new(1, -46, 1, 0), Font = Enum.Font.GothamMedium }
+        )
         local indicator = U.frame(row, { ZIndex = row.ZIndex + 2 }, w, "Accent")
-        w.settingsNav[key] = { row = row, label = label, indicator = indicator }
+        local icon = Icons.make(row, icons[key], 14, w.theme.SystemText, w)
+        icon.Position = UDim2.fromOffset(14, 15)
+        w.settingsNav[key] = SettingsUI.choice(
+            w,
+            { row = row, label = label, icon = icon, indicator = indicator },
+            w.bag,
+            function()
+                return w.settingsCategory == key
+            end
+        )
         U.connect(w.bag, row.Activated, function()
             if SettingsUI.interactive(w, row) then
                 w:SetSettingsCategory(key)
             end
         end)
-        U.connect(w.bag, row.MouseEnter, function()
-            w.motion:To(row, T.Motion.Micro, { BackgroundColor3 = w.theme.RowHover })
-        end)
-        U.connect(w.bag, row.MouseLeave, function()
-            SettingsUI.refreshStyle(w)
-        end)
     end
+    w.settingsDivider = U.frame(panel, { ZIndex = panel.ZIndex + 1 }, w, "Separator")
     w.settingsBody = U.frame(
         panel,
         { Name = "SettingsBody", ClipsDescendants = true, ZIndex = panel.ZIndex + 1 },
@@ -8499,8 +13822,8 @@ function SettingsUI.init(w, config)
     local button = U.button(w.root, {
         Name = "Settings",
         AnchorPoint = Vector2.new(0, 1),
-        Position = UDim2.new(0, 12, 1, -6),
-        Size = UDim2.fromOffset(44, 40),
+        Position = UDim2.new(0, 12, 1, -4),
+        Size = UDim2.fromOffset(44, 44),
         Visible = w.settingsEnabled,
         ZIndex = 14,
     })
@@ -8512,7 +13835,23 @@ function SettingsUI.init(w, config)
         return w.settingsEnabled
     end)
     w.settingsIcon = Icons.make(button, "settings", 16, w.theme.TextSecondary, w)
-    w.settingsIcon.Position = UDim2.fromOffset(14, 12)
+    w.settingsIcon.Position = UDim2.fromOffset(14, 14)
+    w.settingsFooter = SettingsUI.choice(
+        w,
+        {
+            row = button,
+            icon = w.settingsIcon,
+            transparent = true,
+            idleIcon = "TextSecondary",
+            usable = function()
+                return not w.destroyed and w.visible and w.settingsEnabled
+            end,
+        },
+        w.bag,
+        function()
+            return w.settingsOpen == true
+        end
+    )
     U.connect(w.bag, button.Activated, function()
         if w.settingsOpen then
             w:CloseSettings()
@@ -8520,23 +13859,41 @@ function SettingsUI.init(w, config)
             w:OpenSettings()
         end
     end)
-    U.connect(w.bag, button.MouseEnter, function()
-        w.motion:To(button, T.Motion.Micro, { BackgroundColor3 = w.theme.RowHover, BackgroundTransparency = 0 })
-    end)
-    U.connect(w.bag, button.MouseLeave, function()
-        w.motion:To(button, T.Motion.Micro, { BackgroundTransparency = 1 })
-    end)
-    U.connect(w.bag, button.InputBegan, function(event)
-        if U.primary(event) then
-            w.motion:To(button, T.Motion.Micro, { BackgroundColor3 = w.theme.RowPressed, BackgroundTransparency = 0 })
-        end
-    end)
-    U.connect(w.bag, button.InputEnded, function(event)
-        if U.primary(event) then
-            w.motion:To(button, T.Motion.Micro, { BackgroundColor3 = w.theme.RowHover })
-        end
-    end)
     SettingsUI.footerLayout(w)
+end
+function SettingsUI.transition(w, open, immediate)
+    if w.settingsCancel then
+        w.bag:Remove(w.settingsCancel, true)
+        w.settingsCancel = nil
+    end
+    w.settingsGeneration = (w.settingsGeneration or 0) + 1
+    local generation = w.settingsGeneration
+    local duration = immediate and 0 or (open and T.Motion.Structural or T.Motion.Fast)
+    local rest = w.settingsRestPosition
+    local goals = {
+        GroupTransparency = open and 0 or 1,
+        Position = UDim2.fromOffset(rest.X.Offset, rest.Y.Offset + (open and 0 or T.Geometry.SettingsReveal)),
+    }
+    w.settingsPhase = open and "Opening" or "Closing"
+    if open then
+        w.settingsPanel.Visible = true
+    end
+    w.motion:To(w.settingsPanel, duration, goals)
+    local function settle()
+        if w.destroyed or generation ~= w.settingsGeneration then
+            return
+        end
+        w.settingsCancel = nil
+        w.settingsPhase = open and "Open" or "Closed"
+        -- Motion owns the final values; resize/localization may have replaced Position's lease.
+        w.motion:To(w.settingsPanel, 0, { GroupTransparency = open and 0 or 1 })
+        w.settingsPanel.Visible = open
+    end
+    if immediate then
+        settle()
+    else
+        w.settingsCancel = w.bag:After(duration, settle)
+    end
 end
 function Window:OpenSettings(category)
     if self.destroyed or not self.visible or not self.settingsEnabled then
@@ -8555,11 +13912,10 @@ function Window:OpenSettings(category)
     end
     self.settingsOpen = true
     self:SetSidebarVisible(false)
-    self.settingsPanel.Visible = true
-    self:_dimState(true, 0.38)
-    self.motion:To(self.settingsPanel, T.Motion.Structural, { GroupTransparency = 0 })
-    self:SetSettingsCategory(category or self.settingsCategory or "Profiles")
     SettingsUI.layout(self)
+    self:_dimState(true, 0.38)
+    SettingsUI.transition(self, true)
+    self:SetSettingsCategory(category or self.settingsCategory or "Profiles")
     return self
 end
 function Window:CloseSettings(immediate)
@@ -8577,16 +13933,12 @@ function Window:CloseSettings(immediate)
         self.settingsCancel = nil
     end
     if self.settingsPanel then
-        self.motion:To(self.settingsPanel, immediate and 0 or T.Motion.Fast, { GroupTransparency = 1 })
-        if immediate then
-            self.settingsPanel.Visible = false
-        else
-            self.settingsCancel = self.bag:After(T.Motion.Fast, function()
-                self.settingsCancel = nil
-                if not self.settingsOpen then
-                    self.settingsPanel.Visible = false
-                end
-            end)
+        SettingsUI.transition(self, false, immediate)
+    end
+    for _, owner in pairs(self.systemRenders or {}) do
+        local state = owner.choiceState or owner.state
+        if state then
+            state.Hovered, state.Pressed = false, false
         end
     end
     self:_dimState(false, 1, immediate)
