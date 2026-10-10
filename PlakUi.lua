@@ -49,6 +49,7 @@ local Settings = {
     ToggleKey = Enum.KeyCode.RightShift,
     SupportLink = "",
     SocialLinks = {},
+    UIScale = 1,
     ReducedMotion = false,
     KeyVisible = false,
 }
@@ -79,6 +80,7 @@ local State = {
     Callbacks = {},
 }
 local UI = {}
+local Experience
 local LanguageController
 local Scope = {}
 Scope.__index = Scope
@@ -183,7 +185,39 @@ function Animation:To(object, goals, preset, completed)
     if not State.Alive or not object.Parent then
         return
     end
+    preset = preset or Motion.Hover
     local map = self.Objects[object]
+    -- Layout/hover can request the same destination many times. Preserve the
+    -- original easing clock instead of destroying and restarting that tween.
+    if map and not completed and not Settings.ReducedMotion then
+        local candidate
+        local same = true
+        for key, value in pairs(goals) do
+            local record = map[key]
+            if
+                not record
+                or record.Completed
+                or record.Preset ~= preset
+                or record.Goals[key] ~= value
+                or (candidate and candidate ~= record)
+            then
+                same = false
+                break
+            end
+            candidate = record
+        end
+        if same and candidate then
+            for key, value in pairs(candidate.Goals) do
+                if goals[key] ~= value then
+                    same = false
+                    break
+                end
+            end
+            if same then
+                return candidate
+            end
+        end
+    end
     if map then
         for key in pairs(goals) do
             self:Cancel(map[key])
@@ -198,13 +232,26 @@ function Animation:To(object, goals, preset, completed)
         end
         return
     end
+    if not completed then
+        local settled = true
+        for key, value in pairs(goals) do
+            if object[key] ~= value then
+                settled = false
+                break
+            end
+        end
+        if settled then
+            return
+        end
+    end
     map = self.Objects[object] or {}
     self.Objects[object] = map
     local record = {
         Object = object,
         Goals = goals,
         Completed = completed,
-        Tween = Services.Tween:Create(object, preset or Motion.Hover, goals),
+        Preset = preset,
+        Tween = Services.Tween:Create(object, preset, goals),
     }
     for key in pairs(goals) do
         map[key] = record
@@ -308,8 +355,14 @@ local function label(parent, name, text, size, color, font)
     }, parent)
 end
 local function place(object, x, y, w, h)
-    object.Position = UDim2.fromOffset(x, y)
-    object.Size = UDim2.fromOffset(w, h)
+    local position = UDim2.fromOffset(x, y)
+    local size = UDim2.fromOffset(w, h)
+    if object.Position ~= position then
+        object.Position = position
+    end
+    if object.Size ~= size then
+        object.Size = size
+    end
 end
 local function group(parent, name)
     return create(
@@ -385,6 +438,10 @@ local function reconcile()
         State.Name = "Hidden"
     elseif State.Activity == "Validating" then
         State.Name = "Validating"
+    elseif State.Activity == "Completing" then
+        State.Name = "AuthCompleting"
+    elseif State.Activity == "ForgettingKey" then
+        State.Name = "ForgettingKey"
     elseif State.Activity == "Launching" then
         State.Name = "ProductLaunching"
     elseif State.Modal == "progress" then
@@ -991,6 +1048,156 @@ local Translations = {
         restore = "Restaurar loader",
     },
 }
+do
+    local additions = {
+        en = {
+            authReady = "Enter your key to continue",
+            authChecking = "Waiting for authentication response…",
+            authSlow = "The response is taking longer. Your request is still pending.",
+            authGranted = "Access verified",
+            authFailed = "Could not verify access",
+            pasteKey = "Paste",
+            forgetKey = "Forget",
+            options = "Options",
+            keyForgotten = "Saved key removed. This does not revoke an active session.",
+            keyForgetFailed = "Could not remove the saved key",
+            keyForgetUnavailable = "Saved-key removal is unavailable",
+            clipboardUnavailable = "Clipboard reading unavailable — paste directly into the field",
+            clipboardEmpty = "Clipboard is empty or does not contain a single key",
+            prefSaved = "Preferences saved · scale fits your screen",
+            prefUnsaved = "Could not save preferences · using this session",
+            prefSession = "Session preferences · scale fits your screen",
+            prefPending = "Saving preferences…",
+            languageOption = "Language",
+            scaleOption = "Scale",
+            motionFull = "Full motion",
+            motionReduced = "Reduced motion",
+            resetOptions = "Reset options",
+            currentGame = "Current experience",
+            inCatalog = "Supported · in this catalog",
+            notInCatalog = "Not listed in this catalog",
+            expiresIn = "Time left:",
+            accessPremium = "Premium access",
+            accessFree = "Free access",
+            accessKeyless = "Keyless access",
+            networkHint = "Check your connection and try again when the request finishes.",
+            serviceHint = "Check that the FlowAuth runtime and loader are available.",
+            keyErrorHint = "Check the key or get a new one.",
+            errorHint = "Try again or contact support.",
+        },
+        es = {
+            authReady = "Introduce tu key para continuar",
+            authChecking = "Esperando la respuesta de autenticación…",
+            authSlow = "La respuesta está tardando. Tu solicitud sigue pendiente.",
+            authGranted = "Acceso verificado",
+            authFailed = "No se pudo verificar el acceso",
+            pasteKey = "Pegar",
+            forgetKey = "Olvidar",
+            options = "Opciones",
+            keyForgotten = "Key guardada eliminada. No revoca una sesión activa.",
+            keyForgetFailed = "No se pudo eliminar la key guardada",
+            keyForgetUnavailable = "No se puede eliminar la key guardada",
+            clipboardUnavailable = "Lectura del portapapeles no disponible: pega en el campo",
+            clipboardEmpty = "El portapapeles está vacío o no contiene una sola key",
+            prefSaved = "Preferencias guardadas · escala ajustada a la pantalla",
+            prefUnsaved = "No se pudo guardar · se aplicó para esta sesión",
+            prefSession = "Preferencias de sesión · escala ajustada a la pantalla",
+            prefPending = "Guardando preferencias…",
+            languageOption = "Idioma",
+            scaleOption = "Escala",
+            motionFull = "Animaciones completas",
+            motionReduced = "Movimiento reducido",
+            resetOptions = "Restablecer",
+            currentGame = "Experiencia actual",
+            inCatalog = "Compatible · en este catálogo",
+            notInCatalog = "No aparece en este catálogo",
+            expiresIn = "Tiempo restante:",
+            accessPremium = "Acceso Premium",
+            accessFree = "Acceso Free",
+            accessKeyless = "Acceso sin key",
+            networkHint = "Revisa tu conexión e inténtalo de nuevo al terminar la solicitud.",
+            serviceHint = "Comprueba que el runtime y el loader de FlowAuth estén disponibles.",
+            keyErrorHint = "Revisa tu key u obtén una nueva.",
+            errorHint = "Reintenta o contacta con soporte.",
+        },
+        pt = {
+            authReady = "Insira sua key para continuar",
+            authChecking = "Aguardando resposta da autenticação…",
+            authSlow = "A resposta está demorando. Sua solicitação continua pendente.",
+            authGranted = "Acesso verificado",
+            authFailed = "Não foi possível verificar o acesso",
+            pasteKey = "Colar",
+            forgetKey = "Esquecer",
+            options = "Opções",
+            keyForgotten = "Key salva removida. Isso não revoga uma sessão ativa.",
+            keyForgetFailed = "Não foi possível remover a key salva",
+            keyForgetUnavailable = "Remoção da key salva indisponível",
+            clipboardUnavailable = "Leitura do clipboard indisponível: cole no campo",
+            clipboardEmpty = "Clipboard vazio ou não contém uma única key",
+            prefSaved = "Preferências salvas · escala ajustada à tela",
+            prefUnsaved = "Não foi possível salvar · aplicado nesta sessão",
+            prefSession = "Preferências da sessão · escala ajustada à tela",
+            prefPending = "Salvando preferências…",
+            languageOption = "Idioma",
+            scaleOption = "Escala",
+            motionFull = "Animações completas",
+            motionReduced = "Movimento reduzido",
+            resetOptions = "Redefinir",
+            currentGame = "Experiência atual",
+            inCatalog = "Compatível · neste catálogo",
+            notInCatalog = "Não listado neste catálogo",
+            expiresIn = "Tempo restante:",
+            accessPremium = "Acesso Premium",
+            accessFree = "Acesso Free",
+            accessKeyless = "Acesso sem key",
+            networkHint = "Verifique sua conexão e tente novamente quando a solicitação terminar.",
+            serviceHint = "Verifique se o runtime e loader do FlowAuth estão disponíveis.",
+            keyErrorHint = "Verifique a key ou obtenha uma nova.",
+            errorHint = "Tente novamente ou contate o suporte.",
+        },
+        ru = {
+            authReady = "Введите ключ для продолжения",
+            authChecking = "Ожидание ответа авторизации…",
+            authSlow = "Ответ задерживается. Запрос всё ещё выполняется.",
+            authGranted = "Доступ подтверждён",
+            authFailed = "Не удалось подтвердить доступ",
+            pasteKey = "Вставить",
+            forgetKey = "Забыть",
+            options = "Настройки",
+            keyForgotten = "Сохранённый ключ удалён. Активный доступ не отозван.",
+            keyForgetFailed = "Не удалось удалить сохранённый ключ",
+            keyForgetUnavailable = "Удаление сохранённого ключа недоступно",
+            clipboardUnavailable = "Чтение буфера недоступно: вставьте ключ в поле",
+            clipboardEmpty = "Буфер пуст или не содержит один ключ",
+            prefSaved = "Настройки сохранены · масштаб под размер экрана",
+            prefUnsaved = "Сохранение не удалось · действует в этой сессии",
+            prefSession = "Настройки сессии · масштаб под размер экрана",
+            prefPending = "Сохранение настроек…",
+            languageOption = "Язык",
+            scaleOption = "Масштаб",
+            motionFull = "Все анимации",
+            motionReduced = "Меньше движения",
+            resetOptions = "Сбросить",
+            currentGame = "Текущая игра",
+            inCatalog = "Поддерживается · в каталоге",
+            notInCatalog = "Нет в этом каталоге",
+            expiresIn = "Осталось:",
+            accessPremium = "Доступ Premium",
+            accessFree = "Доступ Free",
+            accessKeyless = "Доступ без ключа",
+            networkHint = "Проверьте подключение и повторите после завершения запроса.",
+            serviceHint = "Проверьте доступность runtime и loader FlowAuth.",
+            keyErrorHint = "Проверьте ключ или получите новый.",
+            errorHint = "Повторите или обратитесь в поддержку.",
+        },
+    }
+    for language, values in pairs(additions) do
+        for key, value in pairs(values) do
+            Translations[language][key] = value
+        end
+    end
+end
+
 local Languages = {
     { Id = "en", Name = "English", Aliases = { "english", "en-us", "en-gb" } },
     { Id = "ru", Name = "Русский", Aliases = { "russian", "русский", "ru-ru" } },
@@ -1200,6 +1407,10 @@ function BrandArt:Layout(width, height)
     end
     width = math.max(1, width or self.Root.AbsoluteSize.X)
     height = math.max(1, height or self.Root.AbsoluteSize.Y)
+    if self.LayoutWidth == width and self.LayoutHeight == height then
+        return
+    end
+    self.LayoutWidth, self.LayoutHeight = width, height
     self:CancelReveal()
     self.Root.Size = UDim2.fromOffset(width, height)
     local scale = math.min(width / 360, height / 452)
@@ -1448,7 +1659,7 @@ end
 local SupportedGames = {
     { Id = "roll-a-fisherman", GameId = 90920025162454, FallbackName = "Roll a Fisherman", Status = "Available" },
 }
-local GameMedia = { Cache = {}, Pending = {}, Queue = {}, Bindings = {}, Active = nil, Serial = 0 }
+local GameMedia = { Ready = false, Cache = {}, Pending = {}, Queue = {}, Bindings = {}, Active = nil, Serial = 0 }
 function GameMedia:PlaceId(value)
     local id = finite(value, 0)
     return id > 0 and id < 9007199254740992 and id == math.floor(id) and id or nil
@@ -1611,9 +1822,19 @@ function GameMedia:Apply(card, info)
     if UI.Breadcrumb then
         Navigation:Refresh()
     end
+    if Experience then
+        Experience:RefreshGame()
+    end
 end
 function GameMedia:Drain()
-    if not State.Alive or self.Active or #self.Queue == 0 then
+    if
+        not State.Alive
+        or not self.Ready
+        or self.Active
+        or #self.Queue == 0
+        or State.Activity == "Validating"
+        or State.Activity == "Completing"
+    then
         return
     end
     local id = table.remove(self.Queue, 1)
@@ -1692,11 +1913,31 @@ local function cleanMessage(message, fallback)
     end
     return safeText(message, 1000)
 end
-local function measure(text, size, font, width)
+local TextMetrics = { Values = {}, Count = 0 }
+function TextMetrics:Get(text, size, font, width)
+    local key = text .. "\0" .. tostring(size) .. "\0" .. tostring(font) .. "\0" .. tostring(width)
+    local cached = self.Values[key]
+    if cached then
+        return cached
+    end
     local ok, value = pcall(function()
         return Services.Text:GetTextSize(text, size, font, Vector2.new(width, 10000))
     end)
-    return ok and value.Y or math.ceil(#text * size * 0.54 / math.max(1, width)) * size * 1.3
+    if not ok then
+        -- Font/service failures are retryable, never permanent cache entries.
+        return nil
+    end
+    if self.Count >= 192 then
+        table.clear(self.Values)
+        self.Count = 0
+    end
+    self.Values[key] = value
+    self.Count = self.Count + 1
+    return value
+end
+local function measure(text, size, font, width)
+    local value = TextMetrics:Get(text, size, font, width)
+    return value and value.Y or math.ceil(#text * size * 0.54 / math.max(1, width)) * size * 1.3
 end
 function Toasts:Layout()
     if not UI.Stage then
@@ -1887,11 +2128,18 @@ function Modal:Layout(settleMotion)
         math.clamp(center.X, progressWidth / 2 + 8, math.max(progressWidth / 2 + 8, size.X - progressWidth / 2 - 8)),
         center.Y
     )
-    UI.ProgressPanel.Size = UDim2.fromOffset(progressWidth, 76)
+    local authCompletion = self.AuthCompletion == true
+    UI.ProgressPanel.Size = UDim2.fromOffset(progressWidth, authCompletion and 104 or 76)
     UI.ProgressPanel.Position = UDim2.fromOffset(progressCenter.X, progressCenter.Y)
-    place(UI.ProgressText, 20, 12, progressWidth - 100, 27)
+    place(UI.ProgressText, authCompletion and 54 or 20, 12, progressWidth - (authCompletion and 74 or 100), 27)
+    if UI.ProgressCheck then
+        place(UI.ProgressCheck.Root, 20, 14, 24, 24)
+        place(UI.ProgressLicense, 20, 43, progressWidth - 40, 24)
+        UI.ProgressLicense.Visible = authCompletion
+        UI.ProgressPercent.Visible = not authCompletion
+    end
     place(UI.ProgressPercent, progressWidth - 80, 12, 60, 27)
-    place(UI.ProgressTrack, 20, 48, progressWidth - 40, 7)
+    place(UI.ProgressTrack, 20, authCompletion and 78 or 48, progressWidth - 40, 7)
 end
 function Modal:Refresh()
     local config = self.Config
@@ -1998,6 +2246,14 @@ function Modal:Loading(config)
     if not State.Alive then
         return
     end
+    if type(config) == "string" then
+        config = { Text = config }
+    end
+    config = config or {}
+    self.AuthCompletion = config.AuthCompletion == true
+    if UI.ProgressCheck then
+        UI.ProgressCheck.Root.Visible = false
+    end
     State.ModalToken = State.ModalToken + 1
     State.Modal = "progress"
     reconcile()
@@ -2012,10 +2268,6 @@ function Modal:Loading(config)
     UI.ProgressPanel.Position = destination + UDim2.fromOffset(0, 32)
     Animation:To(UI.ProgressPanel, { GroupTransparency = 0, Position = destination }, Motion.Enter)
     Animation:To(UI.Backdrop, { BackgroundTransparency = 0.48 }, Motion.Enter)
-    if type(config) == "string" then
-        config = { Text = config }
-    end
-    config = config or {}
     self:SetText(config.Text)
     self:SetProgress(finite(config.Progress, 0), true)
     local generation = State.ModalToken
@@ -2308,6 +2560,12 @@ local function buildModal()
     UI.ProgressText = localized(UI.ProgressPanel, "Status", "loading", 14, Theme.Text, Theme.Medium)
     UI.ProgressText.TextTruncate = Enum.TextTruncate.AtEnd
     UI.ProgressPercent = label(UI.ProgressPanel, "Percentage", "0%", 14, Theme.Text, Theme.Medium)
+    UI.ProgressCheck = Icon.new(UI.ProgressPanel, "check", Theme.Accent, 24)
+    UI.ProgressCheck.Root.Visible = false
+    UI.ProgressCheckScale = create("UIScale", { Scale = 1 }, UI.ProgressCheck.Root)
+    UI.ProgressLicense = label(UI.ProgressPanel, "VerifiedLicense", "", 12, Theme.Secondary)
+    UI.ProgressLicense.TextTruncate = Enum.TextTruncate.AtEnd
+    UI.ProgressLicense.Visible = false
     UI.ProgressPercent.TextXAlignment = Enum.TextXAlignment.Right
     UI.ProgressTrack = frame(UI.ProgressPanel, "Track", Theme.Input)
     corner(UI.ProgressTrack, 3)
@@ -2751,12 +3009,386 @@ local function classifyFailure(message)
     then
         return "disabled"
     end
+    if
+        text:find("request failed", 1, true)
+        or text:find("timeout", 1, true)
+        or text:find("connection", 1, true)
+        or text:find("network", 1, true)
+    then
+        return "network"
+    end
+    if
+        text:find("runtime is unavailable", 1, true)
+        or text:find("not configured", 1, true)
+        or text:find("requirekey is unavailable", 1, true)
+    then
+        return "service"
+    end
+    if text:find("invalid", 1, true) or text:find("incorrect", 1, true) then
+        return "key"
+    end
     return "error"
 end
 local AuthField = {}
 function AuthField.Interactive()
     return canInteract() and State.Page == "Auth"
 end
+-- One owner for frontend-only UX. No license decision or FlowAuth request lives here.
+Experience = { Stage = "authReady", OptionsOpen = false, PrefDirty = false }
+function Experience:SetStage(stage)
+    self.Stage = stage
+    if UI.AuthStatus then
+        Localization:Bind(UI.AuthStatus, stage)
+        UI.AuthStatus.TextColor3 = stage == "authFailed" and Theme.Warning
+            or stage == "authGranted" and Theme.Text
+            or Theme.Secondary
+    end
+end
+function Experience:LicenseText()
+    if not State.Authorized then
+        return ""
+    end
+    local info = State.AuthInfo
+    if not info then
+        return Localization:Get("authGranted")
+    end
+    local tier = info.tier
+    local text = Localization:Get(
+        tier == "premium" and "accessPremium"
+            or tier == "free" and "accessFree"
+            or tier == "keyless" and "accessKeyless"
+            or "authGranted"
+    )
+    if info.secondsLeft ~= nil then
+        local remaining = math.max(0, info.secondsLeft - (os.clock() - info.ReceivedAt))
+        local duration = remaining >= 86400 and (math.floor(remaining / 86400) .. "d")
+            or remaining >= 3600 and (math.floor(remaining / 3600) .. "h")
+            or remaining >= 60 and (math.floor(remaining / 60) .. "m")
+            or remaining > 0 and "<1m"
+            or "0m"
+        text = text .. "  •  " .. Localization:Get("expiresIn") .. " " .. duration
+    end
+    return text
+end
+function Experience:Refresh()
+    self:SetStage(self.Stage)
+    if UI.AuthLicense then
+        Localization:Bind(UI.AuthLicense, "empty", "Text", function()
+            return self:LicenseText()
+        end)
+    end
+    if UI.ProgressLicense and Modal.AuthCompletion then
+        UI.ProgressLicense.Text = self:LicenseText()
+    end
+    self:RefreshGame()
+    self:RefreshOptions()
+end
+function Experience:RefreshGame()
+    if not UI.CurrentGame then
+        return
+    end
+    local id = GameMedia:PlaceId(game.PlaceId)
+    local matched
+    for _, product in ipairs(State.Products) do
+        if id and product.GameId == id then
+            matched = product
+            break
+        end
+    end
+    Localization:Bind(UI.GameName, "currentGame", "Text", function()
+        return matched and productName(matched)
+            or self.CurrentGameCard and self.CurrentGameCard.Product.ResolvedName
+            or Localization:Get("currentGame")
+    end)
+    Localization:Bind(UI.GameSupport, matched and "inCatalog" or "notInCatalog")
+    UI.GameSupport.TextColor3 = matched and Theme.Accent or Theme.Secondary
+    local image = id and GameMedia:Thumbnail(id) or ""
+    if UI.GameImage.Image ~= image then
+        UI.GameImage.Image = image
+    end
+    UI.GameImage.Visible = image ~= "" and UI.GameImage.IsLoaded
+end
+function Experience:SavePrefs()
+    if not self.PrefDirty then
+        return true
+    end
+    local write = capability("writefile")
+    if not write then
+        self.PrefSaveState = "prefSession"
+        self:RefreshOptions()
+        return false
+    end
+    local ok = pcall(function()
+        local make = capability("makefolder")
+        local exists = capability("isfolder")
+        if make and (not exists or not exists("PLAK")) then
+            pcall(make, "PLAK")
+        end
+        local http = game:GetService("HttpService")
+        -- Whitelist only UI preferences. Never persist tier, authorization or key.
+        write(
+            "PLAK/ui_preferences.json",
+            http:JSONEncode({
+                Version = 1,
+                Language = Settings.Language,
+                UIScale = Settings.UIScale,
+                ReducedMotion = Settings.ReducedMotion,
+            })
+        )
+    end)
+    if ok then
+        self.PrefDirty = false
+    end
+    self.PrefSaveState = ok and "prefSaved" or "prefUnsaved"
+    self:RefreshOptions()
+    return ok
+end
+function Experience:LoadPrefs()
+    local read, exists = capability("readfile"), capability("isfile")
+    if not read or not exists then
+        return
+    end
+    pcall(function()
+        if not exists("PLAK/ui_preferences.json") then
+            return
+        end
+        local raw = read("PLAK/ui_preferences.json")
+        if type(raw) ~= "string" or #raw > 4096 then
+            return
+        end
+        local data = game:GetService("HttpService"):JSONDecode(raw)
+        if type(data) ~= "table" or data.Version ~= 1 then
+            return
+        end
+        local language = resolveLanguage(data.Language)
+        if language then
+            Settings.Language = language
+        end
+        Settings.UIScale = math.clamp(finite(data.UIScale, 1), 0.85, 1.15)
+        if type(data.ReducedMotion) == "boolean" then
+            Settings.ReducedMotion = data.ReducedMotion
+        end
+    end)
+end
+function Experience:PreferenceChanged()
+    self.PrefDirty = true
+    self.PrefSaveState = "prefPending"
+    Runtime:Cancel(self.PrefTimer)
+    self.PrefTimer = Runtime:Later(0.25, function()
+        self.PrefTimer = nil
+        self:SavePrefs()
+    end)
+    self:RefreshOptions()
+end
+function Experience:RefreshOptions()
+    if not UI.Preferences then
+        return
+    end
+    UI.Preferences.Visible = self.OptionsOpen
+    Localization:Bind(UI.PreferenceLanguage.Label, "languageOption", "Text", function()
+        return Localization:Get("languageOption") .. ": " .. Settings.Language:upper()
+    end)
+    Localization:Bind(UI.PreferenceScale.Label, "scaleOption", "Text", function()
+        return Localization:Get("scaleOption") .. ": " .. math.floor(Settings.UIScale * 100 + 0.5) .. "%"
+    end)
+    Localization:Bind(UI.PreferenceMotion.Label, Settings.ReducedMotion and "motionReduced" or "motionFull")
+    Localization:Bind(UI.PreferenceNote, self.PrefSaveState or "prefSession")
+    local busy = State.Activity ~= "Idle"
+    UI.PasteKey:SetDisabled(busy or not capability("getclipboard"))
+    UI.ForgetKey:SetDisabled(busy or type(State.Callbacks.ForgetKey) ~= "function")
+    UI.Options:SetDisabled(busy)
+    for _, button in ipairs({ UI.PreferenceLanguage, UI.PreferenceScale, UI.PreferenceMotion, UI.PreferenceReset }) do
+        button:SetDisabled(busy)
+    end
+    UI.PasteKey.Root:SetAttribute(
+        "DisabledReason",
+        not capability("getclipboard") and Localization:Get("clipboardUnavailable") or ""
+    )
+    UI.ForgetKey.Root:SetAttribute(
+        "DisabledReason",
+        type(State.Callbacks.ForgetKey) ~= "function" and Localization:Get("keyForgetUnavailable") or ""
+    )
+    Localization:Bind(UI.KeyActionsNote, "empty", "Text", function()
+        if not capability("getclipboard") then
+            return Localization:Get("clipboardUnavailable")
+        elseif type(State.Callbacks.ForgetKey) ~= "function" then
+            return Localization:Get("keyForgetUnavailable")
+        end
+        return ""
+    end)
+end
+function Experience:Paste()
+    if not AuthField.Interactive() then
+        return false, "busy"
+    end
+    local read = capability("getclipboard")
+    if not read then
+        return false, "clipboard_unavailable"
+    end
+    local ok, value = pcall(read)
+    value = ok and trim(value) or ""
+    if value == "" or #value > 4096 or value:find("[%z\r\n]") then
+        Loader:Toast({ Type = "warning", Subtitle = Localization:Get("clipboardEmpty") })
+        return false, "invalid_clipboard"
+    end
+    UI.Key.Text = value
+    AuthField:SetVisible(false)
+    AuthField:Feedback(nil)
+    UI.Key:CaptureFocus()
+    return true
+end
+function Experience:Forget()
+    if not AuthField.Interactive() then
+        return false, "busy"
+    end
+    local callback = State.Callbacks.ForgetKey
+    if type(callback) ~= "function" then
+        return false, "callback_unavailable"
+    end
+    -- Prevent duplicate clicks even if the host callback yields.
+    State.Activity = "ForgettingKey"
+    reconcile()
+    self:RefreshOptions()
+    local ok, removed = pcall(callback, Loader)
+    if not State.Alive then
+        return false, "destroyed"
+    end
+    State.Activity = "Idle"
+    reconcile()
+    self:RefreshOptions()
+    if ok and removed == true then
+        UI.Key.Text = ""
+        AuthField:SetVisible(false)
+        AuthField:Feedback(nil)
+        Loader:Toast({ Type = "info", Subtitle = Localization:Get("keyForgotten") })
+        -- This only removes the saved credential; it does not revoke a session.
+        return true
+    end
+    Loader:Toast({ Type = "warning", Subtitle = Localization:Get("keyForgetFailed") })
+    return false, "delete_failed"
+end
+function Experience:SuccessCheck()
+    if not UI.ProgressCheck or not Modal.AuthCompletion then
+        return
+    end
+    UI.ProgressCheck.Root.Visible = true
+    UI.ProgressCheckScale.Scale = Settings.ReducedMotion and 1 or 0.78
+    Animation:To(UI.ProgressCheckScale, { Scale = 1 }, Motion.Page)
+    UI.ProgressLicense.Text = self:LicenseText()
+end
+function Experience:Height()
+    return 228 + (self.OptionsOpen and 142 or 0)
+end
+function Experience:Layout(width, y)
+    if not UI.CurrentGame then
+        return
+    end
+    local actionWidth = (width - 16) / 3
+    for index, button in ipairs({ UI.PasteKey, UI.ForgetKey, UI.Options }) do
+        place(button.Root, (index - 1) * (actionWidth + 8), y, actionWidth, 44)
+    end
+    place(UI.KeyActionsNote, 0, y + 46, width, 24)
+    place(UI.AuthStatus, 0, y + 74, width, 44)
+    place(UI.AuthLicense, 0, y + 120, width, 24)
+    place(UI.CurrentGame, 0, y + 152, width, 64)
+    place(UI.GamePlaceholder, 8, 8, 48, 48)
+    place(UI.GameFallback.Root, 14, 14, 20, 20)
+    place(UI.GameImage, 0, 0, 48, 48)
+    place(UI.GameName, 68, 8, math.max(1, width - 80), 24)
+    place(UI.GameSupport, 68, 34, math.max(1, width - 80), 22)
+    place(UI.Preferences, 0, y + 228, width, 132)
+    local half = (width - 8) / 2
+    place(UI.PreferenceLanguage.Root, 0, 0, half, 44)
+    place(UI.PreferenceScale.Root, half + 8, 0, half, 44)
+    place(UI.PreferenceMotion.Root, 0, 52, half, 44)
+    place(UI.PreferenceReset.Root, half + 8, 52, half, 44)
+    place(UI.PreferenceNote, 0, 101, width, 28)
+end
+function Experience:Build()
+    local function secondary(name, key, callback, parent)
+        local button = Button.new(parent or UI.AuthBody, name, "", false, nil, callback, Runtime, AuthField.Interactive)
+        button.BaseColor = Theme.Surface
+        button:Apply()
+        Localization:Bind(button.Label, key)
+        return button
+    end
+    UI.PasteKey = secondary("PasteKey", "pasteKey", function()
+        self:Paste()
+    end)
+    UI.ForgetKey = secondary("ForgetKey", "forgetKey", function()
+        self:Forget()
+    end)
+    UI.Options = secondary("PreferencesToggle", "options", function()
+        Loader:ShowPreferences(not self.OptionsOpen)
+    end)
+    UI.KeyActionsNote = label(UI.AuthBody, "KeyActionsNote", "", 12, Theme.Secondary)
+    UI.KeyActionsNote.TextTruncate = Enum.TextTruncate.AtEnd
+    UI.AuthStatus = label(UI.AuthBody, "AuthStatus", "", 12, Theme.Secondary)
+    UI.AuthStatus.TextWrapped = true
+    UI.AuthStatus.TextTruncate = Enum.TextTruncate.AtEnd
+    UI.AuthLicense = label(UI.AuthBody, "AuthLicense", "", 12, Theme.Text)
+    UI.AuthLicense.TextTruncate = Enum.TextTruncate.AtEnd
+    UI.CurrentGame = frame(UI.AuthBody, "CurrentGame", Theme.Input)
+    corner(UI.CurrentGame, 10)
+    UI.GamePlaceholder = frame(UI.CurrentGame, "Thumbnail", Theme.Elevated)
+    UI.GamePlaceholder.ClipsDescendants = true
+    corner(UI.GamePlaceholder, 8)
+    UI.GameFallback = Icon.new(UI.GamePlaceholder, "grid", Theme.Secondary, 20)
+    UI.GameImage = create(
+        "ImageLabel",
+        { Name = "GameImage", BackgroundTransparency = 1, Image = "", Visible = false, ScaleType = Enum.ScaleType.Crop },
+        UI.GamePlaceholder
+    )
+    corner(UI.GameImage, 8)
+    UI.GameName = label(UI.CurrentGame, "Name", "", 13, Theme.Text, Theme.Medium)
+    UI.GameSupport = label(UI.CurrentGame, "Support", "", 12, Theme.Secondary)
+    UI.GameName.TextTruncate = Enum.TextTruncate.AtEnd
+    UI.GameSupport.TextTruncate = Enum.TextTruncate.AtEnd
+    local currentId = GameMedia:PlaceId(game.PlaceId)
+    if currentId then
+        local card = {
+            Product = { GameId = currentId },
+            Scope = Scope.new(),
+            Root = UI.CurrentGame,
+            Name = UI.GameName,
+            Artwork = { Set = function() end }, -- Native thumbnail already owns the image.
+        }
+        self.CurrentGameCard = card
+        Runtime.Finalizers[#Runtime.Finalizers + 1] = function()
+            card.Scope:Destroy()
+            self.CurrentGameCard = nil
+        end
+        -- Reuse the bounded/coalesced metadata worker, never add an auth-time request.
+        GameMedia:Watch(card)
+    end
+    Runtime:Connect(UI.GameImage:GetPropertyChangedSignal("IsLoaded"), function()
+        UI.GameImage.Visible = UI.GameImage.Image ~= "" and UI.GameImage.IsLoaded
+    end)
+    UI.Preferences = frame(UI.AuthBody, "Preferences")
+    UI.Preferences.BackgroundTransparency = 1
+    UI.Preferences.Visible = false
+    UI.PreferenceLanguage = secondary("Language", "languageOption", function()
+        local order = { en = "es", es = "pt", pt = "ru", ru = "en" }
+        Loader:SetLanguage(order[Settings.Language] or "en")
+    end, UI.Preferences)
+    UI.PreferenceScale = secondary("Scale", "scaleOption", function()
+        local nextScale = Settings.UIScale < 0.95 and 1 or Settings.UIScale < 1.05 and 1.1 or 0.9
+        Loader:SetUIScale(nextScale)
+    end, UI.Preferences)
+    UI.PreferenceMotion = secondary("Motion", "motionFull", function()
+        Loader:SetReducedMotion(not Settings.ReducedMotion)
+    end, UI.Preferences)
+    UI.PreferenceReset = secondary("Reset", "resetOptions", function()
+        Loader:SetLanguage("en")
+        Loader:SetUIScale(1)
+        Loader:SetReducedMotion(false)
+        self:PreferenceChanged()
+    end, UI.Preferences)
+    UI.PreferenceNote = label(UI.Preferences, "SaveState", "", 12, Theme.Secondary)
+    UI.PreferenceNote.TextWrapped = true
+    self:Refresh()
+end
+
 function AuthField:Hint()
     local width = State.Layout.KeyWidth or math.huge
     return Localization:Get(width < 96 and "keyHintTiny" or width < 180 and "keyHintCompact" or "keyHint")
@@ -2775,15 +3407,8 @@ function AuthField:SyncMask()
         local ok, length = pcall(utf8.len, key)
         UI.KeyMask.Text = string.rep("•", math.min(128, ok and length or #key))
         local size = UI.KeyMask.AbsoluteSize.X
-        local measured, bounds = pcall(function()
-            return Services.Text:GetTextSize(
-                UI.KeyMask.Text,
-                UI.KeyMask.TextSize,
-                UI.KeyMask.Font,
-                Vector2.new(10000, 10000)
-            )
-        end)
-        local textWidth = measured and bounds.X or math.min(128, ok and length or #key) * UI.KeyMask.TextSize * 0.6
+        local bounds = TextMetrics:Get(UI.KeyMask.Text, UI.KeyMask.TextSize, UI.KeyMask.Font, 10000)
+        local textWidth = bounds and bounds.X or math.min(128, ok and length or #key) * UI.KeyMask.TextSize * 0.6
         UI.KeyMask.TextXAlignment = textWidth > size and Enum.TextXAlignment.Right or Enum.TextXAlignment.Left
     else
         UI.KeyMask.Text = ""
@@ -2793,6 +3418,9 @@ function AuthField:SyncMask()
     UI.RevealKey.Root:SetAttribute("ActionLabel", Localization:Get(Settings.KeyVisible and "hideKey" or "showKey"))
 end
 function AuthField:Feedback(key, message)
+    if not key and not message and not State.AuthFeedback and not State.AuthError then
+        return
+    end
     State.AuthFeedback = (key or message) and { Key = key, Message = message } or nil
     State.AuthError = State.AuthFeedback ~= nil
     if State.AuthError and State.Page ~= "Auth" then
@@ -2832,7 +3460,12 @@ local function authBusy(value)
     UI.ProductsNav:SetDisabled(value)
     UI.RefreshNav:SetDisabled(value)
     UI.AuthBusyTrack.Visible = value
+    Experience:SetStage(value and "authChecking" or "authReady")
+    Experience:RefreshOptions()
     if value then
+        Animation:To(UI.Validate.Scale, { Scale = 0.97 }, Motion.Press, function()
+            Animation:To(UI.Validate.Scale, { Scale = 1 }, Motion.Hover)
+        end)
         AuthField:SetVisible(false)
         UI.Key:ReleaseFocus(false)
         Localization:Bind(UI.Validate.Label, "validating")
@@ -2888,11 +3521,22 @@ local function validate(key)
     State.ValidationToken = State.ValidationToken + 1
     local token = State.ValidationToken
     State.Activity = "Validating"
+    -- A new submission must not display metadata from a previous key/session.
+    State.Authorized = false
+    State.AuthInfo = nil
+    Experience:Refresh()
     AuthField:Feedback(nil)
     UI.Key.Text = key
     closeLanguage()
     authBusy(true)
     reconcile()
+    Runtime:Cancel(State.SlowAuthTimer)
+    State.SlowAuthTimer = Runtime:Later(8, function()
+        State.SlowAuthTimer = nil
+        if token == State.ValidationToken and State.Activity == "Validating" then
+            Experience:SetStage("authSlow")
+        end
+    end)
     -- Lock before scheduling: Activated, Enter and AutoValidate all share this one submission path.
     task.defer(function()
         if not State.Alive or token ~= State.ValidationToken then
@@ -2902,13 +3546,17 @@ local function validate(key)
         if not State.Alive or token ~= State.ValidationToken then
             return
         end
+        Runtime:Cancel(State.SlowAuthTimer)
+        State.SlowAuthTimer = nil
         State.Activity = "Idle"
         authBusy(false)
         if ok and success == true then
             State.Authorized = true
+            Experience:SetStage("authGranted")
+            Experience:Refresh()
             AuthField:Feedback(nil)
             reconcile()
-            local resultMessage = cleanMessage(message, Localization:Get("successCopy"))
+            local resultMessage = cleanMessage(message, Localization:Get("authGranted"))
             if Settings.SuccessBehavior == "hide" or Settings.SuccessBehavior == "destroy" then
                 -- This is a frontend exit transition, not simulated backend progress.
                 -- The validator must return before Script() starts; use SetOnAuthorized.
@@ -2916,10 +3564,12 @@ local function validate(key)
                 local authorized = State.Callbacks.Authorized
                 State.Activity = "Completing"
                 reconcile()
-                Modal:Loading({ Text = resultMessage, Progress = 0 })
+                Experience:RefreshOptions()
+                Modal:Loading({ Text = resultMessage, Progress = 0, AuthCompletion = true })
                 Runtime:Later(Settings.ReducedMotion and 0 or 0.35, function()
                     if token == State.ValidationToken then
                         Modal:SetProgress(1)
+                        Experience:SuccessCheck()
                     end
                 end)
                 Runtime:Later(Settings.ReducedMotion and 0 or 0.7, function()
@@ -2938,6 +3588,7 @@ local function validate(key)
                         else
                             State.Activity = "Idle"
                             reconcile()
+                            Experience:RefreshOptions()
                         end
                         if type(authorized) == "function" then
                             task.defer(function()
@@ -2970,6 +3621,9 @@ local function validate(key)
         else
             State.AuthError = true
             State.Authorized = false
+            State.AuthInfo = nil
+            Experience:SetStage("authFailed")
+            Experience:Refresh()
             reconcile()
             -- Do not display raw Lua exceptions, stack traces, key material or arbitrary non-string return values.
             local resultMessage = ok and cleanMessage(message, Localization:Get("genericError"))
@@ -2979,15 +3633,17 @@ local function validate(key)
             if #key >= 4 and resultMessage:find(key, 1, true) then
                 resultMessage = generic
             end
-            if resultMessage == generic then
-                AuthField:Feedback("genericError")
-            else
-                AuthField:Feedback(nil, safeText(resultMessage, 360))
-            end
+            local adviceKey = kind == "network" and "networkHint"
+                or kind == "service" and "serviceHint"
+                or kind == "key" and "keyErrorHint"
+                or "errorHint"
+            resultMessage = safeText(resultMessage, 240) .. "\n" .. Localization:Get(adviceKey)
+            AuthField:Feedback(nil, safeText(resultMessage, 360))
             if kind == "disabled" then
                 Modal:Open({ Type = "disabled", TitleKey = "access", Description = resultMessage })
             end
         end
+        GameMedia:Drain()
     end)
     return true
 end
@@ -3066,8 +3722,13 @@ local function buildAuth()
     UI.KeyFeedback.Visible = false
     Runtime:Connect(UI.Key:GetPropertyChangedSignal("Text"), function()
         AuthField:SyncMask()
-        if State.Activity == "Idle" and State.AuthFeedback then
-            AuthField:Feedback(nil)
+        if State.Activity == "Idle" then
+            if State.AuthFeedback then
+                AuthField:Feedback(nil)
+            end
+            if not State.Authorized then
+                Experience:SetStage("authReady")
+            end
         end
     end)
     AuthField:SyncMask()
@@ -3122,6 +3783,7 @@ local function buildAuth()
     corner(UI.AuthBusyFill, 2)
     UI.AuthArtwork = BrandArt.new(UI.AuthBody, "HeroArtwork")
     UI.AuthArtwork:Set(Settings.Artwork)
+    Experience:Build()
 end
 function Cards:Clear()
     for _, card in ipairs(self) do
@@ -3493,10 +4155,8 @@ function Navigation:Go(page, force)
 end
 local function displayFontSize(text, width, maximum)
     local size = math.min(maximum, math.floor(width / math.max(1, #characters(text))))
-    local ok, bounds = pcall(function()
-        return Services.Text:GetTextSize(text, size, Theme.Display, Vector2.new(10000, 10000))
-    end)
-    if ok and bounds.X > width then
+    local bounds = TextMetrics:Get(text, size, Theme.Display, 10000)
+    if bounds and bounds.X > width then
         size = math.floor(size * width / bounds.X)
     end
     return math.max(16, size)
@@ -3571,14 +4231,15 @@ function Responsive:Auth(width, height, narrow)
     local feedbackHeight = feedback and math.clamp(measure(feedbackText, 12, Theme.Medium, leftWidth) + 3, 20, 54) or 0
     local feedbackExtra = feedbackHeight > 0 and feedbackHeight + 8 or 0
     buttonsY = buttonsY + feedbackExtra
+    local extrasHeight = Experience:Height()
     if narrow then
-        artY = artY + feedbackExtra
+        artY = artY + feedbackExtra + extrasHeight
         UI.AuthArtwork.Root.Position = UDim2.fromOffset(UI.AuthArtwork.Root.Position.X.Offset, artY)
         local bodyHeight = artY + artHeight + 8
         UI.AuthBody.Size = UDim2.fromOffset(bodyWidth, bodyHeight)
         UI.AuthScroll.CanvasSize = UDim2.fromOffset(0, bodyHeight)
     else
-        local bodyHeight = math.max(height, buttonsY + buttonHeight + 2)
+        local bodyHeight = math.max(height, buttonsY + buttonHeight + 2 + extrasHeight)
         UI.AuthBody.Size = UDim2.fromOffset(bodyWidth, bodyHeight)
         UI.AuthScroll.CanvasSize = UDim2.fromOffset(0, bodyHeight)
     end
@@ -3606,6 +4267,7 @@ function Responsive:Auth(width, height, narrow)
         place(UI.Validate.Root, 0, buttonsY, buttonWidth, buttonHeight)
         place(UI.GetKey.Root, buttonWidth + 16, buttonsY, leftWidth - buttonWidth - 16, buttonHeight)
     end
+    Experience:Layout(leftWidth, buttonsY + (stackedButtons and 106 or buttonHeight) + 12)
     UI.AuthScroll.ScrollingEnabled = UI.AuthScroll.CanvasSize.Y.Offset > height + 1
     if State.Focused and height < 300 then
         UI.AuthScroll.CanvasPosition = Vector2.new(0, math.max(0, inputY - 28))
@@ -3657,6 +4319,7 @@ function Responsive:Update()
         height = math.min(543, safe.Y - 20)
         scale = 1
     end
+    scale = math.min(scale * Settings.UIScale, (safe.X - 20) / width, (safe.Y - 20) / height)
     local rail = width >= 780 and 72 or 56
     local header = height >= 500 and 72 or 54
     local pageTop = height >= 500 and 128 or 106
@@ -3757,27 +4420,36 @@ function Responsive:Update()
     Modal:Layout(true)
     Toasts:Layout()
 end
+function Responsive:Request()
+    if not State.Alive or self.Pending then
+        return
+    end
+    self.Pending = Runtime:Later(0, function()
+        self.Pending = nil
+        self:Update()
+    end)
+end
 local function pointer(input)
     local value = input.Position
     return Vector2.new(value.X, value.Y) - UI.Stage.AbsolutePosition
 end
 local function bindInput()
     Runtime:Connect(UI.Stage:GetPropertyChangedSignal("AbsoluteSize"), function()
-        Responsive:Update()
+        Responsive:Request()
     end)
     Runtime:Connect(UI.Stage:GetPropertyChangedSignal("AbsolutePosition"), function()
-        Responsive:Update()
+        Responsive:Request()
     end)
     for _, property in ipairs({ "VirtualKeyboardVisible", "VirtualKeyboardPosition", "VirtualKeyboardSize" }) do
         pcall(function()
             Runtime:Connect(Services.Input:GetPropertyChangedSignal(property), function()
-                Responsive:Update()
+                Responsive:Request()
             end)
         end)
     end
     pcall(function()
         Runtime:Connect(Services.Input:GetPropertyChangedSignal("TouchEnabled"), function()
-            Responsive:Update()
+            Responsive:Request()
         end)
     end)
     Runtime:Connect(UI.Header.InputBegan, function(input)
@@ -4008,6 +4680,8 @@ function Loader:SetLanguage(language)
     end
     Responsive:Update()
     Localization:Refresh(true)
+    Experience:Refresh()
+    Experience:PreferenceChanged()
     return self, true
 end
 function Loader:GetLanguage()
@@ -4094,6 +4768,7 @@ function Loader:SetProducts(products)
         Cards:Rebuild()
         UI.CatalogEmpty.Visible = #normalized == 0
         Navigation:Refresh()
+        Experience:RefreshGame()
     end
     return self
 end
@@ -4205,6 +4880,7 @@ function Loader:SetReducedMotion(value)
         if State.Activity == "Validating" then
             authBusy(true)
         end
+        Experience:PreferenceChanged()
     end
     return self
 end
@@ -4278,6 +4954,64 @@ function Loader:SetOnUser(callback)
     end
     return self
 end
+-- Pass only metadata returned by the host's successful RequireKey call.
+-- This display method never authorizes a key or unlocks premium features.
+function Loader:SetAuthInfo(info)
+    if not State.Alive then
+        return self
+    end
+    State.AuthInfo = nil
+    if type(info) == "table" then
+        local tier = info.tier or info.keyTier
+        local seconds = finite(info.secondsLeft, nil)
+        State.AuthInfo = {
+            tier = (tier == "premium" or tier == "free" or tier == "keyless") and tier or nil,
+            secondsLeft = seconds and seconds >= 0 and seconds or nil,
+            scriptName = type(info.scriptName) == "string" and safeText(info.scriptName, 100) or nil,
+            scriptVersion = type(info.scriptVersion) == "string" and safeText(info.scriptVersion, 40) or nil,
+            ReceivedAt = os.clock(),
+        }
+        if type(info.isUserPremium) == "boolean" then
+            State.AuthInfo.isUserPremium = info.isUserPremium
+        end
+    end
+    Experience:Refresh()
+    return self
+end
+-- Host callback returns true only when saved-key removal succeeds.
+-- Forgetting a stored credential is not a FlowAuth license revocation.
+function Loader:SetOnForgetKey(callback)
+    assert(callback == nil or type(callback) == "function", "SetOnForgetKey expects a function or nil")
+    if State.Alive then
+        State.Callbacks.ForgetKey = callback
+        Experience:RefreshOptions()
+    end
+    return self
+end
+function Loader:PasteKey()
+    return Experience:Paste()
+end
+function Loader:ForgetSavedKey()
+    return Experience:Forget()
+end
+function Loader:SetUIScale(value)
+    if State.Alive then
+        Settings.UIScale = math.clamp(finite(value, 1), 0.85, 1.15)
+        Responsive:Update()
+        Experience:PreferenceChanged()
+    end
+    return self
+end
+function Loader:ShowPreferences(visible)
+    if not AuthField.Interactive() then
+        return self, false
+    end
+    Experience.OptionsOpen = visible ~= false
+    Experience:RefreshOptions()
+    Responsive:Update()
+    return self, true
+end
+
 function Loader:GetState()
     return {
         Name = State.Name,
@@ -4288,6 +5022,10 @@ function Loader:GetState()
         AuthError = State.AuthError == true,
         Authorized = State.Authorized,
         Language = Settings.Language,
+        UIScale = Settings.UIScale,
+        ReducedMotion = Settings.ReducedMotion,
+        AuthStage = Experience.Stage,
+        AccessTier = State.Authorized and State.AuthInfo and State.AuthInfo.tier or nil,
         ExpirySeconds = Settings.Expiry,
         Progress = State.Progress,
         Modal = State.Modal,
@@ -4347,6 +5085,11 @@ function Loader:Destroy()
     if not State.Alive then
         return
     end
+    Runtime:Cancel(Experience.PrefTimer)
+    Experience.PrefTimer = nil
+    Experience:SavePrefs()
+    State.AuthInfo = nil
+    State.SlowAuthTimer = nil
     State.Alive = false
     State.Visible = false
     State.Drag = nil
@@ -4368,6 +5111,9 @@ function Loader:Destroy()
     table.clear(Toasts.Items)
     table.clear(Toasts.Queue)
     table.clear(Localization.Bindings)
+    table.clear(TextMetrics.Values)
+    TextMetrics.Count = 0
+    Responsive.Pending = nil
     GameMedia:Destroy()
     table.clear(State.Callbacks)
     table.clear(State.Products)
@@ -4465,10 +5211,13 @@ local function initialize()
         environment.__PlakUiLoader = Loader
     end
     Loader.__PlakOwned = true
-    buildShell(findParent())
+    Experience:LoadPrefs()
+    local parent = findParent()
+    buildShell(nil)
     buildModal()
     buildAuth()
     buildProducts()
+    UI.Gui.Parent = parent
     bindInput()
     local dispose = create("BindableEvent", { Name = "PlakDispose" }, UI.Gui)
     Runtime:Connect(dispose.Event, function()
@@ -4480,11 +5229,13 @@ local function initialize()
     Responsive:Update()
     Loader:SetProducts(SupportedGames)
     reconcile()
-    Runtime:Later(0, function()
-        if State.Visible then
-            Animation:To(UI.Window, { GroupTransparency = 0 }, Motion.Enter)
-            UI.AuthArtwork:Reveal()
-        end
+    if State.Visible then
+        Animation:To(UI.Window, { GroupTransparency = 0 }, Motion.Enter)
+        UI.AuthArtwork:Reveal()
+    end
+    Runtime:Later(Settings.ReducedMotion and 0 or Motion.Enter.Time, function()
+        GameMedia.Ready = true
+        GameMedia:Drain()
     end)
     Toasts:Drain()
 end
