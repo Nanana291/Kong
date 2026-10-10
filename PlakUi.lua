@@ -1,5 +1,7 @@
 -- PlakUi — a client-side loader frontend. Authentication and product execution belong to the host.
 -- Callbacks may yield. Progress is host-reported; SetExpiry never grants or revokes a license.
+-- Optional storefront: ShowLicenses(), SetLicenseOfferEnabled(boolean), SetLicenseStoreLink(httpsURL).
+-- Prices are presentation only; checkout and license entitlement remain with the store/host.
 -- PLAK is native GUI geometry. Catalog thumbnails are real Roblox content; optional HTTP only enriches metadata.
 local Loader = {}
 local Services = {
@@ -48,7 +50,11 @@ local Settings = {
     SuccessBehavior = "destroy",
     ToggleKey = Enum.KeyCode.RightShift,
     SupportLink = "",
-    SocialLinks = {},
+    SocialLinks = { discord = "https://dsc.gg/plak" },
+    LicenseOfferEnabled = true,
+    LicenseStoreLink = "https://plak-hub.mysellauth.com/",
+    CommunityEnabled = true,
+    CommunityDismissed = false,
     UIScale = 1,
     ReducedMotion = false,
     KeyVisible = false,
@@ -81,6 +87,8 @@ local State = {
 }
 local UI = {}
 local Experience
+local Community
+local LicenseOffer
 local LanguageController
 local Scope = {}
 Scope.__index = Scope
@@ -1198,6 +1206,112 @@ do
     end
 end
 
+do
+    local additions = {
+        en = {
+            communityTitle = "PLAK COMMUNITY",
+            communityIntro = "A place to ask for help, share ideas and follow Plak.",
+            communityNews = "NEW IN THIS LOADER",
+            communityNewsAuth = "Clearer key validation and success feedback",
+            communityNewsPrefs = "Saved language, scale and motion preferences",
+            communityNewsGame = "Current-game details and catalog compatibility",
+            communityJoin = "Join Discord",
+            communityJoinShort = "Join",
+            communityCopied = "Copied",
+            communitySupport = "Support",
+            communitySuggest = "Suggest",
+            communityOptional = "Joining is optional. Your key stays independent.",
+            communityDockTitle = "Discord",
+            communityDockSubtitle = "Support · ideas · updates",
+            communityDetails = "See the community and loader updates",
+            communityDismiss = "Hide this invitation; remember my choice",
+            communityRestore = "Show community",
+            communityHide = "Hide community",
+            communityInviteCopied = "Invitation copied",
+            communityJoinCopy = "Paste the invitation into Discord to join.",
+            communitySupportCopy = "Paste the invitation into Discord, then describe your issue.",
+            communitySuggestCopy = "Paste the invitation into Discord, then share your game idea.",
+        },
+        es = {
+            communityTitle = "COMUNIDAD PLAK",
+            communityIntro = "Un lugar para pedir ayuda, compartir ideas y seguir Plak.",
+            communityNews = "NOVEDADES DEL LOADER",
+            communityNewsAuth = "Validación de key y confirmación más claras",
+            communityNewsPrefs = "Idioma, escala y animaciones guardados",
+            communityNewsGame = "Juego actual y compatibilidad del catálogo",
+            communityJoin = "Unirme a Discord",
+            communityJoinShort = "Unirme",
+            communityCopied = "Copiado",
+            communitySupport = "Soporte",
+            communitySuggest = "Sugerir",
+            communityOptional = "Unirte es opcional. Tu key es independiente.",
+            communityDockTitle = "Discord",
+            communityDockSubtitle = "Ayuda · ideas · novedades",
+            communityDetails = "Ver la comunidad y las novedades del loader",
+            communityDismiss = "Ocultar esta invitación y recordar mi elección",
+            communityRestore = "Mostrar comunidad",
+            communityHide = "Ocultar comunidad",
+            communityInviteCopied = "Invitación copiada",
+            communityJoinCopy = "Pega la invitación en Discord para unirte.",
+            communitySupportCopy = "Pega la invitación en Discord y describe el problema.",
+            communitySuggestCopy = "Pega la invitación en Discord y comparte tu idea de juego.",
+        },
+        pt = {
+            communityTitle = "COMUNIDADE PLAK",
+            communityIntro = "Um lugar para pedir ajuda, compartilhar ideias e acompanhar Plak.",
+            communityNews = "NOVIDADES DO LOADER",
+            communityNewsAuth = "Validação da key e confirmação mais claras",
+            communityNewsPrefs = "Idioma, escala e animações salvos",
+            communityNewsGame = "Jogo atual e compatibilidade do catálogo",
+            communityJoin = "Entrar no Discord",
+            communityJoinShort = "Entrar",
+            communityCopied = "Copiado",
+            communitySupport = "Suporte",
+            communitySuggest = "Sugerir",
+            communityOptional = "Entrar é opcional. Sua key é independente.",
+            communityDockTitle = "Discord",
+            communityDockSubtitle = "Ajuda · ideias · novidades",
+            communityDetails = "Ver comunidade e novidades do loader",
+            communityDismiss = "Ocultar convite e lembrar minha escolha",
+            communityRestore = "Mostrar comunidade",
+            communityHide = "Ocultar comunidade",
+            communityInviteCopied = "Convite copiado",
+            communityJoinCopy = "Cole o convite no Discord para entrar.",
+            communitySupportCopy = "Cole o convite no Discord e descreva o problema.",
+            communitySuggestCopy = "Cole o convite no Discord e compartilhe sua ideia de jogo.",
+        },
+        ru = {
+            communityTitle = "СООБЩЕСТВО PLAK",
+            communityIntro = "Место для помощи, идей и новостей Plak.",
+            communityNews = "НОВОЕ В ЗАГРУЗЧИКЕ",
+            communityNewsAuth = "Понятная проверка ключа и подтверждение",
+            communityNewsPrefs = "Сохранение языка, масштаба и анимаций",
+            communityNewsGame = "Текущая игра и совместимость каталога",
+            communityJoin = "В Discord",
+            communityJoinShort = "Войти",
+            communityCopied = "Готово",
+            communitySupport = "Помощь",
+            communitySuggest = "Идеи",
+            communityOptional = "Вступление добровольное. Ключ независим.",
+            communityDockTitle = "Discord",
+            communityDockSubtitle = "Помощь · идеи · новости",
+            communityDetails = "Посмотреть сообщество и новости загрузчика",
+            communityDismiss = "Скрыть приглашение и запомнить выбор",
+            communityRestore = "Показать сообщество",
+            communityHide = "Скрыть сообщество",
+            communityInviteCopied = "Приглашение скопировано",
+            communityJoinCopy = "Вставьте приглашение в Discord, чтобы вступить.",
+            communitySupportCopy = "Вставьте приглашение в Discord и опишите проблему.",
+            communitySuggestCopy = "Вставьте приглашение в Discord и предложите игру.",
+        },
+    }
+    for language, values in pairs(additions) do
+        for key, value in pairs(values) do
+            Translations[language][key] = value
+        end
+    end
+end
+
 local Languages = {
     { Id = "en", Name = "English", Aliases = { "english", "en-us", "en-gb" } },
     { Id = "ru", Name = "Русский", Aliases = { "russian", "русский", "ru-ru" } },
@@ -1210,6 +1324,111 @@ for _, language in ipairs(Languages) do
     LanguageAliases[language.Name] = language.Id
     for _, alias in ipairs(language.Aliases) do
         LanguageAliases[alias] = language.Id
+    end
+end
+do
+    local offers = {
+        en = {
+            offerLicenses = "LICENSES",
+            offerHeroA = "Your access.",
+            offerHeroB = "Your way.",
+            offerSubhead = "Choose the license that fits you.",
+            offerOneTime = "ONE-TIME PAYMENT",
+            offerUSD = "USD",
+            offerPerMonth = "USD / month",
+            offerLifetimeTerm = "Lifetime license",
+            offerMonthlyTerm = "Monthly license",
+            offerChooseLifetime = "Choose Lifetime",
+            offerChooseMonthly = "Choose Monthly",
+            offerTerms = "Prices in USD. Review the terms in the store.",
+            offerNotNow = "Not now",
+            offerView = "View license keys",
+            offerCopied = "Link copied",
+            offerStoreCopied = "Store link copied",
+            offerLifetimeCopy = "Open it in your browser and select your Lifetime license.",
+            offerMonthlyCopy = "Open it in your browser and select your Monthly license.",
+            offerStoreCopy = "Open the store link in your browser.",
+            offerStore = "Store",
+            offerJumpLifetime = "Lifetime · $12",
+            offerJumpMonthly = "Monthly · $5",
+        },
+        es = {
+            offerLicenses = "LICENCIAS",
+            offerHeroA = "Tu acceso.",
+            offerHeroB = "A tu manera.",
+            offerSubhead = "Elige la licencia que va contigo.",
+            offerOneTime = "PAGO ÚNICO",
+            offerUSD = "USD",
+            offerPerMonth = "USD / mes",
+            offerLifetimeTerm = "Licencia Lifetime",
+            offerMonthlyTerm = "Licencia Monthly",
+            offerChooseLifetime = "Elegir Lifetime",
+            offerChooseMonthly = "Elegir Monthly",
+            offerTerms = "Precios en USD. Revisa los términos en la tienda.",
+            offerNotNow = "Ahora no",
+            offerView = "Ver licencias",
+            offerCopied = "Enlace copiado",
+            offerStoreCopied = "Enlace de tienda copiado",
+            offerLifetimeCopy = "Ábrelo en tu navegador y selecciona tu licencia Lifetime.",
+            offerMonthlyCopy = "Ábrelo en tu navegador y selecciona tu licencia Monthly.",
+            offerStoreCopy = "Abre el enlace de la tienda en tu navegador.",
+            offerStore = "Tienda",
+            offerJumpLifetime = "Lifetime · $12",
+            offerJumpMonthly = "Monthly · $5",
+        },
+        pt = {
+            offerLicenses = "LICENÇAS",
+            offerHeroA = "Seu acesso.",
+            offerHeroB = "Do seu jeito.",
+            offerSubhead = "Escolha a licença que combina com você.",
+            offerOneTime = "PAGAMENTO ÚNICO",
+            offerUSD = "USD",
+            offerPerMonth = "USD / mês",
+            offerLifetimeTerm = "Licença Lifetime",
+            offerMonthlyTerm = "Licença Monthly",
+            offerChooseLifetime = "Escolher Lifetime",
+            offerChooseMonthly = "Escolher Monthly",
+            offerTerms = "Preços em USD. Consulte os termos na loja.",
+            offerNotNow = "Agora não",
+            offerView = "Ver licenças",
+            offerCopied = "Link copiado",
+            offerStoreCopied = "Link da loja copiado",
+            offerLifetimeCopy = "Abra no navegador e selecione sua licença Lifetime.",
+            offerMonthlyCopy = "Abra no navegador e selecione sua licença Monthly.",
+            offerStoreCopy = "Abra o link da loja no navegador.",
+            offerStore = "Loja",
+            offerJumpLifetime = "Lifetime · $12",
+            offerJumpMonthly = "Monthly · $5",
+        },
+        ru = {
+            offerLicenses = "ЛИЦЕНЗИИ",
+            offerHeroA = "Ваш доступ.",
+            offerHeroB = "Ваш выбор.",
+            offerSubhead = "Выберите подходящую лицензию.",
+            offerOneTime = "РАЗОВЫЙ ПЛАТЁЖ",
+            offerUSD = "USD",
+            offerPerMonth = "USD / месяц",
+            offerLifetimeTerm = "Лицензия Lifetime",
+            offerMonthlyTerm = "Лицензия Monthly",
+            offerChooseLifetime = "Выбрать Lifetime",
+            offerChooseMonthly = "Выбрать Monthly",
+            offerTerms = "Цены в USD. Ознакомьтесь с условиями в магазине.",
+            offerNotNow = "Не сейчас",
+            offerView = "Посмотреть лицензии",
+            offerCopied = "Ссылка скопирована",
+            offerStoreCopied = "Ссылка магазина скопирована",
+            offerLifetimeCopy = "Откройте ссылку в браузере и выберите лицензию Lifetime.",
+            offerMonthlyCopy = "Откройте ссылку в браузере и выберите лицензию Monthly.",
+            offerStoreCopy = "Откройте ссылку магазина в браузере.",
+            offerStore = "Магазин",
+            offerJumpLifetime = "Lifetime · $12",
+            offerJumpMonthly = "Monthly · $5",
+        },
+    }
+    for language, values in pairs(offers) do
+        for key, value in pairs(values) do
+            Translations[language][key] = value
+        end
     end
 end
 local function resolveLanguage(value)
@@ -2077,6 +2296,10 @@ local function setButtonKey(button, key)
     Localization:Bind(button.Label, key)
 end
 function Modal:Layout(settleMotion)
+    if State.Modal == "licenses" then
+        LicenseOffer:Layout(settleMotion)
+        return
+    end
     local size = UI.Stage.AbsoluteSize
     if settleMotion then
         if not State.Modal and UI.Overlay.Visible then
@@ -2191,6 +2414,13 @@ function Modal:Open(config)
         return
     end
     State.ModalToken = State.ModalToken + 1
+    if LicenseOffer then
+        LicenseOffer:CancelReveal()
+    end
+    if UI.LicensePanel then
+        Animation:CancelTree(UI.LicensePanel)
+        UI.LicensePanel.Visible = false
+    end
     self.Config = config or {}
     self.ActionBusy = false
     State.Modal = "result"
@@ -2215,12 +2445,18 @@ function Modal:Close(immediate)
     end
     State.ModalToken = State.ModalToken + 1
     local token = State.ModalToken
+    if LicenseOffer then
+        LicenseOffer:CancelReveal()
+    end
     self.Config = nil
     State.Modal = nil
     reconcile()
     local function finish()
         if token == State.ModalToken then
             UI.Overlay.Visible = false
+            if UI.LicensePanel then
+                UI.LicensePanel.Visible = false
+            end
             UI.Result.Visible = false
             UI.ProgressPanel.Visible = false
             Localization.Bindings[UI.ResultTitle] = nil
@@ -2233,7 +2469,9 @@ function Modal:Close(immediate)
     else
         UI.ResultAction:SetDisabled(true)
         Animation:To(UI.Backdrop, { BackgroundTransparency = 1 }, Motion.Exit)
-        local panel = UI.Result.Visible and UI.Result or UI.ProgressPanel
+        local panel = UI.LicensePanel and UI.LicensePanel.Visible and UI.LicensePanel
+            or UI.Result.Visible and UI.Result
+            or UI.ProgressPanel
         Animation:To(
             panel,
             { GroupTransparency = 1, Position = panel.Position + UDim2.fromOffset(0, 32) },
@@ -2250,6 +2488,13 @@ function Modal:Loading(config)
         config = { Text = config }
     end
     config = config or {}
+    if LicenseOffer then
+        LicenseOffer:CancelReveal()
+    end
+    if UI.LicensePanel then
+        Animation:CancelTree(UI.LicensePanel)
+        UI.LicensePanel.Visible = false
+    end
     self.AuthCompletion = config.AuthCompletion == true
     if UI.ProgressCheck then
         UI.ProgressCheck.Root.Visible = false
@@ -2325,20 +2570,26 @@ function Modal:SetText(value)
         return value and localizedValue(value) or Localization:Get("loading")
     end)
 end
-local function openLink(url)
+local function openLink(url, config)
     if type(url) ~= "string" or trim(url) == "" then
         Loader:Toast({ Type = "warning", Subtitle = Localization:Get("noLink") })
         return false
     end
     local copy = capability("setclipboard") or capability("toclipboard")
-    local ok = copy and pcall(copy, url)
+    local ok, returned = false, nil
+    if copy then
+        ok, returned = pcall(copy, url)
+        ok = ok and returned ~= false
+    end
     if ok then
         Loader:Toast({
             Type = "success",
             Icon = "link",
-            Title = Localization:Get("copied"),
-            Subtitle = Localization:Get("keyCopied"),
+            Title = config and config.Title or Localization:Get("copied"),
+            Subtitle = config and config.Subtitle or Localization:Get("keyCopied"),
         })
+    elseif config and config.InlineFallback then
+        Loader:Toast({ Type = "warning", Title = Localization:Get("noClipboard"), Subtitle = url })
     else
         Modal:Open({
             Type = "info",
@@ -2431,7 +2682,7 @@ local function buildModal()
         Selectable = false,
     }, UI.Overlay)
     Runtime:Connect(UI.Backdrop.Activated, function()
-        if State.Modal == "result" and State.Activity == "Idle" then
+        if (State.Modal == "result" or State.Modal == "licenses") and State.Activity == "Idle" then
             Modal:Close()
         end
     end)
@@ -3033,6 +3284,704 @@ local AuthField = {}
 function AuthField.Interactive()
     return canInteract() and State.Page == "Auth"
 end
+-- Community actions never authenticate, delay Script(), or claim membership.
+-- Storefront presentation only. No purchase, entitlement or auth result is inferred here.
+LicenseOffer = { RevealTasks = {}, Revealing = false }
+function LicenseOffer:Enabled()
+    return Settings.LicenseOfferEnabled and Settings.LicenseStoreLink ~= ""
+end
+function LicenseOffer:Interactive()
+    return State.Alive and State.Visible and State.Modal == "licenses" and State.Activity == "Idle"
+end
+function LicenseOffer:CancelReveal()
+    for _, thread in ipairs(self.RevealTasks) do
+        Runtime:Cancel(thread)
+    end
+    table.clear(self.RevealTasks)
+    self.Revealing = false
+end
+function LicenseOffer:Refresh()
+    if UI.LicenseNav then
+        UI.LicenseNav:SetDisabled(not self:Enabled() or State.Activity ~= "Idle")
+        UI.LicenseNav.Root:SetAttribute("ActionLabel", Localization:Get("offerLicenses"))
+        UI.LicenseInline:SetDisabled(not self:Enabled() or State.Activity ~= "Idle")
+        UI.LicenseInline.Root.Visible = self:Enabled()
+    end
+    if not UI.LicensePanel then
+        return
+    end
+    Localization:Bind(UI.LicenseStore.Label, "offerStore", "Text", function()
+        return Settings.LicenseStoreLink:gsub("^https://", ""):gsub("/$", "")
+    end)
+    local copied = self.CopyTask ~= nil and self.CopiedLink == Settings.LicenseStoreLink
+    for _, card in ipairs(UI.LicenseCards) do
+        Localization:Bind(
+            card.Buy.Label,
+            copied and "offerCopied" or card.Primary and "offerChooseLifetime" or "offerChooseMonthly"
+        )
+        card.Buy:SetDisabled(copied or not self:Enabled())
+    end
+    UI.LicenseStore:SetDisabled(copied or not self:Enabled())
+end
+function LicenseOffer:Copy(plan)
+    if not self:Interactive() or not self:Enabled() then
+        return false, "unavailable"
+    end
+    if self.CopyTask and self.CopiedLink == Settings.LicenseStoreLink then
+        return false, "cooldown"
+    end
+    local link = Settings.LicenseStoreLink
+    local ok = openLink(link, {
+        Title = Localization:Get("offerStoreCopied"),
+        Subtitle = Localization:Get(
+            plan == "lifetime" and "offerLifetimeCopy" or plan == "monthly" and "offerMonthlyCopy" or "offerStoreCopy"
+        ),
+    })
+    if not ok then
+        return false, "clipboard_unavailable"
+    end
+    self.CopiedLink = link
+    Runtime:Cancel(self.CopyTask)
+    self.CopyTask = Runtime:Later(2, function()
+        self.CopyTask = nil
+        self.CopiedLink = nil
+        self:Refresh()
+    end)
+    self:Refresh()
+    return true
+end
+function LicenseOffer:Paint(card, hovered)
+    card.Hovered = hovered == true
+    Animation:To(card.Border, { Transparency = hovered and 0.08 or card.Primary and 0.22 or 0.55 }, Motion.Hover)
+    Animation:To(card.SealScale, { Scale = hovered and 1.04 or 1 }, Motion.Hover)
+end
+function LicenseOffer:BuildMark(parent)
+    local root = frame(parent, "PlakGeometry")
+    root.BackgroundTransparency = 1
+    root.Size = UDim2.fromOffset(114, 30)
+    for index, name in ipairs({ "P", "L", "A", "K" }) do
+        for _, data in ipairs(BrandArt.Glyphs[name]) do
+            local part = frame(root, "Glyph" .. name, Theme.Accent)
+            local x = (index - 1) * 30
+            if data[6] then
+                local dx, dy = data[3] - data[1], data[4] - data[2]
+                part.AnchorPoint = Vector2.new(0.5, 0.5)
+                part.Position = UDim2.fromOffset(x + (data[1] + data[3]) * 0.105, (data[2] + data[4]) * 0.105)
+                part.Size = UDim2.fromOffset(math.sqrt(dx * dx + dy * dy) * 0.21, data[5] * 0.21)
+                part.Rotation = math.deg(math.atan2(dy, dx))
+            else
+                place(part, x + data[1] * 0.21, data[2] * 0.21, data[3] * 0.21, data[4] * 0.21)
+            end
+        end
+    end
+    return root
+end
+function LicenseOffer:BuildCard(primary)
+    local card = { Primary = primary }
+    card.Root = group(UI.LicenseBody, primary and "Lifetime" or "Monthly")
+    card.Root.BackgroundTransparency = 0
+    card.Root.ClipsDescendants = true
+    corner(card.Root, 12)
+    gradient(card.Root, primary and Color3.fromRGB(47, 21, 32) or Theme.Elevated, Color3.fromRGB(18, 17, 22), 35)
+    card.Border = stroke(card.Root, primary and Theme.Accent or Theme.Line, 1, primary and 0.22 or 0.55)
+    card.Scale = create("UIScale", { Scale = 1 }, card.Root)
+    card.Badge = frame(card.Root, "PaymentBadge", Theme.AccentDark)
+    corner(card.Badge, 7)
+    card.Badge.Visible = primary
+    card.BadgeLabel = localized(card.Badge, "Payment", "offerOneTime", 11, Theme.Text, Theme.Medium)
+    card.BadgeLabel.TextXAlignment = Enum.TextXAlignment.Center
+    card.BadgeLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    card.Title = label(card.Root, "Plan", primary and "LIFETIME" or "MONTHLY", 28, Theme.Text, Theme.Bold)
+    card.Price =
+        label(card.Root, "Price", primary and "$12" or "$5", 82, primary and Theme.Accent or Theme.Text, Theme.Bold)
+    card.Currency =
+        localized(card.Root, "Currency", primary and "offerUSD" or "offerPerMonth", 14, Theme.Secondary, Theme.Medium)
+    card.Currency.TextTruncate = Enum.TextTruncate.AtEnd
+    card.Term =
+        localized(card.Root, "LicenseTerm", primary and "offerLifetimeTerm" or "offerMonthlyTerm", 13, Theme.Secondary)
+    card.Term.TextTruncate = Enum.TextTruncate.AtEnd
+    card.Seal = Icon.new(card.Root, "key", primary and Theme.AccentDark or Theme.Muted, 72)
+    card.SealScale = create("UIScale", { Scale = 1 }, card.Seal.Root)
+    card.Buy = Button.new(
+        card.Root,
+        "Choose",
+        "",
+        primary,
+        nil,
+        function()
+            self:Copy(primary and "lifetime" or "monthly")
+        end,
+        Runtime,
+        function()
+            return self:Interactive()
+        end
+    )
+    if not primary then
+        card.Buy.BaseColor = Theme.Inactive
+        card.Buy:Apply()
+    end
+    Runtime:Connect(card.Root.MouseEnter, function()
+        if self:Interactive() then
+            self:Paint(card, true)
+        end
+    end)
+    Runtime:Connect(card.Root.MouseLeave, function()
+        self:Paint(card, false)
+    end)
+    return card
+end
+function LicenseOffer:Build()
+    if UI.LicensePanel then
+        return
+    end
+    local function allowed()
+        return self:Interactive()
+    end
+    UI.LicensePanel = group(UI.Overlay, "LicenseOffers")
+    UI.LicensePanel.AnchorPoint = Vector2.new(0.5, 0.5)
+    UI.LicensePanel.BackgroundTransparency = 0
+    UI.LicensePanel.BackgroundColor3 = Theme.Surface
+    UI.LicensePanel.Active = true
+    UI.LicensePanel.ZIndex = 2
+    UI.LicensePanel.Visible = false
+    UI.LicensePanel.ClipsDescendants = true
+    corner(UI.LicensePanel, 14)
+    stroke(UI.LicensePanel, Theme.Line, 1, 0.15)
+    UI.LicenseScale = create("UIScale", { Scale = 1 }, UI.LicensePanel)
+    UI.LicenseMark = self:BuildMark(UI.LicensePanel)
+    UI.LicenseTag = localized(UI.LicensePanel, "Category", "offerLicenses", 12, Theme.Secondary, Theme.Medium)
+    UI.LicenseDivider = frame(UI.LicensePanel, "HeaderDivider", Theme.Line)
+    UI.LicenseClose = Button.new(UI.LicensePanel, "Close", "", false, "x", function()
+        Modal:Close()
+    end, Runtime, allowed)
+    UI.LicenseClose.Root.BackgroundTransparency = 1
+    UI.LicenseClose.Label.Visible = false
+    UI.LicenseClose.Root:SetAttribute("ActionLabel", Localization:Get("close"))
+    UI.LicenseScroll = create("ScrollingFrame", {
+        Name = "OfferContent",
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ScrollBarThickness = 3,
+        ScrollBarImageColor3 = Theme.AccentDark,
+        ScrollingDirection = Enum.ScrollingDirection.Y,
+        VerticalScrollBarInset = Enum.ScrollBarInset.None,
+        ElasticBehavior = Enum.ElasticBehavior.WhenScrollable,
+    }, UI.LicensePanel)
+    UI.LicenseBody = frame(UI.LicenseScroll, "Body")
+    UI.LicenseBody.BackgroundTransparency = 1
+    UI.LicenseHeroA = localized(UI.LicenseBody, "HeroA", "offerHeroA", 40, Theme.Text, Theme.Bold)
+    UI.LicenseHeroB = localized(UI.LicenseBody, "HeroB", "offerHeroB", 40, Theme.Accent, Theme.Bold)
+    UI.LicenseSubhead = localized(UI.LicenseBody, "Subhead", "offerSubhead", 14, Theme.Secondary)
+    UI.LicenseHeroA.TextTruncate = Enum.TextTruncate.AtEnd
+    UI.LicenseHeroB.TextTruncate = Enum.TextTruncate.AtEnd
+    UI.LicenseSubhead.TextWrapped = true
+    UI.LicenseSubhead.TextTruncate = Enum.TextTruncate.AtEnd
+    UI.LicenseJumpLife = Button.new(UI.LicenseBody, "LifetimeShortcut", "Lifetime · $12", false, nil, function()
+        UI.LicenseScroll.CanvasPosition = Vector2.new(0, math.max(0, UI.LicenseCards[1].Rest.Y.Offset - 8))
+    end, Runtime, allowed)
+    UI.LicenseJumpMonth = Button.new(UI.LicenseBody, "MonthlyShortcut", "Monthly · $5", false, nil, function()
+        UI.LicenseScroll.CanvasPosition = Vector2.new(0, math.max(0, UI.LicenseCards[2].Rest.Y.Offset - 8))
+    end, Runtime, allowed)
+    Localization:Bind(UI.LicenseJumpLife.Label, "offerJumpLifetime")
+    Localization:Bind(UI.LicenseJumpMonth.Label, "offerJumpMonthly")
+    UI.LicenseCards = { self:BuildCard(true), self:BuildCard(false) }
+    UI.LicenseTerms = localized(UI.LicenseBody, "Terms", "offerTerms", 12, Theme.Secondary)
+    UI.LicenseTerms.TextWrapped = true
+    UI.LicenseTerms.TextTruncate = Enum.TextTruncate.AtEnd
+    UI.LicenseTerms.TextXAlignment = Enum.TextXAlignment.Center
+    UI.LicenseStore = Button.new(UI.LicensePanel, "Storefront", "", false, "link", function()
+        self:Copy()
+    end, Runtime, allowed)
+    UI.LicenseStore.BaseColor = Theme.Surface
+    UI.LicenseStore:Apply()
+    UI.LicenseNotNow = Button.new(UI.LicensePanel, "NotNow", "", false, nil, function()
+        Modal:Close()
+    end, Runtime, allowed)
+    UI.LicenseNotNow.Root.BackgroundTransparency = 1
+    Localization:Bind(UI.LicenseNotNow.Label, "offerNotNow")
+    self:Refresh()
+end
+function LicenseOffer:Layout(settle)
+    if not UI.LicensePanel then
+        return
+    end
+    if settle then
+        self:CancelReveal()
+        Animation:CancelProperty(UI.LicensePanel, "Position")
+        Animation:CancelProperty(UI.LicenseScale, "Scale")
+        UI.LicensePanel.GroupTransparency = 0
+        UI.LicenseScale.Scale = 1
+    end
+    local safe = UI.Stage.AbsoluteSize
+    local width = math.max(160, math.min(920, safe.X - 24))
+    local height = math.max(180, math.min(640, safe.Y - 24))
+    local inner = width - 40
+    local stacked = width < 650
+    local compact = width < 420
+    local footer = compact and 112 or 68
+    local viewportHeight = math.max(40, height - 72 - footer - 12)
+    UI.LicensePanel.Size = UDim2.fromOffset(width, height)
+    UI.LicensePanel.Position = UDim2.fromOffset(safe.X / 2, safe.Y / 2)
+    place(UI.LicenseMark, 20, 20, 114, 30)
+    place(UI.LicenseTag, 160, 22, math.max(1, width - 230), 28)
+    UI.LicenseTag.Visible = width >= 420
+    place(UI.LicenseClose.Root, width - 56, 12, 44, 44)
+    place(UI.LicenseDivider, 0, 65, width, 1)
+    place(UI.LicenseScroll, 20, 74, inner, viewportHeight)
+    local font = math.clamp(math.floor(inner / 16), 22, 40)
+    UI.LicenseHeroA.TextSize, UI.LicenseHeroB.TextSize = font, font
+    local heroHeight = font + 10
+    local first = TextMetrics:Get(Localization:Get("offerHeroA"), font, Theme.Bold, 10000)
+    local second = TextMetrics:Get(Localization:Get("offerHeroB"), font, Theme.Bold, 10000)
+    local oneLine = first and second and first.X + second.X + 14 <= inner
+    if oneLine then
+        local left = math.max(0, (inner - first.X - second.X - 14) / 2)
+        place(UI.LicenseHeroA, left, 0, first.X + 2, heroHeight)
+        place(UI.LicenseHeroB, left + first.X + 14, 0, second.X + 2, heroHeight)
+    else
+        place(UI.LicenseHeroA, 0, 0, inner, heroHeight)
+        place(UI.LicenseHeroB, 0, heroHeight, inner, heroHeight)
+    end
+    local subtitleY = oneLine and heroHeight + 8 or heroHeight * 2 + 6
+    place(UI.LicenseSubhead, 0, subtitleY, inner, 38)
+    UI.LicenseSubhead.TextXAlignment = Enum.TextXAlignment.Center
+    UI.LicenseHeroA.TextXAlignment = oneLine and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center
+    UI.LicenseHeroB.TextXAlignment = UI.LicenseHeroA.TextXAlignment
+    UI.LicenseJumpLife.Root.Visible, UI.LicenseJumpMonth.Root.Visible = stacked, stacked
+    local cardsY = subtitleY + 54
+    if stacked then
+        local half = (inner - 8) / 2
+        place(UI.LicenseJumpLife.Root, 0, cardsY, half, 44)
+        place(UI.LicenseJumpMonth.Root, half + 8, cardsY, half, 44)
+        cardsY = cardsY + 56
+    end
+    local cardHeight = stacked and 320 or 330
+    local gap = 16
+    local lifeWidth = stacked and inner or math.floor((inner - gap) * 0.57)
+    local monthlyWidth = stacked and inner or inner - gap - lifeWidth
+    for index, card in ipairs(UI.LicenseCards) do
+        local cardWidth = index == 1 and lifeWidth or monthlyWidth
+        local x = (index == 1 or stacked) and 0 or lifeWidth + gap
+        local y = stacked and cardsY + (index - 1) * (cardHeight + gap) or cardsY
+        card.Rest = UDim2.fromOffset(x, y)
+        if settle then
+            Animation:CancelProperty(card.Root, "Position")
+            Animation:CancelProperty(card.Root, "GroupTransparency")
+            Animation:CancelProperty(card.Scale, "Scale")
+        end
+        card.Root.Position = card.Rest
+        card.Root.Size = UDim2.fromOffset(cardWidth, cardHeight)
+        card.Root.GroupTransparency = settle and 0 or card.Root.GroupTransparency
+        card.Scale.Scale = settle and 1 or card.Scale.Scale
+        local small = cardWidth < 280
+        local priceSize = small and 62 or stacked and 72 or 82
+        card.Price.TextSize = priceSize
+        card.Title.TextSize = small and 24 or 28
+        place(card.Badge, 20, 18, math.min(164, cardWidth - 40), 26)
+        place(card.BadgeLabel, 8, 0, math.max(1, card.Badge.Size.X.Offset - 16), 26)
+        place(card.Title, 20, 58, cardWidth - 40, 40)
+        place(card.Price, 20, 101, cardWidth - 40, priceSize + 12)
+        local currencyY = 101 + priceSize + 16
+        place(card.Currency, 22, currencyY, cardWidth - 44, 24)
+        place(card.Term, 22, currencyY + 28, cardWidth - 44, 24)
+        card.Seal.Root.Visible = cardWidth >= 280
+        place(card.Seal.Root, cardWidth - 94, 105, 64, 64)
+        place(card.Buy.Root, 20, cardHeight - 64, cardWidth - 40, 44)
+        self:Paint(card, card.Hovered)
+    end
+    local notesY = cardsY + (stacked and cardHeight * 2 + gap or cardHeight) + 16
+    place(UI.LicenseTerms, 0, notesY, inner, 42)
+    local canvasHeight = notesY + 50
+    UI.LicenseBody.Size = UDim2.fromOffset(inner, canvasHeight)
+    UI.LicenseScroll.CanvasSize = UDim2.fromOffset(0, canvasHeight)
+    UI.LicenseScroll.ScrollingEnabled = canvasHeight > viewportHeight
+    if compact then
+        place(UI.LicenseStore.Root, 20, height - 106, inner, 44)
+        place(UI.LicenseNotNow.Root, 20, height - 56, inner, 44)
+    else
+        place(UI.LicenseStore.Root, 20, height - 56, math.max(1, inner - 124), 44)
+        place(UI.LicenseNotNow.Root, width - 132, height - 56, 112, 44)
+    end
+end
+function LicenseOffer:Open()
+    if not State.Alive or not State.Visible or State.Activity ~= "Idle" or not self:Enabled() then
+        return false, "unavailable"
+    end
+    if State.Modal == "licenses" then
+        return true
+    end
+    Modal:Close(true)
+    UI.Key:ReleaseFocus(false)
+    closeLanguage()
+    self:Build() -- Lazy: never construct pricing cards on the cold auth path.
+    self:CancelReveal()
+    State.ModalToken = State.ModalToken + 1
+    local generation = State.ModalToken
+    State.Modal = "licenses"
+    Modal.Config = nil
+    reconcile()
+    UI.Overlay.Visible = true
+    UI.Result.Visible, UI.ProgressPanel.Visible = false, false
+    UI.LicensePanel.Visible = true
+    self:Layout(false)
+    self:Refresh()
+    UI.LicensePanel.GroupTransparency = Settings.ReducedMotion and 0 or 1
+    UI.LicenseScale.Scale = Settings.ReducedMotion and 1 or 0.97
+    local destination = UI.LicensePanel.Position
+    UI.LicensePanel.Position = destination + UDim2.fromOffset(0, Settings.ReducedMotion and 0 or 18)
+    Animation:To(UI.Backdrop, { BackgroundTransparency = 0.48 }, Motion.Enter)
+    Animation:To(UI.LicensePanel, { GroupTransparency = 0, Position = destination }, Motion.Enter)
+    Animation:To(UI.LicenseScale, { Scale = 1 }, Motion.Enter)
+    UI.LicenseScroll.CanvasPosition = Vector2.new(0, 0)
+    for index, card in ipairs(UI.LicenseCards) do
+        card.Root.GroupTransparency = Settings.ReducedMotion and 0 or 1
+        card.Root.Position = card.Rest + UDim2.fromOffset(0, Settings.ReducedMotion and 0 or 10)
+        card.Scale.Scale = Settings.ReducedMotion and 1 or 0.985
+        local thread = Runtime:Later(Settings.ReducedMotion and 0 or 0.035 * index, function()
+            if State.Modal == "licenses" and generation == State.ModalToken then
+                Animation:To(card.Root, { GroupTransparency = 0, Position = card.Rest }, Motion.Enter)
+                Animation:To(card.Scale, { Scale = 1 }, Motion.Enter)
+            end
+        end)
+        self.RevealTasks[#self.RevealTasks + 1] = thread
+    end
+    return true
+end
+function LicenseOffer:BuildTriggers()
+    UI.LicenseNav = Button.new(UI.Sidebar, "Licenses", "", false, "key", function()
+        self:Open()
+    end)
+    UI.LicenseNav.Root.BackgroundTransparency = 1
+    UI.LicenseNav.Label.Visible = false
+    UI.LicenseNav.Icon.Root.Position = UDim2.new(0.5, -10, 0.5, 0)
+    UI.LicenseNav.Icon:SetColor(Theme.Accent)
+    UI.LicenseInline = Button.new(UI.AuthBody, "LicenseKeys", "", false, "key", function()
+        self:Open()
+    end, Runtime, AuthField.Interactive)
+    UI.LicenseInline.BaseColor = Theme.Surface
+    UI.LicenseInline:Apply()
+    UI.LicenseInline.Icon:SetColor(Theme.Accent)
+    Localization:Bind(UI.LicenseInline.Label, "offerView")
+    self:Refresh()
+end
+
+Community = { Generation = 0, CardHeight = 300, CardRevealed = false, DockRevealed = false }
+function Community:Link()
+    local link = Settings.SocialLinks.discord
+    return type(link) == "string" and #link <= 2048 and link:match("^https?://") and link or ""
+end
+function Community:Enabled()
+    return Settings.CommunityEnabled and not Settings.CommunityDismissed and self:Link() ~= ""
+end
+function Community:Interactive()
+    return State.Alive
+        and State.Visible
+        and State.Page == "Auth"
+        and not State.Modal
+        and State.Activity ~= "Completing"
+        and not self.Hiding
+end
+function Community:Refresh()
+    if not UI.CommunityCard then
+        return
+    end
+    local copied = self.CopyThread ~= nil and self.CopiedLink == self:Link()
+    Localization:Bind(UI.CommunityJoin.Label, copied and "communityCopied" or "communityJoin")
+    Localization:Bind(UI.CommunityDockJoin.Label, copied and "communityCopied" or "communityJoinShort")
+    Localization:Bind(UI.CommunityRestore.Label, Settings.CommunityDismissed and "communityRestore" or "communityHide")
+    for _, button in ipairs({ UI.CommunityJoin, UI.CommunitySupport, UI.CommunitySuggest, UI.CommunityDockJoin }) do
+        button:SetDisabled(copied or self:Link() == "")
+    end
+    UI.CommunityRestore:SetDisabled(State.Activity ~= "Idle" or not Settings.CommunityEnabled or self:Link() == "")
+    UI.CommunityClose.Root:SetAttribute("ActionLabel", Localization:Get("communityDismiss"))
+    UI.CommunityDockClose.Root:SetAttribute("ActionLabel", Localization:Get("communityDismiss"))
+    UI.CommunityOpen.Root:SetAttribute("ActionLabel", Localization:Get("communityDetails"))
+end
+function Community:Copy(kind)
+    if not self:Interactive() or not self:Enabled() then
+        return false, "unavailable"
+    end
+    local link = self:Link()
+    if self.CopyThread and self.CopiedLink == link then
+        return false, "cooldown"
+    end
+    local copied = openLink(link, {
+        Title = Localization:Get("communityInviteCopied"),
+        Subtitle = Localization:Get(
+            kind == "support" and "communitySupportCopy"
+                or kind == "suggest" and "communitySuggestCopy"
+                or "communityJoinCopy"
+        ),
+        -- A pending authentication must never be covered by an unclosable modal.
+        InlineFallback = State.Activity ~= "Idle",
+    })
+    if not copied then
+        return false, "clipboard_unavailable"
+    end
+    self.CopiedLink = link
+    Runtime:Cancel(self.CopyThread)
+    self.CopyThread = Runtime:Later(2, function()
+        self.CopyThread = nil
+        self.CopiedLink = nil
+        self:Refresh()
+    end)
+    self:Refresh()
+    return true
+end
+function Community:Paint(hovered)
+    if UI.CommunityBorder then
+        Animation:To(UI.CommunityBorder, { Transparency = hovered and 0.28 or 0.58 }, Motion.Hover)
+        Animation:To(UI.CommunityAvatarScale, { Scale = hovered and 1.04 or 1 }, Motion.Hover)
+    end
+end
+function Community:RevealCard()
+    if not self:Enabled() or not self:Interactive() or self.CardRevealed or not State.Layout.Height then
+        return
+    end
+    local scrollY = UI.AuthScroll.CanvasPosition.Y
+    local y = UI.CommunityCard.Position.Y.Offset
+    if y > scrollY + UI.AuthScroll.AbsoluteSize.Y or y + self.CardHeight < scrollY then
+        return
+    end
+    self.CardRevealed = true
+    UI.CommunityCard.GroupTransparency = Settings.ReducedMotion and 0 or 1
+    UI.CommunityScale.Scale = Settings.ReducedMotion and 1 or 0.97
+    Animation:To(UI.CommunityCard, { GroupTransparency = 0 }, Motion.Enter)
+    Animation:To(UI.CommunityScale, { Scale = 1 }, Motion.Enter)
+end
+function Community:Open()
+    if not self:Interactive() or not self:Enabled() then
+        return false
+    end
+    UI.Key:ReleaseFocus(false)
+    UI.AuthScroll.CanvasPosition = Vector2.new(0, math.max(0, UI.CommunityCard.Position.Y.Offset - 12))
+    self:RevealCard()
+    return true
+end
+function Community:Dismiss()
+    if not self:Interactive() or not self:Enabled() then
+        return false
+    end
+    Settings.CommunityDismissed = true
+    self.Hiding = true
+    self.Generation = self.Generation + 1
+    local generation = self.Generation
+    Experience:PreferenceChanged()
+    self:Refresh()
+    Animation:To(UI.CommunityDockScale, { Scale = 0.94 }, Motion.Exit)
+    Animation:To(UI.CommunityCard, { GroupTransparency = 1 }, Motion.Exit, function()
+        if generation == self.Generation then
+            self.Hiding = false
+            Responsive:Update()
+        end
+    end)
+    return true
+end
+function Community:Restore()
+    if not State.Alive then
+        return
+    end
+    self.Generation = self.Generation + 1
+    self.Hiding = false
+    self.CardRevealed = false
+    self.DockRevealed = false
+    Animation:CancelTree(UI.CommunityCard)
+    Animation:CancelTree(UI.CommunityDock)
+    Settings.CommunityDismissed = false
+    Experience:PreferenceChanged()
+    self:Refresh()
+    Responsive:Update()
+end
+function Community:DockHeight(width, height)
+    return (self:Enabled() or self.Hiding) and State.Page == "Auth" and width >= 180 and height >= 350 and 64 or 0
+end
+function Community:Height()
+    return (self:Enabled() or self.Hiding) and (self.CardHeight + 12) or 0
+end
+function Community:Measure(width)
+    if self.MeasuredWidth == width and self.MeasuredLanguage == Settings.Language then
+        return
+    end
+    self.MeasuredWidth, self.MeasuredLanguage = width, Settings.Language
+    local inner = math.max(1, width - 32)
+    self.IntroHeight = math.clamp(measure(Localization:Get("communityIntro"), 12, Theme.Font, inner), 30, 62)
+    self.NewsHeights = self.NewsHeights or {}
+    local joinY = 63 + self.IntroHeight + 16 + 27
+    for index, key in ipairs({ "communityNewsAuth", "communityNewsPrefs", "communityNewsGame" }) do
+        local rowHeight = math.clamp(measure(Localization:Get(key), 12, Theme.Font, inner - 14), 20, 48)
+        self.NewsHeights[index] = rowHeight
+        joinY = joinY + rowHeight + 5
+    end
+    self.CardHeight = joinY + 8 + 137
+end
+function Community:Layout(width, y)
+    local enabled = self:Enabled() or self.Hiding
+    UI.CommunityCard.Visible = enabled
+    if not enabled then
+        return
+    end
+    self:Measure(width)
+    local compact = width < 260
+    Localization:Bind(UI.CommunityTitle, compact and "communityDockTitle" or "communityTitle")
+    UI.CommunityAvatar.Visible = not compact
+    place(UI.CommunityAvatar, 16, 16, 36, 36)
+    place(UI.CommunityDiscord.Root, 6, 6, 24, 24)
+    place(UI.CommunityClose.Root, width - 52, 8, 44, 44)
+    place(UI.CommunityTitle, compact and 16 or 66, 16, math.max(1, width - (compact and 72 or 122)), 40)
+    local inner = math.max(1, width - 32)
+    local introHeight = self.IntroHeight
+    place(UI.CommunityIntro, 16, 63, inner, introHeight)
+    local newsY = 63 + introHeight + 16
+    place(UI.CommunityRule, 16, newsY - 7, inner, 1)
+    place(UI.CommunityNewsHeading, 16, newsY, inner, 22)
+    newsY = newsY + 27
+    for index, key in ipairs({ "communityNewsAuth", "communityNewsPrefs", "communityNewsGame" }) do
+        local rowHeight = self.NewsHeights[index]
+        place(UI.CommunityNewsDots[index], 16, newsY + 7, 4, 4)
+        place(UI.CommunityNews[index], 30, newsY, inner - 14, rowHeight)
+        newsY = newsY + rowHeight + 5
+    end
+    local joinY = newsY + 8
+    place(UI.CommunityJoin.Root, 16, joinY, inner, 44)
+    local half = (inner - 8) / 2
+    place(UI.CommunitySupport.Root, 16, joinY + 52, half, 44)
+    place(UI.CommunitySuggest.Root, 24 + half, joinY + 52, half, 44)
+    place(UI.CommunityOptional, 16, joinY + 103, inner, 22)
+    self.CardHeight = joinY + 137
+    place(UI.CommunityCard, 0, y, width, self.CardHeight)
+    self:RevealCard()
+end
+function Community:LayoutDock(x, y, width, height)
+    local show = self:DockHeight(width, height) > 0
+        and State.Visible
+        and not State.Modal
+        and State.Activity ~= "Completing"
+    UI.CommunityDock.Visible = show
+    if not show then
+        return
+    end
+    place(UI.CommunityDock, x, y, width, 54)
+    local compact = width < 300
+    UI.CommunityDockIcon.Root.Visible = not compact
+    UI.CommunityDockSubtitle.Visible = not compact
+    place(UI.CommunityDockIcon.Root, 14, 15, 24, 24)
+    local start = compact and 12 or 48
+    place(UI.CommunityDockTitle, start, compact and 15 or 6, math.max(1, width - start - 132), 24)
+    place(UI.CommunityDockSubtitle, start, 29, math.max(1, width - start - 132), 18)
+    place(UI.CommunityOpen.Root, 0, 0, math.max(1, width - 128), 54)
+    place(UI.CommunityDockJoin.Root, width - 124, 5, 72, 44)
+    place(UI.CommunityDockClose.Root, width - 48, 5, 44, 44)
+    if not self.DockRevealed then
+        self.DockRevealed = true
+        UI.CommunityDockScale.Scale = Settings.ReducedMotion and 1 or 0.96
+        Animation:To(UI.CommunityDockScale, { Scale = 1 }, Motion.Enter)
+    end
+end
+function Community:Build()
+    local function allowed()
+        return self:Interactive()
+    end
+    local function secondary(parent, name, key, callback, icon)
+        local button = Button.new(parent, name, "", false, icon, callback, Runtime, allowed)
+        button.BaseColor = Theme.Surface
+        button:Apply()
+        if key ~= "empty" then
+            Localization:Bind(button.Label, key)
+        end
+        return button
+    end
+    UI.CommunityCard = group(UI.AuthBody, "PlakCommunity")
+    UI.CommunityCard.BackgroundTransparency = 0
+    UI.CommunityCard.BackgroundColor3 = Theme.Input
+    UI.CommunityCard.GroupTransparency = 1
+    UI.CommunityCard.ClipsDescendants = true
+    corner(UI.CommunityCard, 12)
+    UI.CommunityBorder = stroke(UI.CommunityCard, Theme.AccentDark, 1, 0.58)
+    UI.CommunityScale = create("UIScale", { Scale = 1 }, UI.CommunityCard)
+    UI.CommunityAvatar = frame(UI.CommunityCard, "DiscordMark", Theme.AccentDark)
+    corner(UI.CommunityAvatar, 10)
+    gradient(UI.CommunityAvatar, Theme.AccentDark, Color3.fromRGB(55, 27, 41), 65)
+    UI.CommunityAvatarScale = create("UIScale", { Scale = 1 }, UI.CommunityAvatar)
+    UI.CommunityDiscord = Icon.new(UI.CommunityAvatar, "discord", Theme.Text, 24)
+    UI.CommunityTitle = localized(UI.CommunityCard, "Title", "communityTitle", 15, Theme.Text, Theme.Bold)
+    UI.CommunityTitle.TextWrapped = true
+    UI.CommunityTitle.TextTruncate = Enum.TextTruncate.AtEnd
+    UI.CommunityIntro = localized(UI.CommunityCard, "Intro", "communityIntro", 12, Theme.Secondary)
+    UI.CommunityIntro.TextWrapped = true
+    UI.CommunityIntro.TextYAlignment = Enum.TextYAlignment.Top
+    UI.CommunityIntro.TextTruncate = Enum.TextTruncate.AtEnd
+    UI.CommunityClose = secondary(UI.CommunityCard, "Dismiss", "empty", function()
+        self:Dismiss()
+    end, "x")
+    UI.CommunityClose.Label.Visible = false
+    UI.CommunityClose.Root.BackgroundTransparency = 1
+    UI.CommunityRule = frame(UI.CommunityCard, "Rule", Theme.Line)
+    UI.CommunityNewsHeading =
+        localized(UI.CommunityCard, "ReleaseHeading", "communityNews", 12, Theme.Text, Theme.Medium)
+    UI.CommunityNews, UI.CommunityNewsDots = {}, {}
+    for index, key in ipairs({ "communityNewsAuth", "communityNewsPrefs", "communityNewsGame" }) do
+        UI.CommunityNews[index] = localized(UI.CommunityCard, "Release" .. index, key, 12, Theme.Secondary)
+        UI.CommunityNews[index].TextWrapped = true
+        UI.CommunityNews[index].TextYAlignment = Enum.TextYAlignment.Top
+        UI.CommunityNews[index].TextTruncate = Enum.TextTruncate.AtEnd
+        UI.CommunityNewsDots[index] = frame(UI.CommunityCard, "Dot" .. index, Theme.Accent)
+        corner(UI.CommunityNewsDots[index], 4)
+    end
+    UI.CommunityJoin = Button.new(UI.CommunityCard, "JoinDiscord", "", true, nil, function()
+        self:Copy("join")
+    end, Runtime, allowed)
+    UI.CommunitySupport = secondary(UI.CommunityCard, "CommunitySupport", "communitySupport", function()
+        self:Copy("support")
+    end)
+    UI.CommunitySuggest = secondary(UI.CommunityCard, "SuggestGame", "communitySuggest", function()
+        self:Copy("suggest")
+    end)
+    UI.CommunityOptional = localized(UI.CommunityCard, "Optional", "communityOptional", 12, Theme.Secondary)
+    UI.CommunityOptional.TextXAlignment = Enum.TextXAlignment.Center
+    UI.CommunityDock = frame(UI.Window, "CommunityDock", Theme.Input)
+    UI.CommunityDock.ClipsDescendants = true
+    corner(UI.CommunityDock, 10)
+    stroke(UI.CommunityDock, Theme.AccentDark, 1, 0.65)
+    UI.CommunityDockScale = create("UIScale", { Scale = 1 }, UI.CommunityDock)
+    UI.CommunityDockIcon = Icon.new(UI.CommunityDock, "discord", Theme.Accent, 24)
+    UI.CommunityDockTitle = localized(UI.CommunityDock, "Title", "communityDockTitle", 13, Theme.Text, Theme.Medium)
+    UI.CommunityDockTitle.TextTruncate = Enum.TextTruncate.AtEnd
+    UI.CommunityDockSubtitle = localized(UI.CommunityDock, "Subtitle", "communityDockSubtitle", 12, Theme.Secondary)
+    UI.CommunityDockSubtitle.TextTruncate = Enum.TextTruncate.AtEnd
+    UI.CommunityOpen = secondary(UI.CommunityDock, "Details", "empty", function()
+        self:Open()
+    end)
+    UI.CommunityOpen.Root.BackgroundTransparency = 1
+    UI.CommunityOpen.Label.Visible = false
+    UI.CommunityDockJoin = Button.new(UI.CommunityDock, "JoinDiscord", "", true, nil, function()
+        self:Copy("join")
+    end, Runtime, allowed)
+    UI.CommunityDockClose = secondary(UI.CommunityDock, "Dismiss", "empty", function()
+        self:Dismiss()
+    end, "x")
+    UI.CommunityDockClose.Root.BackgroundTransparency = 1
+    UI.CommunityDockClose.Label.Visible = false
+    UI.CommunityRestore = secondary(UI.Preferences, "CommunityVisibility", "communityHide", function()
+        if Settings.CommunityDismissed then
+            self:Restore()
+        else
+            self:Dismiss()
+        end
+    end)
+    Runtime:Connect(UI.AuthScroll:GetPropertyChangedSignal("CanvasPosition"), function()
+        self:RevealCard()
+    end)
+    Runtime:Connect(UI.CommunityCard.MouseEnter, function()
+        if self:Interactive() then
+            self:Paint(true)
+        end
+    end)
+    Runtime:Connect(UI.CommunityCard.MouseLeave, function()
+        self:Paint(false)
+    end)
+    self:Refresh()
+end
+
 -- One owner for frontend-only UX. No license decision or FlowAuth request lives here.
 Experience = { Stage = "authReady", OptionsOpen = false, PrefDirty = false }
 function Experience:SetStage(stage)
@@ -3082,6 +4031,8 @@ function Experience:Refresh()
     end
     self:RefreshGame()
     self:RefreshOptions()
+    Community:Refresh()
+    LicenseOffer:Refresh()
 end
 function Experience:RefreshGame()
     if not UI.CurrentGame then
@@ -3133,6 +4084,7 @@ function Experience:SavePrefs()
                 Language = Settings.Language,
                 UIScale = Settings.UIScale,
                 ReducedMotion = Settings.ReducedMotion,
+                CommunityDismissed = Settings.CommunityDismissed,
             })
         )
     end)
@@ -3168,6 +4120,9 @@ function Experience:LoadPrefs()
         if type(data.ReducedMotion) == "boolean" then
             Settings.ReducedMotion = data.ReducedMotion
         end
+        if type(data.CommunityDismissed) == "boolean" then
+            Settings.CommunityDismissed = data.CommunityDismissed
+        end
     end)
 end
 function Experience:PreferenceChanged()
@@ -3197,6 +4152,9 @@ function Experience:RefreshOptions()
     UI.PasteKey:SetDisabled(busy or not capability("getclipboard"))
     UI.ForgetKey:SetDisabled(busy or type(State.Callbacks.ForgetKey) ~= "function")
     UI.Options:SetDisabled(busy)
+    if UI.CommunityRestore then
+        UI.CommunityRestore:SetDisabled(busy or not Settings.CommunityEnabled or Community:Link() == "")
+    end
     for _, button in ipairs({ UI.PreferenceLanguage, UI.PreferenceScale, UI.PreferenceMotion, UI.PreferenceReset }) do
         button:SetDisabled(busy)
     end
@@ -3277,7 +4235,7 @@ function Experience:SuccessCheck()
     UI.ProgressLicense.Text = self:LicenseText()
 end
 function Experience:Height()
-    return 228 + (self.OptionsOpen and 142 or 0)
+    return 228 + (LicenseOffer:Enabled() and 52 or 0) + Community:Height() + (self.OptionsOpen and 194 or 0)
 end
 function Experience:Layout(width, y)
     if not UI.CurrentGame then
@@ -3286,6 +4244,10 @@ function Experience:Layout(width, y)
     local actionWidth = (width - 16) / 3
     for index, button in ipairs({ UI.PasteKey, UI.ForgetKey, UI.Options }) do
         place(button.Root, (index - 1) * (actionWidth + 8), y, actionWidth, 44)
+    end
+    if LicenseOffer:Enabled() then
+        place(UI.LicenseInline.Root, 0, y + 52, width, 44)
+        y = y + 52
     end
     place(UI.KeyActionsNote, 0, y + 46, width, 24)
     place(UI.AuthStatus, 0, y + 74, width, 44)
@@ -3296,13 +4258,15 @@ function Experience:Layout(width, y)
     place(UI.GameImage, 0, 0, 48, 48)
     place(UI.GameName, 68, 8, math.max(1, width - 80), 24)
     place(UI.GameSupport, 68, 34, math.max(1, width - 80), 22)
-    place(UI.Preferences, 0, y + 228, width, 132)
+    Community:Layout(width, y + 228)
+    place(UI.Preferences, 0, y + 228 + Community:Height(), width, 184)
     local half = (width - 8) / 2
     place(UI.PreferenceLanguage.Root, 0, 0, half, 44)
     place(UI.PreferenceScale.Root, half + 8, 0, half, 44)
     place(UI.PreferenceMotion.Root, 0, 52, half, 44)
     place(UI.PreferenceReset.Root, half + 8, 52, half, 44)
-    place(UI.PreferenceNote, 0, 101, width, 28)
+    place(UI.CommunityRestore.Root, 0, 102, width, 44)
+    place(UI.PreferenceNote, 0, 153, width, 28)
 end
 function Experience:Build()
     local function secondary(name, key, callback, parent)
@@ -3382,10 +4346,13 @@ function Experience:Build()
         Loader:SetLanguage("en")
         Loader:SetUIScale(1)
         Loader:SetReducedMotion(false)
+        Community:Restore()
         self:PreferenceChanged()
     end, UI.Preferences)
     UI.PreferenceNote = label(UI.Preferences, "SaveState", "", 12, Theme.Secondary)
     UI.PreferenceNote.TextWrapped = true
+    Community:Build()
+    LicenseOffer:BuildTriggers()
     self:Refresh()
 end
 
@@ -3459,6 +4426,7 @@ local function authBusy(value)
     UI.AuthNav:SetDisabled(value)
     UI.ProductsNav:SetDisabled(value)
     UI.RefreshNav:SetDisabled(value)
+    LicenseOffer:Refresh()
     UI.AuthBusyTrack.Visible = value
     Experience:SetStage(value and "authChecking" or "authReady")
     Experience:RefreshOptions()
@@ -4231,6 +5199,7 @@ function Responsive:Auth(width, height, narrow)
     local feedbackHeight = feedback and math.clamp(measure(feedbackText, 12, Theme.Medium, leftWidth) + 3, 20, 54) or 0
     local feedbackExtra = feedbackHeight > 0 and feedbackHeight + 8 or 0
     buttonsY = buttonsY + feedbackExtra
+    Community:Measure(leftWidth)
     local extrasHeight = Experience:Height()
     if narrow then
         artY = artY + feedbackExtra + extrasHeight
@@ -4391,6 +5360,8 @@ function Responsive:Update()
     place(UI.RefreshNav.Root, rail / 2 - 22, navY + (State.Page == "Products" and height >= 380 and 132 or 96), 44, 44)
     UI.ProductsNav.Root.Visible = height >= 280
     UI.RefreshNav.Root.Visible = height >= 350
+    place(UI.LicenseNav.Root, rail / 2 - 22, navY + (State.Page == "Products" and 180 or 144), 44, 44)
+    UI.LicenseNav.Root.Visible = LicenseOffer:Enabled() and height >= 380
     place(UI.ActiveNav, rail / 2 - 18, (State.Page == "Auth" and navY or navY + 48) + 4, 36, 36)
     place(UI.ProductMark, rail / 2 - 16, navY + 94, 32, 32)
     place(UI.Breadcrumb, rail, header + 6, contentWidth - 8, 28)
@@ -4414,7 +5385,11 @@ function Responsive:Update()
     place(UI.LanguageChevron.Root, 16, 4, 12, 12)
     place(UI.LanguageFlag, 9, 38, 26, 26)
     LanguageController:Layout(width, height, rail)
-    self:Auth(contentWidth, contentHeight, narrow)
+    local communityDockHeight = Community:DockHeight(contentWidth, height)
+    local authHeight = math.max(52, contentHeight - communityDockHeight)
+    UI.AuthScroll.Size = UDim2.new(1, 0, 1, -communityDockHeight)
+    self:Auth(contentWidth, authHeight, narrow)
+    Community:LayoutDock(rail, pageTop + contentHeight - communityDockHeight, contentWidth, height)
     Navigation:Refresh()
     Cards:Layout()
     Modal:Layout(true)
@@ -4521,7 +5496,7 @@ local function bindInput()
         if input.KeyCode == Enum.KeyCode.Escape then
             if LanguageController.Open then
                 closeLanguage()
-            elseif State.Modal == "result" and State.Activity == "Idle" then
+            elseif (State.Modal == "result" or State.Modal == "licenses") and State.Activity == "Idle" then
                 Modal:Close()
             end
         elseif input.KeyCode == Settings.ToggleKey and not Services.Input:GetFocusedTextBox() then
@@ -4655,6 +5630,39 @@ function Loader:ClearToasts()
         Toasts:Close(Toasts.Items[index], true)
     end
     return self
+end
+function Loader:ShowLicenses()
+    return LicenseOffer:Open()
+end
+function Loader:SetLicenseOfferEnabled(enabled)
+    if State.Alive then
+        Settings.LicenseOfferEnabled = enabled == true
+        if not LicenseOffer:Enabled() and State.Modal == "licenses" then
+            Modal:Close(true)
+        end
+        LicenseOffer:Refresh()
+        Responsive:Update()
+    end
+    return self
+end
+function Loader:SetLicenseStoreLink(link)
+    if not State.Alive then
+        return self, false
+    end
+    if type(link) ~= "string" then
+        return self, false
+    end
+    link = trim(link)
+    if #link > 2048 or link:find("[%z\r\n]") or (link ~= "" and not link:match("^https://[^/%s]+")) then
+        return self, false
+    end
+    Settings.LicenseStoreLink = link
+    if not LicenseOffer:Enabled() and State.Modal == "licenses" then
+        Modal:Close(true)
+    end
+    LicenseOffer:Refresh()
+    Responsive:Update()
+    return self, true
 end
 function Loader:SetLanguage(language)
     if not State.Alive then
@@ -4876,6 +5884,9 @@ function Loader:SetReducedMotion(value)
             UI.ResultScale.Scale = 1
             UI.ProgressPanel.GroupTransparency = 0
             UI.Backdrop.BackgroundTransparency = State.Modal and 0.48 or 1
+            if State.Modal == "licenses" then
+                LicenseOffer:Layout(true)
+            end
         end
         if State.Activity == "Validating" then
             authBusy(true)
@@ -4919,6 +5930,7 @@ function Loader:SetSocialLinks(links)
                 Settings.SocialLinks[id] = links[id]
             end
         end
+        Community:Refresh()
         Responsive:Update()
     end
     return self
@@ -5012,6 +6024,40 @@ function Loader:ShowPreferences(visible)
     return self, true
 end
 
+-- Community invitations are optional; these methods never verify Discord membership.
+function Loader:SetCommunityEnabled(enabled)
+    if State.Alive then
+        Settings.CommunityEnabled = enabled == true
+        if Settings.CommunityEnabled then
+            Community:Restore()
+        else
+            Community.Generation = Community.Generation + 1
+            Community.Hiding = false
+            Animation:CancelTree(UI.CommunityCard)
+            Animation:CancelTree(UI.CommunityDock)
+            Community:Refresh()
+            Responsive:Update()
+        end
+    end
+    return self
+end
+function Loader:SetCommunityLink(link)
+    if not State.Alive then
+        return self, false
+    end
+    link = trim(link)
+    if link ~= "" and (#link > 2048 or not link:match("^https?://") or link:find("[%z\r\n]")) then
+        return self, false
+    end
+    Settings.SocialLinks.discord = link ~= "" and link or nil
+    Community:Refresh()
+    Responsive:Update()
+    return self, true
+end
+function Loader:GetCommunityLink()
+    return Community:Link()
+end
+
 function Loader:GetState()
     return {
         Name = State.Name,
@@ -5024,6 +6070,9 @@ function Loader:GetState()
         Language = Settings.Language,
         UIScale = Settings.UIScale,
         ReducedMotion = Settings.ReducedMotion,
+        CommunityEnabled = Community:Enabled(),
+        CommunityDockVisible = UI.CommunityDock and UI.CommunityDock.Visible or false,
+        CommunityDismissed = Settings.CommunityDismissed,
         AuthStage = Experience.Stage,
         AccessTier = State.Authorized and State.AuthInfo and State.AuthInfo.tier or nil,
         ExpirySeconds = Settings.Expiry,
