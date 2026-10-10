@@ -45,7 +45,7 @@ local Settings = {
     Language = "en",
     User = "Past Owl",
     Artwork = nil,
-    SuccessBehavior = "products",
+    SuccessBehavior = "destroy",
     ToggleKey = Enum.KeyCode.RightShift,
     SupportLink = "",
     SocialLinks = {},
@@ -1446,7 +1446,7 @@ local function productName(product)
     )
 end
 local SupportedGames = {
-    { Id = "opps", GameId = 114939661069378, FallbackName = "OPPS", Status = "Available" },
+    { Id = "roll-a-fisherman", GameId = 90920025162454, FallbackName = "Roll a Fisherman", Status = "Available" },
 }
 local GameMedia = { Cache = {}, Pending = {}, Queue = {}, Bindings = {}, Active = nil, Serial = 0 }
 function GameMedia:PlaceId(value)
@@ -2909,10 +2909,47 @@ local function validate(key)
             AuthField:Feedback(nil)
             reconcile()
             local resultMessage = cleanMessage(message, Localization:Get("successCopy"))
-            if Settings.SuccessBehavior == "hide" then
-                Loader:Hide()
-            elseif Settings.SuccessBehavior == "destroy" then
-                Loader:Destroy()
+            if Settings.SuccessBehavior == "hide" or Settings.SuccessBehavior == "destroy" then
+                -- This is a frontend exit transition, not simulated backend progress.
+                -- The validator must return before Script() starts; use SetOnAuthorized.
+                local behavior = Settings.SuccessBehavior
+                local authorized = State.Callbacks.Authorized
+                State.Activity = "Completing"
+                reconcile()
+                Modal:Loading({ Text = resultMessage, Progress = 0 })
+                Runtime:Later(Settings.ReducedMotion and 0 or 0.35, function()
+                    if token == State.ValidationToken then
+                        Modal:SetProgress(1)
+                    end
+                end)
+                Runtime:Later(Settings.ReducedMotion and 0 or 0.7, function()
+                    if token ~= State.ValidationToken then
+                        return
+                    end
+                    Loader:Hide()
+                    Runtime:Later(Settings.ReducedMotion and 0 or Motion.Exit.Time, function()
+                        if token ~= State.ValidationToken then
+                            return
+                        end
+                        -- Capture host work before Destroy clears callbacks. It must not
+                        -- be scoped to the frontend or skipped because the UI is gone.
+                        if behavior == "destroy" then
+                            Loader:Destroy()
+                        else
+                            State.Activity = "Idle"
+                            reconcile()
+                        end
+                        if type(authorized) == "function" then
+                            task.defer(function()
+                                local ran = pcall(authorized, key, resultMessage, Loader)
+                                if not ran then
+                                    warn("[PLAK] Authorized callback failed to initialize the script")
+                                end
+                            end)
+                        end
+                    end)
+                end)
+                return
             else
                 Modal:Open({
                     Type = "success",
@@ -3612,12 +3649,12 @@ function Responsive:Update()
         height = math.min(720, safe.Y - 20)
         scale = 1
     elseif safe.X >= 1000 and safe.Y >= 660 then
-        width = 940
-        height = 600
+        width = 912
+        height = 543
         scale = math.min(1, (safe.X - 24) / width, (safe.Y - 24) / height)
     else
-        width = math.min(940, safe.X - 20)
-        height = math.min(600, safe.Y - 20)
+        width = math.min(912, safe.X - 20)
+        height = math.min(543, safe.Y - 20)
         scale = 1
     end
     local rail = width >= 780 and 72 or 56
@@ -3904,6 +3941,7 @@ end
 function Loader:GetExpiry()
     return Settings.Expiry
 end
+-- Validation only: return true/false and a message; do not run long-lived Script() here.
 function Loader:SetOnValidate(callback)
     assert(callback == nil or type(callback) == "function", "SetOnValidate expects a function or nil")
     if State.Alive then
@@ -4216,6 +4254,8 @@ function Loader:SetOnProductLaunch(callback)
     end
     return self
 end
+-- Runs after the success transition and UI teardown in destroy/hide mode.
+-- Register before AutoValidate; the host owns Script() and its error handling.
 function Loader:SetOnAuthorized(callback)
     assert(callback == nil or type(callback) == "function", "SetOnAuthorized expects a function or nil")
     if State.Alive then
