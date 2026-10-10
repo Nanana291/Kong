@@ -4,7 +4,7 @@
 -- Prices are presentation only; checkout and license entitlement remain with the store/host.
 -- PLAK is native GUI geometry. Catalog thumbnails are real Roblox content; optional HTTP only enriches metadata.
 local ModuleStartedAt = os.clock()
-local Loader = { AuthHandoffVersion = 2, FlowInitVersion = 1 }
+local Loader = { AuthHandoffVersion = 2, FlowInitVersion = 1, VerifiedPresentationVersion = 1 }
 local Services = {
     Players = game:GetService("Players"),
     Tween = game:GetService("TweenService"),
@@ -5422,6 +5422,82 @@ function ExternalAuth:Cancel(message)
     return self:Settle(false, message)
 end
 
+-- Shared verified frontend completion; never performs provider authentication.
+local function completeAuthorized(token, key, message)
+    State.Authorized = true
+    local acceptedAt = os.clock()
+    Experience:SetStage("authGranted")
+    Experience:Refresh()
+    AuthField:Feedback(nil)
+    reconcile()
+    local resultMessage = cleanMessage(message, Localization:Get("authGranted"))
+    if Settings.SuccessBehavior == "hide" or Settings.SuccessBehavior == "destroy" then
+        -- This is a frontend exit transition, not simulated backend progress.
+        -- The validator must return before Script() starts; use SetOnAuthorized.
+        local behavior = Settings.SuccessBehavior
+        local authorized = State.Callbacks.Authorized
+        State.Activity = "Completing"
+        reconcile()
+        Experience:RefreshOptions()
+        Modal:Loading({ Text = resultMessage, Progress = 0, AuthCompletion = true })
+        Runtime:Later(Settings.ReducedMotion and 0 or 0.35, function()
+            if token == State.ValidationToken then
+                Modal:SetProgress(1)
+                Experience:SuccessCheck()
+            end
+        end)
+        Runtime:Later(Settings.ReducedMotion and 0 or 0.7, function()
+            if token ~= State.ValidationToken then
+                return
+            end
+            Loader:Hide()
+            Runtime:Later(Settings.ReducedMotion and 0 or Motion.Exit.Time, function()
+                if token ~= State.ValidationToken then
+                    return
+                end
+                Diagnostics.HandoffSeconds = os.clock() - acceptedAt
+                Diagnostics:Refresh()
+                -- Capture host work before Destroy clears callbacks. It must not
+                -- be scoped to the frontend or skipped because the UI is gone.
+                if behavior == "destroy" then
+                    Loader:Destroy()
+                else
+                    State.Activity = "Idle"
+                    reconcile()
+                    Experience:RefreshOptions()
+                end
+                if type(authorized) == "function" then
+                    task.defer(function()
+                        local ran = pcall(authorized, key, resultMessage, Loader)
+                        if not ran then
+                            warn("[PLAK] Authorized callback failed to initialize the script")
+                        end
+                    end)
+                end
+            end)
+        end)
+        return true
+    else
+        Modal:Open({
+            Type = "success",
+            TitleKey = "granted",
+            Description = resultMessage,
+            ActionKey = "continue",
+            OnAction = function()
+                Modal:Close(true)
+                if Settings.SuccessBehavior == "products" then
+                    Navigation:Go("Products")
+                end
+            end,
+        })
+    end
+    Diagnostics.HandoffSeconds = os.clock() - acceptedAt
+    Diagnostics:Refresh()
+    if State.Alive and State.Callbacks.Authorized then
+        invokeHost(State.Callbacks.Authorized, key, resultMessage, Loader)
+    end
+end
+
 local function validate(key)
     if not State.Alive then
         return false, "destroyed"
@@ -5494,77 +5570,8 @@ local function validate(key)
         State.Activity = "Idle"
         authBusy(false)
         if ok and success == true then
-            State.Authorized = true
-            local acceptedAt = os.clock()
-            Experience:SetStage("authGranted")
-            Experience:Refresh()
-            AuthField:Feedback(nil)
-            reconcile()
-            local resultMessage = cleanMessage(message, Localization:Get("authGranted"))
-            if Settings.SuccessBehavior == "hide" or Settings.SuccessBehavior == "destroy" then
-                -- This is a frontend exit transition, not simulated backend progress.
-                -- The validator must return before Script() starts; use SetOnAuthorized.
-                local behavior = Settings.SuccessBehavior
-                local authorized = State.Callbacks.Authorized
-                State.Activity = "Completing"
-                reconcile()
-                Experience:RefreshOptions()
-                Modal:Loading({ Text = resultMessage, Progress = 0, AuthCompletion = true })
-                Runtime:Later(Settings.ReducedMotion and 0 or 0.35, function()
-                    if token == State.ValidationToken then
-                        Modal:SetProgress(1)
-                        Experience:SuccessCheck()
-                    end
-                end)
-                Runtime:Later(Settings.ReducedMotion and 0 or 0.7, function()
-                    if token ~= State.ValidationToken then
-                        return
-                    end
-                    Loader:Hide()
-                    Runtime:Later(Settings.ReducedMotion and 0 or Motion.Exit.Time, function()
-                        if token ~= State.ValidationToken then
-                            return
-                        end
-                        Diagnostics.HandoffSeconds = os.clock() - acceptedAt
-                        Diagnostics:Refresh()
-                        -- Capture host work before Destroy clears callbacks. It must not
-                        -- be scoped to the frontend or skipped because the UI is gone.
-                        if behavior == "destroy" then
-                            Loader:Destroy()
-                        else
-                            State.Activity = "Idle"
-                            reconcile()
-                            Experience:RefreshOptions()
-                        end
-                        if type(authorized) == "function" then
-                            task.defer(function()
-                                local ran = pcall(authorized, key, resultMessage, Loader)
-                                if not ran then
-                                    warn("[PLAK] Authorized callback failed to initialize the script")
-                                end
-                            end)
-                        end
-                    end)
-                end)
+            if completeAuthorized(token, key, message) then
                 return
-            else
-                Modal:Open({
-                    Type = "success",
-                    TitleKey = "granted",
-                    Description = resultMessage,
-                    ActionKey = "continue",
-                    OnAction = function()
-                        Modal:Close(true)
-                        if Settings.SuccessBehavior == "products" then
-                            Navigation:Go("Products")
-                        end
-                    end,
-                })
-            end
-            Diagnostics.HandoffSeconds = os.clock() - acceptedAt
-            Diagnostics:Refresh()
-            if State.Alive and State.Callbacks.Authorized then
-                invokeHost(State.Callbacks.Authorized, key, resultMessage, Loader)
             end
         else
             State.AuthError = true
@@ -6670,6 +6677,29 @@ function Loader:ConfirmExternalAuth(info, message)
         return false, "not_external_auth"
     end
     return ExternalAuth:Settle(true, message, info)
+end
+-- Presentation-only entry for a protected body that already passed its signed tier
+-- check but has no pre-auth UI transport. No synthetic key or validator is involved.
+function Loader:CompleteVerifiedAuth(info, message)
+    if not State.Alive then
+        return false, "destroyed"
+    end
+    if State.Authorized or State.Activity ~= "Idle" or ExternalAuth.Pending or ExternalAuth.Consumed then
+        return false, "busy_or_completed"
+    end
+    if type(info) ~= "table" or (info.tier ~= "free" and info.tier ~= "premium") then
+        return false, "missing_auth_metadata"
+    end
+    self:SetAuthInfo(info)
+    self:SetExpiry(info.secondsLeft)
+    State.ValidationToken = State.ValidationToken + 1
+    State.AuthError = false
+    if State.Modal then
+        Modal:Close(true)
+    end
+    self:Show()
+    completeAuthorized(State.ValidationToken, nil, message)
+    return true
 end
 function Loader:CancelExternalAuth(message)
     return ExternalAuth:Cancel(type(message) == "string" and safeText(message, 240) or nil)
