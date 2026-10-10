@@ -18,7 +18,8 @@
 -- Toggle:AddSettings({Mode="Reveal"|"Disable"}) owns dependent controls; GetSettings returns its group.
 -- Groups preserve values/Flags, gate input, fold without toggling runtime, and never invent runtime shutdown.
 -- Toggle Locked=true stays OFF and opens a Premium callout; SetLocked(false) restores interaction.
--- OnBuyPremium(toggle, window), on Window or Toggle, connects your purchase flow; it never auto-unlocks.
+-- Buy Premium always copies the Plak SellAuth store link; it never auto-unlocks.
+-- Legacy OnBuyPremium options remain accepted but do not override this fixed purchase action.
 -- Themes: Neron Dark / Graphite / OLED / Light; locales: English / Spanish / Russian / Portuguese.
 -- AddNumericStepper returns numeric state with +/- controls and SetBounds; same Flag/hydration path.
 -- AddDynamicSection owns retained controls and Loader/OnLoaded with skeleton/empty/error/retry states.
@@ -3863,20 +3864,7 @@ function Components.premium(control, group, bag)
         owner.state.Pressed = false
         w.pressed[owner] = nil
         w.overlay:Close()
-        local callback = control.config.OnBuyPremium or w.onBuyPremium
-        if type(callback) ~= "function" then
-            w:Notify("PremiumRequired", w:Translate("PurchaseNotConfigured"), "Warning")
-            return
-        end
-        local ok, err = xpcall(function()
-            callback(control, w)
-        end, debug.traceback)
-        if not ok then
-            U.warn("Buy Premium", err)
-            if not w.destroyed then
-                w:Notify("Failed", nil, "Danger")
-            end
-        end
+        Premium.copyPurchaseLink(w)
     end)
     owner:_render()
 end
@@ -9114,6 +9102,23 @@ function Premium.row(w, page, key)
     control:_render()
     return control
 end
+function Premium.copyPurchaseLink(w)
+    local url = "https://plak-hub.mysellauth.com/"
+    local copy = Storage.resolve("setclipboard") or Storage.resolve("toclipboard")
+    local ok, result = false, nil
+    if copy then
+        ok, result = pcall(copy, url)
+    end
+    local copied = ok and result ~= false
+    if not w.destroyed then
+        if copied then
+            w:Notify("Copied")
+        else
+            w:Notify("ClipboardUnavailable", url)
+        end
+    end
+    return copied
+end
 function Premium.build(w, page)
     SettingsUI.heading(w, page, "Premium", "PremiumBody")
     w.premiumStatusRow = Premium.row(w, page, "PremiumStatus")
@@ -9125,21 +9130,7 @@ function Premium.build(w, page)
             if w.premiumPurchaseBusy or w:GetPremiumStatus().Active then
                 return
             end
-            if type(w.onBuyPremium) ~= "function" then
-                w:Notify("PremiumRequired", w:Translate("PurchaseNotConfigured"), "Warning")
-                return
-            end
-            w.premiumPurchaseBusy = true
-            local ok, err = xpcall(function()
-                w.onBuyPremium(nil, w)
-            end, debug.traceback)
-            w.premiumPurchaseBusy = false
-            if not ok then
-                U.warn("Buy Premium", err)
-                if not w.destroyed then
-                    w:Notify("Failed", nil, "Danger")
-                end
-            end
+            Premium.copyPurchaseLink(w)
         end,
     })
     local press = w.premiumBuy.Press
