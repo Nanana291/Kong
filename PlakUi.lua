@@ -3,7 +3,8 @@
 -- Optional storefront: ShowLicenses(), SetLicenseOfferEnabled(boolean), SetLicenseStoreLink(httpsURL).
 -- Prices are presentation only; checkout and license entitlement remain with the store/host.
 -- PLAK is native GUI geometry. Catalog thumbnails are real Roblox content; optional HTTP only enriches metadata.
-local Loader = {}
+local ModuleStartedAt = os.clock()
+local Loader = { AuthHandoffVersion = 2, FlowInitVersion = 1 }
 local Services = {
     Players = game:GetService("Players"),
     Tween = game:GetService("TweenService"),
@@ -89,6 +90,9 @@ local UI = {}
 local Experience
 local Community
 local LicenseOffer
+local Accessibility
+local Diagnostics
+local ExternalAuth
 local LanguageController
 local Scope = {}
 Scope.__index = Scope
@@ -533,6 +537,10 @@ function Icon.new(parent, name, color, size)
         if name == "eye-off" then
             line(3, 3, 17, 17, 1.8)
         end
+    elseif name == "collapse-window" then
+        path({ { 4, 3 }, { 16, 3 }, { 16, 9 }, { 4, 9 }, { 4, 3 } }, false)
+        path({ { 7, 12 }, { 10, 15 }, { 13, 12 } }, false)
+        line(5, 18, 15, 18)
     elseif name == "minimize" then
         line(4, 12, 16, 12, 1.8)
     elseif name == "play" then
@@ -574,6 +582,9 @@ function Icon.new(parent, name, color, size)
         path({ { 10, 2 }, { 19, 17 }, { 1, 17 } }, true)
         line(10, 7, 10, 11)
         circle(10, 14, 0.7, true)
+    elseif name == "copy" then
+        path({ { 7, 3 }, { 16, 3 }, { 16, 13 } }, false)
+        path({ { 4, 7 }, { 12, 7 }, { 12, 17 }, { 4, 17 }, { 4, 7 } }, false)
     elseif name == "link" then
         path({ { 7, 12 }, { 4, 15 }, { 2, 13 }, { 2, 9 }, { 7, 4 }, { 11, 4 }, { 13, 6 } })
         path({ { 13, 8 }, { 16, 5 }, { 18, 7 }, { 18, 11 }, { 13, 16 }, { 9, 16 }, { 7, 14 } })
@@ -670,7 +681,7 @@ end
 local Button = {}
 function Button.new(parent, name, text, accent, iconName, onActivated, scope, allowed)
     scope = scope or Runtime
-    local self = { Disabled = false, Hovered = false, Pressed = false }
+    local self = { Disabled = false, Hovered = false, Pressed = false, Scope = scope }
     self.Root = create("TextButton", {
         Name = name,
         Text = "",
@@ -681,6 +692,7 @@ function Button.new(parent, name, text, accent, iconName, onActivated, scope, al
         Selectable = true,
     }, parent)
     corner(self.Root, Theme.Radius)
+    self.HoverStroke = stroke(self.Root, Theme.Accent, 1, 1)
     self.Scale = create("UIScale", { Scale = 1 }, self.Root)
     if accent then
         self.Gradient = gradient(self.Root, Theme.Accent, Theme.AccentDark)
@@ -713,6 +725,11 @@ function Button.new(parent, name, text, accent, iconName, onActivated, scope, al
                 Motion.Hover
             )
         end
+        Animation:To(
+            self.HoverStroke,
+            { Transparency = self.Disabled and 1 or self.Hovered and 0.65 or 1 },
+            Motion.Hover
+        )
         self.Label.TextColor3 = self.Disabled and Theme.Secondary or Theme.Text
         self.Root.Selectable = not self.Disabled
         Animation:To(self.Scale, { Scale = self.Pressed and not self.Disabled and 0.985 or 1 }, Motion.Press)
@@ -729,20 +746,32 @@ function Button.new(parent, name, text, accent, iconName, onActivated, scope, al
         if enabled() then
             self.Hovered = true
             self:Apply()
+            if Accessibility then
+                Accessibility:Tooltip(self.Root)
+            end
         end
     end)
     scope:Connect(self.Root.MouseLeave, function()
+        if Accessibility and Accessibility.TooltipRoot == self.Root then
+            Accessibility:HideTooltip()
+        end
         self.Hovered = false
         self.Pressed = false
         self:Apply()
     end)
     scope:Connect(self.Root.SelectionGained, function()
+        if Accessibility then
+            Accessibility:Selection(self.Root, true)
+        end
         if enabled() then
             self.Hovered = true
             self:Apply()
         end
     end)
     scope:Connect(self.Root.SelectionLost, function()
+        if Accessibility then
+            Accessibility:Selection(self.Root, false)
+        end
         self.Hovered = false
         self.Pressed = false
         self:Apply()
@@ -765,13 +794,28 @@ function Button.new(parent, name, text, accent, iconName, onActivated, scope, al
             self:Apply()
         end
     end)
-    scope:Connect(self.Root.Activated, function()
-        if enabled() then
-            self.Pressed = false
-            self:Apply()
-            onActivated()
+    function self:Activate()
+        if not enabled() then
+            return false
         end
+        self.Pressed = false
+        self:Apply()
+        onActivated()
+        return true
+    end
+    scope:Connect(self.Root.Activated, function()
+        if
+            Accessibility
+            and Accessibility.KeyboardRoot == self.Root
+            and os.clock() - (Accessibility.KeyboardAt or -1) < 0.12
+        then
+            return
+        end
+        self:Activate()
     end)
+    if Accessibility then
+        Accessibility:Register(self.Root, self, enabled)
+    end
     return self
 end
 local Translations = {
@@ -1426,6 +1470,130 @@ do
         },
     }
     for language, values in pairs(offers) do
+        for key, value in pairs(values) do
+            Translations[language][key] = value
+        end
+    end
+end
+do
+    local polish = {
+        en = {
+            offerHaveKey = "Already have a key?",
+            diagShow = "Show diagnostics",
+            diagHide = "Hide diagnostics",
+            diagTitle = "UI diagnostics",
+            diagBuild = "UI build",
+            diagReady = "UI ready",
+            diagValidation = "Last validation",
+            diagHandoff = "UI handoff",
+            diagNote = "Measured UI timings only. No key or personal data. Excludes download and Script().",
+            diagNotMeasured = "Not measured",
+            diagPending = "In progress",
+            diagCopied = "Diagnostics copied. No key included.",
+            secondaryCommunity = "Community",
+            tipAuth = "Authorization",
+            tipProducts = "Supported games",
+            tipRefresh = "Refresh loader",
+            tipLanguage = "Change language",
+        },
+        es = {
+            offerHaveKey = "¿Ya tienes una key?",
+            diagShow = "Ver diagnóstico",
+            diagHide = "Ocultar diagnóstico",
+            diagTitle = "Diagnóstico de UI",
+            diagBuild = "Construcción UI",
+            diagReady = "UI lista",
+            diagValidation = "Última validación",
+            diagHandoff = "Entrega UI",
+            diagNote = "Solo tiempos medidos de UI. Sin key ni datos personales. Excluye descarga y Script().",
+            diagNotMeasured = "Sin medición",
+            diagPending = "En curso",
+            diagCopied = "Diagnóstico copiado. Sin key.",
+            secondaryCommunity = "Comunidad",
+            tipAuth = "Autorización",
+            tipProducts = "Juegos compatibles",
+            tipRefresh = "Actualizar loader",
+            tipLanguage = "Cambiar idioma",
+        },
+        pt = {
+            offerHaveKey = "Já tem uma key?",
+            diagShow = "Ver diagnóstico",
+            diagHide = "Ocultar diagnóstico",
+            diagTitle = "Diagnóstico da UI",
+            diagBuild = "Construção UI",
+            diagReady = "UI pronta",
+            diagValidation = "Última validação",
+            diagHandoff = "Entrega UI",
+            diagNote = "Apenas tempos medidos da UI. Sem key ou dados pessoais. Exclui download e Script().",
+            diagNotMeasured = "Não medido",
+            diagPending = "Em andamento",
+            diagCopied = "Diagnóstico copiado. Sem key.",
+            secondaryCommunity = "Comunidade",
+            tipAuth = "Autorização",
+            tipProducts = "Jogos compatíveis",
+            tipRefresh = "Atualizar loader",
+            tipLanguage = "Mudar idioma",
+        },
+        ru = {
+            offerHaveKey = "Уже есть ключ?",
+            diagShow = "Показать диагностику",
+            diagHide = "Скрыть диагностику",
+            diagTitle = "Диагностика UI",
+            diagBuild = "Создание UI",
+            diagReady = "UI готов",
+            diagValidation = "Последняя проверка",
+            diagHandoff = "Передача UI",
+            diagNote = "Только измерения UI. Без ключа и личных данных. Не включает загрузку и Script().",
+            diagNotMeasured = "Не измерено",
+            diagPending = "В процессе",
+            diagCopied = "Диагностика скопирована. Без ключа.",
+            secondaryCommunity = "Сообщество",
+            tipAuth = "Авторизация",
+            tipProducts = "Поддерживаемые игры",
+            tipRefresh = "Обновить загрузчик",
+            tipLanguage = "Изменить язык",
+        },
+    }
+    for language, values in pairs(polish) do
+        for key, value in pairs(values) do
+            Translations[language][key] = value
+        end
+    end
+end
+do
+    Translations.en.keyLinkLoading = "Getting your key link…"
+    Translations.es.keyLinkLoading = "Obteniendo el enlace de tu key…"
+    Translations.pt.keyLinkLoading = "Obtendo o link da sua key…"
+    Translations.ru.keyLinkLoading = "Получение ссылки на ключ…"
+end
+do
+    local external = {
+        en = {
+            externalUnconfirmed = "FlowAuth did not confirm this run.",
+            externalRestart = "Close this prompt and rerun the FlowAuth loader. If a run is still pending, restart the executor.",
+            externalKeyLong = "Keys must contain at most 512 bytes.",
+            accessLifetime = "Lifetime",
+        },
+        es = {
+            externalUnconfirmed = "FlowAuth no confirmó esta ejecución.",
+            externalRestart = "Cierra esta ventana y ejecuta de nuevo el loader de FlowAuth. Si sigue pendiente, reinicia el executor.",
+            externalKeyLong = "Las keys deben tener como máximo 512 bytes.",
+            accessLifetime = "Lifetime",
+        },
+        pt = {
+            externalUnconfirmed = "O FlowAuth não confirmou esta execução.",
+            externalRestart = "Feche esta janela e execute o loader FlowAuth novamente. Se continuar pendente, reinicie o executor.",
+            externalKeyLong = "As keys devem ter no máximo 512 bytes.",
+            accessLifetime = "Vitalício",
+        },
+        ru = {
+            externalUnconfirmed = "FlowAuth не подтвердил этот запуск.",
+            externalRestart = "Закройте окно и снова запустите загрузчик FlowAuth. Если запрос ещё ожидается, перезапустите исполнитель.",
+            externalKeyLong = "Ключ не должен превышать 512 байт.",
+            accessLifetime = "Бессрочно",
+        },
+    }
+    for language, values in pairs(external) do
         for key, value in pairs(values) do
             Translations[language][key] = value
         end
@@ -2369,6 +2537,7 @@ function Modal:Refresh()
     if not config then
         return
     end
+    UI.ResultClose.Root:SetAttribute("ActionLabel", Localization:Get("close"))
     local kind = config.Type or "info"
     local titleKey = config.TitleKey
         or (
@@ -2413,6 +2582,7 @@ function Modal:Open(config)
     if not State.Alive then
         return
     end
+    Accessibility:CaptureModal()
     State.ModalToken = State.ModalToken + 1
     if LicenseOffer then
         LicenseOffer:CancelReveal()
@@ -2451,6 +2621,8 @@ function Modal:Close(immediate)
     self.Config = nil
     State.Modal = nil
     reconcile()
+    Accessibility:HideTooltip()
+    Accessibility:Layout()
     local function finish()
         if token == State.ModalToken then
             UI.Overlay.Visible = false
@@ -2461,6 +2633,7 @@ function Modal:Close(immediate)
             UI.ProgressPanel.Visible = false
             Localization.Bindings[UI.ResultTitle] = nil
             Localization.Bindings[UI.ResultDescription] = nil
+            Accessibility:RestoreModal()
         end
     end
     if immediate or not State.Visible then
@@ -2495,6 +2668,7 @@ function Modal:Loading(config)
         Animation:CancelTree(UI.LicensePanel)
         UI.LicensePanel.Visible = false
     end
+    Accessibility:CaptureModal()
     self.AuthCompletion = config.AuthCompletion == true
     if UI.ProgressCheck then
         UI.ProgressCheck.Root.Visible = false
@@ -2625,15 +2799,7 @@ local function invokeHost(callback, ...)
     end)
 end
 local function diagnosticText()
-    return string.format(
-        "%s %s\nLanguage: %s\nUI: %s\nProduct: %s\nSession duration: %ss",
-        Settings.Title,
-        Settings.Version,
-        Settings.Language,
-        State.Name,
-        State.SelectedProduct and State.SelectedProduct.Id or "none",
-        tostring(Settings.Expiry)
-    )
+    return Diagnostics:Text()
 end
 local function support()
     if State.Callbacks.Support then
@@ -2655,7 +2821,11 @@ local function support()
         ActionKey = "copyDetails",
         OnAction = function()
             local copy = capability("setclipboard") or capability("toclipboard")
-            if copy and pcall(copy, details) then
+            local copied, result = false, nil
+            if copy then
+                copied, result = pcall(copy, details)
+            end
+            if copied and result ~= false then
                 Loader:Toast({ Type = "success", Title = Localization:Get("copied") })
                 Modal:Close()
             else
@@ -2948,12 +3118,26 @@ function LanguageController:Layout(width, height, rail)
     end
 end
 function LanguageController:SetOpen(value)
+    if Accessibility then
+        Accessibility:HideTooltip()
+    end
     value = value == true and canInteract()
     if self.Open == value then
         return
     end
     self.Open = value
     self.Pressed = false
+    if Accessibility then
+        if value then
+            self.ReturnFocus = Accessibility.Focused
+        else
+            local root = self.ReturnFocus
+            self.ReturnFocus = nil
+            if root and Accessibility.Keyboard then
+                Accessibility:Focus(root)
+            end
+        end
+    end
     self.Token = self.Token + 1
     local token = self.Token
     if not State.Visible then
@@ -3026,7 +3210,7 @@ local function buildShell(parent)
         "Minimize",
         "",
         false,
-        "minimize",
+        "collapse-window",
         function()
             Loader:Hide()
         end,
@@ -3035,7 +3219,28 @@ local function buildShell(parent)
             return State.Alive and State.Visible
         end
     )
-    UI.Minimize.Icon.Root.Position = UDim2.new(0.5, -9, 0.5, 0)
+    UI.Minimize.BaseColor = Theme.Elevated
+    UI.Minimize:Apply()
+    UI.Minimize.Root:FindFirstChildOfClass("UICorner").CornerRadius = UDim.new(0, 12)
+    UI.Minimize.Icon.Root.Position = UDim2.new(0.5, -10, 0.5, 0)
+    UI.Minimize.Icon:SetColor(Theme.Secondary)
+    UI.MinimizeGlyphScale = create("UIScale", { Scale = 1 }, UI.Minimize.Icon.Root)
+    local function paintHide(hovered)
+        UI.Minimize.Icon:SetColor(hovered and Theme.Accent or Theme.Secondary)
+        Animation:To(UI.MinimizeGlyphScale, { Scale = hovered and 1.08 or 1 }, Motion.Hover)
+    end
+    Runtime:Connect(UI.Minimize.Root.MouseEnter, function()
+        paintHide(true)
+    end)
+    Runtime:Connect(UI.Minimize.Root.MouseLeave, function()
+        paintHide(false)
+    end)
+    Runtime:Connect(UI.Minimize.Root.SelectionGained, function()
+        paintHide(true)
+    end)
+    Runtime:Connect(UI.Minimize.Root.SelectionLost, function()
+        paintHide(false)
+    end)
     Localization:Bind(UI.Minimize.Label, "minimize")
     UI.Minimize.Label.Visible = false
     -- A sibling of Window remains reachable when the full window (including its modal) is hidden.
@@ -3043,6 +3248,7 @@ local function buildShell(parent)
     UI.RestoreDock.Visible = false
     UI.RestoreDock.ZIndex = 25
     UI.RestoreDock.GroupTransparency = 1
+    UI.RestoreDockScale = create("UIScale", { Scale = 1 }, UI.RestoreDock)
     UI.Restore = Button.new(
         UI.RestoreDock,
         "RestoreLoader",
@@ -3121,6 +3327,10 @@ local function buildShell(parent)
         button.Icon.Root.Position = UDim2.new(0.5, -8, 0.5, 0)
         button.Icon.Root.Size = UDim2.fromOffset(16, 16)
         button.Icon:SetColor(Theme.Muted)
+        button.Root:SetAttribute(
+            "ActionLabel",
+            id == "discord" and "Discord" or id == "telegram" and "Telegram" or "YouTube"
+        )
         UI.Social[id] = button
     end
     UI.Pages = frame(UI.Window, "Pages")
@@ -3284,7 +3494,561 @@ local AuthField = {}
 function AuthField.Interactive()
     return canInteract() and State.Page == "Auth"
 end
--- Community actions never authenticate, delay Script(), or claim membership.
+-- Event-only navigation and one reusable tooltip/focus surface. No frame polling.
+Accessibility = { Entries = {}, ByRoot = {}, Keyboard = false }
+function Accessibility:Available(root)
+    if not State.Alive or not State.Visible or not root or not root.Parent then
+        return false
+    end
+    local entry = self.ByRoot[root]
+    if not entry or (entry.Allowed and not entry.Allowed()) then
+        return false
+    end
+    if root ~= UI.Key and root.Selectable == false then
+        return false
+    end
+    local object = root
+    while object and object ~= UI.Gui do
+        if object:IsA("GuiObject") and object.Visible == false then
+            return false
+        end
+        object = object.Parent
+    end
+    return object == UI.Gui
+end
+function Accessibility:TooltipText(root)
+    local value = root:GetAttribute("ActionLabel")
+    local entry = self.ByRoot[root]
+    if entry and entry.Button then
+        if entry.Button.Label.Visible and entry.Button.Label.Text ~= "" then
+            value = entry.Button.Label.Text
+        else
+            value = value or entry.Button.Label.Text
+        end
+    end
+    return type(value) == "string" and value or ""
+end
+function Accessibility:HideTooltip()
+    Runtime:Cancel(self.TooltipTask)
+    self.TooltipTask = nil
+    self.TooltipRoot = nil
+    if UI.Tooltip then
+        UI.Tooltip.Visible = false
+    end
+end
+function Accessibility:Tooltip(root, immediate)
+    self:HideTooltip()
+    local entry = self.ByRoot[root]
+    if
+        not entry
+        or (entry.Button and entry.Button.Label.Visible and entry.Button.Label.Text ~= "")
+        or not self:Available(root)
+    then
+        return
+    end
+    self.TooltipRoot = root
+    self.TooltipTask = Runtime:Later(immediate and 0 or 0.35, function()
+        self.TooltipTask = nil
+        if self.TooltipRoot ~= root or not self:Available(root) then
+            return
+        end
+        local text = self:TooltipText(root)
+        if text == "" then
+            return
+        end
+        if not UI.Tooltip then
+            UI.Tooltip = group(UI.Stage, "ActionTooltip")
+            UI.Tooltip.BackgroundColor3 = Theme.Elevated
+            UI.Tooltip.BackgroundTransparency = 0
+            UI.Tooltip.ZIndex = 55
+            corner(UI.Tooltip, 8)
+            stroke(UI.Tooltip, Theme.Line, 1, 0.15)
+            UI.TooltipLabel = label(UI.Tooltip, "Hint", "", 12, Theme.Text, Theme.Medium)
+            UI.TooltipLabel.TextWrapped = true
+        end
+        UI.TooltipLabel.Text = text
+        UI.Tooltip.Visible = true
+        UI.Tooltip.GroupTransparency = Settings.ReducedMotion and 0 or 1
+        self:Layout()
+        Animation:To(UI.Tooltip, { GroupTransparency = 0 }, Motion.Hover)
+    end)
+end
+function Accessibility:Register(root, button, allowed)
+    if self.ByRoot[root] then
+        return
+    end
+    local entry = { Root = root, Button = button, Allowed = allowed }
+    self.Entries[#self.Entries + 1] = entry
+    self.ByRoot[root] = entry
+    -- Factory-owned signals already have a scope; extra hints share that scope.
+    local scope = button and button.Scope or Runtime
+    if not button then
+        scope:Connect(root.MouseEnter, function()
+            self:Tooltip(root)
+        end)
+        scope:Connect(root.MouseLeave, function()
+            if self.TooltipRoot == root then
+                self:HideTooltip()
+            end
+        end)
+        scope:Connect(root.SelectionGained, function()
+            if self.Keyboard and self:Available(root) then
+                self.Focused = root
+                self:Layout()
+                self:Tooltip(root, true)
+            end
+        end)
+        scope:Connect(root.SelectionLost, function()
+            if self.Focused == root then
+                self.Focused = nil
+                self:Layout()
+                self:HideTooltip()
+            end
+        end)
+    end
+    scope.Finalizers[#scope.Finalizers + 1] = function()
+        self.ByRoot[root] = nil
+        for index, item in ipairs(self.Entries) do
+            if item == entry then
+                table.remove(self.Entries, index)
+                break
+            end
+        end
+        if self.Focused == root then
+            self:Clear()
+        end
+        if self.TooltipRoot == root then
+            self:HideTooltip()
+        end
+    end
+end
+function Accessibility:Selection(root, gained)
+    if gained and self.Keyboard and self:Available(root) then
+        self.Focused = root
+        self:Layout()
+        self:Tooltip(root, true)
+    elseif not gained and self.Focused == root then
+        self.Focused = nil
+        self:Layout()
+        self:HideTooltip()
+    end
+end
+function Accessibility:Clear()
+    self.Focused = nil
+    self.Keyboard = false
+    self:HideTooltip()
+    if UI.FocusRing then
+        UI.FocusRing.Visible = false
+    end
+    if self.GuiService then
+        pcall(function()
+            local selected = self.GuiService.SelectedObject
+            if selected and self.ByRoot[selected] then
+                self.GuiService.SelectedObject = self.ExternalSelection
+            end
+        end)
+    end
+    self.ExternalSelection = nil
+end
+function Accessibility:EnsureVisible(root)
+    local scroll = root.Parent
+    while scroll and scroll ~= UI.Stage do
+        if scroll:IsA("ScrollingFrame") then
+            local scale = root:IsDescendantOf(UI.Window) and (State.Layout.Scale or 1) or 1
+            local top = (root.AbsolutePosition.Y - scroll.AbsolutePosition.Y) / scale
+            local viewport = scroll.AbsoluteSize.Y / scale
+            local bottom = top + root.AbsoluteSize.Y / scale
+            local y = scroll.CanvasPosition.Y
+            if top < 8 then
+                y = y + top - 8
+            elseif bottom > viewport - 8 then
+                y = y + bottom - viewport + 8
+            end
+            scroll.CanvasPosition = Vector2.new(
+                scroll.CanvasPosition.X,
+                math.clamp(y, 0, math.max(0, scroll.CanvasSize.Y.Offset - viewport))
+            )
+        end
+        scroll = scroll.Parent
+    end
+end
+function Accessibility:Focus(root)
+    if not self:Available(root) then
+        return false
+    end
+    local native = Services.Input:GetFocusedTextBox()
+    if native == UI.Key or native == UI.ResultCopy then
+        native:ReleaseFocus(false)
+    end
+    self.Focused = root
+    self.Keyboard = true
+    self:EnsureVisible(root)
+    if root == UI.Key or root == UI.ResultCopy then
+        root:CaptureFocus()
+    elseif self.GuiService then
+        pcall(function()
+            local selected = self.GuiService.SelectedObject
+            if selected and not self.ByRoot[selected] then
+                self.ExternalSelection = selected
+            end
+            self.GuiService.SelectedObject = root
+        end)
+    end
+    self.Focused = root
+    self:Layout()
+    self:Tooltip(root, true)
+    return true
+end
+function Accessibility:Order()
+    local list, seen = {}, {}
+    local function add(value)
+        local root = value and (typeof(value) == "Instance" and value or value.Root)
+        if root and not seen[root] and self:Available(root) then
+            list[#list + 1] = root
+            seen[root] = true
+        end
+    end
+    if LanguageController.Open then
+        add(UI.LanguageToggle)
+        for _, language in ipairs(Languages) do
+            add(UI.LanguageOptions[language.Id])
+        end
+    elseif State.Modal == "licenses" then
+        add(UI.LicenseClose)
+        add(UI.LicenseJumpLife)
+        add(UI.LicenseJumpMonth)
+        for _, card in ipairs(UI.LicenseCards) do
+            add(card.Buy)
+        end
+        add(UI.LicenseStore)
+        add(UI.LicenseHaveKey)
+        add(UI.LicenseNotNow)
+    elseif State.Modal == "result" then
+        add(UI.ResultClose)
+        add(UI.ResultCopy)
+        add(UI.ResultLink)
+        add(UI.ResultAction)
+    elseif State.Modal then
+        return list
+    else
+        if State.Page == "Auth" then
+            add(UI.Key)
+            add(UI.RevealKey)
+            add(UI.Validate)
+            add(UI.GetKey)
+            add(UI.PasteKey)
+            add(UI.ForgetKey)
+            add(UI.Options)
+            add(UI.LicenseInline)
+            add(UI.CommunityDetails)
+            add(UI.PreferenceLanguage)
+            add(UI.PreferenceScale)
+            add(UI.PreferenceMotion)
+            add(UI.PreferenceReset)
+            add(UI.CommunityRestore)
+            add(UI.DiagnosticsToggle)
+            add(UI.DiagnosticsCopy)
+            add(UI.CommunityClose)
+            add(UI.CommunityJoin)
+            add(UI.CommunitySupport)
+            add(UI.CommunitySuggest)
+            add(UI.CommunityDockJoin)
+            add(UI.CommunityOpen)
+            add(UI.CommunityDockClose)
+        else
+            for _, card in ipairs(Cards) do
+                add(card.Open)
+            end
+        end
+        for _, id in ipairs({ "discord", "telegram", "youtube" }) do
+            add(UI.Social[id])
+        end
+        add(UI.AuthNav)
+        add(UI.ProductsNav)
+        add(UI.RefreshNav)
+        add(UI.LicenseNav)
+        add(UI.LanguageToggle)
+        add(UI.Minimize)
+    end
+    return list
+end
+function Accessibility:Tab(reverse)
+    if not State.Alive or not State.Visible or State.Activity ~= "Idle" then
+        return false
+    end
+    local list = self:Order()
+    if #list == 0 then
+        return false
+    end
+    local current = Services.Input:GetFocusedTextBox() or self.Focused
+    local index = reverse and 1 or 0
+    for i, root in ipairs(list) do
+        if root == current then
+            index = i
+            break
+        end
+    end
+    index = ((index - 1 + (reverse and -1 or 1)) % #list) + 1
+    return self:Focus(list[index])
+end
+function Accessibility:Activate()
+    local root = self.Focused
+    if not self.Keyboard or not self:Available(root) then
+        return false
+    end
+    if root == UI.Key or root == UI.ResultCopy then
+        return false
+    end -- Native TextBox owns Enter/IME.
+    local entry = self.ByRoot[root]
+    if entry.Button then
+        entry.Button:Activate()
+        self.KeyboardRoot, self.KeyboardAt = root, os.clock()
+    elseif root == UI.LanguageToggle then
+        LanguageController:SetOpen(not LanguageController.Open)
+    end
+    return true
+end
+function Accessibility:CaptureModal()
+    if not State.Modal then
+        self.ReturnFocus = Services.Input:GetFocusedTextBox() or self.Focused
+    end
+    self:HideTooltip()
+    if UI.FocusRing then
+        UI.FocusRing.Visible = false
+    end
+end
+function Accessibility:RestoreModal()
+    local root = self.ReturnFocus
+    self.ReturnFocus = nil
+    if root and self.Keyboard and State.Activity == "Idle" then
+        self:Focus(root)
+    else
+        self:Layout()
+    end
+end
+function Accessibility:Layout()
+    local root = self.Focused
+    local show = self.Keyboard and self:Available(root)
+    if show and root == UI.ResultCopy then
+        self:EnsureVisible(root)
+    end
+    if show then
+        if not UI.FocusRing then
+            UI.FocusRing = frame(UI.Stage, "KeyboardFocus")
+            UI.FocusRing.BackgroundTransparency = 1
+            UI.FocusRing.ZIndex = 45
+            corner(UI.FocusRing, 11)
+            stroke(UI.FocusRing, Theme.Accent, 2, 0.08)
+        end
+        local origin, size = root.AbsolutePosition - UI.Stage.AbsolutePosition, root.AbsoluteSize
+        place(UI.FocusRing, origin.X - 2, origin.Y - 2, size.X + 4, size.Y + 4)
+    end
+    if UI.FocusRing then
+        UI.FocusRing.Visible = show == true
+    end
+    if UI.Tooltip and UI.Tooltip.Visible and self.TooltipRoot and self:Available(self.TooltipRoot) then
+        local target = self.TooltipRoot
+        local size = UI.Stage.AbsoluteSize
+        local width = math.min(236, math.max(100, size.X - 16))
+        local height = math.clamp(measure(UI.TooltipLabel.Text, 12, Theme.Medium, width - 24) + 20, 38, 84)
+        local origin = target.AbsolutePosition - UI.Stage.AbsolutePosition
+        local x = math.clamp(origin.X + target.AbsoluteSize.X + 8, 8, math.max(8, size.X - width - 8))
+        local y = math.clamp(origin.Y + (target.AbsoluteSize.Y - height) / 2, 8, math.max(8, size.Y - height - 8))
+        place(UI.Tooltip, x, y, width, height)
+        place(UI.TooltipLabel, 12, 8, width - 24, height - 16)
+    elseif UI.Tooltip then
+        UI.Tooltip.Visible = false
+    end
+end
+function Accessibility:Build()
+    pcall(function()
+        self.GuiService = game:GetService("GuiService")
+        Runtime:Connect(self.GuiService:GetPropertyChangedSignal("SelectedObject"), function()
+            local selected = self.GuiService.SelectedObject
+            if selected and not self.ByRoot[selected] and self.Keyboard then
+                self:Clear()
+            end
+        end)
+    end)
+    self:Register(UI.Key, nil, AuthField.Interactive)
+    UI.ResultCopy.Selectable = true
+    self:Register(UI.ResultCopy, nil, function()
+        return State.Modal == "result" and State.Activity == "Idle"
+    end)
+    self:Register(UI.LanguageToggle, nil, function()
+        return State.Activity == "Idle" and not State.Modal
+    end)
+    Runtime:Connect(UI.Key.Focused, function()
+        if self.Keyboard then
+            self.Focused = UI.Key
+            self:Layout()
+        end
+        self:HideTooltip()
+    end)
+    Runtime:Connect(UI.AuthScroll:GetPropertyChangedSignal("CanvasPosition"), function()
+        self:Layout()
+    end)
+    Runtime:Connect(Services.Input.InputBegan, function(input)
+        local kind = input.UserInputType
+        if kind == Enum.UserInputType.MouseButton1 or kind == Enum.UserInputType.Touch then
+            self:Clear()
+        end
+    end)
+end
+
+-- Measured frontend spans only. No host exceptions, key material, user identity or entitlement.
+Diagnostics = { StartedAt = ModuleStartedAt, Open = false }
+function Diagnostics:Milliseconds(value)
+    return type(value) == "number"
+            and value == value
+            and value < math.huge
+            and math.max(0, math.floor(value * 1000 + 0.5))
+        or nil
+end
+function Diagnostics:Snapshot()
+    return {
+        schemaVersion = 1,
+        uiBuildMs = self:Milliseconds(self.BuiltAt and self.BuiltAt - self.StartedAt),
+        uiReadyMs = self:Milliseconds(self.ReadyAt and self.ReadyAt - self.StartedAt),
+        validationMs = self:Milliseconds(self.ValidationSeconds),
+        handoffMs = self:Milliseconds(self.HandoffSeconds),
+        validationPending = self.ValidationStarted ~= nil,
+        uiVisible = State.Visible == true,
+        language = Settings.Language,
+        reducedMotion = Settings.ReducedMotion,
+        viewportWidth = math.floor(State.Layout.Width or 0),
+        viewportHeight = math.floor(State.Layout.Height or 0),
+    }
+end
+function Diagnostics:Text()
+    local data = self:Snapshot()
+    local function timing(value)
+        return value ~= nil and tostring(value) .. " ms" or "not measured"
+    end
+    return string.format(
+        "PLAK UI diagnostics v1\nUI build: %s\nUI ready: %s\nLast validation: %s\nUI handoff: %s\nValidation pending: %s\nLanguage: %s\nReduced motion: %s\nUI visible: %s\nWindow: %dx%d\nTimings exclude download, checkout and Script() execution.",
+        timing(data.uiBuildMs),
+        timing(data.uiReadyMs),
+        timing(data.validationMs),
+        timing(data.handoffMs),
+        tostring(data.validationPending),
+        data.language,
+        tostring(data.reducedMotion),
+        tostring(data.uiVisible),
+        data.viewportWidth,
+        data.viewportHeight
+    )
+end
+function Diagnostics:Refresh()
+    if not UI.DiagnosticsPanel then
+        return
+    end
+    local data = self:Snapshot()
+    local values = { data.uiBuildMs, data.uiReadyMs, data.validationMs, data.handoffMs }
+    for index, row in ipairs(UI.DiagnosticRows) do
+        row.Value.Text = index == 3 and data.validationPending and Localization:Get("diagPending")
+            or values[index] ~= nil and tostring(values[index]) .. " ms"
+            or Localization:Get("diagNotMeasured")
+    end
+    UI.DiagnosticsPanel.Visible = self.Open and Experience.OptionsOpen
+    Localization:Bind(UI.DiagnosticsToggle.Label, self.Open and "diagHide" or "diagShow")
+    UI.DiagnosticsToggle:SetDisabled(State.Activity ~= "Idle")
+end
+function Diagnostics:Build()
+    if UI.DiagnosticsPanel then
+        return
+    end
+    UI.DiagnosticsPanel = frame(UI.Preferences, "Diagnostics", Theme.Input)
+    corner(UI.DiagnosticsPanel, 10)
+    stroke(UI.DiagnosticsPanel, Theme.Line, 1, 0.4)
+    UI.DiagnosticRows = {}
+    for index, key in ipairs({ "diagBuild", "diagReady", "diagValidation", "diagHandoff" }) do
+        UI.DiagnosticRows[index] = {
+            Title = localized(UI.DiagnosticsPanel, "Metric" .. index, key, 12, Theme.Secondary),
+            Value = label(UI.DiagnosticsPanel, "Value" .. index, "", 14, Theme.Text, Theme.Medium),
+        }
+    end
+    UI.DiagnosticsNote = localized(UI.DiagnosticsPanel, "Privacy", "diagNote", 11, Theme.Secondary)
+    UI.DiagnosticsNote.TextWrapped = true
+    UI.DiagnosticsCopy = Button.new(UI.DiagnosticsPanel, "CopyDiagnostics", "", false, "copy", function()
+        self:Copy()
+    end, Runtime, AuthField.Interactive)
+    Localization:Bind(UI.DiagnosticsCopy.Label, "copyDetails")
+    self:Refresh()
+end
+function Diagnostics:Toggle(open)
+    if not State.Alive or not State.Visible or State.Activity ~= "Idle" then
+        return false
+    end
+    self.Open = open == nil and not self.Open or open == true
+    if self.Open then
+        self:Build()
+    end
+    if UI.DiagnosticsToggle then
+        Localization:Bind(UI.DiagnosticsToggle.Label, self.Open and "diagHide" or "diagShow")
+    end
+    self:Refresh()
+    Responsive:Update()
+    return true
+end
+function Diagnostics:Measure(width)
+    if self.MeasuredWidth == width and self.MeasuredLanguage == Settings.Language then
+        return
+    end
+    self.MeasuredWidth, self.MeasuredLanguage = width, Settings.Language
+    self.NoteHeight = math.clamp(measure(Localization:Get("diagNote"), 11, Theme.Font, math.max(1, width - 24)), 38, 96)
+    self.MetricsHeight = width < 270 and 232 or 124
+    self.PanelHeight = self.MetricsHeight + self.NoteHeight + 62
+end
+function Diagnostics:Height()
+    return self.Open and ((self.PanelHeight or 232) + 12) or 0
+end
+function Diagnostics:Layout(width)
+    if not UI.DiagnosticsPanel or not self.Open then
+        return
+    end
+    self:Measure(width)
+    place(UI.DiagnosticsPanel, 0, 242, width, self.PanelHeight)
+    local half = (width - 32) / 2
+    for index, row in ipairs(UI.DiagnosticRows) do
+        local stacked = width < 270
+        local x = stacked and 12 or index % 2 == 1 and 12 or 20 + half
+        local y = stacked and 12 + (index - 1) * 54 or index <= 2 and 12 or 66
+        local rowWidth = stacked and width - 24 or half
+        row.Title.TextWrapped = true
+        row.Title.TextTruncate = Enum.TextTruncate.AtEnd
+        place(row.Title, x, y, rowWidth, 28)
+        place(row.Value, x, y + 28, rowWidth, 22)
+    end
+    place(UI.DiagnosticsNote, 12, self.MetricsHeight, width - 24, self.NoteHeight)
+    place(UI.DiagnosticsCopy.Root, 12, self.MetricsHeight + 8 + self.NoteHeight, width - 24, 44)
+end
+function Diagnostics:Copy()
+    if not AuthField.Interactive() then
+        return false, "busy"
+    end
+    local text = self:Text()
+    local copy = capability("setclipboard") or capability("toclipboard")
+    local ok, result = false, nil
+    if copy then
+        ok, result = pcall(copy, text)
+    end
+    if ok and result ~= false then
+        Loader:Toast({ Type = "success", Title = Localization:Get("copied"), Subtitle = Localization:Get("diagCopied") })
+        return true
+    end
+    Modal:Open({
+        Type = "info",
+        Title = Localization:Get("diagTitle"),
+        CopyText = text,
+        ActionKey = "close",
+        OnAction = function()
+            Modal:Close()
+        end,
+    })
+    return false, "clipboard_unavailable"
+end
+
 -- Storefront presentation only. No purchase, entitlement or auth result is inferred here.
 LicenseOffer = { RevealTasks = {}, Revealing = false }
 function LicenseOffer:Enabled()
@@ -3310,6 +4074,7 @@ function LicenseOffer:Refresh()
     if not UI.LicensePanel then
         return
     end
+    UI.LicenseClose.Root:SetAttribute("ActionLabel", Localization:Get("close"))
     Localization:Bind(UI.LicenseStore.Label, "offerStore", "Text", function()
         return Settings.LicenseStoreLink:gsub("^https://", ""):gsub("/$", "")
     end)
@@ -3494,6 +4259,12 @@ function LicenseOffer:Build()
     end, Runtime, allowed)
     UI.LicenseStore.BaseColor = Theme.Surface
     UI.LicenseStore:Apply()
+    UI.LicenseHaveKey = Button.new(UI.LicensePanel, "HaveKey", "", false, nil, function()
+        self:BackToKey()
+    end, Runtime, allowed)
+    UI.LicenseHaveKey.Root.BackgroundTransparency = 1
+    Localization:Bind(UI.LicenseHaveKey.Label, "offerHaveKey")
+    UI.LicenseHaveKey.Label.TextColor3 = Theme.Accent
     UI.LicenseNotNow = Button.new(UI.LicensePanel, "NotNow", "", false, nil, function()
         Modal:Close()
     end, Runtime, allowed)
@@ -3518,7 +4289,7 @@ function LicenseOffer:Layout(settle)
     local inner = width - 40
     local stacked = width < 650
     local compact = width < 420
-    local footer = compact and 112 or 68
+    local footer = compact and 162 or 118
     local viewportHeight = math.max(40, height - 72 - footer - 12)
     UI.LicensePanel.Size = UDim2.fromOffset(width, height)
     UI.LicensePanel.Position = UDim2.fromOffset(safe.X / 2, safe.Y / 2)
@@ -3596,12 +4367,50 @@ function LicenseOffer:Layout(settle)
     UI.LicenseScroll.CanvasSize = UDim2.fromOffset(0, canvasHeight)
     UI.LicenseScroll.ScrollingEnabled = canvasHeight > viewportHeight
     if compact then
-        place(UI.LicenseStore.Root, 20, height - 106, inner, 44)
+        place(UI.LicenseStore.Root, 20, height - 156, inner, 44)
+        place(UI.LicenseHaveKey.Root, 20, height - 106, inner, 44)
         place(UI.LicenseNotNow.Root, 20, height - 56, inner, 44)
     else
-        place(UI.LicenseStore.Root, 20, height - 56, math.max(1, inner - 124), 44)
+        place(UI.LicenseStore.Root, 20, height - 106, inner, 44)
+        place(UI.LicenseHaveKey.Root, 20, height - 56, math.max(1, inner - 124), 44)
         place(UI.LicenseNotNow.Root, width - 132, height - 56, 112, 44)
     end
+    self:FitLabels()
+    Accessibility:Layout()
+end
+function LicenseOffer:FitLabels()
+    for _, card in ipairs(UI.LicenseCards) do
+        local width = math.max(1, card.Buy.Root.Size.X.Offset - 20)
+        local font = 12
+        local bounds = TextMetrics:Get(
+            Localization:Get(card.Primary and "offerChooseLifetime" or "offerChooseMonthly"),
+            font,
+            Theme.Medium,
+            10000
+        )
+        if bounds and bounds.X > width then
+            font = math.max(10, math.floor(font * width / bounds.X))
+        end
+        card.Buy.Label.TextSize = font
+        card.Buy.Label.TextWrapped = true
+        card.BadgeLabel.TextSize = 10
+    end
+end
+function LicenseOffer:BackToKey()
+    if not self:Interactive() then
+        return false
+    end
+    local keyboard = Accessibility.Keyboard
+    Modal:Close(true)
+    Navigation:Go("Auth", true)
+    Accessibility.Keyboard = keyboard
+    UI.AuthScroll.CanvasPosition = Vector2.new(0, 0)
+    if Accessibility.Keyboard then
+        Accessibility:Focus(UI.Key)
+    else
+        UI.Key:CaptureFocus()
+    end
+    return true
 end
 function LicenseOffer:Open()
     if not State.Alive or not State.Visible or State.Activity ~= "Idle" or not self:Enabled() then
@@ -3617,6 +4426,7 @@ function LicenseOffer:Open()
     self:CancelReveal()
     State.ModalToken = State.ModalToken + 1
     local generation = State.ModalToken
+    Accessibility:CaptureModal()
     State.Modal = "licenses"
     Modal.Config = nil
     reconcile()
@@ -3665,7 +4475,7 @@ function LicenseOffer:BuildTriggers()
     self:Refresh()
 end
 
-Community = { Generation = 0, CardHeight = 300, CardRevealed = false, DockRevealed = false }
+Community = { DetailsOpen = false, Generation = 0, CardHeight = 300, CardRevealed = false, DockRevealed = false }
 function Community:Link()
     local link = Settings.SocialLinks.discord
     return type(link) == "string" and #link <= 2048 and link:match("^https?://") and link or ""
@@ -3693,6 +4503,10 @@ function Community:Refresh()
         button:SetDisabled(copied or self:Link() == "")
     end
     UI.CommunityRestore:SetDisabled(State.Activity ~= "Idle" or not Settings.CommunityEnabled or self:Link() == "")
+    if UI.CommunityDetails then
+        UI.CommunityDetails.Root.Visible = self:Enabled()
+        UI.CommunityDetails:SetDisabled(State.Activity ~= "Idle")
+    end
     UI.CommunityClose.Root:SetAttribute("ActionLabel", Localization:Get("communityDismiss"))
     UI.CommunityDockClose.Root:SetAttribute("ActionLabel", Localization:Get("communityDismiss"))
     UI.CommunityOpen.Root:SetAttribute("ActionLabel", Localization:Get("communityDetails"))
@@ -3735,7 +4549,13 @@ function Community:Paint(hovered)
     end
 end
 function Community:RevealCard()
-    if not self:Enabled() or not self:Interactive() or self.CardRevealed or not State.Layout.Height then
+    if
+        not self.DetailsOpen
+        or not self:Enabled()
+        or not self:Interactive()
+        or self.CardRevealed
+        or not State.Layout.Height
+    then
         return
     end
     local scrollY = UI.AuthScroll.CanvasPosition.Y
@@ -3753,6 +4573,8 @@ function Community:Open()
     if not self:Interactive() or not self:Enabled() then
         return false
     end
+    self.DetailsOpen = true
+    Responsive:Update()
     UI.Key:ReleaseFocus(false)
     UI.AuthScroll.CanvasPosition = Vector2.new(0, math.max(0, UI.CommunityCard.Position.Y.Offset - 12))
     self:RevealCard()
@@ -3796,7 +4618,7 @@ function Community:DockHeight(width, height)
     return (self:Enabled() or self.Hiding) and State.Page == "Auth" and width >= 180 and height >= 350 and 64 or 0
 end
 function Community:Height()
-    return (self:Enabled() or self.Hiding) and (self.CardHeight + 12) or 0
+    return self.DetailsOpen and (self:Enabled() or self.Hiding) and (self.CardHeight + 12) or 0
 end
 function Community:Measure(width)
     if self.MeasuredWidth == width and self.MeasuredLanguage == Settings.Language then
@@ -3815,7 +4637,7 @@ function Community:Measure(width)
     self.CardHeight = joinY + 8 + 137
 end
 function Community:Layout(width, y)
-    local enabled = self:Enabled() or self.Hiding
+    local enabled = self.DetailsOpen and (self:Enabled() or self.Hiding)
     UI.CommunityCard.Visible = enabled
     if not enabled then
         return
@@ -3985,12 +4807,16 @@ end
 -- One owner for frontend-only UX. No license decision or FlowAuth request lives here.
 Experience = { Stage = "authReady", OptionsOpen = false, PrefDirty = false }
 function Experience:SetStage(stage)
+    local changed = self.Stage ~= stage
     self.Stage = stage
     if UI.AuthStatus then
         Localization:Bind(UI.AuthStatus, stage)
         UI.AuthStatus.TextColor3 = stage == "authFailed" and Theme.Warning
             or stage == "authGranted" and Theme.Text
             or Theme.Secondary
+        if changed and State.Layout.Height then
+            Responsive:Request()
+        end
     end
 end
 function Experience:LicenseText()
@@ -4008,6 +4834,9 @@ function Experience:LicenseText()
             or tier == "keyless" and "accessKeyless"
             or "authGranted"
     )
+    if info.lifetime then
+        return text .. "  •  " .. Localization:Get("accessLifetime")
+    end
     if info.secondsLeft ~= nil then
         local remaining = math.max(0, info.secondsLeft - (os.clock() - info.ReceivedAt))
         local duration = remaining >= 86400 and (math.floor(remaining / 86400) .. "d")
@@ -4022,6 +4851,11 @@ end
 function Experience:Refresh()
     self:SetStage(self.Stage)
     if UI.AuthLicense then
+        local changed = UI.AuthLicense.Visible ~= State.Authorized
+        UI.AuthLicense.Visible = State.Authorized
+        if changed and State.Layout.Height then
+            Responsive:Request()
+        end
         Localization:Bind(UI.AuthLicense, "empty", "Text", function()
             return self:LicenseText()
         end)
@@ -4033,6 +4867,7 @@ function Experience:Refresh()
     self:RefreshOptions()
     Community:Refresh()
     LicenseOffer:Refresh()
+    Diagnostics:Refresh()
 end
 function Experience:RefreshGame()
     if not UI.CurrentGame then
@@ -4136,6 +4971,12 @@ function Experience:PreferenceChanged()
     self:RefreshOptions()
 end
 function Experience:RefreshOptions()
+    if UI.DiagnosticsToggle then
+        UI.DiagnosticsToggle:SetDisabled(State.Activity ~= "Idle")
+    end
+    if UI.DiagnosticsPanel then
+        UI.DiagnosticsPanel.Visible = Diagnostics.Open and self.OptionsOpen
+    end
     if not UI.Preferences then
         return
     end
@@ -4234,8 +5075,23 @@ function Experience:SuccessCheck()
     Animation:To(UI.ProgressCheckScale, { Scale = 1 }, Motion.Page)
     UI.ProgressLicense.Text = self:LicenseText()
 end
+function Experience:Measure(width)
+    self.StatusHeight = math.clamp(measure(Localization:Get(self.Stage), 12, Theme.Font, math.max(1, width)), 24, 54)
+end
 function Experience:Height()
-    return 228 + (LicenseOffer:Enabled() and 52 or 0) + Community:Height() + (self.OptionsOpen and 194 or 0)
+    local note = UI.KeyActionsNote and UI.KeyActionsNote.Text ~= "" and 26 or 0
+    local access = State.Authorized and 28 or 0
+    local extras = (LicenseOffer:Enabled() or Community:Enabled()) and 52 or 0
+    return 160 + note + access + extras + Community:Height() + (self.OptionsOpen and (242 + Diagnostics:Height()) or 0)
+end
+function Experience:FitButton(button)
+    if not button then
+        return
+    end
+    local inset = button.Icon and 28 or 16
+    local width = math.max(1, button.Root.Size.X.Offset - inset)
+    button.Label.TextSize = width < 120 and 11 or 12
+    button.Label.TextWrapped = true
 end
 function Experience:Layout(width, y)
     if not UI.CurrentGame then
@@ -4245,28 +5101,65 @@ function Experience:Layout(width, y)
     for index, button in ipairs({ UI.PasteKey, UI.ForgetKey, UI.Options }) do
         place(button.Root, (index - 1) * (actionWidth + 8), y, actionWidth, 44)
     end
-    if LicenseOffer:Enabled() then
-        place(UI.LicenseInline.Root, 0, y + 52, width, 44)
-        y = y + 52
+    y = y + 48
+    local note = UI.KeyActionsNote.Text ~= ""
+    UI.KeyActionsNote.Visible = note
+    if note then
+        place(UI.KeyActionsNote, 0, y, width, 24)
+        y = y + 26
     end
-    place(UI.KeyActionsNote, 0, y + 46, width, 24)
-    place(UI.AuthStatus, 0, y + 74, width, 44)
-    place(UI.AuthLicense, 0, y + 120, width, 24)
-    place(UI.CurrentGame, 0, y + 152, width, 64)
+    local statusHeight = self.StatusHeight or 30
+    place(UI.AuthStatus, 0, y, width, statusHeight)
+    y = y + statusHeight + 6
+    UI.AuthLicense.Visible = State.Authorized
+    if State.Authorized then
+        place(UI.AuthLicense, 0, y, width, 24)
+        y = y + 28
+    end
+    place(UI.CurrentGame, 0, y, width, 64)
     place(UI.GamePlaceholder, 8, 8, 48, 48)
     place(UI.GameFallback.Root, 14, 14, 20, 20)
     place(UI.GameImage, 0, 0, 48, 48)
     place(UI.GameName, 68, 8, math.max(1, width - 80), 24)
     place(UI.GameSupport, 68, 34, math.max(1, width - 80), 22)
-    Community:Layout(width, y + 228)
-    place(UI.Preferences, 0, y + 228 + Community:Height(), width, 184)
+    y = y + 76
+    local offer, community = LicenseOffer:Enabled(), Community:Enabled()
+    UI.LicenseInline.Root.Visible = offer
+    UI.CommunityDetails.Root.Visible = community
+    if offer or community then
+        local half = offer and community and (width - 8) / 2 or width
+        place(UI.LicenseInline.Root, 0, y, half, 44)
+        place(UI.CommunityDetails.Root, offer and half + 8 or 0, y, half, 44)
+        y = y + 52
+    end
+    Community:Layout(width, y)
+    y = y + Community:Height()
+    place(UI.Preferences, 0, y, width, 230 + Diagnostics:Height())
     local half = (width - 8) / 2
     place(UI.PreferenceLanguage.Root, 0, 0, half, 44)
     place(UI.PreferenceScale.Root, half + 8, 0, half, 44)
     place(UI.PreferenceMotion.Root, 0, 52, half, 44)
     place(UI.PreferenceReset.Root, half + 8, 52, half, 44)
     place(UI.CommunityRestore.Root, 0, 102, width, 44)
-    place(UI.PreferenceNote, 0, 153, width, 28)
+    place(UI.PreferenceNote, 0, 150, width, 28)
+    place(UI.DiagnosticsToggle.Root, 0, 186, width, 44)
+    Diagnostics:Layout(width)
+    for _, button in ipairs({
+        UI.GetKey,
+        UI.PasteKey,
+        UI.ForgetKey,
+        UI.Options,
+        UI.LicenseInline,
+        UI.CommunityDetails,
+        UI.PreferenceLanguage,
+        UI.PreferenceScale,
+        UI.PreferenceMotion,
+        UI.PreferenceReset,
+        UI.CommunityRestore,
+        UI.DiagnosticsToggle,
+    }) do
+        self:FitButton(button)
+    end
 end
 function Experience:Build()
     local function secondary(name, key, callback, parent)
@@ -4353,6 +5246,12 @@ function Experience:Build()
     UI.PreferenceNote.TextWrapped = true
     Community:Build()
     LicenseOffer:BuildTriggers()
+    UI.CommunityDetails = secondary("CommunityDetails", "secondaryCommunity", function()
+        Community:Open()
+    end)
+    UI.DiagnosticsToggle = secondary("DiagnosticsToggle", "diagShow", function()
+        Diagnostics:Toggle()
+    end, UI.Preferences)
     self:Refresh()
 end
 
@@ -4422,11 +5321,15 @@ local function authBusy(value)
     UI.GetKey:SetDisabled(value)
     UI.RevealKey:SetDisabled(value)
     UI.Key.TextEditable = State.Visible and not value and State.Page == "Auth"
+    UI.CommunityDetails:SetDisabled(value)
     UI.Key.Active = UI.Key.TextEditable
     UI.AuthNav:SetDisabled(value)
     UI.ProductsNav:SetDisabled(value)
     UI.RefreshNav:SetDisabled(value)
     LicenseOffer:Refresh()
+    Accessibility:HideTooltip()
+    Accessibility:Layout()
+    UI.DiagnosticsToggle:SetDisabled(value)
     UI.AuthBusyTrack.Visible = value
     Experience:SetStage(value and "authChecking" or "authReady")
     Experience:RefreshOptions()
@@ -4454,6 +5357,71 @@ local function authBusy(value)
         Animation:To(UI.Auth, { GroupTransparency = 0 }, Motion.Page)
     end
 end
+-- Frontend bridge only. The host confirms AFTER its provider accepts the key.
+-- These methods are not a permission boundary and never check a key themselves.
+ExternalAuth = { Mode = false, Consumed = false }
+function ExternalAuth:Settle(success, message, info)
+    local request = self.Pending
+    if not request or request.Done then
+        return false, "no_pending_submission"
+    end
+    if success and (not State.Alive or request.Token ~= State.ValidationToken) then
+        return false, "stale_submission"
+    end
+    if success then
+        if type(info) ~= "table" or (info.tier ~= "premium" and info.tier ~= "free") then
+            return false, "missing_auth_metadata"
+        end
+        Loader:SetAuthInfo(info)
+        Loader:SetExpiry(info.secondsLeft)
+    end
+    request.Done = true
+    request.Success = success == true
+    request.MessageKey = message == nil and (success and "authGranted" or "externalUnconfirmed") or nil
+    request.Message = message
+    Runtime:Cancel(request.Timer)
+    request.Timer = nil
+    request.Signal:Fire()
+    return true
+end
+function ExternalAuth:Wait(key)
+    if self.Consumed then
+        return false, Localization:Get("externalRestart")
+    end
+    if #key > 512 then
+        return false, Localization:Get("externalKeyLong")
+    end
+    local callback = State.Callbacks.KeySubmit
+    if type(callback) ~= "function" then
+        return false, Localization:Get("noValidator")
+    end
+    self.Consumed = true
+    local request = { Token = State.ValidationToken, Signal = create("BindableEvent", { Name = "ExternalAuthResult" }) }
+    self.Pending = request
+    request.Timer = Runtime:Later(30, function()
+        if self.Pending == request then
+            self:Settle(false)
+        end
+    end)
+    local ok, submitted = pcall(callback, key, Loader)
+    if not ok or submitted == false then
+        self:Settle(false)
+    end
+    -- Done is checked before Wait: a synchronous host confirmation cannot be lost.
+    if not request.Done then
+        request.Signal.Event:Wait()
+    end
+    Runtime:Cancel(request.Timer)
+    request.Signal:Destroy()
+    if self.Pending == request then
+        self.Pending = nil
+    end
+    return request.Success == true, request.Message or Localization:Get(request.MessageKey or "externalUnconfirmed")
+end
+function ExternalAuth:Cancel(message)
+    return self:Settle(false, message)
+end
+
 local function validate(key)
     if not State.Alive then
         return false, "destroyed"
@@ -4489,6 +5457,9 @@ local function validate(key)
     State.ValidationToken = State.ValidationToken + 1
     local token = State.ValidationToken
     State.Activity = "Validating"
+    Diagnostics.ValidationStarted = os.clock()
+    Diagnostics.ValidationSeconds = nil
+    Diagnostics.HandoffSeconds = nil
     -- A new submission must not display metadata from a previous key/session.
     State.Authorized = false
     State.AuthInfo = nil
@@ -4510,16 +5481,21 @@ local function validate(key)
         if not State.Alive or token ~= State.ValidationToken then
             return
         end
+        local callbackStarted = os.clock()
         local ok, success, message = pcall(callback, key)
         if not State.Alive or token ~= State.ValidationToken then
             return
         end
+        Diagnostics.ValidationSeconds = os.clock() - callbackStarted
+        Diagnostics.ValidationStarted = nil
+        Diagnostics:Refresh()
         Runtime:Cancel(State.SlowAuthTimer)
         State.SlowAuthTimer = nil
         State.Activity = "Idle"
         authBusy(false)
         if ok and success == true then
             State.Authorized = true
+            local acceptedAt = os.clock()
             Experience:SetStage("authGranted")
             Experience:Refresh()
             AuthField:Feedback(nil)
@@ -4549,6 +5525,8 @@ local function validate(key)
                         if token ~= State.ValidationToken then
                             return
                         end
+                        Diagnostics.HandoffSeconds = os.clock() - acceptedAt
+                        Diagnostics:Refresh()
                         -- Capture host work before Destroy clears callbacks. It must not
                         -- be scoped to the frontend or skipped because the UI is gone.
                         if behavior == "destroy" then
@@ -4583,6 +5561,8 @@ local function validate(key)
                     end,
                 })
             end
+            Diagnostics.HandoffSeconds = os.clock() - acceptedAt
+            Diagnostics:Refresh()
             if State.Alive and State.Callbacks.Authorized then
                 invokeHost(State.Callbacks.Authorized, key, resultMessage, Loader)
             end
@@ -4601,7 +5581,8 @@ local function validate(key)
             if #key >= 4 and resultMessage:find(key, 1, true) then
                 resultMessage = generic
             end
-            local adviceKey = kind == "network" and "networkHint"
+            local adviceKey = ExternalAuth.Mode and ExternalAuth.Consumed and "externalRestart"
+                or kind == "network" and "networkHint"
                 or kind == "service" and "serviceHint"
                 or kind == "key" and "keyErrorHint"
                 or "errorHint"
@@ -4612,6 +5593,46 @@ local function validate(key)
             end
         end
         GameMedia:Drain()
+    end)
+    return true
+end
+local function requestKeyLink()
+    if not AuthField.Interactive() then
+        return false, "busy"
+    end
+    local callback = State.Callbacks.GetKey
+    if type(callback) ~= "function" then
+        return openLink(Settings.KeyLink)
+    end
+    State.Activity = "ResolvingKeyLink"
+    State.KeyLinkToken = (State.KeyLinkToken or 0) + 1
+    local token = State.KeyLinkToken
+    reconcile()
+    UI.GetKey:SetDisabled(true)
+    UI.Validate:SetDisabled(true)
+    Experience:SetStage("keyLinkLoading")
+    Experience:RefreshOptions()
+    -- Like validation, the host request must finish cleanup even if the UI closes.
+    task.defer(function()
+        if not State.Alive or token ~= State.KeyLinkToken then
+            return
+        end
+        local ok, link = pcall(callback, Loader)
+        if not State.Alive or token ~= State.KeyLinkToken then
+            return
+        end
+        State.Activity = "Idle"
+        reconcile()
+        UI.GetKey:SetDisabled(false)
+        UI.Validate:SetDisabled(false)
+        Experience:SetStage("authReady")
+        Experience:RefreshOptions()
+        if ok and type(link) == "string" and trim(link) ~= "" then
+            Settings.KeyLink = trim(link)
+            openLink(Settings.KeyLink)
+        else
+            Loader:Toast({ Type = "warning", Subtitle = Localization:Get("noLink") })
+        end
     end)
     return true
 end
@@ -4648,7 +5669,7 @@ local function buildAuth()
         Name = "Key",
         Text = "",
         PlaceholderText = "",
-        PlaceholderColor3 = Theme.Muted,
+        PlaceholderColor3 = Theme.Secondary,
         TextColor3 = Theme.Text,
         TextSize = 13,
         Font = Theme.Medium,
@@ -4738,7 +5759,7 @@ local function buildAuth()
     end, Runtime, AuthField.Interactive)
     Localization:Bind(UI.Validate.Label, "signIn")
     UI.GetKey = Button.new(UI.AuthBody, "GetKey", "", false, "support", function()
-        openLink(Settings.KeyLink)
+        requestKeyLink()
     end, Runtime, AuthField.Interactive)
     Localization:Bind(UI.GetKey.Label, "getKey")
     UI.AuthBusyTrack = frame(UI.Validate.Root, "WaitingTrack", Theme.AccentDark)
@@ -5052,6 +6073,10 @@ local function buildProducts()
     UI.CatalogEmpty.Visible = false
 end
 function Navigation:Refresh()
+    UI.AuthNav.Root:SetAttribute("ActionLabel", Localization:Get("tipAuth"))
+    UI.ProductsNav.Root:SetAttribute("ActionLabel", Localization:Get("tipProducts"))
+    UI.RefreshNav.Root:SetAttribute("ActionLabel", Localization:Get("tipRefresh"))
+    UI.LanguageToggle:SetAttribute("ActionLabel", Localization:Get("tipLanguage"))
     Localization:Bind(UI.Breadcrumb, "authorization", "Text", function()
         return State.Page == "Auth" and (Localization:Get("main") .. "  •  " .. Localization:Get("authorization"))
             or (Localization:Get("product") .. "  •  " .. productName(State.SelectedProduct or State.Products[1]))
@@ -5080,6 +6105,7 @@ function Navigation:Go(page, force)
         return false
     end
     closeLanguage()
+    Accessibility:Clear()
     UI.AuthArtwork:CancelReveal()
     State.PageToken = State.PageToken + 1
     local token = State.PageToken
@@ -5101,7 +6127,7 @@ function Navigation:Go(page, force)
     Animation:CancelTree(previous)
     destination.Visible = true
     destination.GroupTransparency = 1
-    destination.Position = UDim2.fromOffset(0, 6)
+    destination.Position = UDim2.fromOffset(Settings.ReducedMotion and 0 or (page == "Products" and 18 or -18), 0)
     Animation:To(destination, { GroupTransparency = 0, Position = UDim2.fromOffset(0, 0) }, Motion.Page, function()
         if token == State.PageToken then
             previous.Visible = false
@@ -5200,6 +6226,8 @@ function Responsive:Auth(width, height, narrow)
     local feedbackExtra = feedbackHeight > 0 and feedbackHeight + 8 or 0
     buttonsY = buttonsY + feedbackExtra
     Community:Measure(leftWidth)
+    Experience:Measure(leftWidth)
+    Diagnostics:Measure(leftWidth)
     local extrasHeight = Experience:Height()
     if narrow then
         artY = artY + feedbackExtra + extrasHeight
@@ -5232,7 +6260,7 @@ function Responsive:Auth(width, height, narrow)
         place(UI.Validate.Root, 0, buttonsY, leftWidth, 48)
         place(UI.GetKey.Root, 0, buttonsY + 58, leftWidth, 48)
     else
-        local buttonWidth = math.floor((leftWidth - 16) / 2)
+        local buttonWidth = math.floor((leftWidth - 16) * 0.60)
         place(UI.Validate.Root, 0, buttonsY, buttonWidth, buttonHeight)
         place(UI.GetKey.Root, buttonWidth + 16, buttonsY, leftWidth - buttonWidth - 16, buttonHeight)
     end
@@ -5312,7 +6340,9 @@ function Responsive:Update()
         Safe = safe,
     }
     UI.Window.Size = UDim2.fromOffset(width, height)
-    UI.Scale.Scale = scale
+    State.VisibilityRestScale = scale
+    Animation:CancelProperty(UI.Scale, "Scale")
+    UI.Scale.Scale = scale * (State.Visible and 1 or 0.94)
     local center = State.WindowCenter or safe / 2
     center = self:Clamp(center, safe, Vector2.new(width * scale, height * scale))
     State.WindowCenter = center
@@ -5324,7 +6354,7 @@ function Responsive:Update()
     place(UI.Header, 0, 0, width, header)
     place(UI.BrandLogo.Root, rail / 2 - 14, header / 2 - 14, 28, 28)
     local userWidth = width < 480 and math.clamp(math.floor(width * 0.22), 44, 92) or 112
-    UI.Minimize.Root.Visible = narrow or Services.Input.TouchEnabled == true
+    UI.Minimize.Root.Visible = true
     local extra = UI.Minimize.Root.Visible and 50 or 0
     local avatarX = width - 52 - extra
     local userX = width - 64 - userWidth - extra
@@ -5394,6 +6424,7 @@ function Responsive:Update()
     Cards:Layout()
     Modal:Layout(true)
     Toasts:Layout()
+    Accessibility:Layout()
 end
 function Responsive:Request()
     if not State.Alive or self.Pending then
@@ -5490,8 +6521,28 @@ local function bindInput()
         State.Drag = nil
     end)
     Runtime:Connect(Services.Input.InputBegan, function(input, processed)
-        if processed then
+        local focused = Services.Input:GetFocusedTextBox()
+        local ownedTextbox = focused == UI.Key or focused == UI.ResultCopy
+        local ownedSelection = Accessibility.Keyboard and Accessibility:Available(Accessibility.Focused)
+        if input.KeyCode == Enum.KeyCode.Tab and (not processed or ownedTextbox or ownedSelection) then
+            if focused and not ownedTextbox then
+                return
+            end
+            local reverse = false
+            pcall(function()
+                reverse = Services.Input:IsKeyDown(Enum.KeyCode.LeftShift)
+                    or Services.Input:IsKeyDown(Enum.KeyCode.RightShift)
+            end)
+            Accessibility:Tab(reverse)
             return
+        end
+        if processed or (focused and not ownedTextbox) then
+            return
+        end
+        if (input.KeyCode == Enum.KeyCode.Return or input.KeyCode == Enum.KeyCode.KeypadEnter) and not focused then
+            if Accessibility:Activate() then
+                return
+            end
         end
         if input.KeyCode == Enum.KeyCode.Escape then
             if LanguageController.Open then
@@ -5531,6 +6582,8 @@ end
 local function restoreAffordance(visible)
     if visible then
         UI.RestoreDock.Visible = true
+        UI.RestoreDockScale.Scale = Settings.ReducedMotion and 1 or 0.84
+        Animation:To(UI.RestoreDockScale, { Scale = 1 }, Motion.Enter)
         Animation:To(UI.RestoreDock, { GroupTransparency = 0 }, Motion.Enter)
     else
         Animation:To(UI.RestoreDock, { GroupTransparency = 1 }, Motion.Exit, function()
@@ -5581,7 +6634,7 @@ function Loader:SetKeyLink(url)
 end
 function Loader:SetExpiry(seconds)
     if State.Alive then
-        Settings.Expiry = math.max(0, finite(seconds, 0))
+        Settings.Expiry = seconds == math.huge and math.huge or math.max(0, finite(seconds, 0))
     end
     return self
 end
@@ -5589,9 +6642,52 @@ function Loader:GetExpiry()
     return Settings.Expiry
 end
 -- Validation only: return true/false and a message; do not run long-lived Script() here.
+-- This optional host hook resolves a link only on an explicit Get Key action.
+function Loader:SetOnGetKey(callback)
+    assert(callback == nil or type(callback) == "function", "SetOnGetKey expects a function or nil")
+    if State.Alive then
+        State.Callbacks.GetKey = callback
+    end
+    return self
+end
+-- One-shot pre-auth submission. The protected host must call ConfirmExternalAuth later.
+function Loader:SetOnKeySubmit(callback)
+    assert(callback == nil or type(callback) == "function", "SetOnKeySubmit expects a function or nil")
+    if State.Alive then
+        if ExternalAuth.Pending or ExternalAuth.Consumed then
+            return self, false
+        end
+        ExternalAuth.Mode = callback ~= nil
+        State.Callbacks.KeySubmit = callback
+        State.Callbacks.Validate = callback and function(key)
+            return ExternalAuth:Wait(key)
+        end or nil
+    end
+    return self, true
+end
+function Loader:ConfirmExternalAuth(info, message)
+    if not ExternalAuth.Mode then
+        return false, "not_external_auth"
+    end
+    return ExternalAuth:Settle(true, message, info)
+end
+function Loader:CancelExternalAuth(message)
+    return ExternalAuth:Cancel(type(message) == "string" and safeText(message, 240) or nil)
+end
+function Loader:SetOnDestroyed(callback)
+    assert(callback == nil or type(callback) == "function", "SetOnDestroyed expects a function or nil")
+    if State.Alive then
+        State.Callbacks.Destroyed = callback
+    end
+    return self
+end
 function Loader:SetOnValidate(callback)
     assert(callback == nil or type(callback) == "function", "SetOnValidate expects a function or nil")
     if State.Alive then
+        if ExternalAuth.Pending then
+            return self, false
+        end
+        ExternalAuth.Mode = false
         State.Callbacks.Validate = callback
     end
     return self
@@ -5689,6 +6785,11 @@ function Loader:SetLanguage(language)
     Responsive:Update()
     Localization:Refresh(true)
     Experience:Refresh()
+    if State.Modal == "licenses" then
+        LicenseOffer:Layout(true)
+    end
+    Accessibility:HideTooltip()
+    Accessibility:Layout()
     Experience:PreferenceChanged()
     return self, true
 end
@@ -5870,6 +6971,7 @@ function Loader:SetReducedMotion(value)
     if State.Alive then
         Settings.ReducedMotion = value == true
         if Settings.ReducedMotion then
+            Accessibility:HideTooltip()
             -- Settle destinations and lifecycle finalizers; cancelling alone strands exiting notifications.
             Animation:Finish()
             UI.AuthArtwork:CancelReveal()
@@ -5891,6 +6993,7 @@ function Loader:SetReducedMotion(value)
         if State.Activity == "Validating" then
             authBusy(true)
         end
+        Accessibility:Layout()
         Experience:PreferenceChanged()
     end
     return self
@@ -5978,7 +7081,8 @@ function Loader:SetAuthInfo(info)
         local seconds = finite(info.secondsLeft, nil)
         State.AuthInfo = {
             tier = (tier == "premium" or tier == "free" or tier == "keyless") and tier or nil,
-            secondsLeft = seconds and seconds >= 0 and seconds or nil,
+            secondsLeft = info.secondsLeft == math.huge and math.huge or seconds and seconds >= 0 and seconds or nil,
+            lifetime = info.secondsLeft == math.huge,
             scriptName = type(info.scriptName) == "string" and safeText(info.scriptName, 100) or nil,
             scriptVersion = type(info.scriptVersion) == "string" and safeText(info.scriptVersion, 40) or nil,
             ReceivedAt = os.clock(),
@@ -6058,6 +7162,23 @@ function Loader:GetCommunityLink()
     return Community:Link()
 end
 
+-- Whitelisted scalars only: no key, host result, account identity or callback error.
+function Loader:GetDiagnostics()
+    return Diagnostics:Snapshot()
+end
+function Loader:CopyDiagnostics()
+    return Diagnostics:Copy()
+end
+function Loader:ShowDiagnostics(visible)
+    if State.Alive and State.Visible and State.Activity == "Idle" then
+        if visible ~= false then
+            Experience.OptionsOpen = true
+        end
+        Experience:RefreshOptions()
+        return Diagnostics:Toggle(visible ~= false)
+    end
+    return false, "unavailable"
+end
 function Loader:GetState()
     return {
         Name = State.Name,
@@ -6073,6 +7194,8 @@ function Loader:GetState()
         CommunityEnabled = Community:Enabled(),
         CommunityDockVisible = UI.CommunityDock and UI.CommunityDock.Visible or false,
         CommunityDismissed = Settings.CommunityDismissed,
+        ExternalAuthPending = ExternalAuth.Pending ~= nil and not ExternalAuth.Pending.Done,
+        ExternalAuthSubmitted = ExternalAuth.Mode and ExternalAuth.Consumed,
         AuthStage = Experience.Stage,
         AccessTier = State.Authorized and State.AuthInfo and State.AuthInfo.tier or nil,
         ExpirySeconds = Settings.Expiry,
@@ -6085,6 +7208,7 @@ function Loader:Show()
     if not State.Alive then
         return self
     end
+    local wasVisible = State.Visible
     State.VisibilityToken = State.VisibilityToken + 1
     State.Visible = true
     reconcile()
@@ -6094,6 +7218,13 @@ function Loader:Show()
     UI.Key.Active = UI.Key.TextEditable
     Responsive:Update()
     UI.Overlay.Visible = State.Modal ~= nil
+    local destination = UI.Window.Position
+    if not wasVisible and not Settings.ReducedMotion then
+        UI.Window.Position = destination + UDim2.fromOffset(0, 12)
+        UI.Scale.Scale = (State.VisibilityRestScale or 1) * 0.965
+    end
+    Animation:To(UI.Scale, { Scale = State.VisibilityRestScale or 1 }, Motion.Enter)
+    Animation:To(UI.Window, { Position = destination }, Motion.Enter)
     Animation:To(UI.Window, { GroupTransparency = 0 }, Motion.Enter)
     if State.Page == "Auth" then
         UI.AuthArtwork:Reveal()
@@ -6109,6 +7240,7 @@ function Loader:Hide()
     State.VisibilityToken = State.VisibilityToken + 1
     local token = State.VisibilityToken
     State.Visible = false
+    Accessibility:Clear()
     State.Drag = nil
     State.Focused = false
     reconcile()
@@ -6121,8 +7253,22 @@ function Loader:Hide()
     UI.Key:ReleaseFocus(false)
     UI.Key.TextEditable = false
     Responsive:Update()
-    restoreAffordance(true)
+    -- Authentication exits never expose an interactive restore chip.
+    restoreAffordance(State.Activity ~= "Completing")
     UI.Overlay.Visible = false
+    local rest = UI.Window.Position
+    local offset = State.Activity == "Completing" and Vector2.new(0, -6) or Vector2.new(12, 18)
+    if State.Activity ~= "Completing" then
+        local dock = UI.RestoreDock.Position
+        offset = Vector2.new((dock.X.Offset - rest.X.Offset) * 0.045, (dock.Y.Offset - rest.Y.Offset) * 0.045)
+    end
+    Animation:To(
+        UI.Scale,
+        { Scale = (State.VisibilityRestScale or 1) * (State.Activity == "Completing" and 0.985 or 0.94) },
+        Motion.Exit
+    )
+    -- Keep fade/finalizer separate: resize owns Position and may cancel its tween.
+    Animation:To(UI.Window, { Position = rest + UDim2.fromOffset(offset.X, offset.Y) }, Motion.Exit)
     Animation:To(UI.Window, { GroupTransparency = 1 }, Motion.Exit, function()
         if State.VisibilityToken == token and not State.Visible then
             UI.Window.Visible = false
@@ -6134,6 +7280,13 @@ function Loader:Destroy()
     if not State.Alive then
         return
     end
+    local destroyed = State.Callbacks.Destroyed
+    -- Wake an unscoped external waiter before disposing its signal/lifecycle.
+    if ExternalAuth.Pending then
+        ExternalAuth:Cancel()
+    end
+    Accessibility:Clear()
+    Diagnostics.ValidationStarted = nil
     Runtime:Cancel(Experience.PrefTimer)
     Experience.PrefTimer = nil
     Experience:SavePrefs()
@@ -6188,6 +7341,12 @@ function Loader:Destroy()
         env.__PlakUiLoader = nil
     end
     State.Registry = nil
+    if type(destroyed) == "function" then
+        local ok = pcall(destroyed, self)
+        if not ok then
+            warn("[PLAK] Destroy callback failed")
+        end
+    end
     Settings.Artwork = nil
     Settings.KeyLink = ""
     table.clear(Settings.SocialLinks)
@@ -6266,7 +7425,9 @@ local function initialize()
     buildModal()
     buildAuth()
     buildProducts()
+    Diagnostics.BuiltAt = os.clock()
     UI.Gui.Parent = parent
+    Accessibility:Build()
     bindInput()
     local dispose = create("BindableEvent", { Name = "PlakDispose" }, UI.Gui)
     Runtime:Connect(dispose.Event, function()
@@ -6277,6 +7438,7 @@ local function initialize()
     end)
     Responsive:Update()
     Loader:SetProducts(SupportedGames)
+    Diagnostics.ReadyAt = os.clock()
     reconcile()
     if State.Visible then
         Animation:To(UI.Window, { GroupTransparency = 0 }, Motion.Enter)
