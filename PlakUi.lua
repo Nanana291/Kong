@@ -1,6 +1,6 @@
 -- PlakUi — a client-side loader frontend. Authentication and product execution belong to the host.
 -- Callbacks may yield. Progress is host-reported; SetExpiry never grants or revokes a license.
--- Optional storefront: ShowLicenses(), SetLicenseOfferEnabled(boolean), SetLicenseStoreLink(httpsURL).
+-- Dedicated third tab after Supported Games: ShowLicenses(), SetLicenseOfferEnabled(boolean), SetLicenseStoreLink(httpsURL).
 -- Prices are presentation only; checkout and license entitlement remain with the store/host.
 -- PLAK is native GUI geometry. Catalog thumbnails are real Roblox content; optional HTTP only enriches metadata.
 local ModuleStartedAt = os.clock()
@@ -460,6 +460,8 @@ local function reconcile()
         State.Name = "ProductProgress"
     elseif State.Modal then
         State.Name = "ModalOpen"
+    elseif State.Page == "Licenses" then
+        State.Name = "LicenseBrowser"
     elseif State.Page == "Products" then
         State.Name = "ProductBrowser"
     elseif State.Focused then
@@ -1373,6 +1375,8 @@ end
 do
     local offers = {
         en = {
+            offerTab = "License Keys",
+            offerMonthlyBadge = "MONTHLY ACCESS",
             offerLicenses = "LICENSES",
             offerHeroA = "Your access.",
             offerHeroB = "Your way.",
@@ -1397,6 +1401,8 @@ do
             offerJumpMonthly = "Monthly · $5",
         },
         es = {
+            offerTab = "Claves de licencia",
+            offerMonthlyBadge = "ACCESO MENSUAL",
             offerLicenses = "LICENCIAS",
             offerHeroA = "Tu acceso.",
             offerHeroB = "A tu manera.",
@@ -1421,6 +1427,8 @@ do
             offerJumpMonthly = "Monthly · $5",
         },
         pt = {
+            offerTab = "Chaves de licença",
+            offerMonthlyBadge = "ACESSO MENSAL",
             offerLicenses = "LICENÇAS",
             offerHeroA = "Seu acesso.",
             offerHeroB = "Do seu jeito.",
@@ -1445,6 +1453,8 @@ do
             offerJumpMonthly = "Monthly · $5",
         },
         ru = {
+            offerTab = "Ключи лицензии",
+            offerMonthlyBadge = "МЕСЯЧНЫЙ ДОСТУП",
             offerLicenses = "ЛИЦЕНЗИИ",
             offerHeroA = "Ваш доступ.",
             offerHeroB = "Ваш выбор.",
@@ -2464,10 +2474,6 @@ local function setButtonKey(button, key)
     Localization:Bind(button.Label, key)
 end
 function Modal:Layout(settleMotion)
-    if State.Modal == "licenses" then
-        LicenseOffer:Layout(settleMotion)
-        return
-    end
     local size = UI.Stage.AbsoluteSize
     if settleMotion then
         if not State.Modal and UI.Overlay.Visible then
@@ -2587,10 +2593,6 @@ function Modal:Open(config)
     if LicenseOffer then
         LicenseOffer:CancelReveal()
     end
-    if UI.LicensePanel then
-        Animation:CancelTree(UI.LicensePanel)
-        UI.LicensePanel.Visible = false
-    end
     self.Config = config or {}
     self.ActionBusy = false
     State.Modal = "result"
@@ -2626,9 +2628,6 @@ function Modal:Close(immediate)
     local function finish()
         if token == State.ModalToken then
             UI.Overlay.Visible = false
-            if UI.LicensePanel then
-                UI.LicensePanel.Visible = false
-            end
             UI.Result.Visible = false
             UI.ProgressPanel.Visible = false
             Localization.Bindings[UI.ResultTitle] = nil
@@ -2642,9 +2641,7 @@ function Modal:Close(immediate)
     else
         UI.ResultAction:SetDisabled(true)
         Animation:To(UI.Backdrop, { BackgroundTransparency = 1 }, Motion.Exit)
-        local panel = UI.LicensePanel and UI.LicensePanel.Visible and UI.LicensePanel
-            or UI.Result.Visible and UI.Result
-            or UI.ProgressPanel
+        local panel = UI.Result.Visible and UI.Result or UI.ProgressPanel
         Animation:To(
             panel,
             { GroupTransparency = 1, Position = panel.Position + UDim2.fromOffset(0, 32) },
@@ -2663,10 +2660,6 @@ function Modal:Loading(config)
     config = config or {}
     if LicenseOffer then
         LicenseOffer:CancelReveal()
-    end
-    if UI.LicensePanel then
-        Animation:CancelTree(UI.LicensePanel)
-        UI.LicensePanel.Visible = false
     end
     Accessibility:CaptureModal()
     self.AuthCompletion = config.AuthCompletion == true
@@ -2852,7 +2845,7 @@ local function buildModal()
         Selectable = false,
     }, UI.Overlay)
     Runtime:Connect(UI.Backdrop.Activated, function()
-        if (State.Modal == "result" or State.Modal == "licenses") and State.Activity == "Idle" then
+        if State.Modal == "result" and State.Activity == "Idle" then
             Modal:Close()
         end
     end)
@@ -3713,16 +3706,6 @@ function Accessibility:Order()
         for _, language in ipairs(Languages) do
             add(UI.LanguageOptions[language.Id])
         end
-    elseif State.Modal == "licenses" then
-        add(UI.LicenseClose)
-        add(UI.LicenseJumpLife)
-        add(UI.LicenseJumpMonth)
-        for _, card in ipairs(UI.LicenseCards) do
-            add(card.Buy)
-        end
-        add(UI.LicenseStore)
-        add(UI.LicenseHaveKey)
-        add(UI.LicenseNotNow)
     elseif State.Modal == "result" then
         add(UI.ResultClose)
         add(UI.ResultCopy)
@@ -3739,7 +3722,6 @@ function Accessibility:Order()
             add(UI.PasteKey)
             add(UI.ForgetKey)
             add(UI.Options)
-            add(UI.LicenseInline)
             add(UI.CommunityDetails)
             add(UI.PreferenceLanguage)
             add(UI.PreferenceScale)
@@ -3755,10 +3737,14 @@ function Accessibility:Order()
             add(UI.CommunityDockJoin)
             add(UI.CommunityOpen)
             add(UI.CommunityDockClose)
+        elseif State.Page == "Licenses" then
+            add(UI.LicenseJumpLife)
+            add(UI.LicenseJumpMonth)
+            for _, card in ipairs(UI.LicenseCards or {}) do add(card.Buy) end
+            add(UI.LicenseStore)
+            add(UI.LicenseHaveKey)
         else
-            for _, card in ipairs(Cards) do
-                add(card.Open)
-            end
+            for _, card in ipairs(Cards) do add(card.Open) end
         end
         for _, id in ipairs({ "discord", "telegram", "youtube" }) do
             add(UI.Social[id])
@@ -4049,76 +4035,84 @@ function Diagnostics:Copy()
     return false, "clipboard_unavailable"
 end
 
--- Storefront presentation only. No purchase, entitlement or auth result is inferred here.
-LicenseOffer = { RevealTasks = {}, Revealing = false }
+-- Dedicated lazy storefront page. Checkout and entitlement remain with the store/host.
+LicenseOffer = { RevealTasks = {}, Generation = 0 }
 function LicenseOffer:Enabled()
     return Settings.LicenseOfferEnabled and Settings.LicenseStoreLink ~= ""
 end
 function LicenseOffer:Interactive()
-    return State.Alive and State.Visible and State.Modal == "licenses" and State.Activity == "Idle"
+    return canInteract() and State.Page == "Licenses" and self:Enabled()
 end
 function LicenseOffer:CancelReveal()
-    for _, thread in ipairs(self.RevealTasks) do
-        Runtime:Cancel(thread)
-    end
+    self.Generation = self.Generation + 1
+    for _, thread in ipairs(self.RevealTasks) do Runtime:Cancel(thread) end
     table.clear(self.RevealTasks)
-    self.Revealing = false
+    for _, card in ipairs(UI.LicenseCards or {}) do
+        Animation:CancelProperty(card.Root, "Position")
+        Animation:CancelProperty(card.Root, "GroupTransparency")
+        Animation:CancelProperty(card.Scale, "Scale")
+        Animation:CancelProperty(card.Sweep, "Position")
+        Animation:CancelProperty(card.Seal.Root, "Rotation")
+        Animation:CancelProperty(card.SealScale, "Scale")
+        card.Root.GroupTransparency, card.Scale.Scale = 0, 1
+        if card.Rest then card.Root.Position = card.Rest end
+        card.Hovered = false
+        card.Sweep.Visible = false
+        card.Seal.Root.Rotation, card.SealScale.Scale = -35, 1
+    end
 end
 function LicenseOffer:Refresh()
     if UI.LicenseNav then
         UI.LicenseNav:SetDisabled(not self:Enabled() or State.Activity ~= "Idle")
-        UI.LicenseNav.Root:SetAttribute("ActionLabel", Localization:Get("offerLicenses"))
-        UI.LicenseInline:SetDisabled(not self:Enabled() or State.Activity ~= "Idle")
-        UI.LicenseInline.Root.Visible = self:Enabled()
+        UI.LicenseNav.Root:SetAttribute("ActionLabel", Localization:Get("offerTab"))
+        UI.LicenseNav.Icon:SetColor(State.Page == "Licenses" and Theme.Accent or Theme.Muted)
     end
-    if not UI.LicensePanel then
-        return
-    end
-    UI.LicenseClose.Root:SetAttribute("ActionLabel", Localization:Get("close"))
+    if not UI.LicensePanel then return end
     Localization:Bind(UI.LicenseStore.Label, "offerStore", "Text", function()
         return Settings.LicenseStoreLink:gsub("^https://", ""):gsub("/$", "")
     end)
+    UI.LicenseStore.Root:SetAttribute("ActionLabel", Localization:Get("offerStore") .. " · " .. Settings.LicenseStoreLink)
     local copied = self.CopyTask ~= nil and self.CopiedLink == Settings.LicenseStoreLink
     for _, card in ipairs(UI.LicenseCards) do
-        Localization:Bind(
-            card.Buy.Label,
-            copied and "offerCopied" or card.Primary and "offerChooseLifetime" or "offerChooseMonthly"
-        )
+        Localization:Bind(card.Buy.Label, copied and "offerCopied" or card.Primary and "offerChooseLifetime" or "offerChooseMonthly")
         card.Buy:SetDisabled(copied or not self:Enabled())
     end
     UI.LicenseStore:SetDisabled(copied or not self:Enabled())
+    self:FitLabels()
 end
 function LicenseOffer:Copy(plan)
-    if not self:Interactive() or not self:Enabled() then
-        return false, "unavailable"
-    end
-    if self.CopyTask and self.CopiedLink == Settings.LicenseStoreLink then
-        return false, "cooldown"
-    end
+    if not self:Interactive() then return false, "unavailable" end
+    if self.CopyTask and self.CopiedLink == Settings.LicenseStoreLink then return false, "cooldown" end
     local link = Settings.LicenseStoreLink
     local ok = openLink(link, {
         Title = Localization:Get("offerStoreCopied"),
-        Subtitle = Localization:Get(
-            plan == "lifetime" and "offerLifetimeCopy" or plan == "monthly" and "offerMonthlyCopy" or "offerStoreCopy"
-        ),
+        Subtitle = Localization:Get(plan == "lifetime" and "offerLifetimeCopy" or plan == "monthly" and "offerMonthlyCopy" or "offerStoreCopy"),
     })
-    if not ok then
-        return false, "clipboard_unavailable"
-    end
+    if not ok then return false, "clipboard_unavailable" end
     self.CopiedLink = link
     Runtime:Cancel(self.CopyTask)
     self.CopyTask = Runtime:Later(2, function()
-        self.CopyTask = nil
-        self.CopiedLink = nil
+        self.CopyTask, self.CopiedLink = nil, nil
         self:Refresh()
     end)
     self:Refresh()
     return true
 end
 function LicenseOffer:Paint(card, hovered)
+    local entering = hovered == true and not card.Hovered
     card.Hovered = hovered == true
-    Animation:To(card.Border, { Transparency = hovered and 0.08 or card.Primary and 0.22 or 0.55 }, Motion.Hover)
-    Animation:To(card.SealScale, { Scale = hovered and 1.04 or 1 }, Motion.Hover)
+    Animation:To(card.Border, { Transparency = hovered and 0.05 or card.Primary and 0.18 or 0.48 }, Motion.Hover)
+    Animation:To(card.SealScale, { Scale = hovered and 1.045 or 1 }, Motion.Page)
+    Animation:To(card.Seal.Root, { Rotation = hovered and -29 or -35 }, Motion.Page)
+    -- One finite sweep per intentional hover; no idle/per-frame animation loop.
+    if entering and not Settings.ReducedMotion and self:Interactive() then
+        local width = card.Root.Size.X.Offset
+        card.Sweep.Position = UDim2.fromOffset(-90, -50)
+        card.Sweep.Visible = true
+        Animation:To(card.Sweep, { Position = UDim2.fromOffset(width + 90, -50) }, Motion.Enter, function()
+            card.Sweep.Visible = false
+        end)
+    end
 end
 function LicenseOffer:BuildMark(parent)
     local root = frame(parent, "PlakGeometry")
@@ -4141,337 +4135,264 @@ function LicenseOffer:BuildMark(parent)
     end
     return root
 end
+function LicenseOffer:BuildKey(parent, primary)
+    local root = frame(parent, "FacetedLicenseKey")
+    root.BackgroundTransparency = 1
+    root.Rotation = -35
+    local bright = primary and Color3.fromRGB(213, 48, 86) or Color3.fromRGB(77, 76, 88)
+    local dark = primary and Color3.fromRGB(82, 20, 39) or Color3.fromRGB(30, 29, 36)
+    -- Open hexagonal bow, depth faces and beveled shaft. All native GUI geometry.
+    for index = 0, 5 do
+        local a, b = math.rad(index * 60 - 30), math.rad((index + 1) * 60 - 30)
+        local x1, y1 = 36 + math.cos(a) * 25, 28 + math.sin(a) * 25
+        local x2, y2 = 36 + math.cos(b) * 25, 28 + math.sin(b) * 25
+        local angle = math.deg(math.atan2(y2 - y1, x2 - x1))
+        for layer = 1, 2 do
+            local face = frame(root, "BowFace" .. index .. "Depth" .. layer)
+            face.AnchorPoint = Vector2.new(0.5, 0.5)
+            face.Position = UDim2.fromOffset((x1 + x2) / 2 + (layer == 1 and 3 or 0), (y1 + y2) / 2 + (layer == 1 and 4 or 0))
+            face.Size = UDim2.fromOffset(29, layer == 1 and 12 or 10)
+            face.Rotation = angle
+            gradient(face, layer == 1 and dark or bright, dark, index < 3 and 90 or 270)
+        end
+    end
+    local shaft = frame(root, "BeveledShaft")
+    place(shaft, 30, 48, 13, 60)
+    gradient(shaft, bright, dark, 0)
+    local edge = frame(root, "ShaftDepth", dark)
+    place(edge, 43, 51, 3, 57)
+    for index = 1, 2 do
+        local tooth = frame(root, "KeyTooth" .. index)
+        place(tooth, 39, 70 + index * 15, index == 1 and 14 or 20, 10)
+        gradient(tooth, bright, dark, 90)
+    end
+    return { Root = root }
+end
 function LicenseOffer:BuildCard(primary)
     local card = { Primary = primary }
     card.Root = group(UI.LicenseBody, primary and "Lifetime" or "Monthly")
-    card.Root.BackgroundTransparency = 0
-    card.Root.ClipsDescendants = true
-    corner(card.Root, 12)
-    gradient(card.Root, primary and Color3.fromRGB(47, 21, 32) or Theme.Elevated, Color3.fromRGB(18, 17, 22), 35)
-    card.Border = stroke(card.Root, primary and Theme.Accent or Theme.Line, 1, primary and 0.22 or 0.55)
+    card.Root.BackgroundTransparency, card.Root.ClipsDescendants = 0, true
+    corner(card.Root, 14)
+    gradient(card.Root, primary and Color3.fromRGB(48, 17, 29) or Color3.fromRGB(29, 29, 35), Color3.fromRGB(13, 13, 17), 36)
+    card.Border = stroke(card.Root, primary and Theme.Accent or Theme.Line, 1, primary and 0.18 or 0.48)
     card.Scale = create("UIScale", { Scale = 1 }, card.Root)
-    card.Badge = frame(card.Root, "PaymentBadge", Theme.AccentDark)
-    corner(card.Badge, 7)
-    card.Badge.Visible = primary
-    card.BadgeLabel = localized(card.Badge, "Payment", "offerOneTime", 11, Theme.Text, Theme.Medium)
+    card.Facet = frame(card.Root, "DiagonalFacet", Theme.Text)
+    card.Facet.BackgroundTransparency = primary and 0.975 or 0.985
+    card.Facet.Rotation = 36
+    card.Sweep = frame(card.Root, "FiniteLightSweep", Theme.Text)
+    card.Sweep.BackgroundTransparency, card.Sweep.Rotation, card.Sweep.Visible = 0.965, 30, false
+    card.Badge = frame(card.Root, "PaymentBadge", primary and Theme.AccentDark or Theme.Inactive)
+    corner(card.Badge, 6)
+    card.BadgeLabel = localized(card.Badge, "Payment", primary and "offerOneTime" or "offerMonthlyBadge", 10, Theme.Text, Theme.Medium)
     card.BadgeLabel.TextXAlignment = Enum.TextXAlignment.Center
     card.BadgeLabel.TextTruncate = Enum.TextTruncate.AtEnd
-    card.Title = label(card.Root, "Plan", primary and "LIFETIME" or "MONTHLY", 28, Theme.Text, Theme.Bold)
-    card.Price =
-        label(card.Root, "Price", primary and "$12" or "$5", 82, primary and Theme.Accent or Theme.Text, Theme.Bold)
-    card.Currency =
-        localized(card.Root, "Currency", primary and "offerUSD" or "offerPerMonth", 14, Theme.Secondary, Theme.Medium)
+    card.Title = label(card.Root, "Plan", primary and "LIFETIME" or "MONTHLY", 29, Theme.Text, Theme.Bold)
+    card.Price = label(card.Root, "Price", primary and "$12" or "$5", 74, primary and Theme.Accent or Theme.Text, Theme.Bold)
+    card.Currency = localized(card.Root, "Currency", primary and "offerUSD" or "offerPerMonth", 13, Theme.Secondary, Theme.Medium)
     card.Currency.TextTruncate = Enum.TextTruncate.AtEnd
-    card.Term =
-        localized(card.Root, "LicenseTerm", primary and "offerLifetimeTerm" or "offerMonthlyTerm", 13, Theme.Secondary)
+    card.Term = localized(card.Root, "LicenseTerm", primary and "offerLifetimeTerm" or "offerMonthlyTerm", 13, Theme.Secondary)
     card.Term.TextTruncate = Enum.TextTruncate.AtEnd
-    card.Seal = Icon.new(card.Root, "key", primary and Theme.AccentDark or Theme.Muted, 72)
+    card.Seal = self:BuildKey(card.Root, primary)
     card.SealScale = create("UIScale", { Scale = 1 }, card.Seal.Root)
-    card.Buy = Button.new(
-        card.Root,
-        "Choose",
-        "",
-        primary,
-        nil,
-        function()
-            self:Copy(primary and "lifetime" or "monthly")
-        end,
-        Runtime,
-        function()
-            return self:Interactive()
-        end
-    )
-    if not primary then
-        card.Buy.BaseColor = Theme.Inactive
-        card.Buy:Apply()
-    end
+    card.Buy = Button.new(card.Root, "Choose", "", primary, nil, function()
+        self:Copy(primary and "lifetime" or "monthly")
+    end, Runtime, function() return self:Interactive() end)
+    card.Buy.Label.Size = UDim2.new(1, -40, 1, 0)
+    card.Arrow = Icon.new(card.Buy.Root, "chevron", Theme.Text, 16)
+    card.Arrow.Root.Rotation = -90
+    if not primary then card.Buy.BaseColor = Theme.Inactive; card.Buy:Apply() end
     Runtime:Connect(card.Root.MouseEnter, function()
-        if self:Interactive() then
-            self:Paint(card, true)
-        end
+        if self:Interactive() then self:Paint(card, true) end
     end)
-    Runtime:Connect(card.Root.MouseLeave, function()
-        self:Paint(card, false)
-    end)
+    Runtime:Connect(card.Root.MouseLeave, function() self:Paint(card, false) end)
     return card
 end
 function LicenseOffer:Build()
-    if UI.LicensePanel then
-        return
-    end
-    local function allowed()
-        return self:Interactive()
-    end
-    UI.LicensePanel = group(UI.Overlay, "LicenseOffers")
-    UI.LicensePanel.AnchorPoint = Vector2.new(0.5, 0.5)
-    UI.LicensePanel.BackgroundTransparency = 0
-    UI.LicensePanel.BackgroundColor3 = Theme.Surface
-    UI.LicensePanel.Active = true
-    UI.LicensePanel.ZIndex = 2
-    UI.LicensePanel.Visible = false
-    UI.LicensePanel.ClipsDescendants = true
-    corner(UI.LicensePanel, 14)
-    stroke(UI.LicensePanel, Theme.Line, 1, 0.15)
+    if UI.LicensePanel then return end
+    local function allowed() return self:Interactive() end
+    UI.LicensePanel = group(UI.Pages, "Licenses")
+    UI.LicensePanel.Visible, UI.LicensePanel.ClipsDescendants = false, true
+    UI.LicensePanel.Size = UDim2.fromScale(1, 1)
     UI.LicenseScale = create("UIScale", { Scale = 1 }, UI.LicensePanel)
     UI.LicenseMark = self:BuildMark(UI.LicensePanel)
-    UI.LicenseTag = localized(UI.LicensePanel, "Category", "offerLicenses", 12, Theme.Secondary, Theme.Medium)
+    UI.LicenseTag = localized(UI.LicensePanel, "Category", "offerLicenses", 11, Theme.Secondary, Theme.Medium)
     UI.LicenseDivider = frame(UI.LicensePanel, "HeaderDivider", Theme.Line)
-    UI.LicenseClose = Button.new(UI.LicensePanel, "Close", "", false, "x", function()
-        Modal:Close()
-    end, Runtime, allowed)
-    UI.LicenseClose.Root.BackgroundTransparency = 1
-    UI.LicenseClose.Label.Visible = false
-    UI.LicenseClose.Root:SetAttribute("ActionLabel", Localization:Get("close"))
     UI.LicenseScroll = create("ScrollingFrame", {
-        Name = "OfferContent",
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        ScrollBarThickness = 3,
-        ScrollBarImageColor3 = Theme.AccentDark,
-        ScrollingDirection = Enum.ScrollingDirection.Y,
-        VerticalScrollBarInset = Enum.ScrollBarInset.None,
-        ElasticBehavior = Enum.ElasticBehavior.WhenScrollable,
+        Name = "LicenseContent", BackgroundTransparency = 1, BorderSizePixel = 0,
+        ScrollBarThickness = 3, ScrollBarImageColor3 = Theme.AccentDark,
+        ScrollingDirection = Enum.ScrollingDirection.Y, VerticalScrollBarInset = Enum.ScrollBarInset.None,
+        ElasticBehavior = Enum.ElasticBehavior.WhenScrollable, ClipsDescendants = true,
     }, UI.LicensePanel)
     UI.LicenseBody = frame(UI.LicenseScroll, "Body")
     UI.LicenseBody.BackgroundTransparency = 1
-    UI.LicenseHeroA = localized(UI.LicenseBody, "HeroA", "offerHeroA", 40, Theme.Text, Theme.Bold)
-    UI.LicenseHeroB = localized(UI.LicenseBody, "HeroB", "offerHeroB", 40, Theme.Accent, Theme.Bold)
+    UI.LicenseHeroA = localized(UI.LicenseBody, "HeroA", "offerHeroA", 36, Theme.Text, Theme.Bold)
+    UI.LicenseHeroB = localized(UI.LicenseBody, "HeroB", "offerHeroB", 36, Theme.Accent, Theme.Bold)
     UI.LicenseSubhead = localized(UI.LicenseBody, "Subhead", "offerSubhead", 14, Theme.Secondary)
-    UI.LicenseHeroA.TextTruncate = Enum.TextTruncate.AtEnd
-    UI.LicenseHeroB.TextTruncate = Enum.TextTruncate.AtEnd
-    UI.LicenseSubhead.TextWrapped = true
-    UI.LicenseSubhead.TextTruncate = Enum.TextTruncate.AtEnd
-    UI.LicenseJumpLife = Button.new(UI.LicenseBody, "LifetimeShortcut", "Lifetime · $12", false, nil, function()
+    UI.LicenseSubhead.TextWrapped, UI.LicenseSubhead.TextTruncate = true, Enum.TextTruncate.AtEnd
+    UI.LicenseJumpLife = Button.new(UI.LicenseBody, "LifetimeShortcut", "", false, nil, function()
         UI.LicenseScroll.CanvasPosition = Vector2.new(0, math.max(0, UI.LicenseCards[1].Rest.Y.Offset - 8))
     end, Runtime, allowed)
-    UI.LicenseJumpMonth = Button.new(UI.LicenseBody, "MonthlyShortcut", "Monthly · $5", false, nil, function()
+    UI.LicenseJumpMonth = Button.new(UI.LicenseBody, "MonthlyShortcut", "", false, nil, function()
         UI.LicenseScroll.CanvasPosition = Vector2.new(0, math.max(0, UI.LicenseCards[2].Rest.Y.Offset - 8))
     end, Runtime, allowed)
     Localization:Bind(UI.LicenseJumpLife.Label, "offerJumpLifetime")
     Localization:Bind(UI.LicenseJumpMonth.Label, "offerJumpMonthly")
     UI.LicenseCards = { self:BuildCard(true), self:BuildCard(false) }
     UI.LicenseTerms = localized(UI.LicenseBody, "Terms", "offerTerms", 12, Theme.Secondary)
-    UI.LicenseTerms.TextWrapped = true
-    UI.LicenseTerms.TextTruncate = Enum.TextTruncate.AtEnd
-    UI.LicenseTerms.TextXAlignment = Enum.TextXAlignment.Center
-    UI.LicenseStore = Button.new(UI.LicensePanel, "Storefront", "", false, "link", function()
-        self:Copy()
-    end, Runtime, allowed)
+    UI.LicenseTerms.TextWrapped, UI.LicenseTerms.TextXAlignment = true, Enum.TextXAlignment.Center
+    UI.LicenseStore = Button.new(UI.LicensePanel, "Storefront", "", false, "link", function() self:Copy() end, Runtime, allowed)
     UI.LicenseStore.BaseColor = Theme.Surface
+    UI.LicenseStore.Label.TextTruncate = Enum.TextTruncate.AtEnd
     UI.LicenseStore:Apply()
-    UI.LicenseHaveKey = Button.new(UI.LicensePanel, "HaveKey", "", false, nil, function()
-        self:BackToKey()
-    end, Runtime, allowed)
+    UI.LicenseHaveKey = Button.new(UI.LicensePanel, "HaveKey", "", false, nil, function() self:BackToKey() end, Runtime, allowed)
     UI.LicenseHaveKey.Root.BackgroundTransparency = 1
     Localization:Bind(UI.LicenseHaveKey.Label, "offerHaveKey")
     UI.LicenseHaveKey.Label.TextColor3 = Theme.Accent
-    UI.LicenseNotNow = Button.new(UI.LicensePanel, "NotNow", "", false, nil, function()
-        Modal:Close()
-    end, Runtime, allowed)
-    UI.LicenseNotNow.Root.BackgroundTransparency = 1
-    Localization:Bind(UI.LicenseNotNow.Label, "offerNotNow")
     self:Refresh()
 end
 function LicenseOffer:Layout(settle)
-    if not UI.LicensePanel then
-        return
-    end
-    if settle then
-        self:CancelReveal()
-        Animation:CancelProperty(UI.LicensePanel, "Position")
-        Animation:CancelProperty(UI.LicenseScale, "Scale")
-        UI.LicensePanel.GroupTransparency = 0
-        UI.LicenseScale.Scale = 1
-    end
-    local safe = UI.Stage.AbsoluteSize
-    local width = math.max(160, math.min(920, safe.X - 24))
-    local height = math.max(180, math.min(640, safe.Y - 24))
-    local inner = width - 40
-    local stacked = width < 650
-    local compact = width < 420
-    local footer = compact and 162 or 118
-    local viewportHeight = math.max(40, height - 72 - footer - 12)
+    if not UI.LicensePanel then return end
+    if settle then self:CancelReveal() end
+    local size = UI.Pages.AbsoluteSize
+    local width, height = math.max(100, size.X), math.max(100, size.Y)
+    local inner, compact = width - 12, width < 490
+    local tiny = height < 180
+    local header = tiny and 0 or 52
+    local footer = tiny and 54 or compact and 106 or 60
+    local viewportHeight = math.max(20, height - header - footer)
     UI.LicensePanel.Size = UDim2.fromOffset(width, height)
-    UI.LicensePanel.Position = UDim2.fromOffset(safe.X / 2, safe.Y / 2)
-    place(UI.LicenseMark, 20, 20, 114, 30)
-    place(UI.LicenseTag, 160, 22, math.max(1, width - 230), 28)
-    UI.LicenseTag.Visible = width >= 420
-    place(UI.LicenseClose.Root, width - 56, 12, 44, 44)
-    place(UI.LicenseDivider, 0, 65, width, 1)
-    place(UI.LicenseScroll, 20, 74, inner, viewportHeight)
-    local font = math.clamp(math.floor(inner / 16), 22, 40)
+    place(UI.LicenseMark, 0, 4, 114, 30)
+    place(UI.LicenseTag, 132, 6, math.max(1, width - 132), 26)
+    UI.LicenseMark.Visible = not tiny
+    UI.LicenseTag.Visible = not tiny and width >= 250
+    UI.LicenseDivider.Visible = not tiny
+    UI.LicenseHaveKey.Root.Visible = not tiny
+    place(UI.LicenseDivider, 0, 42, inner, 1)
+    place(UI.LicenseScroll, 0, header, inner, viewportHeight)
+    local font = math.clamp(math.floor(inner / 17), 22, 36)
+    local a = TextMetrics:Get(Localization:Get("offerHeroA"), font, Theme.Bold, 10000)
+    local b = TextMetrics:Get(Localization:Get("offerHeroB"), font, Theme.Bold, 10000)
+    if a and b and math.max(a.X, b.X) > inner then
+        font = math.max(16, math.floor(font * inner / math.max(a.X, b.X)))
+        a = TextMetrics:Get(Localization:Get("offerHeroA"), font, Theme.Bold, 10000)
+        b = TextMetrics:Get(Localization:Get("offerHeroB"), font, Theme.Bold, 10000)
+    end
     UI.LicenseHeroA.TextSize, UI.LicenseHeroB.TextSize = font, font
     local heroHeight = font + 10
-    local first = TextMetrics:Get(Localization:Get("offerHeroA"), font, Theme.Bold, 10000)
-    local second = TextMetrics:Get(Localization:Get("offerHeroB"), font, Theme.Bold, 10000)
-    local oneLine = first and second and first.X + second.X + 14 <= inner
-    if oneLine then
-        local left = math.max(0, (inner - first.X - second.X - 14) / 2)
-        place(UI.LicenseHeroA, left, 0, first.X + 2, heroHeight)
-        place(UI.LicenseHeroB, left + first.X + 14, 0, second.X + 2, heroHeight)
-    else
-        place(UI.LicenseHeroA, 0, 0, inner, heroHeight)
-        place(UI.LicenseHeroB, 0, heroHeight, inner, heroHeight)
-    end
-    local subtitleY = oneLine and heroHeight + 8 or heroHeight * 2 + 6
-    place(UI.LicenseSubhead, 0, subtitleY, inner, 38)
-    UI.LicenseSubhead.TextXAlignment = Enum.TextXAlignment.Center
+    local oneLine = a and b and a.X + b.X + 12 <= inner
+    local left = oneLine and math.max(0, (inner - a.X - b.X - 12) / 2) or 0
+    place(UI.LicenseHeroA, left, 0, oneLine and a.X + 2 or inner, heroHeight)
+    place(UI.LicenseHeroB, oneLine and left + a.X + 12 or 0, oneLine and 0 or heroHeight, oneLine and b.X + 2 or inner, heroHeight)
     UI.LicenseHeroA.TextXAlignment = oneLine and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center
     UI.LicenseHeroB.TextXAlignment = UI.LicenseHeroA.TextXAlignment
+    local subtitleY = (oneLine and heroHeight or heroHeight * 2) + 6
+    place(UI.LicenseSubhead, 0, subtitleY, inner, 40)
+    UI.LicenseSubhead.TextXAlignment = Enum.TextXAlignment.Center
+    local stacked, cardsY = inner < 560, subtitleY + 56
     UI.LicenseJumpLife.Root.Visible, UI.LicenseJumpMonth.Root.Visible = stacked, stacked
-    local cardsY = subtitleY + 54
     if stacked then
         local half = (inner - 8) / 2
         place(UI.LicenseJumpLife.Root, 0, cardsY, half, 44)
         place(UI.LicenseJumpMonth.Root, half + 8, cardsY, half, 44)
         cardsY = cardsY + 56
     end
-    local cardHeight = stacked and 320 or 330
-    local gap = 16
-    local lifeWidth = stacked and inner or math.floor((inner - gap) * 0.57)
-    local monthlyWidth = stacked and inner or inner - gap - lifeWidth
+    local gap, cardHeight = 16, 324
+    local lifeWidth = stacked and inner or math.floor((inner - gap) * 0.56)
     for index, card in ipairs(UI.LicenseCards) do
-        local cardWidth = index == 1 and lifeWidth or monthlyWidth
+        local cw = stacked and inner or index == 1 and lifeWidth or inner - gap - lifeWidth
         local x = (index == 1 or stacked) and 0 or lifeWidth + gap
         local y = stacked and cardsY + (index - 1) * (cardHeight + gap) or cardsY
         card.Rest = UDim2.fromOffset(x, y)
-        if settle then
-            Animation:CancelProperty(card.Root, "Position")
-            Animation:CancelProperty(card.Root, "GroupTransparency")
-            Animation:CancelProperty(card.Scale, "Scale")
-        end
-        card.Root.Position = card.Rest
-        card.Root.Size = UDim2.fromOffset(cardWidth, cardHeight)
-        card.Root.GroupTransparency = settle and 0 or card.Root.GroupTransparency
-        card.Scale.Scale = settle and 1 or card.Scale.Scale
-        local small = cardWidth < 280
-        local priceSize = small and 62 or stacked and 72 or 82
-        card.Price.TextSize = priceSize
-        card.Title.TextSize = small and 24 or 28
-        place(card.Badge, 20, 18, math.min(164, cardWidth - 40), 26)
+        card.Root.Position, card.Root.Size = card.Rest, UDim2.fromOffset(cw, cardHeight)
+        place(card.Facet, cw * 0.62, -80, cw * 0.6, cardHeight + 170)
+        card.Sweep.Size = UDim2.fromOffset(44, cardHeight + 100)
+        place(card.Badge, 20, 18, math.max(1, math.min(176, cw - 40)), 26)
         place(card.BadgeLabel, 8, 0, math.max(1, card.Badge.Size.X.Offset - 16), 26)
-        place(card.Title, 20, 58, cardWidth - 40, 40)
-        place(card.Price, 20, 101, cardWidth - 40, priceSize + 12)
-        local currencyY = 101 + priceSize + 16
-        place(card.Currency, 22, currencyY, cardWidth - 44, 24)
-        place(card.Term, 22, currencyY + 28, cardWidth - 44, 24)
-        card.Seal.Root.Visible = cardWidth >= 280
-        place(card.Seal.Root, cardWidth - 94, 105, 64, 64)
-        place(card.Buy.Root, 20, cardHeight - 64, cardWidth - 40, 44)
+        local titleSize = cw < 290 and 24 or 29
+        local titleBounds = TextMetrics:Get(card.Title.Text, titleSize, Theme.Bold, 10000)
+        if titleBounds and titleBounds.X > cw - 40 then titleSize = math.max(14, math.floor(titleSize * (cw - 40) / titleBounds.X)) end
+        card.Title.TextSize = titleSize
+        place(card.Title, 20, 58, cw - 40, 40)
+        local keyVisible = cw >= 245
+        card.Seal.Root.Visible = keyVisible
+        place(card.Seal.Root, cw - 102, 102, 72, 110)
+        local priceWidth = cw - 40 - (keyVisible and 90 or 0)
+        local priceSize = cw < 280 and 64 or 74
+        local bounds = TextMetrics:Get(card.Price.Text, priceSize, Theme.Bold, 10000)
+        if bounds and bounds.X > priceWidth then priceSize = math.max(42, math.floor(priceSize * priceWidth / bounds.X)) end
+        card.Price.TextSize = priceSize
+        place(card.Price, 20, 103, math.max(1, priceWidth), 88)
+        place(card.Currency, 22, 190, cw - 44, 24)
+        place(card.Term, 22, 220, cw - 44, 24)
+        place(card.Buy.Root, 20, cardHeight - 64, cw - 40, 48)
+        place(card.Arrow.Root, cw - 72, 16, 16, 16)
         self:Paint(card, card.Hovered)
     end
-    local notesY = cardsY + (stacked and cardHeight * 2 + gap or cardHeight) + 16
-    place(UI.LicenseTerms, 0, notesY, inner, 42)
-    local canvasHeight = notesY + 50
-    UI.LicenseBody.Size = UDim2.fromOffset(inner, canvasHeight)
-    UI.LicenseScroll.CanvasSize = UDim2.fromOffset(0, canvasHeight)
-    UI.LicenseScroll.ScrollingEnabled = canvasHeight > viewportHeight
-    if compact then
-        place(UI.LicenseStore.Root, 20, height - 156, inner, 44)
-        place(UI.LicenseHaveKey.Root, 20, height - 106, inner, 44)
-        place(UI.LicenseNotNow.Root, 20, height - 56, inner, 44)
+    local termsY = cardsY + (stacked and cardHeight * 2 + gap or cardHeight) + 16
+    local termsBounds = TextMetrics:Get(Localization:Get("offerTerms"), 12, Theme.Font, inner)
+    local termsHeight = math.max(44, termsBounds and math.ceil(termsBounds.Y) + 6 or 44)
+    place(UI.LicenseTerms, 0, termsY, inner, termsHeight)
+    local canvas = termsY + termsHeight + 8
+    UI.LicenseBody.Size, UI.LicenseScroll.CanvasSize = UDim2.fromOffset(inner, canvas), UDim2.fromOffset(0, canvas)
+    UI.LicenseScroll.ScrollingEnabled = canvas > viewportHeight
+    local old = UI.LicenseScroll.CanvasPosition
+    UI.LicenseScroll.CanvasPosition = Vector2.new(0, math.clamp(old.Y, 0, math.max(0, canvas - viewportHeight)))
+    if tiny then
+        place(UI.LicenseStore.Root, 0, height - 50, inner, 44)
+    elseif compact then
+        place(UI.LicenseStore.Root, 0, height - 100, inner, 44)
+        place(UI.LicenseHaveKey.Root, 0, height - 50, inner, 44)
     else
-        place(UI.LicenseStore.Root, 20, height - 106, inner, 44)
-        place(UI.LicenseHaveKey.Root, 20, height - 56, math.max(1, inner - 124), 44)
-        place(UI.LicenseNotNow.Root, width - 132, height - 56, 112, 44)
+        local haveWidth = math.min(190, math.floor(inner * 0.34))
+        place(UI.LicenseStore.Root, 0, height - 50, inner - haveWidth - 10, 44)
+        place(UI.LicenseHaveKey.Root, inner - haveWidth, height - 50, haveWidth, 44)
     end
     self:FitLabels()
-    Accessibility:Layout()
 end
 function LicenseOffer:FitLabels()
-    for _, card in ipairs(UI.LicenseCards) do
-        local width = math.max(1, card.Buy.Root.Size.X.Offset - 20)
-        local font = 12
-        local bounds = TextMetrics:Get(
-            Localization:Get(card.Primary and "offerChooseLifetime" or "offerChooseMonthly"),
-            font,
-            Theme.Medium,
-            10000
-        )
-        if bounds and bounds.X > width then
-            font = math.max(10, math.floor(font * width / bounds.X))
-        end
-        card.Buy.Label.TextSize = font
-        card.Buy.Label.TextWrapped = true
+    for _, card in ipairs(UI.LicenseCards or {}) do
+        local width, font = math.max(1, card.Buy.Root.Size.X.Offset - 56), 15
+        local bounds = TextMetrics:Get(Localization:Get(card.Primary and "offerChooseLifetime" or "offerChooseMonthly"), font, Theme.Medium, 10000)
+        if bounds and bounds.X > width then font = math.max(10, math.floor(font * width / bounds.X)) end
+        card.Buy.Label.TextSize, card.Buy.Label.TextWrapped = font, true
         card.BadgeLabel.TextSize = 10
     end
 end
 function LicenseOffer:BackToKey()
-    if not self:Interactive() then
-        return false
-    end
+    if not self:Interactive() then return false end
     local keyboard = Accessibility.Keyboard
-    Modal:Close(true)
     Navigation:Go("Auth", true)
     Accessibility.Keyboard = keyboard
     UI.AuthScroll.CanvasPosition = Vector2.new(0, 0)
-    if Accessibility.Keyboard then
-        Accessibility:Focus(UI.Key)
-    else
-        UI.Key:CaptureFocus()
-    end
+    if keyboard then Accessibility:Focus(UI.Key) else UI.Key:CaptureFocus() end
     return true
 end
-function LicenseOffer:Open()
-    if not State.Alive or not State.Visible or State.Activity ~= "Idle" or not self:Enabled() then
-        return false, "unavailable"
-    end
-    if State.Modal == "licenses" then
-        return true
-    end
-    Modal:Close(true)
-    UI.Key:ReleaseFocus(false)
-    closeLanguage()
-    self:Build() -- Lazy: never construct pricing cards on the cold auth path.
+function LicenseOffer:Reveal()
     self:CancelReveal()
-    State.ModalToken = State.ModalToken + 1
-    local generation = State.ModalToken
-    Accessibility:CaptureModal()
-    State.Modal = "licenses"
-    Modal.Config = nil
-    reconcile()
-    UI.Overlay.Visible = true
-    UI.Result.Visible, UI.ProgressPanel.Visible = false, false
-    UI.LicensePanel.Visible = true
-    self:Layout(false)
-    self:Refresh()
-    UI.LicensePanel.GroupTransparency = Settings.ReducedMotion and 0 or 1
-    UI.LicenseScale.Scale = Settings.ReducedMotion and 1 or 0.97
-    local destination = UI.LicensePanel.Position
-    UI.LicensePanel.Position = destination + UDim2.fromOffset(0, Settings.ReducedMotion and 0 or 18)
-    Animation:To(UI.Backdrop, { BackgroundTransparency = 0.48 }, Motion.Enter)
-    Animation:To(UI.LicensePanel, { GroupTransparency = 0, Position = destination }, Motion.Enter)
-    Animation:To(UI.LicenseScale, { Scale = 1 }, Motion.Enter)
-    UI.LicenseScroll.CanvasPosition = Vector2.new(0, 0)
+    if not self:Interactive() or not UI.LicensePanel then return end
+    local generation, token = self.Generation, State.PageToken
     for index, card in ipairs(UI.LicenseCards) do
         card.Root.GroupTransparency = Settings.ReducedMotion and 0 or 1
-        card.Root.Position = card.Rest + UDim2.fromOffset(0, Settings.ReducedMotion and 0 or 10)
+        card.Root.Position = card.Rest + UDim2.fromOffset(0, Settings.ReducedMotion and 0 or 14)
         card.Scale.Scale = Settings.ReducedMotion and 1 or 0.985
-        local thread = Runtime:Later(Settings.ReducedMotion and 0 or 0.035 * index, function()
-            if State.Modal == "licenses" and generation == State.ModalToken then
+        self.RevealTasks[#self.RevealTasks + 1] = Runtime:Later(Settings.ReducedMotion and 0 or 0.055 * (index - 1), function()
+            if self.Generation == generation and State.PageToken == token and self:Interactive() then
                 Animation:To(card.Root, { GroupTransparency = 0, Position = card.Rest }, Motion.Enter)
                 Animation:To(card.Scale, { Scale = 1 }, Motion.Enter)
             end
         end)
-        self.RevealTasks[#self.RevealTasks + 1] = thread
     end
-    return true
+end
+function LicenseOffer:Open()
+    if not State.Alive or not State.Visible or State.Activity ~= "Idle" or not self:Enabled() then return false, "unavailable" end
+    Modal:Close(true)
+    return Navigation:Go("Licenses")
 end
 function LicenseOffer:BuildTriggers()
-    UI.LicenseNav = Button.new(UI.Sidebar, "Licenses", "", false, "key", function()
-        self:Open()
-    end)
+    UI.LicenseNav = Button.new(UI.Sidebar, "Licenses", "", false, "key", function() self:Open() end)
     UI.LicenseNav.Root.BackgroundTransparency = 1
     UI.LicenseNav.Label.Visible = false
     UI.LicenseNav.Icon.Root.Position = UDim2.new(0.5, -10, 0.5, 0)
-    UI.LicenseNav.Icon:SetColor(Theme.Accent)
-    UI.LicenseInline = Button.new(UI.AuthBody, "LicenseKeys", "", false, "key", function()
-        self:Open()
-    end, Runtime, AuthField.Interactive)
-    UI.LicenseInline.BaseColor = Theme.Surface
-    UI.LicenseInline:Apply()
-    UI.LicenseInline.Icon:SetColor(Theme.Accent)
-    Localization:Bind(UI.LicenseInline.Label, "offerView")
     self:Refresh()
 end
 
@@ -5123,13 +5044,10 @@ function Experience:Layout(width, y)
     place(UI.GameName, 68, 8, math.max(1, width - 80), 24)
     place(UI.GameSupport, 68, 34, math.max(1, width - 80), 22)
     y = y + 76
-    local offer, community = LicenseOffer:Enabled(), Community:Enabled()
-    UI.LicenseInline.Root.Visible = offer
+    local community = Community:Enabled()
     UI.CommunityDetails.Root.Visible = community
-    if offer or community then
-        local half = offer and community and (width - 8) / 2 or width
-        place(UI.LicenseInline.Root, 0, y, half, 44)
-        place(UI.CommunityDetails.Root, offer and half + 8 or 0, y, half, 44)
+    if community then
+        place(UI.CommunityDetails.Root, 0, y, width, 44)
         y = y + 52
     end
     Community:Layout(width, y)
@@ -5149,7 +5067,6 @@ function Experience:Layout(width, y)
         UI.PasteKey,
         UI.ForgetKey,
         UI.Options,
-        UI.LicenseInline,
         UI.CommunityDetails,
         UI.PreferenceLanguage,
         UI.PreferenceScale,
@@ -6079,47 +5996,51 @@ local function buildProducts()
     UI.CatalogEmpty.Size = UDim2.fromScale(1, 1)
     UI.CatalogEmpty.Visible = false
 end
+function Navigation:PageRoot(page)
+    return page == "Auth" and UI.Auth or page == "Products" and UI.Products or UI.LicensePanel
+end
 function Navigation:Refresh()
     UI.AuthNav.Root:SetAttribute("ActionLabel", Localization:Get("tipAuth"))
     UI.ProductsNav.Root:SetAttribute("ActionLabel", Localization:Get("tipProducts"))
     UI.RefreshNav.Root:SetAttribute("ActionLabel", Localization:Get("tipRefresh"))
     UI.LanguageToggle:SetAttribute("ActionLabel", Localization:Get("tipLanguage"))
     Localization:Bind(UI.Breadcrumb, "authorization", "Text", function()
+        if State.Page == "Licenses" then return Localization:Get("offerTab") end
         return State.Page == "Auth" and (Localization:Get("main") .. "  •  " .. Localization:Get("authorization"))
             or (Localization:Get("product") .. "  •  " .. productName(State.SelectedProduct or State.Products[1]))
     end)
     UI.AuthNav.Icon:SetColor(State.Page == "Auth" and Theme.Accent or Theme.Muted)
     UI.ProductsNav.Icon:SetColor(State.Page == "Products" and Theme.Accent or Theme.Muted)
-    UI.ProductMark.Visible = State.Page == "Products" and State.Layout.Height >= 380
+    LicenseOffer:Refresh()
+    UI.ProductMark.Visible = State.Page == "Products" and State.Layout.Height >= 500
     UI.Copyright.Visible = State.Page == "Auth" and State.Layout.Height >= 320
     if UI.ContextPage ~= State.Page then
         UI.ContextIcon.Root:Destroy()
-        UI.ContextIcon = Icon.new(UI.Sidebar, State.Page == "Auth" and "home" or "grid", Theme.Muted, 18)
+        UI.ContextIcon = Icon.new(UI.Sidebar, State.Page == "Auth" and "home" or State.Page == "Products" and "grid" or "key", Theme.Muted, 18)
         UI.ContextPage = State.Page
     end
-    if State.Layout.ContextY then
-        place(UI.ContextIcon.Root, State.Layout.Rail / 2 - 9, State.Layout.ContextY, 18, 18)
-    end
+    if State.Layout.ContextY then place(UI.ContextIcon.Root, State.Layout.Rail / 2 - 9, State.Layout.ContextY, 18, 18) end
     UI.ContextIcon.Root.Visible = State.Layout.Height >= 380
-    local selected = State.Page == "Auth" and UI.AuthNav.Root or UI.ProductsNav.Root
+    local selected = State.Page == "Auth" and UI.AuthNav.Root or State.Page == "Products" and UI.ProductsNav.Root or UI.LicenseNav.Root
     Animation:To(UI.ActiveNav, { Position = selected.Position + UDim2.fromOffset(4, 4) }, Motion.Page)
 end
 function Navigation:Go(page, force)
-    if not State.Alive or (not force and not canInteract()) then
-        return false
-    end
-    if page ~= "Auth" and page ~= "Products" then
-        return false
+    if not State.Alive or (not force and not canInteract()) then return false end
+    if page ~= "Auth" and page ~= "Products" and page ~= "Licenses" then return false end
+    if page == "Licenses" then
+        if not LicenseOffer:Enabled() then return false end
+        LicenseOffer:Build() -- Lazy: the cold key prompt does not construct pricing geometry.
     end
     closeLanguage()
     Accessibility:Clear()
     UI.AuthArtwork:CancelReveal()
+    LicenseOffer:CancelReveal()
     State.PageToken = State.PageToken + 1
     local token = State.PageToken
-    local previous = State.Page == "Auth" and UI.Auth or UI.Products
-    local destination = page == "Auth" and UI.Auth or UI.Products
-    State.Page = page
-    State.Focused = false
+    local previous, destination = self:PageRoot(State.Page), self:PageRoot(page)
+    local oldIndex = State.Page == "Auth" and 1 or State.Page == "Products" and 2 or 3
+    local newIndex = page == "Auth" and 1 or page == "Products" and 2 or 3
+    State.Page, State.Focused = page, false
     UI.Key.TextEditable = State.Visible and page == "Auth" and State.Activity ~= "Validating"
     UI.Key.Active = UI.Key.TextEditable
     UI.Key:ReleaseFocus(false)
@@ -6132,13 +6053,10 @@ function Navigation:Go(page, force)
     end
     previous.Visible = false
     Animation:CancelTree(previous)
-    destination.Visible = true
-    destination.GroupTransparency = 1
-    destination.Position = UDim2.fromOffset(Settings.ReducedMotion and 0 or (page == "Products" and 18 or -18), 0)
+    destination.Visible, destination.GroupTransparency = true, 1
+    destination.Position = UDim2.fromOffset(Settings.ReducedMotion and 0 or (newIndex > oldIndex and 18 or -18), 0)
     Animation:To(destination, { GroupTransparency = 0, Position = UDim2.fromOffset(0, 0) }, Motion.Page, function()
-        if token == State.PageToken then
-            previous.Visible = false
-        end
+        if token == State.PageToken then previous.Visible = false end
     end)
     for _, card in ipairs(Cards) do
         card.Dim.BackgroundTransparency = 1
@@ -6147,11 +6065,9 @@ function Navigation:Go(page, force)
     end
     Cards.Hovered = nil
     Responsive:Update()
-    if page == "Auth" then
-        UI.AuthArtwork:Reveal()
-    else
-        Cards:Reveal()
-    end
+    if page == "Auth" then UI.AuthArtwork:Reveal()
+    elseif page == "Products" then Cards:Reveal()
+    else LicenseOffer:Reveal() end
     return true
 end
 local function displayFontSize(text, width, maximum)
@@ -6391,16 +6307,18 @@ function Responsive:Update()
         UI.CustomAvatar.Size = UI.Avatar.Root.Size
     end
     place(UI.Sidebar, 0, 0, rail, height)
-    local navY = height >= 380 and header + 50 or header + 22
+    local compactRail = height < 260
+    local navStep = compactRail and 44 or 48
+    local navY = height >= 380 and header + 50 or header + (compactRail and 4 or 8)
     place(UI.AuthNav.Root, rail / 2 - 22, navY, 44, 44)
-    place(UI.ProductsNav.Root, rail / 2 - 22, navY + 48, 44, 44)
-    place(UI.RefreshNav.Root, rail / 2 - 22, navY + (State.Page == "Products" and height >= 380 and 132 or 96), 44, 44)
+    place(UI.ProductsNav.Root, rail / 2 - 22, navY + navStep, 44, 44)
+    place(UI.RefreshNav.Root, rail / 2 - 22, navY + navStep * 3 + 4, 44, 44)
     UI.ProductsNav.Root.Visible = height >= 280
-    UI.RefreshNav.Root.Visible = height >= 350
-    place(UI.LicenseNav.Root, rail / 2 - 22, navY + (State.Page == "Products" and 180 or 144), 44, 44)
-    UI.LicenseNav.Root.Visible = LicenseOffer:Enabled() and height >= 380
-    place(UI.ActiveNav, rail / 2 - 18, (State.Page == "Auth" and navY or navY + 48) + 4, 36, 36)
-    place(UI.ProductMark, rail / 2 - 16, navY + 94, 32, 32)
+    UI.RefreshNav.Root.Visible = height >= 380
+    place(UI.LicenseNav.Root, rail / 2 - 22, navY + navStep * 2, 44, 44)
+    UI.LicenseNav.Root.Visible = LicenseOffer:Enabled() and height >= navY + navStep * 2 + 44
+    place(UI.ActiveNav, rail / 2 - 18, navY + (State.Page == "Auth" and 0 or State.Page == "Products" and navStep or navStep * 2) + 4, 36, 36)
+    place(UI.ProductMark, rail / 2 - 16, navY + 202, 32, 32)
     place(UI.Breadcrumb, rail, header + 6, contentWidth - 8, 28)
     UI.Breadcrumb.TextTruncate = Enum.TextTruncate.AtEnd
     local hasSocial = false
@@ -6418,9 +6336,14 @@ function Responsive:Update()
     place(UI.Copyright, rail, height - 45, math.max(50, footerWidth - (Settings.Version ~= "" and 84 or 0)), 26)
     place(UI.Version, rail + footerWidth - 72, height - 45, 72, 26)
     UI.Version.Visible = State.Page == "Auth" and height >= 320
-    place(UI.LanguageToggle, rail / 2 - 22, height - 82, 44, 74)
+    local shortRail = height < 350
+    -- In a very short landscape window, use the brand-icon slot instead of
+    -- overlapping the third tab. Full text branding remains in the header.
+    UI.BrandLogo.Root.Visible = not compactRail
+    place(UI.LanguageToggle, rail / 2 - 22, compactRail and (header - 44) / 2 or height - (shortRail and 46 or 82), 44, shortRail and 44 or 74)
+    UI.LanguageChevron.Root.Visible = not shortRail
     place(UI.LanguageChevron.Root, 16, 4, 12, 12)
-    place(UI.LanguageFlag, 9, 38, 26, 26)
+    place(UI.LanguageFlag, 9, shortRail and 9 or 38, 26, 26)
     LanguageController:Layout(width, height, rail)
     local communityDockHeight = Community:DockHeight(contentWidth, height)
     local authHeight = math.max(52, contentHeight - communityDockHeight)
@@ -6429,6 +6352,7 @@ function Responsive:Update()
     Community:LayoutDock(rail, pageTop + contentHeight - communityDockHeight, contentWidth, height)
     Navigation:Refresh()
     Cards:Layout()
+    LicenseOffer:Layout(true)
     Modal:Layout(true)
     Toasts:Layout()
     Accessibility:Layout()
@@ -6474,7 +6398,7 @@ local function bindInput()
             return
         end
         local pos = pointer(input)
-        for _, button in ipairs({ UI.UserAction, UI.Minimize.Root }) do
+        for _, button in ipairs({ UI.UserAction, UI.Minimize.Root, UI.LanguageToggle }) do
             if button.Visible then
                 local hit = button.AbsolutePosition - UI.Stage.AbsolutePosition
                 local size = button.AbsoluteSize
@@ -6554,8 +6478,10 @@ local function bindInput()
         if input.KeyCode == Enum.KeyCode.Escape then
             if LanguageController.Open then
                 closeLanguage()
-            elseif (State.Modal == "result" or State.Modal == "licenses") and State.Activity == "Idle" then
+            elseif State.Modal == "result" and State.Activity == "Idle" then
                 Modal:Close()
+            elseif State.Page == "Licenses" and State.Activity == "Idle" then
+                Navigation:Go("Auth")
             end
         elseif input.KeyCode == Settings.ToggleKey and not Services.Input:GetFocusedTextBox() then
             if State.Visible then
@@ -7039,8 +6965,8 @@ end
 function Loader:SetLicenseOfferEnabled(enabled)
     if State.Alive then
         Settings.LicenseOfferEnabled = enabled == true
-        if not LicenseOffer:Enabled() and State.Modal == "licenses" then
-            Modal:Close(true)
+        if not LicenseOffer:Enabled() and State.Page == "Licenses" then
+            Navigation:Go("Auth", true)
         end
         LicenseOffer:Refresh()
         Responsive:Update()
@@ -7059,8 +6985,8 @@ function Loader:SetLicenseStoreLink(link)
         return self, false
     end
     Settings.LicenseStoreLink = link
-    if not LicenseOffer:Enabled() and State.Modal == "licenses" then
-        Modal:Close(true)
+    if not LicenseOffer:Enabled() and State.Page == "Licenses" then
+        Navigation:Go("Auth", true)
     end
     LicenseOffer:Refresh()
     Responsive:Update()
@@ -7091,7 +7017,7 @@ function Loader:SetLanguage(language)
     Responsive:Update()
     Localization:Refresh(true)
     Experience:Refresh()
-    if State.Modal == "licenses" then
+    if State.Page == "Licenses" then
         LicenseOffer:Layout(true)
     end
     Accessibility:HideTooltip()
@@ -7292,7 +7218,7 @@ function Loader:SetReducedMotion(value)
             UI.ResultScale.Scale = 1
             UI.ProgressPanel.GroupTransparency = 0
             UI.Backdrop.BackgroundTransparency = State.Modal and 0.48 or 1
-            if State.Modal == "licenses" then
+            if State.Page == "Licenses" then
                 LicenseOffer:Layout(true)
             end
         end
@@ -7532,11 +7458,9 @@ function Loader:Show()
     Animation:To(UI.Scale, { Scale = State.VisibilityRestScale or 1 }, Motion.Enter)
     Animation:To(UI.Window, { Position = destination }, Motion.Enter)
     Animation:To(UI.Window, { GroupTransparency = 0 }, Motion.Enter)
-    if State.Page == "Auth" then
-        UI.AuthArtwork:Reveal()
-    else
-        Cards:Reveal()
-    end
+    if State.Page == "Auth" then UI.AuthArtwork:Reveal()
+    elseif State.Page == "Products" then Cards:Reveal()
+    else LicenseOffer:Reveal() end
     return self
 end
 function Loader:Hide()
