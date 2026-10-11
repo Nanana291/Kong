@@ -4,7 +4,7 @@
 -- Prices are presentation only; checkout and license entitlement remain with the store/host.
 -- PLAK is native GUI geometry. Catalog thumbnails are real Roblox content; optional HTTP only enriches metadata.
 local ModuleStartedAt = os.clock()
-local Loader = { AuthHandoffVersion = 2, FlowInitVersion = 1, VerifiedPresentationVersion = 1 }
+local Loader = { AuthHandoffVersion = 2, FlowInitVersion = 1, FlowInitPromptVersion = 1, VerifiedPresentationVersion = 1 }
 local Services = {
     Players = game:GetService("Players"),
     Tween = game:GetService("TweenService"),
@@ -6657,6 +6657,282 @@ function Loader:SetOnGetKey(callback)
     end
     return self
 end
+-- Native PUBLIC prompt lifecycle for the documented first-statement flow_init.
+-- Returns only user input; the protected host confirms real signed auth later.
+-- Never contains gameplay or grants an entitlement from an input string.
+function Loader:AwaitFlowKey(currentKey, options)
+    if not State.Alive then
+        error("[PLAK] Key prompt is already closed", 0)
+    end
+    options = type(options) == "table" and options or {}
+    local KEY_LINK_HASH = type(options.RewardHash) == "string" and options.RewardHash or "64ff8fd713a475fe6fffd9d067759a40"
+    local GET_KEY_URL = type(options.GetKeyUrl) == "string" and options.GetKeyUrl or ""
+    local SAVE_FOLDER = "PLAK"
+    local SAVE_FILE = SAVE_FOLDER .. "/saved_key.txt"
+    local SLOT = "__PlakFlowInitBridgeV1"
+    local OWNER = "PLAK/flow_init/v1"
+
+    local function environment()
+        if type(getgenv) == "function" then
+            local ok, value = pcall(getgenv)
+            if ok and type(value) == "table" then
+                return value
+            end
+        end
+        return type(_G) == "table" and _G or nil
+    end
+    local env = environment()
+    if not env then
+        self:Destroy()
+        error("[PLAK] Shared executor environment is unavailable", 0)
+    end
+    local function primitive(name, direct)
+        local value = env[name]
+        if type(value) == "function" then
+            return value
+        end
+        if type(direct) == "function" then
+            return direct
+        end
+        value = type(_G) == "table" and _G[name] or nil
+        return type(value) == "function" and value or nil
+    end
+    local function trim(value)
+        return type(value) == "string" and value:gsub("^%s+", ""):gsub("%s+$", "") or ""
+    end
+    local function getFlow()
+        local value = env.FlowAuth
+        if type(value) ~= "table" and type(_G) == "table" then
+            value = _G.FlowAuth
+        end
+        return type(value) == "table" and value or nil
+    end
+    local old = env[SLOT]
+    if type(old) == "table" and old.Owner == OWNER then
+        if old.ScriptStarted then
+            if old.Loader ~= self then
+                self:Destroy()
+            end
+            error("[PLAK] Script() already started in this session; restart the executor to run it again", 0)
+        end
+        if not old.Finished then
+            if old.Loader ~= self then
+                self:Destroy()
+            end
+            error(
+                "[PLAK] A FlowAuth run is still unconfirmed. Close its UI and restart the executor before retrying",
+                0
+            )
+        end
+        if old.Loader then
+            pcall(old.Loader.Destroy, old.Loader)
+        end
+    end
+    -- A single-flight UI transport, NOT authentication proof or a cached license.
+    local bridge = { Owner = OWNER, Stage = "initializing", Finished = false, Flow = getFlow() }
+    env[SLOT] = bridge
+    env.premuser = false
+    local submit = Instance.new("BindableEvent")
+    submit.Name = "PlakFlowInitSubmission"
+    local chosenKey
+    local files = {
+        Read = primitive("readfile", readfile),
+        Exists = primitive("isfile", isfile),
+        Write = primitive("writefile", writefile),
+        Delete = primitive("delfile", delfile),
+        MakeFolder = primitive("makefolder", makefolder),
+        IsFolder = primitive("isfolder", isfolder),
+    }
+    local function clearCredential()
+        chosenKey = nil
+    end
+    local function stopOriginalRun()
+        local flow = bridge.Flow
+        if flow and type(flow.Stop) == "function" then
+            local ok = pcall(flow.Stop, flow)
+            if ok then
+                bridge.Finished = true
+            end
+            return ok
+        end
+        return false
+    end
+    local function abort(message)
+        bridge.Cancelled = true
+        bridge.Finished = not bridge.Submitted
+        bridge.Stage = "cancelled"
+        clearCredential()
+        if not bridge.Submitted then
+            if submit then
+                submit:Fire()
+            end
+        else
+            stopOriginalRun()
+        end
+        if bridge.Loader then
+            pcall(bridge.Loader.Destroy, bridge.Loader)
+        end
+        if submit then
+            submit:Destroy()
+            submit = nil
+        end
+        error(message, 0) -- flow_init errors CANCEL the run; never return nil as a fallback key.
+    end
+    local function readSavedKey()
+        if not files.Read or not files.Exists then
+            return nil
+        end
+        local ok, exists = pcall(files.Exists, SAVE_FILE)
+        if not ok or not exists then
+            return nil
+        end
+        local readOk, value = pcall(files.Read, SAVE_FILE)
+        local key = readOk and trim(value) or ""
+        return #key > 0 and #key <= 512 and key or nil
+    end
+    local function deleteSavedKey()
+        if not files.Delete then
+            return false
+        end
+        if files.Exists then
+            local ok, exists = pcall(files.Exists, SAVE_FILE)
+            if not ok then
+                return false
+            end
+            if not exists then
+                return true
+            end
+        end
+        local ok, result = pcall(files.Delete, SAVE_FILE)
+        return ok and result ~= false
+    end
+    -- Called ONLY by the protected, post-auth body. Do not cache merely submitted keys.
+    bridge.SaveAcceptedKey = function()
+        local key = chosenKey
+        clearCredential()
+        if not files.Write or type(key) ~= "string" or key == "" then
+            return false
+        end
+        if files.MakeFolder then
+            local existsOk, exists = false, false
+            if files.IsFolder then
+                existsOk, exists = pcall(files.IsFolder, SAVE_FOLDER)
+            end
+            if not existsOk or not exists then
+                pcall(files.MakeFolder, SAVE_FOLDER)
+            end
+        end
+        local ok, result = pcall(files.Write, SAVE_FILE, key)
+        return ok and result ~= false
+    end
+    bridge.ClearCredential = clearCredential
+    local cachedLink = ""
+    local function getKeyLink()
+        if cachedLink ~= "" then
+            return cachedLink
+        end
+        local flow = getFlow()
+        if flow and type(flow.GetKeyLink) == "function" then
+            -- Documented helper: no RequireKey, script execution or extra auth.
+            bridge.Flow = bridge.Flow or flow
+            local ok, value = pcall(flow.GetKeyLink, flow, KEY_LINK_HASH)
+            if ok then
+                cachedLink = trim(value)
+            end
+        end
+        if cachedLink == "" then
+            cachedLink = trim(GET_KEY_URL) -- Public gateway URL if helper isn't present before auth.
+        end
+        return cachedLink
+    end
+    local loader = self
+    bridge.Loader = loader
+    for _, name in ipairs({
+        "SetTitle",
+        "SetVersion",
+        "SetSuccessBehavior",
+        "SetOnKeySubmit",
+        "ConfirmExternalAuth",
+        "CancelExternalAuth",
+        "SetOnAuthorized",
+        "SetOnDestroyed",
+        "SetOnForgetKey",
+        "SetOnGetKey",
+        "SetKeyLink",
+        "AutoValidate",
+        "GetState",
+        "Destroy",
+    }) do
+        if type(loader[name]) ~= "function" then
+            abort("[PLAK] Remote UI is outdated: missing " .. name .. "; publish updated UIs/PlakUi.lua")
+        end
+    end
+    if loader.FlowInitVersion ~= 1 then
+        abort("[PLAK] Publish the flow_init-compatible PlakUi.lua at SOURCE_URL")
+    end
+    loader:SetTitle("Plak")
+    loader:SetVersion("1.1.0")
+    loader:SetSuccessBehavior("destroy")
+    loader:SetOnGetKey(getKeyLink)
+    if cachedLink ~= "" then
+        loader:SetKeyLink(cachedLink)
+    end
+    loader:SetOnForgetKey(files.Delete and deleteSavedKey or nil)
+    loader:SetOnDestroyed(function()
+        if bridge.Accepted then
+            return
+        end -- Successful UI teardown must NOT stop the protected game.
+        bridge.Cancelled = true
+        bridge.Stage = "cancelled"
+        clearCredential()
+        if bridge.Submitted then
+            stopOriginalRun()
+        else
+            bridge.Finished = true
+            if submit then
+                submit:Fire()
+            end
+        end
+    end)
+    loader:SetOnKeySubmit(function(key)
+        if bridge.Submitted or bridge.Cancelled then
+            return false
+        end
+        key = trim(key)
+        if key == "" or #key > 512 then
+            return false
+        end
+        chosenKey = key
+        bridge.Flow = bridge.Flow or getFlow()
+        bridge.Submitted = true
+        bridge.Stage = "awaiting-flowauth"
+        submit:Fire() -- Submission ONLY: no success message, premium flag or gameplay.
+        return true
+    end)
+    bridge.Stage = "prompt"
+    print("[PLAK] Key UI ready v1.5; waiting for FlowAuth confirmation.")
+    local initialKey = trim(currentKey)
+    if #initialKey > 512 then
+        abort("[PLAK] script_key exceeds FlowAuth's 512-byte limit")
+    end
+    if initialKey == "" then
+        initialKey = readSavedKey() or ""
+    end
+    if initialKey ~= "" then
+        loader:AutoValidate(initialKey)
+    end
+    -- Check the latch before waiting: already-set script_key / fast submission cannot be lost.
+    if not bridge.Submitted and not bridge.Cancelled then
+        submit.Event:Wait()
+    end
+    submit:Destroy()
+    submit = nil
+    if bridge.Cancelled or type(chosenKey) ~= "string" or chosenKey == "" then
+        abort("[PLAK] Key prompt cancelled")
+    end
+    return chosenKey -- FlowAuth checks it NEXT. An input string is never authentication proof.
+end
+
 -- One-shot pre-auth submission. The protected host must call ConfirmExternalAuth later.
 function Loader:SetOnKeySubmit(callback)
     assert(callback == nil or type(callback) == "function", "SetOnKeySubmit expects a function or nil")
