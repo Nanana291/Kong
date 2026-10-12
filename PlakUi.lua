@@ -38,6 +38,11 @@ local Theme = {
     Success = Color3.fromRGB(98, 177, 106),
     Warning = Color3.fromRGB(183, 153, 92),
     Danger = Color3.fromRGB(203, 96, 105),
+    ToggleTrackOff = Color3.fromRGB(22, 20, 28),
+    ToggleTrackOn = Color3.fromRGB(47, 43, 68),
+    ToggleKnobOff = Color3.fromRGB(48, 44, 58),
+    ToggleKnobOn = Color3.fromRGB(119, 113, 180),
+    ToggleKnobDisabled = Color3.fromRGB(36, 35, 43),
     Radius = 3,
     InputRadius = 2,
     PanelRadius = 6,
@@ -50,6 +55,7 @@ local Theme = {
 local Motion = {
     Hover = TweenInfo.new(0.10, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
     Press = TweenInfo.new(0.10, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+    Toggle = TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
     Enter = TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
     Exit = TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.In),
     Page = TweenInfo.new(0.24, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
@@ -76,6 +82,7 @@ local Settings = {
     UIScale = 1,
     ReducedMotion = false,
     KeyVisible = false,
+    RememberMe = true, -- Preserve prior autosave behavior until the user explicitly opts out.
 }
 local State = {
     Name = "Initializing",
@@ -471,6 +478,8 @@ local function reconcile()
         State.Name = "AuthCompleting"
     elseif State.Activity == "ForgettingKey" then
         State.Name = "ForgettingKey"
+    elseif State.Activity == "SavingPreferences" then
+        State.Name = "SavingPreferences"
     elseif State.Activity == "Launching" then
         State.Name = "ProductLaunching"
     elseif State.Modal == "progress" then
@@ -1142,6 +1151,8 @@ do
             authFailed = "Could not verify access",
             pasteKey = "Paste",
             forgetKey = "Forget",
+            rememberMe = "Remember Me",
+            keyRememberUnavailable = "Saved-key management is unavailable",
             options = "Options",
             keyForgotten = "Saved key removed. This does not revoke an active session.",
             keyForgetFailed = "Could not remove the saved key",
@@ -1177,6 +1188,8 @@ do
             authFailed = "No se pudo verificar el acceso",
             pasteKey = "Pegar",
             forgetKey = "Olvidar",
+            rememberMe = "Recordarme",
+            keyRememberUnavailable = "No se puede gestionar la key guardada",
             options = "Opciones",
             keyForgotten = "Key guardada eliminada. No revoca una sesión activa.",
             keyForgetFailed = "No se pudo eliminar la key guardada",
@@ -1212,6 +1225,8 @@ do
             authFailed = "Não foi possível verificar o acesso",
             pasteKey = "Colar",
             forgetKey = "Esquecer",
+            rememberMe = "Lembrar de mim",
+            keyRememberUnavailable = "Gerenciamento da key salva indisponível",
             options = "Opções",
             keyForgotten = "Key salva removida. Isso não revoga uma sessão ativa.",
             keyForgetFailed = "Não foi possível remover a key salva",
@@ -1247,6 +1262,8 @@ do
             authFailed = "Не удалось подтвердить доступ",
             pasteKey = "Вставить",
             forgetKey = "Забыть",
+            rememberMe = "Запомнить меня",
+            keyRememberUnavailable = "Управление сохранённым ключом недоступно",
             options = "Настройки",
             keyForgotten = "Сохранённый ключ удалён. Активный доступ не отозван.",
             keyForgetFailed = "Не удалось удалить сохранённый ключ",
@@ -4014,7 +4031,7 @@ function Accessibility:Order()
             add(UI.GetKey)
             add(UI.PasteKey)
             add(UI.KeyFeedbackMore)
-            add(UI.ForgetKey)
+            add(UI.RememberMe)
             add(UI.Options)
             add(UI.CommunityDetails)
             add(UI.PreferenceLanguage)
@@ -5251,7 +5268,7 @@ function Experience:SavePrefs()
         self:RefreshOptions()
         return false
     end
-    local ok = pcall(function()
+    local ok, result = pcall(function()
         local make = capability("makefolder")
         local exists = capability("isfolder")
         if make and (not exists or not exists("PLAK")) then
@@ -5259,7 +5276,7 @@ function Experience:SavePrefs()
         end
         local http = game:GetService("HttpService")
         -- Whitelist only UI preferences. Never persist tier, authorization or key.
-        write(
+        return write(
             "PLAK/ui_preferences.json",
             http:JSONEncode({
                 Version = 1,
@@ -5267,9 +5284,11 @@ function Experience:SavePrefs()
                 UIScale = Settings.UIScale,
                 ReducedMotion = Settings.ReducedMotion,
                 CommunityDismissed = Settings.CommunityDismissed,
+                RememberMe = Settings.RememberMe,
             })
         )
     end)
+    ok = ok and result ~= false
     if ok then
         self.PrefDirty = false
     end
@@ -5305,6 +5324,9 @@ function Experience:LoadPrefs()
         if type(data.CommunityDismissed) == "boolean" then
             Settings.CommunityDismissed = data.CommunityDismissed
         end
+        if type(data.RememberMe) == "boolean" then
+            Settings.RememberMe = data.RememberMe
+        end
     end)
 end
 function Experience:PreferenceChanged()
@@ -5316,6 +5338,52 @@ function Experience:PreferenceChanged()
         self:SavePrefs()
     end)
     self:RefreshOptions()
+end
+function Experience:CanRememberKey()
+    return type(State.Callbacks.ForgetKey) == "function"
+        and capability("readfile") ~= nil
+        and capability("writefile") ~= nil
+        and capability("isfile") ~= nil
+end
+function Experience:SetRememberMe(value)
+    if not AuthField.Interactive() then
+        return false, "busy"
+    end
+    if not self:CanRememberKey() then
+        return false, "storage_unavailable"
+    end
+    value = value == true
+    if Settings.RememberMe == value then
+        return true
+    end
+    -- Block reentry if executor file operations or the host deletion callback yield.
+    State.Activity = value and "SavingPreferences" or "ForgettingKey"
+    reconcile()
+    Settings.RememberMe = value
+    self:PreferenceChanged()
+    Runtime:Cancel(self.PrefTimer)
+    self.PrefTimer = nil
+    local saved = self:SavePrefs() -- Commit opt-out before a quick restart can hydrate an old value.
+    local ok, removed = true, true
+    if not value and State.Alive then
+        ok, removed = pcall(State.Callbacks.ForgetKey, Loader)
+    end
+    if not State.Alive then
+        return false, "destroyed"
+    end
+    State.Activity = "Idle"
+    reconcile()
+    self:RefreshOptions()
+    if not ok or removed ~= true then
+        -- Keep OFF even if deletion fails: the host must still skip saving and loading.
+        Loader:Toast({ Type = "warning", Subtitle = Localization:Get("keyForgetFailed") })
+        return false, "delete_failed"
+    end
+    if not saved then
+        Loader:Toast({ Type = "warning", Subtitle = Localization:Get(self.PrefSaveState) })
+    end
+    -- Do not erase the field, change premium state or revoke the current session.
+    return true
 end
 function Experience:RefreshOptions()
     if UI.DiagnosticsToggle then
@@ -5338,8 +5406,9 @@ function Experience:RefreshOptions()
     Localization:Bind(UI.PreferenceMotion.Label, Settings.ReducedMotion and "motionReduced" or "motionFull")
     Localization:Bind(UI.PreferenceNote, self.PrefSaveState or "prefSession")
     local busy = State.Activity ~= "Idle"
+    local rememberAvailable = self:CanRememberKey()
     UI.PasteKey:SetDisabled(busy or not capability("getclipboard"))
-    UI.ForgetKey:SetDisabled(busy or type(State.Callbacks.ForgetKey) ~= "function")
+    UI.RememberMe:SetDisabled(busy or not rememberAvailable)
     UI.Options:SetDisabled(busy)
     if UI.CommunityRestore then
         UI.CommunityRestore:SetDisabled(busy or not Settings.CommunityEnabled or Community:Link() == "")
@@ -5351,15 +5420,16 @@ function Experience:RefreshOptions()
         "DisabledReason",
         not capability("getclipboard") and Localization:Get("clipboardUnavailable") or ""
     )
-    UI.ForgetKey.Root:SetAttribute(
+    UI.RememberMe.Root:SetAttribute("ActionLabel", Localization:Get("rememberMe"))
+    UI.RememberMe.Root:SetAttribute(
         "DisabledReason",
-        type(State.Callbacks.ForgetKey) ~= "function" and Localization:Get("keyForgetUnavailable") or ""
+        not rememberAvailable and Localization:Get("keyRememberUnavailable") or ""
     )
     Localization:Bind(UI.KeyActionsNote, "empty", "Text", function()
         if not capability("getclipboard") then
             return Localization:Get("clipboardUnavailable")
-        elseif type(State.Callbacks.ForgetKey) ~= "function" then
-            return Localization:Get("keyForgetUnavailable")
+        elseif not rememberAvailable then
+            return Localization:Get("keyRememberUnavailable")
         end
         return ""
     end)
@@ -5497,14 +5567,14 @@ function Experience:FitButton(button)
     if not button then
         return
     end
-    local inset = button.Icon and button.Icon.Root.Visible and 44 or 16
+    local inset = button.Track and 52 or button.Icon and button.Icon.Root.Visible and 44 or 16
     local width = math.max(1, button.Root.Size.X.Offset - inset)
     button.Label.TextSize = width < 120 and 12 or 13
     button.Label.TextWrapped = true
 end
 function Experience:Layout(width, y)
     local hit = math.max(44, math.ceil(44 / math.max(0.1, State.Layout.Scale or 1)))
-    place(UI.ForgetKey.Root, 0, y, math.min(width, math.max(hit, 150)), hit)
+    place(UI.RememberMe.Root, 0, y, math.min(width, math.max(hit, 220)), hit)
     UI.KeyActionsNote.Visible = false -- Feedback uses the reserved guidance slot.
     y = y + hit + 8
     UI.AuthLicense.Visible = State.Authorized
@@ -5550,7 +5620,7 @@ function Experience:Layout(width, y)
     )
     for _, button in ipairs({
         UI.GetKey,
-        UI.ForgetKey,
+        UI.RememberMe,
         UI.Options,
         UI.PreferenceLanguage,
         UI.PreferenceScale,
@@ -5581,9 +5651,46 @@ function Experience:Build()
     UI.PasteKey.Root:SetAttribute("ActionLabel", Localization:Get("pasteKey"))
     UI.PasteGlyph = Icon.new(UI.PasteKey.Root, "copy", Theme.Secondary, 18)
     place(UI.PasteGlyph.Root, 13, 13, 18, 18)
-    UI.ForgetKey = secondary("ForgetKey", "forgetKey", function()
-        self:Forget()
+    UI.RememberMe = secondary("RememberMe", "rememberMe", function()
+        self:SetRememberMe(not Settings.RememberMe)
     end)
+    do
+        local toggle = UI.RememberMe
+        toggle.Root.BackgroundTransparency = 1
+        toggle.Root:SetAttribute("ControlType", "Toggle")
+        toggle.Label.TextXAlignment = Enum.TextXAlignment.Left
+        toggle.Label.Size = UDim2.new(1, -52, 1, 0)
+        toggle.Track = frame(toggle.Root, "SwitchTrack", Theme.ToggleTrackOff)
+        toggle.Track.AnchorPoint = Vector2.new(1, 0.5)
+        toggle.Track.Position = UDim2.new(1, -4, 0.5, 0)
+        toggle.Track.Size = UDim2.fromOffset(36, 14)
+        corner(toggle.Track, 7)
+        toggle.Knob = frame(toggle.Track, "SwitchKnob", Theme.ToggleKnobOff)
+        toggle.Knob.AnchorPoint = Vector2.new(0.5, 0.5)
+        toggle.Knob.Size = UDim2.fromOffset(10, 10)
+        toggle.Knob.Position = UDim2.new(0, Settings.RememberMe and 29 or 7, 0.5, 0)
+        corner(toggle.Knob, 5)
+        function toggle:Apply()
+            local on = Settings.RememberMe
+            local track = self.Disabled and Theme.Input or on and Theme.ToggleTrackOn or Theme.ToggleTrackOff
+            local knob = self.Disabled and Theme.ToggleKnobDisabled or on and Theme.ToggleKnobOn or Theme.ToggleKnobOff
+            if not self.Disabled and self.Hovered then
+                track = track:Lerp(Theme.Text, 0.035)
+            end
+            if not self.Disabled and self.Pressed then
+                knob = knob:Lerp(track, 0.12)
+            end
+            self.Root.Selectable = not self.Disabled
+            self.Root:SetAttribute("Value", on)
+            self.Label.TextColor3 = self.Disabled and Theme.Muted or Theme.Text
+            Animation:To(self.Track, { BackgroundColor3 = track }, Motion.Toggle)
+            Animation:To(self.Knob, {
+                BackgroundColor3 = knob,
+                Position = UDim2.new(0, on and 29 or 7, 0.5, 0),
+            }, Motion.Toggle)
+        end
+        toggle:Apply()
+    end
     UI.Options = Button.new(UI.Sidebar, "PreferencesToggle", "", false, "tools", function()
         Loader:ShowPreferences(not self.OptionsOpen)
     end, Runtime, canInteract)
@@ -7375,7 +7482,7 @@ function Loader:AwaitFlowKey(currentKey, options)
         error(message, 0) -- flow_init errors CANCEL the run; never return nil as a fallback key.
     end
     local function readSavedKey()
-        if not files.Read or not files.Exists then
+        if not Settings.RememberMe or not files.Read or not files.Exists then
             return nil
         end
         local ok, exists = pcall(files.Exists, SAVE_FILE)
@@ -7387,26 +7494,30 @@ function Loader:AwaitFlowKey(currentKey, options)
         return #key > 0 and #key <= 512 and key or nil
     end
     local function deleteSavedKey()
-        if not files.Delete then
-            return false
-        end
         if files.Exists then
             local ok, exists = pcall(files.Exists, SAVE_FILE)
-            if not ok then
-                return false
-            end
-            if not exists then
+            if ok and not exists then
                 return true
             end
         end
-        local ok, result = pcall(files.Delete, SAVE_FILE)
-        return ok and result ~= false
+        if files.Delete then
+            local ok, result = pcall(files.Delete, SAVE_FILE)
+            if ok and result ~= false then
+                return true
+            end
+        end
+        -- Some executors can read/write files but cannot delete them.
+        if files.Write then
+            local ok, result = pcall(files.Write, SAVE_FILE, "")
+            return ok and result ~= false
+        end
+        return false
     end
     -- Called ONLY by the protected, post-auth body. Do not cache merely submitted keys.
     bridge.SaveAcceptedKey = function()
         local key = chosenKey
         clearCredential()
-        if not files.Write or type(key) ~= "string" or key == "" then
+        if not Settings.RememberMe or not files.Write or type(key) ~= "string" or key == "" then
             return false
         end
         if files.MakeFolder then
@@ -7459,7 +7570,10 @@ function Loader:AwaitFlowKey(currentKey, options)
     if cachedLink ~= "" then
         loader:SetKeyLink(cachedLink)
     end
-    loader:SetOnForgetKey(files.Delete and deleteSavedKey or nil)
+    loader:SetOnForgetKey((files.Delete or files.Write) and deleteSavedKey or nil)
+    if not Settings.RememberMe then
+        deleteSavedKey()
+    end
     loader:SetOnDestroyed(function()
         if bridge.Accepted then
             return
@@ -8090,6 +8204,7 @@ function Loader:GetState()
         Activity = State.Activity,
         Visible = State.Visible,
         KeyVisible = Settings.KeyVisible,
+        RememberMe = Settings.RememberMe,
         AuthError = State.AuthError == true,
         Authorized = State.Authorized,
         Language = Settings.Language,
