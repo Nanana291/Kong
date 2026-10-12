@@ -104,3 +104,5 @@ jobs:
           fi
           git commit -m "Load supported games from remote Games.json"
           git push
+
+# trigger-2
