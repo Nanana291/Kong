@@ -69,7 +69,7 @@ local Settings = {
     KeyLink = KEY_REWARD_URL,
     Expiry = 0,
     Language = "en",
-    User = "Past Owl",
+    User = "Hi!",
     Artwork = nil,
     SuccessBehavior = "destroy",
     ToggleKey = Enum.KeyCode.RightShift,
@@ -2318,6 +2318,10 @@ function GameMedia:Thumbnail(id)
     -- GameThumbnail uses a placeId; GameIcon uses a universeId. Native content works without file APIs.
     return "rbxthumb://type=GameThumbnail&id=" .. string.format("%.0f", id) .. "&w=768&h=432"
 end
+function GameMedia:GameIcon(universeId)
+    local id = self:PlaceId(universeId)
+    return id and ("rbxthumb://type=GameIcon&id=" .. string.format("%.0f", id) .. "&w=150&h=150") or ""
+end
 function GameMedia:RequestFunction()
     local direct = capability("request") or capability("http_request")
     if direct then
@@ -2378,17 +2382,64 @@ function GameMedia:Get(url, json, valid)
     end)
     return decoded and type(data) == "table" and data or nil
 end
+function GameMedia:Materialize(url, id, kind, valid)
+    local host = type(url) == "string" and url:match("^https://([^/]+)/")
+    local write, custom = capability("writefile"), capability("getcustomasset") or capability("getsynasset")
+    if
+        not host
+        or not (host == "rbxcdn.com" or host:match("^[%w%-%.]+%.rbxcdn%.com$"))
+        or not write
+        or not custom
+        or not valid()
+    then
+        return nil
+    end
+    local bytes = self:Get(url, false, valid)
+    if not bytes or bytes:sub(1, 8) ~= "\137PNG\13\10\26\10" or not valid() then
+        return nil
+    end
+    local ok, image = pcall(function()
+        local path = "PlakUi_" .. kind .. "_" .. string.format("%.0f", id) .. "_" .. self.Serial .. ".png"
+        if not valid() or write(path, bytes) == false or not valid() then
+            return nil
+        end
+        return custom(path)
+    end)
+    return ok and valid() and assetId(image) or nil
+end
 function GameMedia:Resolve(placeId, valid, partial)
     local info = partial or { Image = self:Thumbnail(placeId) }
-    local universe = self:Get(
-        "https://apis.roblox.com/universes/v1/places/" .. string.format("%.0f", placeId) .. "/universe",
-        true,
-        valid
-    )
-    local universeId = universe and self:PlaceId(universe.universeId)
+    local current = placeId == self:PlaceId(game.PlaceId)
+    local universeId = current and self:PlaceId(game.GameId) or nil
+    if not universeId then
+        local universe = self:Get(
+            "https://apis.roblox.com/universes/v1/places/" .. string.format("%.0f", placeId) .. "/universe",
+            true,
+            valid
+        )
+        universeId = universe and self:PlaceId(universe.universeId)
+    end
     if universeId then
         info.UniverseId = universeId
         local suffix = string.format("%.0f", universeId)
+        if current then
+            -- The Home identity is a universe GameIcon, NEVER a place's rectangular thumbnail.
+            info.Icon = self:GameIcon(universeId)
+            local icons = self:Get(
+                "https://thumbnails.roblox.com/v1/games/icons?universeIds="
+                    .. suffix
+                    .. "&size=150x150&format=Png&isCircular=false",
+                true,
+                valid
+            )
+            local icon = icons and type(icons.data) == "table" and icons.data[1]
+            if type(icon) == "table" and tonumber(icon.targetId) == universeId and icon.state == "Completed" then
+                info.Icon = self:Materialize(icon.imageUrl, universeId, "icon", valid) or info.Icon
+            end
+            if valid() and Experience then
+                Experience:RefreshGame()
+            end
+        end
         local games = self:Get("https://games.roblox.com/v1/games?universeIds=" .. suffix, true, valid)
         local item = games and type(games.data) == "table" and games.data[1]
         if
@@ -2412,34 +2463,7 @@ function GameMedia:Resolve(placeId, valid, partial)
             and type(set.thumbnails) == "table"
             and set.thumbnails[1]
         local url = type(thumb) == "table" and thumb.state == "Completed" and thumb.imageUrl
-        local host = type(url) == "string" and url:match("^https://([^/]+)/")
-        local write, custom = capability("writefile"), capability("getcustomasset") or capability("getsynasset")
-        -- Only Roblox's image CDN is eligible for file materialization, never an arbitrary JSON URL.
-        if
-            host
-            and (host == "rbxcdn.com" or host:match("^[%w%-%.]+%.rbxcdn%.com$"))
-            and write
-            and custom
-            and valid()
-        then
-            local bytes = self:Get(url, false, valid)
-            if bytes and bytes:sub(1, 8) == "\137PNG\13\10\26\10" and valid() then
-                local imageOk, image = pcall(function()
-                    local path = "PlakUi_game_" .. string.format("%.0f", placeId) .. "_" .. self.Serial .. ".png"
-                    if not valid() then
-                        return nil
-                    end
-                    write(path, bytes)
-                    if not valid() then
-                        return nil
-                    end
-                    return custom(path)
-                end)
-                if imageOk and valid() and assetId(image) then
-                    info.Image = image
-                end
-            end
-        end
+        info.Image = self:Materialize(url, placeId, "game", valid) or info.Image
     end
     if not info.Name and valid() then
         local ok, data = pcall(function()
@@ -5252,7 +5276,9 @@ function Experience:RefreshGame()
     end)
     Localization:Bind(UI.GameSupport, matched and "inCatalog" or "notInCatalog")
     UI.GameSupport.TextColor3 = matched and Theme.AccentText or Theme.Secondary
-    local image = id and GameMedia:Thumbnail(id) or ""
+    local active = GameMedia.Active
+    local info = active and active.Id == id and active.Partial or id and GameMedia.Cache[id]
+    local image = info and info.Icon or GameMedia:GameIcon(game.GameId)
     if UI.GameImage.Image ~= image then
         UI.GameImage.Image = image
     end
@@ -5722,7 +5748,7 @@ function Experience:Build()
     UI.AuthLicense.TextTruncate = Enum.TextTruncate.AtEnd
     UI.CurrentGame = frame(UI.AuthBody, "CurrentGame", Theme.Input)
     corner(UI.CurrentGame, Theme.PanelRadius)
-    UI.GamePlaceholder = frame(UI.CurrentGame, "Thumbnail", Theme.Elevated)
+    UI.GamePlaceholder = frame(UI.CurrentGame, "GameIcon", Theme.Elevated)
     UI.GamePlaceholder.ClipsDescendants = true
     corner(UI.GamePlaceholder, Theme.PanelRadius)
     UI.GameFallback = Icon.new(UI.GamePlaceholder, "grid", Theme.Secondary, 20)
@@ -5743,7 +5769,7 @@ function Experience:Build()
             Scope = Scope.new(),
             Root = UI.CurrentGame,
             Name = UI.GameName,
-            Artwork = { Set = function() end }, -- Native thumbnail already owns the image.
+            Artwork = { Set = function() end }, -- The Home GameIcon owns the square identity image.
         }
         self.CurrentGameCard = card
         Runtime.Finalizers[#Runtime.Finalizers + 1] = function()
@@ -7806,7 +7832,7 @@ function Loader:SetUser(user, avatar)
         avatar = user.Avatar
         user = user.Name
     end
-    Settings.User = safeText(user or "Past Owl", 96)
+    Settings.User = safeText(user or "Hi!", 96)
     UI.User.Text = Settings.User
     Runtime:Disconnect(UI.AvatarConnection)
     UI.AvatarConnection = nil
