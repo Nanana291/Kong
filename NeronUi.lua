@@ -923,6 +923,7 @@ define("flag", copy(NativeIcons.profile))
 define("misc", {iconRing(.5,.28,.12),iconLine(.5,.42,.5,.76),iconLine(.5,.76,.23,.76),iconLine(.5,.76,.77,.76)})
 define("empty", {iconRing(.5,.5,.40),iconRing(.36,.43,.025),iconRing(.64,.43,.025),iconPoly({{.35,.67},{.43,.61},{.57,.61},{.65,.67}},false)})
 define("menu", {iconLine(.18,.28,.82,.28),iconLine(.18,.5,.82,.5),iconLine(.18,.72,.82,.72)})
+define("key", {iconRing(.3,.3,.18),iconLine(.43,.43,.84,.84),iconLine(.67,.67,.79,.55),iconLine(.77,.77,.89,.65)})
 define("discord", {iconRing(.5,.5,.32),iconRing(.37,.48,.025),iconRing(.63,.48,.025),iconLine(.33,.65,.67,.65)})
 define("brand", {iconBar(.24,.22,.58,.14,-28),iconBar(.18,.45,.58,.14,-28),iconBar(.12,.68,.58,.14,-28)})
 
@@ -9049,7 +9050,8 @@ function Premium.refresh(w)
     w.premiumExpiryRow.valueLabel.Text = expiry
     w.premiumPlanRow.valueLabel.Text = data.Plan or w:Translate("NotProvided")
     w.premiumPlanRow:SetVisible(data.Plan ~= nil)
-    w.premiumBuy:SetVisible(not data.Active)
+    w.premiumBuy:SetVisible(not data.Active and not (w.promotionDock and w.promotionDock.Root.Visible))
+    Premium.refreshPromotions(w)
 end
 function Premium.schedule(w)
     if w.premiumCancel then
@@ -9102,14 +9104,18 @@ function Premium.row(w, page, key)
     control:_render()
     return control
 end
-function Premium.copyPurchaseLink(w)
-    local url = "https://plak-hub.mysellauth.com/"
+function Premium.copyLink(w, url)
+    if w.destroyed or w.promotionCopyBusy then
+        return false
+    end
+    w.promotionCopyBusy = true
     local copy = Storage.resolve("setclipboard") or Storage.resolve("toclipboard")
     local ok, result = false, nil
     if copy then
         ok, result = pcall(copy, url)
     end
     local copied = ok and result ~= false
+    w.promotionCopyBusy = false
     if not w.destroyed then
         if copied then
             w:Notify("Copied")
@@ -9118,6 +9124,274 @@ function Premium.copyPurchaseLink(w)
         end
     end
     return copied
+end
+function Premium.copyPurchaseLink(w)
+    return Premium.copyLink(w, "https://plak-hub.mysellauth.com/")
+end
+function Premium.copyDiscordLink(w)
+    return Premium.copyLink(w, "https://dsc.gg/plak")
+end
+
+-- Shared native promotion surfaces: no entitlements, consumer Flags, HTTP or profile data.
+function Premium.action(w, parent, bag, key, store, primary)
+    local entry = { Key = key, Store = store }
+    local button, label
+    button = SettingsUI.button(w, parent, key, { Name = key, ZIndex = parent.ZIndex + 2 }, bag, function()
+        if entry.Busy or w.promotionCopyBusy or (store and w:GetPremiumStatus().Active) then
+            return
+        end
+        entry.Busy = true
+        local copied = store and Premium.copyPurchaseLink(w) or not store and Premium.copyDiscordLink(w)
+        entry.Busy = false
+        if w.destroyed or not button.Parent then
+            return
+        end
+        if entry.Timer then
+            bag:Remove(entry.Timer, true)
+        end
+        entry.Feedback = copied and "Copied" or "CopyLinkFailed"
+        Premium.refreshPromotions(w)
+        entry.Timer = bag:After(1.4, function()
+            entry.Timer, entry.Feedback = nil, nil
+            Premium.refreshPromotions(w)
+        end)
+    end, primary)
+    label = button:FindFirstChildOfClass("TextLabel")
+    entry.Root, entry.Label = button, label
+    w.promotionActions = w.promotionActions or {}
+    w.promotionActions[entry] = true
+    bag:Add(function()
+        w.promotionActions[entry] = nil
+    end)
+    return button
+end
+function Premium.refreshPromotions(w)
+    if w.destroyed then
+        return
+    end
+    local active = w:GetPremiumStatus().Active
+    for entry in pairs(w.promotionActions or {}) do
+        if entry.Root.Parent then
+            local disabled = entry.Store and active
+            entry.Root:SetAttribute("NeronPromotionDisabled", disabled)
+            entry.Root.Active, entry.Root.Selectable = not disabled, not disabled
+            Locale.bind(w, entry.Label, "Text", disabled and "PremiumActive" or entry.Feedback or entry.Key)
+            local renderer = w.systemRenders and w.systemRenders[entry.Root]
+            if renderer then
+                renderer:_render()
+            end
+        end
+    end
+end
+function Premium.surface(w, parent, name)
+    local root = U.frame(parent, {
+        Name = name,
+        ZIndex = parent.ZIndex + 1,
+        ClipsDescendants = true,
+    }, w, "SurfaceSecondary")
+    U.corner(root, T.Radius.Window)
+    local edge = U.stroke(root, w.theme.SurfaceEdge, 1)
+    U.bind(w, edge, "Color", "SurfaceEdge")
+    return root
+end
+function Premium.measure(w, label, width)
+    width = math.max(1, width)
+    w.promotionMeasures = w.promotionMeasures or setmetatable({}, { __mode = "k" })
+    local cached = w.promotionMeasures[label]
+    if
+        cached
+        and cached.Text == label.Text
+        and cached.Width == width
+        and cached.Size == label.TextSize
+        and cached.Font == label.Font
+    then
+        return cached.Height
+    end
+    local height = math.ceil(S.Text:GetTextSize(label.Text, label.TextSize, label.Font, Vector2.new(width, 1000)).Y) + 4
+    w.promotionMeasures[label] =
+        { Text = label.Text, Width = width, Size = label.TextSize, Font = label.Font, Height = height }
+    return height
+end
+function Premium.planCard(w, parent, bag, key, amount, period, caption, action, primary)
+    local card = { Root = Premium.surface(w, parent, key) }
+    card.Icon = Icons.make(card.Root, "key", 18, w.theme.Accent, w)
+    card.Title = SettingsUI.text(w, card.Root, key, { Font = Enum.Font.GothamBold, TextSize = 16 }, "TextPrimary")
+    card.Price = U.label(card.Root, amount, 34, w.theme.TextPrimary, { Font = Enum.Font.GothamBold })
+    U.bind(w, card.Price, "TextColor3", "TextPrimary")
+    card.Period = SettingsUI.text(w, card.Root, period)
+    card.Caption = SettingsUI.text(w, card.Root, caption, { TextWrapped = true, TextTruncate = Enum.TextTruncate.None })
+    card.Button = Premium.action(w, card.Root, bag, action, true, primary)
+    function card:Layout(width, height, hit, captionHeight)
+        self.Root.Size = UDim2.fromOffset(width, height)
+        self.Icon.Position = UDim2.fromOffset(16, 18)
+        self.Title.Position, self.Title.Size = UDim2.fromOffset(44, 14), UDim2.new(1, -60, 0, 26)
+        self.Price.Position, self.Price.Size = UDim2.fromOffset(16, 46), UDim2.fromOffset(80, 48)
+        self.Period.Position, self.Period.Size = UDim2.fromOffset(100, 64), UDim2.new(1, -116, 0, 24)
+        self.Caption.Position, self.Caption.Size = UDim2.fromOffset(16, 98), UDim2.new(1, -32, 0, captionHeight)
+        self.Button.Position, self.Button.Size = UDim2.fromOffset(16, height - hit - 16), UDim2.new(1, -32, 0, hit)
+    end
+    return card
+end
+function Premium.buildMembership(w, page)
+    SettingsUI.heading(w, page, "Membership", "MembershipBody")
+    local control = Components.row(page, { Name = "Membership", Persistent = false }, "Membership")
+    local monthly = Premium.planCard(
+        w,
+        control.row,
+        control.bag,
+        "LicenseMonthly",
+        "$5",
+        "PerMonth",
+        "MonthlyAccess",
+        "BuyMonthly",
+        false
+    )
+    local lifetime = Premium.planCard(
+        w,
+        control.row,
+        control.bag,
+        "LicenseLifetime",
+        "$12",
+        "OneTime",
+        "LifetimeAccess",
+        "BuyLifetime",
+        true
+    )
+    local hint = SettingsUI.text(w, control.row, "PurchaseCopyHint", {
+        TextWrapped = true,
+        TextTruncate = Enum.TextTruncate.None,
+    })
+    local store = U.label(control.row, "plak-hub.mysellauth.com", 12, w.theme.SystemText)
+    U.bind(w, store, "TextColor3", "SystemText")
+    local community = Premium.surface(w, control.row, "PlakCommunity")
+    local icon = Icons.make(community, "discord", 24, w.theme.Accent, w)
+    local title = SettingsUI.text(w, community, "CommunityTitle", {
+        Font = Enum.Font.GothamBold,
+        TextSize = 17,
+        TextWrapped = true,
+        TextTruncate = Enum.TextTruncate.None,
+    }, "TextPrimary")
+    local copy = SettingsUI.text(w, community, "CommunityBody", {
+        TextWrapped = true,
+        TextTruncate = Enum.TextTruncate.None,
+    })
+    local join = Premium.action(w, community, control.bag, "JoinDiscord", false, false)
+    local link = U.label(community, "dsc.gg/plak", 12, w.theme.SystemText)
+    U.bind(w, link, "TextColor3", "SystemText")
+    local inviteHint = SettingsUI.text(w, community, "CommunityCopyHint")
+    function control:layoutVisual()
+        local width = self.layoutWidth or self.row.AbsoluteSize.X / math.max(0.1, w.scale)
+        local hit = math.max(44, math.ceil(44 / math.max(0.1, w.scale)))
+        local stacked = width < 460
+        local gap = 12
+        local cardWidth = stacked and width or (width - gap) / 2
+        local captionHeight = math.max(
+            40,
+            Premium.measure(w, monthly.Caption, cardWidth - 32),
+            Premium.measure(w, lifetime.Caption, cardWidth - 32)
+        )
+        local cardHeight = 126 + captionHeight + hit
+        monthly.Root.Position = UDim2.fromOffset(0, 0)
+        lifetime.Root.Position = UDim2.fromOffset(stacked and 0 or cardWidth + gap, stacked and cardHeight + gap or 0)
+        monthly:Layout(cardWidth, cardHeight, hit, captionHeight)
+        lifetime:Layout(cardWidth, cardHeight, hit, captionHeight)
+        local y = stacked and cardHeight * 2 + gap or cardHeight
+        local hintHeight = math.max(36, Premium.measure(w, hint, width))
+        hint.Position, hint.Size = UDim2.fromOffset(0, y + 12), UDim2.fromOffset(width, hintHeight)
+        store.Position, store.Size = UDim2.fromOffset(0, y + hintHeight + 18), UDim2.fromOffset(width, 20)
+        y = y + hintHeight + 54
+        local wideCommunity = width >= 600
+        local titleHeight = math.max(30, Premium.measure(w, title, width - (wideCommunity and 280 or 68)))
+        local copyY = math.max(48, titleHeight + 24)
+        local copyHeight = math.max(42, Premium.measure(w, copy, width - (wideCommunity and 252 or 32)))
+        local joinY = wideCommunity and 24 or copyY + copyHeight + 12
+        local bottomY = joinY + hit + 6
+        local compactLink = width < 360
+        local ch = math.max(copyY + copyHeight + 20, bottomY + ((compactLink or wideCommunity) and 48 or 32))
+        community.Position, community.Size = UDim2.fromOffset(0, y), UDim2.fromOffset(width, ch)
+        icon.Position = UDim2.fromOffset(16, 17)
+        title.Position, title.Size =
+            UDim2.fromOffset(52, 12), UDim2.new(1, -(wideCommunity and 280 or 68), 0, titleHeight)
+        copy.Position, copy.Size =
+            UDim2.fromOffset(16, copyY), UDim2.new(1, -(wideCommunity and 252 or 32), 0, copyHeight)
+        join.Position = UDim2.fromOffset(wideCommunity and width - 196 or 16, joinY)
+        join.Size = wideCommunity and UDim2.fromOffset(180, hit) or UDim2.new(1, -32, 0, hit)
+        link.Position, link.Size =
+            UDim2.fromOffset(wideCommunity and width - 196 or 16, bottomY), UDim2.fromOffset(100, 20)
+        inviteHint.Position, inviteHint.Size =
+            UDim2.fromOffset(
+                wideCommunity and width - 196 or compactLink and 16 or 124,
+                bottomY + ((compactLink or wideCommunity) and 20 or 0)
+            ),
+            wideCommunity and UDim2.fromOffset(180, 20) or UDim2.new(1, -(compactLink and 32 or 140), 0, 20)
+        self.row.Size = UDim2.fromOffset(width, y + ch + 8)
+        self.label.Visible, self.lane.Visible = false, false
+    end
+    function control:renderVisual()
+        self.row.BackgroundTransparency = 1
+    end
+    w.membershipControl = control
+    control:_layout()
+    control:_render()
+end
+function Premium.buildDock(w)
+    local dock = { Root = U.frame(w.settingsPanel, { Name = "GrowthDock", ZIndex = w.settingsBody.ZIndex + 1 }, w) }
+    w.promotionDock = dock
+    dock.License = Premium.surface(w, dock.Root, "LicensePromotion")
+    dock.Community = Premium.surface(w, dock.Root, "DiscordPromotion")
+    dock.Title = SettingsUI.text(w, dock.License, "PlakPremium", { Font = Enum.Font.GothamBold }, "TextPrimary")
+    dock.Price = SettingsUI.text(w, dock.License, "LicensePrices")
+    dock.Buy = Premium.action(w, dock.License, w.bag, "BuyLicense", true, true)
+    dock.Store = U.label(dock.License, "plak-hub.mysellauth.com", 12, w.theme.SystemText)
+    U.bind(w, dock.Store, "TextColor3", "SystemText")
+    dock.CommunityTitle =
+        SettingsUI.text(w, dock.Community, "PlakCommunity", { Font = Enum.Font.GothamBold }, "TextPrimary")
+    dock.Invite = SettingsUI.text(w, dock.Community, "CommunityCopyHint")
+    dock.Join = Premium.action(w, dock.Community, w.bag, "JoinDiscord", false, false)
+    dock.DiscordLink = U.label(dock.Community, "dsc.gg/plak", 12, w.theme.SystemText)
+    U.bind(w, dock.DiscordLink, "TextColor3", "SystemText")
+    function dock:Layout(width, height, full, hit)
+        local left = full and (width - 12) * 0.57 or (width - 8) / 2
+        self.License.Position, self.License.Size = UDim2.fromOffset(0, 0), UDim2.fromOffset(left, height)
+        self.Community.Position, self.Community.Size =
+            UDim2.fromOffset(left + (full and 12 or 8), 0), UDim2.fromOffset(width - left - (full and 12 or 8), height)
+        for _, label in ipairs({
+            self.Title,
+            self.Price,
+            self.Store,
+            self.CommunityTitle,
+            self.Invite,
+            self.DiscordLink,
+        }) do
+            label.Visible = full
+        end
+        self.License.BackgroundTransparency, self.Community.BackgroundTransparency = full and 0 or 1, full and 0 or 1
+        self.Title.Position, self.Title.Size = UDim2.fromOffset(12, 8), UDim2.new(1, -24, 0, 22)
+        self.Price.Position, self.Price.Size = UDim2.fromOffset(12, 32), UDim2.new(1, -24, 0, 24)
+        self.Store.Position, self.Store.Size = UDim2.fromOffset(12, height - 24), UDim2.new(1, -24, 0, 20)
+        self.DiscordLink.Position, self.DiscordLink.Size = UDim2.fromOffset(12, height - 24), UDim2.new(1, -24, 0, 20)
+        self.CommunityTitle.Position, self.CommunityTitle.Size = UDim2.fromOffset(12, 8), UDim2.new(1, -24, 0, 22)
+        self.Invite.Position, self.Invite.Size = UDim2.fromOffset(12, 32), UDim2.new(1, -24, 0, 24)
+        for _, button in ipairs({ self.Buy, self.Join }) do
+            button.Position = UDim2.fromOffset(full and 12 or 0, full and 64 or 0)
+            button.Size = UDim2.new(1, full and -24 or 0, 0, hit)
+        end
+    end
+end
+function Premium.layoutDock(w, bodyX, bodyY, width, height)
+    local dock = w.promotionDock
+    if not dock then
+        return 0
+    end
+    local hit = math.max(44, math.ceil(44 / math.max(0.1, w.scale)))
+    local full = width >= 540 and height >= 400
+    local dh = full and 96 + hit or hit
+    dock.Root.Visible = w.settingsCategory ~= "Membership" and height >= dh + 92
+    if dock.Root.Visible then
+        dock.Root.Position, dock.Root.Size = UDim2.fromOffset(bodyX, bodyY + height - dh), UDim2.fromOffset(width, dh)
+        dock:Layout(width, dh, full, hit)
+    end
+    return dock.Root.Visible and dh + 12 or 0
 end
 function Premium.build(w, page)
     SettingsUI.heading(w, page, "Premium", "PremiumBody")
@@ -10093,6 +10367,72 @@ Locale.rows = {
     Themes = { "Themes", "Temas", "Темы", "Temas" },
     Language = { "Language", "Idioma", "Язык", "Idioma" },
     General = { "General", "General", "Общие", "Geral" },
+    Membership = {
+        "Membership",
+        "Licencias y comunidad",
+        "Доступ и сообщество",
+        "Licenças e comunidade",
+    },
+    MembershipBody = {
+        "Premium access or community. Your choice.",
+        "Acceso Premium o comunidad. Tú decides.",
+        "Premium-доступ или сообщество. Решать вам.",
+        "Acesso Premium ou comunidade. Você escolhe.",
+    },
+    LicenseMonthly = { "Monthly", "Mensual", "Месяц", "Mensal" },
+    LicenseLifetime = { "Lifetime", "De por vida", "Навсегда", "Vitalícia" },
+    PerMonth = { "/ month", "/ mes", "/ месяц", "/ mês" },
+    OneTime = { "one-time", "pago único", "один платёж", "pagamento único" },
+    MonthlyAccess = {
+        "Monthly Premium access",
+        "Acceso Premium mensual",
+        "Premium-доступ на месяц",
+        "Acesso Premium mensal",
+    },
+    LifetimeAccess = {
+        "Lifetime Premium access. Pay once.",
+        "Premium de por vida. Un solo pago.",
+        "Premium навсегда. Один платёж.",
+        "Premium vitalício. Pague uma vez.",
+    },
+    BuyMonthly = { "Buy monthly", "Comprar mensual", "Купить на месяц", "Comprar mensal" },
+    BuyLifetime = { "Buy lifetime", "Comprar de por vida", "Купить навсегда", "Comprar vitalícia" },
+    BuyLicense = { "Buy license", "Comprar licencia", "Купить лицензию", "Comprar licença" },
+    PurchaseCopyHint = {
+        "Both buttons copy the store link. Choose your license in the store.",
+        "Ambos botones copian el enlace de la tienda. Elige allí tu licencia.",
+        "Кнопки копируют ссылку магазина. Выберите лицензию в магазине.",
+        "Os botões copiam o link da loja. Escolha sua licença na loja.",
+    },
+    CommunityTitle = {
+        "You belong here",
+        "Este es tu lugar",
+        "Присоединяйтесь к нам",
+        "Seu lugar é aqui",
+    },
+    CommunityBody = {
+        "Share feedback, find support, and follow PLAK updates. Joining is optional.",
+        "Comparte ideas, busca ayuda y sigue las novedades de PLAK. Unirte es opcional.",
+        "Обратная связь, помощь и новости PLAK. Вступать необязательно.",
+        "Compartilhe ideias, encontre ajuda e acompanhe o PLAK. Participar é opcional.",
+    },
+    JoinDiscord = { "Join Discord", "Unirse a Discord", "Вступить в Discord", "Entrar no Discord" },
+    CommunityCopyHint = {
+        "Copies the invite link",
+        "Copia la invitación",
+        "Копирует приглашение",
+        "Copia o convite",
+    },
+    PlakPremium = { "PLAK Premium", "PLAK Premium", "PLAK Premium", "PLAK Premium" },
+    PlakCommunity = { "PLAK Community", "Comunidad PLAK", "Сообщество PLAK", "Comunidade PLAK" },
+    LicensePrices = {
+        "$5 / month  ·  $12 lifetime",
+        "$5 / mes  ·  $12 de por vida",
+        "$5 / месяц  ·  $12 навсегда",
+        "$5 / mês  ·  $12 vitalícia",
+    },
+    PremiumActive = { "Premium active", "Premium activo", "Premium активен", "Premium ativo" },
+    CopyLinkFailed = { "Copy failed", "No se pudo copiar", "Не скопировано", "Falha ao copiar" },
     PremiumRequired = { "Premium Required", "Se requiere Premium", "Требуется Premium", "Premium necessário" },
     BuyPremium = { "Buy Premium", "Comprar Premium", "Купить Premium", "Comprar Premium" },
     UnlockPremiumFeature = {
@@ -12425,6 +12765,9 @@ function SettingsUI.interactive(w, object)
     if w.destroyed or not w.visible or not w.settingsOpen then
         return false
     end
+    if object:GetAttribute("NeronPromotionDisabled") == true then
+        return false
+    end
     if w.confirmation then
         return object:IsDescendantOf(w.confirmation.panel)
     end
@@ -12542,20 +12885,21 @@ function SettingsUI.button(w, parent, key, props, bag, callback, primary)
     local owner = { state = { Hovered = false, Pressed = false } }
     function owner:_render()
         local state = self.state
-        w.motion:To(
-            stroke,
-            T.Motion.Micro,
-            { Color = w.theme.SurfaceEdge, Transparency = primary and 1 or (state.Hovered and 0.2 or 0.55) }
-        )
+        local disabled = button:GetAttribute("NeronPromotionDisabled") == true
+        w.motion:To(stroke, T.Motion.Micro, {
+            Color = w.theme.SurfaceEdge,
+            Transparency = primary and not disabled and 1 or (state.Hovered and not disabled and 0.2 or 0.55),
+        })
         w.motion:To(button, T.Motion.Micro, {
             BackgroundTransparency = 0,
-            BackgroundColor3 = state.Pressed and (primary and w.theme.AccentPressed or w.theme.RowPressed)
+            BackgroundColor3 = disabled and w.theme.SurfaceSecondary
+                or state.Pressed and (primary and w.theme.AccentPressed or w.theme.RowPressed)
                 or (
                     primary and w.theme.Accent
                     or (state.Hovered and w.theme.SurfaceSelected or w.theme.SurfaceSecondary)
                 ),
         })
-        label.TextColor3 = primary and w.theme.ButtonText or w.theme.SystemText
+        label.TextColor3 = primary and not disabled and w.theme.ButtonText or w.theme.SystemText
     end
     w.systemRenders = w.systemRenders or {}
     w.systemRenders[button] = owner
@@ -13659,6 +14003,18 @@ function SettingsUI.layout(w)
         compact and 132 or T.Geometry.SettingsHeader + 8
     )
     w.settingsBody.Size = UDim2.new(1, -(compact and 24 or T.Geometry.SettingsNav + 52), 1, -(compact and 148 or 88))
+    local panelWidth = w.root.Size.X.Offset - (compact and 16 or 36)
+    local panelHeight = w.root.Size.Y.Offset - (compact and 24 or 56)
+    local reserve = Premium.layoutDock(
+        w,
+        w.settingsBody.Position.X.Offset,
+        w.settingsBody.Position.Y.Offset,
+        panelWidth - (compact and 24 or T.Geometry.SettingsNav + 52),
+        panelHeight - (compact and 148 or 88)
+    )
+    w.settingsBody.Size =
+        UDim2.new(1, -(compact and 24 or T.Geometry.SettingsNav + 52), 1, -(compact and 148 or 88) - reserve)
+    Premium.refresh(w)
     if w.profileToolbarLayout then
         w.profileToolbarLayout()
     end
@@ -13761,8 +14117,8 @@ function SettingsUI.build(w)
     )
     w.settingsNavLayout =
         U.new("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }, w.settingsNavHost)
-    local icons = { Profiles = "folder", Themes = "sun", Language = "flag", General = "settings" }
-    for i, key in ipairs({ "Profiles", "Themes", "Language", "General" }) do
+    local icons = { Profiles = "folder", Themes = "sun", Language = "flag", General = "settings", Membership = "key" }
+    for i, key in ipairs({ "Profiles", "Themes", "Language", "General", "Membership" }) do
         local row = U.button(
             w.settingsNavHost,
             { Name = key, LayoutOrder = i, BackgroundTransparency = 0, ZIndex = panel.ZIndex + 2 }
@@ -13802,6 +14158,8 @@ function SettingsUI.build(w)
     SettingsUI.themes(w, SettingsUI.page(w, "Themes"))
     SettingsUI.languages(w, SettingsUI.page(w, "Language"))
     SettingsUI.general(w, SettingsUI.page(w, "General"))
+    Premium.buildMembership(w, SettingsUI.page(w, "Membership"))
+    Premium.buildDock(w)
     SettingsUI.layout(w)
 end
 function SettingsUI.footerLayout(w)
