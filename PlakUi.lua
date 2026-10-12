@@ -10,6 +10,7 @@ local Services = {
     Tween = game:GetService("TweenService"),
     Input = game:GetService("UserInputService"),
     Text = game:GetService("TextService"),
+    Http = game:GetService("HttpService"),
 }
 local Theme = {
     Surface = Color3.fromRGB(17, 17, 19),
@@ -2141,7 +2142,31 @@ local Statuses = {
     Disabled = { Key = "disabled", Icon = "shield-alert", Launch = false },
 }
 local Cards = {}
--- Supported experiences are configured here, not fetched from a remote catalog.
+local SUPPORTED_GAMES_URL = "https://raw.githubusercontent.com/Nanana291/Plak/main/Games.json"
+local SupportedGamesFallback = {
+    { Id = "roll-a-fisherman", GameId = 90920025162454, FallbackName = "Roll a Fisherman", Status = "Available" },
+}
+local function loadSupportedGames()
+    local fetched, response = pcall(function()
+        return game:HttpGet(SUPPORTED_GAMES_URL)
+    end)
+    if fetched and type(response) == "string" and response ~= "" then
+        local decodedOk, decoded = pcall(Services.Http.JSONDecode, Services.Http, response)
+        if decodedOk and type(decoded) == "table" then
+            local catalog = {}
+            for _, config in ipairs(decoded) do
+                if type(config) == "table" then
+                    catalog[#catalog + 1] = config
+                end
+            end
+            if #catalog > 0 or next(decoded) == nil then
+                return catalog
+            end
+        end
+    end
+    warn("[PlakUi] Failed to load supported games from Games.json; using fallback catalog")
+    return SupportedGamesFallback
+end
 local function productName(product)
     product = product or {}
     return localizedValue(
@@ -2149,9 +2174,6 @@ local function productName(product)
         Localization:Get(product.GameId and "game" or "umbrella")
     )
 end
-local SupportedGames = {
-    { Id = "roll-a-fisherman", GameId = 90920025162454, FallbackName = "Roll a Fisherman", Status = "Available" },
-}
 local GameMedia = { Ready = false, Cache = {}, Pending = {}, Queue = {}, Bindings = {}, Active = nil, Serial = 0 }
 function GameMedia:PlaceId(value)
     local id = finite(value, 0)
@@ -3388,7 +3410,7 @@ local function buildShell(parent)
         if State.Callbacks.Refresh then
             invokeHost(State.Callbacks.Refresh, Loader)
         else
-            Cards:Rebuild()
+            Loader:SetProducts(loadSupportedGames())
             Loader:Toast({ Type = "info", Title = Localization:Get("refreshed"), Duration = 2 })
         end
     end)
@@ -7853,7 +7875,7 @@ local function initialize()
         Loader:Destroy()
     end)
     Responsive:Update()
-    Loader:SetProducts(SupportedGames)
+    Loader:SetProducts(loadSupportedGames())
     Diagnostics.ReadyAt = os.clock()
     reconcile()
     if State.Visible then
