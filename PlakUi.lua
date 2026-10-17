@@ -18,15 +18,19 @@ local Services = {
 -- Shared visual language with Neron; Plak keeps its own auth/runtime owners.
 local Theme = {
     Surface = Color3.fromRGB(14, 13, 18),
-    Sidebar = Color3.fromRGB(16, 15, 20),
-    Header = Color3.fromRGB(16, 15, 20),
+    Sidebar = Color3.fromRGB(18, 17, 23),
+    Header = Color3.fromRGB(17, 16, 22),
     Content = Color3.fromRGB(15, 14, 19),
-    Input = Color3.fromRGB(18, 17, 23),
-    Elevated = Color3.fromRGB(20, 19, 26),
-    Inactive = Color3.fromRGB(23, 22, 30),
-    Edge = Color3.fromRGB(28, 27, 35),
-    Line = Color3.fromRGB(43, 41, 55),
-    Text = Color3.fromRGB(220, 219, 225),
+    Input = Color3.fromRGB(21, 20, 27),
+    Elevated = Color3.fromRGB(24, 23, 31),
+    Inactive = Color3.fromRGB(27, 26, 35),
+    Hover = Color3.fromRGB(31, 29, 40),
+    Edge = Color3.fromRGB(33, 31, 42),
+    Line = Color3.fromRGB(49, 46, 61),
+    WindowEdge = Color3.fromRGB(64, 59, 77),
+    Rim = Color3.fromRGB(193, 185, 211),
+    MaterialLow = Color3.fromRGB(239, 237, 245),
+    Text = Color3.fromRGB(229, 227, 236),
     Secondary = Color3.fromRGB(173, 170, 184),
     Muted = Color3.fromRGB(149, 146, 162),
     Accent = Color3.fromRGB(116, 111, 177),
@@ -51,17 +55,24 @@ local Theme = {
     Medium = Enum.Font.GothamMedium,
     Bold = Enum.Font.GothamBold,
     Display = Enum.Font.GothamBold,
+    BadgeSize = 11,
 }
 local Motion = {
-    Hover = TweenInfo.new(0.10, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-    Press = TweenInfo.new(0.10, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+    Hover = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+    Press = TweenInfo.new(0.075, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
     Toggle = TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-    Enter = TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
-    Exit = TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.In),
-    Page = TweenInfo.new(0.24, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+    Enter = TweenInfo.new(0.26, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+    Exit = TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+    Page = TweenInfo.new(0.20, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+    PageExit = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+    Indicator = TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+    Panel = TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
     Progress = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
     Drag = TweenInfo.new(0.055, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
     DecodeDuration = 0.32,
+    PageDistance = 6,
+    PanelDistance = 6,
+    RevealDistance = 6,
 }
 local Settings = {
     Title = "PLAK",
@@ -88,6 +99,7 @@ local State = {
     Name = "Initializing",
     Alive = true,
     Visible = true,
+    Presented = false,
     Page = "Auth",
     Activity = "Idle",
     Modal = nil,
@@ -259,7 +271,7 @@ function Animation:To(object, goals, preset, completed)
             self:Cancel(map[key])
         end
     end
-    if Settings.ReducedMotion then
+    if Settings.ReducedMotion or State.Presented == false then
         for key, value in pairs(goals) do
             object[key] = value
         end
@@ -411,6 +423,30 @@ local function gradient(object, startColor, endColor, rotation)
     -- UIGradient multiplies its parent's color; a neutral base preserves the sampled palette.
     object.BackgroundColor3 = Color3.new(1, 1, 1)
     return create("UIGradient", { Color = ColorSequence.new(startColor, endColor), Rotation = rotation or 0 }, object)
+end
+-- Material details are native, static and deliberately low contrast. No texture
+-- requests, animation loops or extra CanvasGroups are needed for this depth.
+local Material = {}
+function Material:Tone(root)
+    if root:FindFirstChildOfClass("UIGradient") then
+        return
+    end
+    return create("UIGradient", {
+        Name = "SurfaceFalloff",
+        Color = ColorSequence.new(Color3.new(1, 1, 1), Theme.MaterialLow),
+        Rotation = 90,
+    }, root)
+end
+function Material:Rim(root, color, transparency)
+    local rim = frame(root, "SurfaceRim", color or Theme.Rim)
+    rim.BackgroundTransparency = transparency or 0.94
+    rim.Position, rim.Size = UDim2.fromOffset(6, 0), UDim2.new(1, -12, 0, 1)
+    rim.Active, rim.Selectable = false, false
+    return rim
+end
+function Material:Panel(root)
+    self:Tone(root)
+    self:Rim(root)
 end
 local function trim(value)
     return type(value) == "string" and value:gsub("^%s+", ""):gsub("%s+$", "") or ""
@@ -661,6 +697,25 @@ function Icon.new(parent, name, color, size)
         circle(7, 12, 1, true)
         circle(13, 12, 1, true)
         path({ { 9, 14 }, { 10, 16 }, { 11, 14 } })
+    elseif name == "sliders" then
+        line(3, 5, 17, 5)
+        line(3, 10, 17, 10)
+        line(3, 15, 17, 15)
+        circle(7, 5, 2, true)
+        circle(13, 10, 2, true)
+        circle(8, 15, 2, true)
+    elseif name == "settings" then
+        circle(10, 10, 5.8)
+        circle(10, 10, 2.2)
+        for index = 0, 7 do
+            local angle = index * math.pi / 4
+            line(
+                10 + math.cos(angle) * 6.3,
+                10 + math.sin(angle) * 6.3,
+                10 + math.cos(angle) * 8.2,
+                10 + math.sin(angle) * 8.2
+            )
+        end
     elseif name == "tools" then
         path({
             { 4, 3 },
@@ -700,21 +755,57 @@ function Icon.new(parent, name, color, size)
     end
     return {
         Root = root,
-        SetColor = function(_, value)
+        SetColor = function(_, value, preset)
             for _, part in ipairs(parts) do
                 if part:IsA("UIStroke") then
-                    part.Color = value
+                    if preset then
+                        Animation:To(part, { Color = value }, preset)
+                    else
+                        Animation:CancelProperty(part, "Color")
+                        part.Color = value
+                    end
                 else
-                    part.BackgroundColor3 = value
+                    if preset then
+                        Animation:To(part, { BackgroundColor3 = value }, preset)
+                    else
+                        Animation:CancelProperty(part, "BackgroundColor3")
+                        part.BackgroundColor3 = value
+                    end
                 end
             end
         end,
     }
 end
 local Button = {}
+function Button:Release(input, force)
+    local capture = self.Capture
+    if not capture then
+        return
+    end
+    local same = input == capture.Input
+        or (
+            input
+            and input.UserInputType == Enum.UserInputType.MouseButton1
+            and capture.Input.UserInputType == Enum.UserInputType.MouseButton1
+        )
+    if not force and not same then
+        return
+    end
+    self.Capture = nil
+    local control = capture.Control
+    control.Pressed = false
+    if control.Scope.Alive and control.Root.Parent then
+        control:Apply()
+    end
+end
 function Button.new(parent, name, text, accent, iconName, onActivated, scope, allowed)
     scope = scope or Runtime
     local self = { Disabled = false, Hovered = false, Pressed = false, Scope = scope }
+    scope.Finalizers[#scope.Finalizers + 1] = function()
+        if Button.Capture and Button.Capture.Control == self then
+            Button.Capture = nil
+        end
+    end
     self.Root = create("TextButton", {
         Name = name,
         Text = "",
@@ -727,6 +818,10 @@ function Button.new(parent, name, text, accent, iconName, onActivated, scope, al
     corner(self.Root, Theme.Radius)
     self.HoverStroke = stroke(self.Root, Theme.Accent, 1, 1)
     self.Scale = create("UIScale", { Scale = 1 }, self.Root)
+    if accent then
+        Material:Tone(self.Root)
+        self.SurfaceRim = Material:Rim(self.Root, Theme.Text, 0.84)
+    end
     self.Label = label(self.Root, "Label", text, 13, accent and Theme.ButtonText or Theme.Text, Theme.Medium)
     self.Label.TextXAlignment = Enum.TextXAlignment.Center
     self.Label.TextTruncate = Enum.TextTruncate.AtEnd
@@ -739,15 +834,16 @@ function Button.new(parent, name, text, accent, iconName, onActivated, scope, al
         self.Label.Size = UDim2.new(1, -44, 1, 0)
     end
     function self:Apply()
+        local preset = self.Pressed and Motion.Press or Motion.Hover
         local base = accent and Theme.AccentHover
-            or self.ContextHovered and Theme.Accent
+            or self.ContextHovered and Theme.AccentDark
             or self.BaseColor
             or Theme.Input
         local color = self.Disabled and base:Lerp(Theme.Surface, 0.48)
-            or self.Pressed and base:Lerp(Theme.Surface, 0.18)
-            or self.Hovered and base:Lerp(Theme.Text, 0.07)
+            or self.Pressed and base:Lerp(Theme.Surface, 0.16)
+            or self.Hovered and base:Lerp(Theme.Text, accent and 0.045 or 0.035)
             or base
-        Animation:To(self.Root, { BackgroundColor3 = color }, Motion.Hover)
+        Animation:To(self.Root, { BackgroundColor3 = color }, preset)
         if self.Gradient then
             Animation:To(
                 self.Gradient,
@@ -755,29 +851,52 @@ function Button.new(parent, name, text, accent, iconName, onActivated, scope, al
                 Motion.Hover
             )
         end
-        Animation:To(
-            self.HoverStroke,
-            { Transparency = self.Disabled and 1 or self.Hovered and 0.65 or 1 },
-            Motion.Hover
-        )
+        Animation:To(self.HoverStroke, {
+            Color = accent and Theme.AccentText or Theme.Line,
+            Transparency = self.Disabled and 1
+                or (self.Ghost or self.Navigation) and 1
+                or self.Hovered and 0.35
+                or accent and 0.65
+                or 1,
+        }, preset)
         local textColor = self.Disabled and Theme.Muted or self.TextColor or (accent and Theme.ButtonText or Theme.Text)
         if self.Navigation then
-            self.Root.BackgroundTransparency = (self.Selected or self.Hovered) and 0.12 or 1
+            Animation:To(self.Root, {
+                BackgroundTransparency = self.Hovered and not self.Selected and 0.55 or 1,
+            }, preset)
             textColor = self.Disabled and Theme.Muted
                 or (self.Selected or self.Hovered) and Theme.Text
                 or Theme.Secondary
+        elseif self.Ghost then
+            Animation:To(self.Root, {
+                BackgroundTransparency = self.Disabled and 1 or self.Pressed and 0.25 or self.Hovered and 0.5 or 1,
+            }, preset)
         end
-        self.Label.TextColor3 = textColor
+        Animation:To(self.Label, { TextColor3 = textColor }, preset)
         if self.Icon then
-            self.Icon:SetColor(self.Navigation and (self.Selected and Theme.AccentText or textColor) or textColor)
+            self.Icon:SetColor(
+                self.Navigation and (self.Selected and Theme.AccentText or textColor) or textColor,
+                preset
+            )
+        end
+        if self.SurfaceRim then
+            Animation:To(self.SurfaceRim, {
+                BackgroundTransparency = self.Disabled and 1 or self.Pressed and 0.96 or self.Hovered and 0.76 or 0.84,
+            }, preset)
         end
         self.Root.Selectable = not self.Disabled
         -- Surface/ink feedback, never a small layout jump on every press.
         Animation:To(self.Scale, { Scale = 1 }, Motion.Press)
     end
     function self:SetDisabled(value)
+        if Button.Capture and Button.Capture.Control == self then
+            Button:Release(nil, true)
+        end
         self.Disabled = value == true
         self.Pressed = false
+        if self.Disabled then
+            self.Hovered = false
+        end
         self:Apply()
     end
     local function enabled()
@@ -825,19 +944,23 @@ function Button.new(parent, name, text, accent, iconName, onActivated, scope, al
                 or input.UserInputType == Enum.UserInputType.Touch
             )
         then
+            Button:Release(nil, true)
+            Button.Capture = { Control = self, Input = input }
             self.Pressed = true
             self:Apply()
         end
     end)
-    scope:Connect(self.Root.InputEnded, function()
-        if self.Pressed then
-            self.Pressed = false
-            self:Apply()
+    scope:Connect(self.Root.InputEnded, function(input)
+        if Button.Capture and Button.Capture.Control == self then
+            Button:Release(input)
         end
     end)
     function self:Activate()
         if not enabled() then
             return false
+        end
+        if Button.Capture and Button.Capture.Control == self then
+            Button:Release(nil, true)
         end
         self.Pressed = false
         self:Apply()
@@ -1781,6 +1904,7 @@ do
             keyHint = "Paste your key",
             closeLoader = "Close loader",
             preferencesTitle = "Preferences",
+            motionOption = "Motion",
             asideTitle = "One key. Your access.",
             asideCopy = "Enter your key, or get a free key to continue. Verification stays in your hands.",
             offerChooseLifetime = "Open store",
@@ -1800,6 +1924,7 @@ do
             keyHint = "Pega tu key",
             closeLoader = "Cerrar loader",
             preferencesTitle = "Preferencias",
+            motionOption = "Animación",
             asideTitle = "Una key. Tu acceso.",
             asideCopy = "Introduce tu key u obtén una gratis para continuar. Tú decides cuándo verificar.",
             offerChooseLifetime = "Abrir tienda",
@@ -1819,6 +1944,7 @@ do
             keyHint = "Cole sua key",
             closeLoader = "Fechar loader",
             preferencesTitle = "Preferências",
+            motionOption = "Animação",
             asideTitle = "Uma key. Seu acesso.",
             asideCopy = "Insira sua key ou obtenha uma grátis para continuar. Você decide quando verificar.",
             offerChooseLifetime = "Abrir loja",
@@ -1838,6 +1964,7 @@ do
             keyHint = "Вставьте ключ",
             closeLoader = "Закрыть загрузчик",
             preferencesTitle = "Настройки",
+            motionOption = "Анимация",
             asideTitle = "Один ключ. Ваш доступ.",
             asideCopy = "Введите ключ или получите бесплатный, чтобы продолжить. Вы сами запускаете проверку.",
             offerChooseLifetime = "Открыть магазин",
@@ -2665,12 +2792,10 @@ function Toasts:Close(item, immediate)
     if immediate then
         remove()
     else
-        Animation:To(
-            item.Root,
-            { GroupTransparency = 1, Position = item.Root.Position + UDim2.fromOffset(20, 0) },
-            Motion.Exit,
-            remove
-        )
+        Animation:To(item.Root, {
+            GroupTransparency = 1,
+            Position = item.Root.Position + UDim2.fromOffset(Settings.ReducedMotion and 0 or 8, 0),
+        }, Motion.Exit, remove)
     end
 end
 function Toasts:Drain()
@@ -2690,12 +2815,13 @@ function Toasts:Create(config)
         Closing = false,
     }
     item.Root = group(UI.ToastLayer, "Toast")
-    item.Root.BackgroundColor3 = Theme.Input
+    item.Root.BackgroundColor3 = Theme.Elevated
     item.Root.BackgroundTransparency = 0
     item.Root.GroupTransparency = 1
     item.Root.Position = UDim2.fromOffset(UI.Stage.AbsoluteSize.X, 12)
     corner(item.Root, Theme.PanelRadius)
-    stroke(item.Root, Theme.Line, 1)
+    stroke(item.Root, Theme.Line, 1, 0.25)
+    Material:Panel(item.Root)
     local accent = config.Type == "warning" and Theme.Warning
         or config.Type == "error" and Theme.Danger
         or config.Type == "success" and Theme.Success
@@ -2888,9 +3014,9 @@ function Modal:Open(config)
     Animation:CancelTree(UI.ProgressPanel)
     self:Refresh()
     UI.Result.GroupTransparency = 1
-    UI.ResultScale.Scale = 0.98
+    UI.ResultScale.Scale = Settings.ReducedMotion and 1 or 0.992
     local destination = UI.Result.Position
-    UI.Result.Position = destination + UDim2.fromOffset(0, 8)
+    UI.Result.Position = destination + UDim2.fromOffset(0, Settings.ReducedMotion and 0 or Motion.PanelDistance)
     Animation:To(UI.Backdrop, { BackgroundTransparency = 0.48 }, Motion.Enter)
     Animation:To(UI.Result, { GroupTransparency = 0, Position = destination }, Motion.Enter)
     Animation:To(UI.ResultScale, { Scale = 1 }, Motion.Enter)
@@ -2926,12 +3052,10 @@ function Modal:Close(immediate)
         UI.ResultAction:SetDisabled(true)
         Animation:To(UI.Backdrop, { BackgroundTransparency = 1 }, Motion.Exit)
         local panel = UI.Result.Visible and UI.Result or UI.ProgressPanel
-        Animation:To(
-            panel,
-            { GroupTransparency = 1, Position = panel.Position + UDim2.fromOffset(0, 32) },
-            Motion.Exit,
-            finish
-        )
+        Animation:To(panel, {
+            GroupTransparency = 1,
+            Position = panel.Position + UDim2.fromOffset(0, Settings.ReducedMotion and 0 or Motion.PanelDistance),
+        }, Motion.Exit, finish)
     end
 end
 function Modal:Loading(config)
@@ -2963,7 +3087,7 @@ function Modal:Loading(config)
     UI.ProgressPanel.GroupTransparency = 1
     self:Layout()
     local destination = UI.ProgressPanel.Position
-    UI.ProgressPanel.Position = destination + UDim2.fromOffset(0, 32)
+    UI.ProgressPanel.Position = destination + UDim2.fromOffset(0, Motion.PanelDistance)
     Animation:To(UI.ProgressPanel, { GroupTransparency = 0, Position = destination }, Motion.Enter)
     Animation:To(UI.Backdrop, { BackgroundTransparency = 0.48 }, Motion.Enter)
     self:SetText(config.Text)
@@ -3139,11 +3263,12 @@ local function buildModal()
     UI.Result.AnchorPoint = Vector2.new(0.5, 0.5)
     UI.Result.BackgroundTransparency = 0
     UI.Result.Active = true
-    UI.Result.BackgroundColor3 = Theme.Surface
+    UI.Result.BackgroundColor3 = Theme.Elevated
     UI.Result.ZIndex = 2
     UI.Result.Visible = false
     corner(UI.Result, Theme.PanelRadius)
-    stroke(UI.Result, Theme.Line, 1)
+    stroke(UI.Result, Theme.WindowEdge, 1, 0.28)
+    Material:Panel(UI.Result)
     UI.ResultScale = create("UIScale", { Scale = 1 }, UI.Result)
     UI.ResultSymbol = frame(UI.Result, "Symbol", Theme.Accent)
     corner(UI.ResultSymbol, Theme.Radius)
@@ -3256,6 +3381,7 @@ local function buildModal()
     UI.ProgressPanel.ZIndex = 2
     UI.ProgressPanel.Visible = false
     corner(UI.ProgressPanel, Theme.PanelRadius)
+    Material:Panel(UI.ProgressPanel)
     stroke(UI.ProgressPanel, Theme.Line, 1)
     UI.ProgressText = localized(UI.ProgressPanel, "Status", "loading", 14, Theme.Text, Theme.Medium)
     UI.ProgressText.TextTruncate = Enum.TextTruncate.AtEnd
@@ -3355,10 +3481,18 @@ function LanguageController:Paint()
     if not UI.LanguageChevron then
         return
     end
-    local color = self.Open and Theme.Accent or self.Hovered and Theme.Text or Theme.Secondary
+    if UI.LanguageName then
+        for _, descriptor in ipairs(Languages) do
+            if descriptor.Id == Settings.Language then
+                UI.LanguageName.Text = descriptor.Name
+                break
+            end
+        end
+    end
+    local color = self.Open and Theme.AccentText or self.Hovered and Theme.Text or Theme.Secondary
     UI.LanguageToggle:SetAttribute("Expanded", self.Open)
     Animation:To(UI.LanguageChevron.Root, { Rotation = self.Open and 180 or 0 }, Motion.Hover)
-    Animation:To(UI.LanguageChevronScale, { Scale = self.Pressed and 0.82 or self.Hovered and 1.08 or 1 }, Motion.Hover)
+    Animation:To(UI.LanguageChevronScale, { Scale = self.Pressed and 0.94 or self.Hovered and 1.03 or 1 }, Motion.Hover)
     for _, part in ipairs(self.ChevronParts) do
         Animation:To(part, { BackgroundColor3 = color }, Motion.Hover)
     end
@@ -3431,7 +3565,7 @@ function LanguageController:SetOpen(value)
         if not UI.LanguageMenu.Visible then
             UI.LanguageMenu.GroupTransparency = 1
             UI.LanguageMenu.Position = (self.Position or UDim2.new()) + UDim2.fromOffset(0, 8)
-            UI.LanguageMenuScale.Scale = 0.965
+            UI.LanguageMenuScale.Scale = Settings.ReducedMotion and 1 or 0.992
         end
         UI.LanguageMenu.Visible = true
         UI.LanguageMenu.Active = true
@@ -3440,7 +3574,7 @@ function LanguageController:SetOpen(value)
         Animation:To(UI.LanguageMenu, { GroupTransparency = 0 }, Motion.Enter)
     else
         UI.LanguageMenu.Active = false
-        Animation:To(UI.LanguageMenuScale, { Scale = 0.975 }, Motion.Exit)
+        Animation:To(UI.LanguageMenuScale, { Scale = Settings.ReducedMotion and 1 or 0.992 }, Motion.Exit)
         Animation:To(UI.LanguageMenu, {
             Position = (self.Position or UI.LanguageMenu.Position) + UDim2.fromOffset(0, 6),
         }, Motion.Exit)
@@ -3475,7 +3609,12 @@ local function buildShell(parent)
     UI.Window.ClipsDescendants = true
     UI.Window.GroupTransparency = 1
     corner(UI.Window, Theme.WindowRadius)
+    UI.WindowEdge = stroke(UI.Window, Theme.WindowEdge, 1, 0.42)
+    UI.WindowRim = Material:Rim(UI.Window, Theme.Rim, 0.91)
+    UI.WindowRim.ZIndex = 6
     UI.Scale = create("UIScale", { Scale = 1 }, UI.Window)
+    UI.ContentSurface = frame(UI.Window, "ContentSurface", Theme.Content)
+    Material:Tone(UI.ContentSurface)
     UI.Header = frame(UI.Window, "Header")
     UI.Header.BackgroundColor3 = Theme.Header
     UI.Header.BackgroundTransparency = 0
@@ -3502,6 +3641,7 @@ local function buildShell(parent)
         end
     )
     UI.Minimize.BaseColor = Theme.Header
+    UI.Minimize.Ghost = true
     UI.Minimize:Apply()
     UI.Minimize.Root:FindFirstChildOfClass("UICorner").CornerRadius = UDim.new(0, Theme.Radius)
     UI.Minimize.Icon.Root.Position = UDim2.new(0.5, -10, 0.5, 0)
@@ -3521,13 +3661,14 @@ local function buildShell(parent)
         end
     )
     UI.CloseWindow.Root.BackgroundTransparency = 1
+    UI.CloseWindow.Ghost = true
     UI.CloseWindow.Label.Visible = false
     UI.CloseWindow.Icon.Root.Position = UDim2.new(0.5, -9, 0.5, 0)
     UI.CloseWindow.Root:SetAttribute("ActionLabel", Localization:Get("closeLoader"))
     UI.MinimizeGlyphScale = create("UIScale", { Scale = 1 }, UI.Minimize.Icon.Root)
     local function paintHide(hovered)
         UI.Minimize.Icon:SetColor(hovered and Theme.Accent or Theme.Secondary)
-        Animation:To(UI.MinimizeGlyphScale, { Scale = hovered and 1.08 or 1 }, Motion.Hover)
+        Animation:To(UI.MinimizeGlyphScale, { Scale = hovered and 1.035 or 1 }, Motion.Hover)
     end
     Runtime:Connect(UI.Minimize.Root.MouseEnter, function()
         paintHide(true)
@@ -3584,6 +3725,7 @@ local function buildShell(parent)
     UI.Sidebar = frame(UI.Window, "Sidebar")
     UI.Sidebar.BackgroundColor3 = Theme.Sidebar
     UI.Sidebar.BackgroundTransparency = 0
+    Material:Tone(UI.Sidebar)
     UI.BrandLogo.Root.Parent, UI.Brand.Parent = UI.Sidebar, UI.Sidebar
     UI.SidebarDivider = frame(UI.Sidebar, "SidebarDivider", Theme.Edge)
     UI.HeaderDivider = frame(UI.Header, "HeaderDivider", Theme.Edge)
@@ -3591,10 +3733,20 @@ local function buildShell(parent)
     UI.PageDescription.TextTruncate = Enum.TextTruncate.AtEnd
     UI.RailSurface = frame(UI.Sidebar, "NavigationSurface", Theme.Sidebar)
     corner(UI.RailSurface, Theme.PanelRadius)
+    UI.NavigationCaption = localized(UI.Sidebar, "NavigationCaption", "main", 10, Theme.Muted, Theme.Medium)
+    UI.NavigationCaption.TextTransparency = 0.25
+    UI.NavigationCaption.TextTruncate = Enum.TextTruncate.AtEnd
+    UI.NavigationPlate = frame(UI.Sidebar, "NavigationSelection", Theme.Inactive)
+    corner(UI.NavigationPlate, 4)
+    stroke(UI.NavigationPlate, Theme.Line, 1, 0.72)
+    Material:Rim(UI.NavigationPlate, Theme.Rim, 0.96)
+    UI.UtilityDivider = frame(UI.Sidebar, "UtilityDivider", Theme.Edge)
     UI.ContextIcon = Icon.new(UI.Sidebar, "home", Theme.Muted, 18)
     UI.ActiveNav = frame(UI.Sidebar, "Active", Theme.AccentDark)
     UI.ActiveNav.BackgroundTransparency = 0.7
     corner(UI.ActiveNav, 1)
+    UI.ActiveNav.BackgroundColor3 = Theme.AccentText
+    UI.ActiveNav.BackgroundTransparency = 0.12
     UI.AuthNav = Button.new(UI.Sidebar, "Authorization", "", false, "home", function()
         Navigation:Go("Auth")
     end)
@@ -3655,6 +3807,8 @@ local function buildShell(parent)
         UI.Sidebar
     )
     UI.LanguageFlag = flag(UI.LanguageToggle, Settings.Language)
+    UI.LanguageName = label(UI.LanguageToggle, "CurrentLanguage", "", 12, Theme.Secondary, Theme.Medium)
+    UI.LanguageName.TextTruncate = Enum.TextTruncate.AtEnd
     UI.LanguageChevron = Icon.new(UI.LanguageToggle, "chevron", Theme.Secondary, 12)
     UI.LanguageChevronScale = create("UIScale", { Scale = 1 }, UI.LanguageChevron.Root)
     for _, part in ipairs(UI.LanguageChevron.Root:GetChildren()) do
@@ -3669,7 +3823,8 @@ local function buildShell(parent)
     UI.LanguageMenu.Visible = false
     UI.LanguageMenu.GroupTransparency = 1
     corner(UI.LanguageMenu, Theme.PanelRadius)
-    stroke(UI.LanguageMenu, Theme.Line, 1)
+    stroke(UI.LanguageMenu, Theme.Line, 1, 0.2)
+    Material:Panel(UI.LanguageMenu)
     UI.LanguageMenuScale = create("UIScale", { Scale = 1 }, UI.LanguageMenu)
     UI.LanguageList = create("ScrollingFrame", {
         Name = "LanguageList",
@@ -4423,7 +4578,8 @@ function LicenseOffer:Refresh()
     if UI.LicenseNav then
         UI.LicenseNav:SetDisabled(not self:Enabled() or State.Activity ~= "Idle")
         UI.LicenseNav.Root:SetAttribute("ActionLabel", Localization:Get("offerTab"))
-        UI.LicenseNav.Icon:SetColor(State.Page == "Licenses" and Theme.Accent or Theme.Muted)
+        -- Navigation owns icon ink. A second immediate painter here used to
+        -- cancel its hover/selection tween on every responsive refresh.
     end
     if not UI.LicensePanel then
         return
@@ -4474,6 +4630,12 @@ function LicenseOffer:Copy(plan)
 end
 function LicenseOffer:Paint(card, hovered)
     card.Hovered = hovered == true
+    local surface = card.Primary and Theme.AccentMuted or Theme.Input
+    Animation:To(
+        card.Root,
+        { BackgroundColor3 = card.Hovered and surface:Lerp(Theme.Text, 0.018) or surface },
+        Motion.Hover
+    )
     local color = card.Primary and Theme.AccentHover or Theme.Edge
     Animation:To(card.Border, {
         Color = color,
@@ -4551,6 +4713,7 @@ function LicenseOffer:BuildCard(primary)
     card.Root.BackgroundColor3 = primary and Theme.AccentMuted or Theme.Input
     corner(card.Root, Theme.PanelRadius)
     card.Border = stroke(card.Root, primary and Theme.AccentHover or Theme.Edge, 1, primary and 0.45 or 0.12)
+    Material:Panel(card.Root)
     card.Scale = create("UIScale", { Scale = 1 }, card.Root)
     card.Facet = frame(card.Root, "DiagonalFacet", Theme.Text)
     card.Facet.Visible, card.Facet.BackgroundTransparency = false, 1
@@ -4718,11 +4881,19 @@ function LicenseOffer:Layout(settle)
     local gap = 12
     local cardWidth = stacked and width or (width - gap) / 2
     -- Measure both before placing either so translated terms retain equal-height comparison.
-    local cardHeight = 244
+    local cardHeight, badgeExtra = 244, 0
     for _, card in ipairs(UI.LicenseCards) do
-        card.TermHeight = math.max(20, measure(card.Term.Text, 12, Theme.Font, math.max(1, cardWidth - 32)))
+        -- Language decoding is presentation only: never size from its transient
+        -- scrambled label text, otherwise a later resize changes the final layout.
+        card.BadgeCopy = Localization:Get(card.Primary and "offerOneTime" or "offerMonthlyBadge")
+        local term = Localization:Get(card.Primary and "offerLifetimeTerm" or "offerMonthlyTerm")
+        card.TermHeight = math.max(20, measure(term, 12, Theme.Font, math.max(1, cardWidth - 32)))
+        card.BadgeHeight =
+            math.max(22, measure(card.BadgeCopy, Theme.BadgeSize, Theme.Medium, math.max(1, cardWidth - 48)) + 8)
+        badgeExtra = math.max(badgeExtra, card.BadgeHeight - 24)
         cardHeight = math.max(cardHeight, 156 + card.TermHeight + 12 + hit + 16)
     end
+    cardHeight = cardHeight + badgeExtra
     for index, card in ipairs(UI.LicenseCards) do
         local x = stacked and 0 or (index - 1) * (cardWidth + gap)
         local y = cardsY + (stacked and (index - 1) * (cardHeight + gap) or 0)
@@ -4730,15 +4901,18 @@ function LicenseOffer:Layout(settle)
         card.Root.Position, card.Root.Size = card.Rest, UDim2.fromOffset(cardWidth, cardHeight)
         card.Facet.Visible, card.Sweep.Visible = false, false
         place(card.Title, 16, 16, cardWidth - 32, 24)
-        place(card.Badge, 16, 44, cardWidth - 32, 24)
-        place(card.BadgeLabel, 8, 0, cardWidth - 48, 24)
+        local termBounds = TextMetrics:Get(card.BadgeCopy, Theme.BadgeSize, Theme.Medium, 10000)
+        local badgeWidth = math.min(cardWidth - 32, math.ceil(termBounds and termBounds.X or cardWidth - 48) + 24)
+        place(card.Badge, 16, 48, badgeWidth, card.BadgeHeight)
+        place(card.BadgeLabel, 8, 0, badgeWidth - 16, card.BadgeHeight)
+        card.BadgeLabel.TextSize = Theme.BadgeSize
         local keyVisible = cardWidth >= 250
         card.Seal.Root.Visible = keyVisible
-        place(card.Seal.Root, cardWidth - 76, 72, 56, 84)
+        place(card.Seal.Root, cardWidth - 76, 72 + badgeExtra, 56, 84)
         card.Price.TextSize = cardWidth < 220 and 36 or cardWidth < 300 and 40 or 44
-        place(card.Price, 16, 78, math.max(1, cardWidth - 32 - (keyVisible and 70 or 0)), 52)
-        place(card.Currency, 16, 130, cardWidth - 32, 20)
-        place(card.Term, 16, 156, cardWidth - 32, card.TermHeight)
+        place(card.Price, 16, 78 + badgeExtra, math.max(1, cardWidth - 32 - (keyVisible and 70 or 0)), 52)
+        place(card.Currency, 16, 130 + badgeExtra, cardWidth - 32, 20)
+        place(card.Term, 16, 156 + badgeExtra, cardWidth - 32, card.TermHeight)
         place(card.Buy.Root, 16, cardHeight - hit - 16, cardWidth - 32, hit)
         place(card.Arrow.Root, cardWidth - 60, 15, 14, 14)
         self:Paint(card, card.Hovered)
@@ -4770,13 +4944,16 @@ function LicenseOffer:Layout(settle)
 end
 
 function LicenseOffer:FitLabels()
+    local copied = self.CopyTask ~= nil and self.CopiedLink == Settings.LicenseStoreLink
     for _, card in ipairs(UI.LicenseCards or {}) do
         local width = math.max(1, card.Buy.Root.Size.X.Offset - 40)
-        local bounds = TextMetrics:Get(card.Buy.Label.Text, 14, Theme.Medium, 10000)
+        local caption =
+            Localization:Get(copied and "offerCopied" or card.Primary and "offerChooseLifetime" or "offerChooseMonthly")
+        local bounds = TextMetrics:Get(caption, 14, Theme.Medium, 10000)
         card.Buy.Label.TextSize = bounds and bounds.X > width and 12 or 14
         card.Buy.Label.TextWrapped = true
         card.Buy.Label.TextTruncate = Enum.TextTruncate.None
-        card.BadgeLabel.TextSize = 11
+        card.BadgeLabel.TextSize = Theme.BadgeSize
         card.Currency.TextSize, card.Term.TextSize = 12, 12
     end
     for _, button in ipairs({ UI.LicenseStore, UI.LicenseHaveKey, UI.LicenseJumpLife, UI.LicenseJumpMonth }) do
@@ -5411,6 +5588,46 @@ function Experience:SetRememberMe(value)
     -- Do not erase the field, change premium state or revoke the current session.
     return true
 end
+function Experience:PresentOptions()
+    local blocked = not State.Visible or State.Modal or State.Activity ~= "Idle"
+    local open = self.OptionsOpen == true and not blocked
+    if self.OptionsPresented == open and not (blocked and UI.Preferences.Visible) then
+        return
+    end
+    self.OptionsPresented = open
+    self.OptionsToken = (self.OptionsToken or 0) + 1
+    local token = self.OptionsToken
+    local rest = self.PreferencesRest or UI.Preferences.Position
+    if blocked or (not open and not UI.Preferences.Visible) then
+        Animation:CancelTree(UI.Preferences)
+        Animation:CancelTree(UI.PreferencesBackdrop)
+        UI.Preferences.Visible, UI.PreferencesBackdrop.Visible = false, false
+        UI.Preferences.GroupTransparency, UI.PreferencesBackdrop.BackgroundTransparency = 1, 1
+        UI.Preferences.Position = rest
+        return
+    end
+    if open then
+        if not UI.Preferences.Visible then
+            UI.Preferences.GroupTransparency = Settings.ReducedMotion and 0 or 1
+            UI.Preferences.Position = rest + UDim2.fromOffset(0, Settings.ReducedMotion and 0 or Motion.PanelDistance)
+        end
+        UI.Preferences.Visible, UI.PreferencesBackdrop.Visible = true, true
+        Animation:To(UI.Preferences, { Position = rest }, Motion.Panel)
+        Animation:To(UI.Preferences, { GroupTransparency = 0 }, Motion.Panel)
+        Animation:To(UI.PreferencesBackdrop, { BackgroundTransparency = 0.48 }, Motion.Panel)
+    else
+        Animation:To(UI.PreferencesBackdrop, { BackgroundTransparency = 1 }, Motion.Exit)
+        Animation:To(UI.Preferences, {
+            Position = rest + UDim2.fromOffset(0, Settings.ReducedMotion and 0 or Motion.PanelDistance),
+        }, Motion.Exit)
+        Animation:To(UI.Preferences, { GroupTransparency = 1 }, Motion.Exit, function()
+            if token == self.OptionsToken and not self.OptionsOpen then
+                UI.Preferences.Visible, UI.PreferencesBackdrop.Visible = false, false
+                UI.Preferences.Position = self.PreferencesRest or rest
+            end
+        end)
+    end
+end
 function Experience:RefreshOptions()
     if UI.DiagnosticsToggle then
         UI.DiagnosticsToggle:SetDisabled(State.Activity ~= "Idle")
@@ -5421,15 +5638,18 @@ function Experience:RefreshOptions()
     if not UI.Preferences then
         return
     end
-    UI.Preferences.Visible = self.OptionsOpen and State.Visible and not State.Modal
-    UI.PreferencesBackdrop.Visible = UI.Preferences.Visible
-    Localization:Bind(UI.PreferenceLanguage.Label, "languageOption", "Text", function()
-        return Localization:Get("languageOption") .. ": " .. Settings.Language:upper()
-    end)
-    Localization:Bind(UI.PreferenceScale.Label, "scaleOption", "Text", function()
-        return Localization:Get("scaleOption") .. ": " .. math.floor(Settings.UIScale * 100 + 0.5) .. "%"
-    end)
-    Localization:Bind(UI.PreferenceMotion.Label, Settings.ReducedMotion and "motionReduced" or "motionFull")
+    self:PresentOptions()
+    UI.Options.ContextHovered = self.OptionsOpen
+    UI.Options:Apply()
+    Localization:Bind(UI.PreferenceLanguage.Label, "languageOption")
+    UI.PreferenceLanguage.ValueLabel.Text = Settings.Language:upper()
+    Localization:Bind(UI.PreferenceScale.Label, "scaleOption")
+    UI.PreferenceScale.ValueLabel.Text = math.floor(Settings.UIScale * 100 + 0.5) .. "%"
+    Localization:Bind(UI.PreferenceMotion.Label, "motionOption")
+    Localization:Bind(UI.PreferenceMotion.ValueLabel, Settings.ReducedMotion and "motionReduced" or "motionFull")
+    for _, button in ipairs({ UI.PreferenceLanguage, UI.PreferenceScale, UI.PreferenceMotion }) do
+        button.Root:SetAttribute("ActionLabel", button.Label.Text .. ": " .. button.ValueLabel.Text)
+    end
     Localization:Bind(UI.PreferenceNote, self.PrefSaveState or "prefSession")
     local busy = State.Activity ~= "Idle"
     local rememberAvailable = self:CanRememberKey()
@@ -5539,15 +5759,20 @@ function Experience:RefreshJourney()
         node.Dot.BackgroundTransparency = done and 0 or active and 0.1 or 0.7
         node.Check.Root.Visible = done
         if done and not self.WasAccepted then
-            node.CheckScale.Scale = Settings.ReducedMotion and 1 or 0.72
+            node.CheckScale.Scale = Settings.ReducedMotion and 1 or 0.88
             Animation:To(node.CheckScale, { Scale = 1 }, Motion.Page)
         end
         node.Label.TextColor3 = (done or active) and Theme.Text or Theme.Secondary
         if index == 1 and checking and not self.WasChecking then
-            Animation:To(node.Scale, { Scale = 1.18 }, Motion.Press, function()
+            Animation:To(node.Scale, { Scale = 1.06 }, Motion.Press, function()
                 Animation:To(node.Scale, { Scale = 1 }, Motion.Page)
             end)
         end
+    end
+    for index, rail in ipairs(UI.AuthJourneyRails or {}) do
+        rail.Root.Visible = not linkLoading
+        local filled = accepted and (index == 1 or handoff)
+        Animation:To(rail.Fill, { Size = UDim2.fromScale(filled and 1 or 0, 1) }, Motion.Toggle)
     end
     self.WasChecking, self.WasAccepted = checking, accepted
     if UI.AuthJourneyNote then
@@ -5559,6 +5784,13 @@ function Experience:BuildJourney()
     UI.AuthJourney.BackgroundTransparency = 1
     corner(UI.AuthJourney, Theme.PanelRadius)
     UI.AuthJourneyNodes = {}
+    UI.AuthJourneyRails = {}
+    for index = 1, 2 do
+        local rail = frame(UI.AuthJourney, "MilestoneConnector" .. index, Theme.Line)
+        local fill = frame(rail, "Accepted", Theme.Accent)
+        fill.Size = UDim2.fromScale(0, 1)
+        UI.AuthJourneyRails[index] = { Root = rail, Fill = fill }
+    end
     for index, key in ipairs({ "journeyKey", "journeyVerified", "journeyReady" }) do
         local node = { Root = frame(UI.AuthJourney, "Milestone" .. index) }
         node.Root.BackgroundTransparency = 1
@@ -5600,7 +5832,7 @@ function Experience:FitButton(button)
 end
 function Experience:Layout(width, y)
     local hit = math.max(44, math.ceil(44 / math.max(0.1, State.Layout.Scale or 1)))
-    place(UI.RememberMe.Root, 0, y, math.min(width, math.max(hit, 220)), hit)
+    place(UI.RememberMe.Root, 0, y, width, hit)
     UI.KeyActionsNote.Visible = false -- Feedback uses the reserved guidance slot.
     y = y + hit + 8
     UI.AuthLicense.Visible = State.Authorized
@@ -5612,15 +5844,29 @@ function Experience:Layout(width, y)
     Community:Layout(width, y)
     local panelWidth = math.min(392, State.Layout.Width - 24)
     local inner = panelWidth - 32
-    local half = (inner - 8) / 2
-    local step = hit + 8
-    place(UI.PreferenceLanguage.Root, 0, 0, half, hit)
-    place(UI.PreferenceScale.Root, half + 8, 0, half, hit)
-    place(UI.PreferenceMotion.Root, 0, step, half, hit)
-    place(UI.PreferenceReset.Root, half + 8, step, half, hit)
-    place(UI.CommunityRestore.Root, 0, step * 2, inner, hit)
-    local noteY = step * 3
-    local noteHeight = math.max(36, measure(UI.PreferenceNote.Text, 12, Theme.Font, inner))
+    local step = hit + 2
+    place(UI.PreferenceSectionLabel, 0, 0, inner, 20)
+    for index, button in ipairs({ UI.PreferenceLanguage, UI.PreferenceScale, UI.PreferenceMotion }) do
+        place(button.Root, 0, 26 + (index - 1) * step, inner, hit)
+        place(button.RowIcon.Root, 12, (hit - 18) / 2, 18, 18)
+        local valueWidth = button == UI.PreferenceMotion and math.min(162, inner * 0.45) or 60
+        if inner < 260 then
+            button.Label.Position, button.Label.Size = UDim2.fromOffset(42, 5), UDim2.new(1, -76, 0, 18)
+            button.ValueLabel.Position, button.ValueLabel.Size =
+                UDim2.fromOffset(42, hit - 21), UDim2.new(1, -76, 0, 17)
+            button.ValueLabel.TextXAlignment = Enum.TextXAlignment.Left
+        else
+            place(button.ValueLabel, inner - valueWidth - 30, 0, valueWidth, hit)
+            button.ValueLabel.TextXAlignment = Enum.TextXAlignment.Right
+            button.Label.Position, button.Label.Size = UDim2.fromOffset(42, 0), UDim2.new(1, -valueWidth - 82, 1, 0)
+        end
+        place(button.ValueChevron.Root, inner - 24, (hit - 12) / 2, 12, 12)
+    end
+    place(UI.PreferenceReset.Root, 0, 26 + step * 3 + 10, inner, hit)
+    place(UI.CommunityRestore.Root, 0, 26 + step * 4 + 12, inner, hit)
+    local noteY = 26 + step * 5 + 22
+    local noteHeight =
+        math.max(36, measure(Localization:Get(self.PrefSaveState or "prefSession"), 12, Theme.Font, inner))
     place(UI.PreferenceNote, 0, noteY, inner, noteHeight)
     local diagY = noteY + noteHeight + 12
     place(UI.DiagnosticsToggle.Root, 0, diagY, inner, hit)
@@ -5628,8 +5874,15 @@ function Experience:Layout(width, y)
     Diagnostics:Layout(inner)
     local bodyHeight = Diagnostics.Top + Diagnostics:Height() + 8
     local header = hit + 12
+    place(UI.PreferencesHeaderDivider, 16, header - 2, inner, 1)
     local panelHeight = math.min(State.Layout.Height - 24, header + bodyHeight + 24)
-    place(UI.Preferences, State.Layout.Width - panelWidth - 12, 12, panelWidth, math.max(hit + 48, panelHeight))
+    local rest = UDim2.fromOffset(State.Layout.Width - panelWidth - 12, 12)
+    if self.PreferencesRest ~= rest then
+        Animation:CancelProperty(UI.Preferences, "Position")
+        UI.Preferences.Position = rest
+        self.PreferencesRest = rest
+    end
+    UI.Preferences.Size = UDim2.fromOffset(panelWidth, math.max(hit + 48, panelHeight))
     place(UI.PreferencesTitle, 16, 12, panelWidth - hit - 36, hit)
     place(UI.PreferenceClose.Root, panelWidth - hit - 8, 8, hit, hit)
     place(UI.PreferencesScroll, 16, header, inner, math.max(20, panelHeight - header - 16))
@@ -5644,6 +5897,7 @@ function Experience:Layout(width, y)
             math.max(0, bodyHeight - UI.PreferencesScroll.Size.Y.Offset)
         )
     )
+    self:PresentOptions()
     for _, button in ipairs({
         UI.GetKey,
         UI.RememberMe,
@@ -5673,6 +5927,7 @@ function Experience:Build()
         self:Paste()
     end, UI.KeyContainer)
     UI.PasteKey.Root.BackgroundTransparency = 1
+    UI.PasteKey.Ghost = true
     UI.PasteKey.Label.Visible = false
     UI.PasteKey.Root:SetAttribute("ActionLabel", Localization:Get("pasteKey"))
     UI.PasteGlyph = Icon.new(UI.PasteKey.Root, "copy", Theme.Secondary, 18)
@@ -5691,6 +5946,7 @@ function Experience:Build()
         toggle.Track.Position = UDim2.new(1, -4, 0.5, 0)
         toggle.Track.Size = UDim2.fromOffset(36, 14)
         corner(toggle.Track, 7)
+        toggle.TrackEdge = stroke(toggle.Track, Theme.Line, 1, 0.62)
         toggle.Knob = frame(toggle.Track, "SwitchKnob", Theme.ToggleKnobOff)
         toggle.Knob.AnchorPoint = Vector2.new(0.5, 0.5)
         toggle.Knob.Size = UDim2.fromOffset(10, 10)
@@ -5710,6 +5966,7 @@ function Experience:Build()
             self.Root:SetAttribute("Value", on)
             self.Label.TextColor3 = self.Disabled and Theme.Muted or Theme.Text
             Animation:To(self.Track, { BackgroundColor3 = track }, Motion.Toggle)
+            Animation:To(self.TrackEdge, { Transparency = self.Disabled and 0.85 or on and 0.7 or 0.48 }, Motion.Toggle)
             Animation:To(self.Knob, {
                 BackgroundColor3 = knob,
                 Position = UDim2.new(0, on and 29 or 7, 0.5, 0),
@@ -5717,11 +5974,12 @@ function Experience:Build()
         end
         toggle:Apply()
     end
-    UI.Options = Button.new(UI.Sidebar, "PreferencesToggle", "", false, "tools", function()
+    UI.Options = Button.new(UI.Sidebar, "PreferencesToggle", "", false, "settings", function()
         Loader:ShowPreferences(not self.OptionsOpen)
     end, Runtime, canInteract)
     Localization:Bind(UI.Options.Label, "preferencesTitle")
     UI.Options.Root.BackgroundTransparency = 1
+    UI.Options.Ghost = true
     UI.KeyGuidance = localized(UI.AuthBody, "KeyGuidance", "keyGuidance", 12, Theme.Secondary)
     UI.KeyGuidance.TextWrapped = true
     UI.KeyGuidance.TextYAlignment = Enum.TextYAlignment.Top
@@ -5758,6 +6016,9 @@ function Experience:Build()
         UI.GamePlaceholder
     )
     corner(UI.GameImage, Theme.PanelRadius)
+    stroke(UI.GamePlaceholder, Theme.Line, 1, 0.55)
+    UI.GameContextTag = localized(UI.CurrentGame, "ContextType", "game", 10, Theme.Muted, Theme.Medium)
+    UI.GameContextTag.TextXAlignment = Enum.TextXAlignment.Right
     UI.GameName = label(UI.CurrentGame, "Name", "", 13, Theme.Text, Theme.Medium)
     UI.GameSupport = label(UI.CurrentGame, "Support", "", 12, Theme.Secondary)
     UI.GameName.TextTruncate = Enum.TextTruncate.AtEnd
@@ -5799,15 +6060,18 @@ function Experience:Build()
         Loader:ShowPreferences(false)
     end)
     UI.Preferences = group(UI.Window, "Preferences")
-    UI.Preferences.BackgroundColor3, UI.Preferences.BackgroundTransparency = Theme.Input, 0
+    UI.Preferences.BackgroundColor3, UI.Preferences.BackgroundTransparency = Theme.Elevated, 0
     UI.Preferences.ZIndex, UI.Preferences.Visible, UI.Preferences.Active = 12, false, true
     corner(UI.Preferences, Theme.PanelRadius)
-    stroke(UI.Preferences, Theme.Line, 1)
+    stroke(UI.Preferences, Theme.WindowEdge, 1, 0.35)
+    Material:Panel(UI.Preferences)
+    UI.PreferencesHeaderDivider = frame(UI.Preferences, "HeaderDivider", Theme.Edge)
     UI.PreferencesTitle = localized(UI.Preferences, "Title", "preferencesTitle", 16, Theme.Text, Theme.Medium)
     UI.PreferenceClose = Button.new(UI.Preferences, "ClosePreferences", "", false, "x", function()
         Loader:ShowPreferences(false)
     end, Runtime, canInteract)
     UI.PreferenceClose.Root.BackgroundTransparency = 1
+    UI.PreferenceClose.Ghost = true
     UI.PreferenceClose.Label.Visible = false
     UI.PreferenceClose.Icon.Root.Position = UDim2.new(0.5, -9, 0.5, 0)
     UI.PreferenceClose.Root:SetAttribute("ActionLabel", Localization:Get("close"))
@@ -5824,6 +6088,7 @@ function Experience:Build()
     }, UI.Preferences)
     UI.PreferencesContent = frame(UI.PreferencesScroll, "PreferenceContent")
     UI.PreferencesContent.BackgroundTransparency = 1
+    UI.PreferenceSectionLabel = localized(UI.PreferencesContent, "Section", "session", 11, Theme.Muted, Theme.Medium)
     UI.PreferenceLanguage = secondary("Language", "languageOption", function()
         local order = { en = "es", es = "pt", pt = "ru", ru = "en" }
         Loader:SetLanguage(order[Settings.Language] or "en")
@@ -5842,6 +6107,18 @@ function Experience:Build()
         Community:Restore()
         self:PreferenceChanged()
     end, UI.PreferencesContent)
+    for index, button in ipairs({ UI.PreferenceLanguage, UI.PreferenceScale, UI.PreferenceMotion }) do
+        button.BaseColor = Theme.Input
+        button.Label.TextXAlignment = Enum.TextXAlignment.Left
+        button.RowIcon =
+            Icon.new(button.Root, index == 1 and "rosette" or index == 2 and "sliders" or "clock", Theme.Secondary, 18)
+        button.ValueLabel = label(button.Root, "Value", "", 12, Theme.Secondary, Theme.Medium)
+        button.ValueLabel.TextXAlignment = Enum.TextXAlignment.Right
+        button.ValueLabel.TextTruncate = Enum.TextTruncate.AtEnd
+        button.ValueChevron = Icon.new(button.Root, "chevron", Theme.Muted, 12)
+        button.ValueChevron.Root.Rotation = -90
+        button:Apply()
+    end
     UI.PreferenceNote = label(UI.PreferencesContent, "SaveState", "", 12, Theme.Secondary)
     UI.PreferenceNote.TextWrapped = true
     Community:Build()
@@ -5860,17 +6137,29 @@ function AuthField:Paint()
         return
     end
     local active = State.Focused or State.AuthError
-    Animation:To(UI.KeyStroke, {
-        Color = State.AuthError and Theme.Danger or State.Focused and Theme.Accent or Theme.Line,
-        Transparency = active and 0.04 or 0.15,
+    local ink = State.AuthError and Theme.Danger or State.Focused and Theme.AccentText or Theme.Line
+    Animation:To(
+        UI.KeyStroke,
+        { Color = ink, Transparency = active and 0.12 or self.Hovered and 0.32 or 0.48 },
+        Motion.Hover
+    )
+    Animation:To(UI.KeyContainer, {
+        BackgroundColor3 = State.AuthError and Theme.Input:Lerp(Theme.Danger, 0.025)
+            or State.Focused and Theme.Input:Lerp(Theme.Accent, 0.045)
+            or self.Hovered and Theme.Elevated
+            or Theme.Input,
     }, Motion.Hover)
+    UI.KeyIcon:SetColor(
+        State.AuthError and Theme.Danger or State.Focused and Theme.AccentText or Theme.Muted,
+        Motion.Hover
+    )
+    Animation:To(UI.KeyRim, { BackgroundTransparency = active and 0.93 or 0.97 }, Motion.Hover)
     if UI.KeyFocusLine then
         UI.KeyFocusLine.BackgroundColor3 = State.AuthError and Theme.Danger or Theme.Accent
-        Animation:To(
-            UI.KeyFocusLine,
-            { Size = active and UDim2.new(1, -24, 0, 2) or UDim2.fromOffset(0, 2) },
-            Motion.Page
-        )
+        Animation:To(UI.KeyFocusLine, {
+            Size = active and UDim2.new(1, -24, 0, 1) or UDim2.fromOffset(0, 1),
+            BackgroundTransparency = active and 0.12 or 1,
+        }, Motion.Toggle)
     end
 end
 function AuthField:Hint()
@@ -5922,7 +6211,6 @@ function AuthField:Feedback(key, message)
         UI.KeyFeedback.TextTransparency = 1
         Animation:To(UI.KeyFeedback, { TextTransparency = 0 }, Motion.Hover)
     end
-    UI.KeyIcon:SetColor((State.AuthError or State.Focused) and Theme.Accent or Theme.Muted)
     AuthField:Paint()
     reconcile()
     Responsive:Update()
@@ -5952,9 +6240,8 @@ local function authBusy(value)
     Experience:SetStage(value and "authChecking" or "authReady")
     Experience:RefreshOptions()
     if value then
-        Animation:To(UI.Validate.Scale, { Scale = 0.97 }, Motion.Press, function()
-            Animation:To(UI.Validate.Scale, { Scale = 1 }, Motion.Hover)
-        end)
+        -- Waiting feedback stays inside the control; its outer geometry never pulses.
+        Animation:To(UI.Validate.Scale, { Scale = 1 }, Motion.Press)
         AuthField:SetVisible(false)
         UI.Key:ReleaseFocus(false)
         Localization:Bind(UI.Validate.Label, "validating")
@@ -5967,12 +6254,16 @@ local function authBusy(value)
                 TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, false)
             )
         end
-        Animation:To(UI.Auth, { GroupTransparency = 0.12 }, Motion.Page)
+        if State.Page == "Auth" then
+            Animation:To(UI.Auth, { GroupTransparency = 0.12 }, Motion.Page)
+        end
     else
         Animation:Cancel(State.AuthSpinner)
         State.AuthSpinner = nil
         Localization:Bind(UI.Validate.Label, "journeyKey")
-        Animation:To(UI.Auth, { GroupTransparency = 0 }, Motion.Page)
+        if State.Page == "Auth" then
+            Animation:To(UI.Auth, { GroupTransparency = 0 }, Motion.Page)
+        end
     end
 end
 -- Frontend bridge only. The host confirms AFTER its provider accepts the key.
@@ -6257,9 +6548,11 @@ local function buildAuth()
     UI.KeyContainer = frame(UI.AuthBody, "KeyField", Theme.Input)
     corner(UI.KeyContainer, Theme.InputRadius)
     UI.KeyStroke = stroke(UI.KeyContainer, Theme.Line, 1, 0.1)
+    Material:Tone(UI.KeyContainer)
+    UI.KeyRim = Material:Rim(UI.KeyContainer, Theme.Rim, 0.96)
     UI.KeyFocusLine = frame(UI.KeyContainer, "FocusUnderline", Theme.Accent)
     UI.KeyFocusLine.Position = UDim2.new(0, 12, 1, -3)
-    UI.KeyFocusLine.Size = UDim2.fromOffset(0, 2)
+    UI.KeyFocusLine.Size = UDim2.fromOffset(0, 1)
     corner(UI.KeyFocusLine, 2)
     UI.KeyIcon = Icon.new(UI.KeyContainer, "key", Theme.Muted, 19)
     place(UI.KeyIcon.Root, 15, 15, 19, 19)
@@ -6296,6 +6589,7 @@ local function buildAuth()
         AuthField:SetVisible(not Settings.KeyVisible)
     end, Runtime, AuthField.Interactive)
     UI.RevealKey.Root.BackgroundTransparency = 1
+    UI.RevealKey.Ghost = true
     UI.RevealKey.Root.ZIndex = 3
     UI.RevealKey.Label.Visible = false
     UI.RevealEye = Icon.new(UI.RevealKey.Root, "eye", Theme.Secondary, 19)
@@ -6341,12 +6635,12 @@ local function buildAuth()
         Responsive:Update()
     end)
     Runtime:Connect(UI.KeyContainer.MouseEnter, function()
-        if not State.Focused and canInteract() then
-            Animation:To(UI.KeyContainer, { BackgroundColor3 = Theme.Elevated }, Motion.Hover)
-        end
+        AuthField.Hovered = canInteract()
+        AuthField:Paint()
     end)
     Runtime:Connect(UI.KeyContainer.MouseLeave, function()
-        Animation:To(UI.KeyContainer, { BackgroundColor3 = Theme.Input }, Motion.Hover)
+        AuthField.Hovered = false
+        AuthField:Paint()
     end)
     UI.Validate = Button.new(UI.AuthBody, "Validate", "", true, nil, function()
         validate(UI.Key.Text)
@@ -6358,7 +6652,7 @@ local function buildAuth()
     Localization:Bind(UI.GetKey.Label, "getKey")
     UI.AuthBusyTrack = frame(UI.Validate.Root, "WaitingTrack", Theme.AccentDark)
     UI.AuthBusyTrack.Position = UDim2.new(0, 14, 1, -8)
-    UI.AuthBusyTrack.Size = UDim2.new(1, -28, 0, 3)
+    UI.AuthBusyTrack.Size = UDim2.new(1, -28, 0, 2)
     UI.AuthBusyTrack.ClipsDescendants = true
     UI.AuthBusyTrack.Visible = false
     corner(UI.AuthBusyTrack, 2)
@@ -6366,12 +6660,16 @@ local function buildAuth()
     corner(UI.AuthBusyFill, 2)
     UI.AccessAside = frame(UI.AuthBody, "AccessContext", Theme.Elevated)
     corner(UI.AccessAside, Theme.PanelRadius)
-    stroke(UI.AccessAside, Theme.Edge, 1)
+    stroke(UI.AccessAside, Theme.Edge, 1, 0.25)
+    Material:Panel(UI.AccessAside)
+    UI.AsideDivider = frame(UI.AccessAside, "ContextDivider", Theme.Line)
+    UI.AsideDivider.Position, UI.AsideDivider.Size = UDim2.new(0, 16, 1, -64), UDim2.new(1, -32, 0, 1)
+    UI.AsideDivider.BackgroundTransparency = 0.5
     UI.AsideTitle = localized(UI.AccessAside, "ContextTitle", "asideTitle", 14, Theme.Text, Theme.Medium)
     UI.AsideTitle.TextWrapped = true
     UI.AsideCopy = localized(UI.AccessAside, "ContextCopy", "asideCopy", 12, Theme.Secondary)
     UI.AsideCopy.TextWrapped, UI.AsideCopy.TextYAlignment = true, Enum.TextYAlignment.Top
-    UI.AsideShield = Icon.new(UI.AccessAside, "shield-check", Theme.AccentText, 28)
+    UI.AsideShield = Icon.new(UI.AccessAside, "key", Theme.AccentText, 28)
     UI.AuthArtwork = BrandArt.new(UI.AuthBody, "HeroArtwork")
     UI.AuthArtwork:Set(Settings.Artwork)
     Experience:Build()
@@ -6494,7 +6792,8 @@ function Cards:Create(product, index)
     card.Root = group(UI.Catalog, "Product_" .. product.Id)
     card.Root.BackgroundTransparency, card.Root.BackgroundColor3, card.Root.ClipsDescendants = 0, Theme.Elevated, true
     corner(card.Root, Theme.PanelRadius)
-    card.Border = stroke(card.Root, Theme.Line, 1, 0.35)
+    card.Border = stroke(card.Root, Theme.Line, 1, 0.45)
+    Material:Tone(card.Root)
     card.Artwork = Artwork.new(
         card.Root,
         "ProductArtwork",
@@ -6529,7 +6828,11 @@ function Cards:Create(product, index)
     )
     card.Select.Root.BackgroundTransparency, card.Select.Label.Visible = 1, false
     card.Select.Root:SetAttribute("ActionLabel", Localization:Get("gameInspect") .. " · " .. productName(product))
-    card.InspectGlyph = Icon.new(card.Select.Root, "grid", Theme.Text, 16)
+    card.InspectBadge = frame(card.Select.Root, "InspectAffordance", Theme.Surface)
+    card.InspectBadge.BackgroundTransparency = 0.18
+    corner(card.InspectBadge, Theme.Radius)
+    stroke(card.InspectBadge, Theme.Line, 1, 0.4)
+    card.InspectGlyph = Icon.new(card.InspectBadge, "info", Theme.Secondary, 16)
     card.InspectGlyph.Root.AnchorPoint = Vector2.new(0, 0)
     card.Current = frame(card.Root, "CurrentGameBadge", Theme.AccentDark)
     corner(card.Current, 6)
@@ -6537,6 +6840,7 @@ function Cards:Create(product, index)
     card.CurrentLabel.TextXAlignment = Enum.TextXAlignment.Center
     card.CurrentLabel.TextTruncate = Enum.TextTruncate.AtEnd
     card.Footer = frame(card.Root, "CardFooter", Theme.Input)
+    Material:Rim(card.Footer, Theme.Rim, 0.96)
     card.Logo = Icon.new(card.Footer, "rosette", Theme.Accent, 22)
     card.Name = label(card.Footer, "ProductName", "", 17, Theme.Text, Theme.Bold)
     card.Name.TextWrapped, card.Name.TextTruncate = true, Enum.TextTruncate.AtEnd
@@ -6547,7 +6851,8 @@ function Cards:Create(product, index)
     card.Details.BackgroundColor3, card.Details.BackgroundTransparency, card.Details.Visible =
         Theme.Surface, 0.03, false
     corner(card.Details, Theme.PanelRadius)
-    stroke(card.Details, Theme.Edge, 1)
+    stroke(card.Details, Theme.Edge, 1, 0.2)
+    Material:Panel(card.Details)
     card.DetailsTitle = localized(card.Details, "About", "gameAbout", 12, Theme.Secondary, Theme.Medium)
     card.Description = label(card.Details, "Description", "", 12, Theme.Text)
     card.Description.TextWrapped, card.Description.TextYAlignment, card.Description.TextTruncate =
@@ -6593,11 +6898,10 @@ function Cards:Create(product, index)
             Motion.Hover
         )
         if not other.DetailsOpen then
-            Animation:To(
-                other.Border,
-                { Color = hovered and Theme.Muted or Theme.Line, Transparency = hovered and 0.1 or 0.35 },
-                Motion.Hover
-            )
+            Animation:To(other.Border, {
+                Color = hovered and Theme.Line:Lerp(Theme.AccentText, 0.22) or Theme.Line,
+                Transparency = hovered and 0.15 or 0.45,
+            }, Motion.Hover)
         end
     end
     local function hover(value)
@@ -6659,8 +6963,8 @@ function Cards:Reveal()
         if not Settings.ReducedMotion and card.RestPosition then
             local token = card.RevealToken
             card.Root.GroupTransparency = 1
-            card.Root.Position = card.RestPosition + UDim2.fromOffset(0, 10)
-            card.RevealThread = card.Scope:Later(math.min(index - 1, 5) * 0.035, function()
+            card.Root.Position = card.RestPosition + UDim2.fromOffset(0, Motion.RevealDistance)
+            card.RevealThread = card.Scope:Later(math.min(index - 1, 5) * 0.025, function()
                 card.RevealThread = nil
                 if State.Visible and State.Page == "Products" and token == card.RevealToken then
                     Animation:To(card.Root, { GroupTransparency = 0, Position = card.RestPosition }, Motion.Enter)
@@ -6705,7 +7009,8 @@ function Cards:Layout()
         }, Motion.Hover)
         card.Artwork.Root.Size = UDim2.fromOffset(cardWidth, artHeight)
         place(card.Select.Root, 0, 0, cardWidth, artHeight)
-        place(card.InspectGlyph.Root, 12, artHeight - 30, 16, 16)
+        place(card.InspectBadge, 12, artHeight - 40, 28, 28)
+        place(card.InspectGlyph.Root, 6, 6, 16, 16)
         place(card.Footer, 0, artHeight, cardWidth, footerHeight)
         card.Logo.Root.Visible = false
         local actionWidth = cardWidth >= 340 and 116 or hit
@@ -6783,7 +7088,7 @@ end
 function Navigation:PageRoot(page)
     return page == "Auth" and UI.Auth or page == "Products" and UI.Products or UI.LicensePanel
 end
-function Navigation:Refresh()
+function Navigation:Refresh(instant)
     UI.AuthNav.Root:SetAttribute("ActionLabel", Localization:Get("homeNav"))
     UI.ProductsNav.Root:SetAttribute("ActionLabel", Localization:Get("tipProducts"))
     UI.RefreshNav.Root:SetAttribute("ActionLabel", Localization:Get("tipRefresh"))
@@ -6801,7 +7106,7 @@ function Navigation:Refresh()
     for index, button in ipairs({ UI.AuthNav, UI.ProductsNav, UI.LicenseNav, UI.RefreshNav }) do
         button.Navigation = true
         button.Selected = index == (State.Page == "Auth" and 1 or State.Page == "Products" and 2 or 3)
-        button.BaseColor = Theme.Inactive
+        button.BaseColor = Theme.Hover
         button:Apply()
     end
     Localization:Bind(UI.AuthNav.Label, "homeNav")
@@ -6813,8 +7118,21 @@ function Navigation:Refresh()
     local selected = State.Page == "Auth" and UI.AuthNav.Root
         or State.Page == "Products" and UI.ProductsNav.Root
         or UI.LicenseNav.Root
-    UI.ActiveNav.Visible = selected.Visible
-    Animation:To(UI.ActiveNav, { Position = UDim2.fromOffset(0, selected.Position.Y.Offset + 8) }, Motion.Page)
+    UI.ActiveNav.Visible, UI.NavigationPlate.Visible = selected.Visible, selected.Visible
+    local marker = UDim2.fromOffset(selected.Position.X.Offset + 3, selected.Position.Y.Offset + 12)
+    local markerSize = UDim2.fromOffset(2, math.max(12, selected.Size.Y.Offset - 24))
+    if instant or not self.PlateReady or Settings.ReducedMotion then
+        Animation:CancelProperty(UI.NavigationPlate, "Position")
+        Animation:CancelProperty(UI.NavigationPlate, "Size")
+        Animation:CancelProperty(UI.ActiveNav, "Position")
+        UI.NavigationPlate.Position, UI.NavigationPlate.Size = selected.Position, selected.Size
+        UI.ActiveNav.Position, UI.ActiveNav.Size = marker, markerSize
+    else
+        Animation:To(UI.NavigationPlate, { Position = selected.Position, Size = selected.Size }, Motion.Indicator)
+        UI.ActiveNav.Size = markerSize
+        Animation:To(UI.ActiveNav, { Position = marker }, Motion.Indicator)
+    end
+    self.PlateReady = true
 end
 
 function Navigation:Go(page, force)
@@ -6828,8 +7146,9 @@ function Navigation:Go(page, force)
         if not LicenseOffer:Enabled() then
             return false
         end
-        LicenseOffer:Build() -- Lazy: the cold key prompt does not construct pricing geometry.
+        LicenseOffer:Build()
     end
+    Button:Release(nil, true)
     closeLanguage()
     Accessibility:Clear()
     UI.AuthArtwork:CancelReveal()
@@ -6839,26 +7158,46 @@ function Navigation:Go(page, force)
     local previous, destination = self:PageRoot(State.Page), self:PageRoot(page)
     local oldIndex = State.Page == "Auth" and 1 or State.Page == "Products" and 2 or 3
     local newIndex = page == "Auth" and 1 or page == "Products" and 2 or 3
+    local direction = newIndex >= oldIndex and 1 or -1
+    local continuing = destination.Visible
     State.Page, State.Focused = page, false
-    UI.Key.TextEditable = State.Visible and page == "Auth" and State.Activity ~= "Validating"
+    UI.Key.TextEditable = State.Visible and page == "Auth" and State.Activity == "Idle"
     UI.Key.Active = UI.Key.TextEditable
     UI.Key:ReleaseFocus(false)
     reconcile()
-    self:Refresh()
-    if previous == destination then
-        destination.Visible = true
-        Animation:To(destination, { GroupTransparency = 0 }, Motion.Page)
-        return true
-    end
-    previous.Visible = false
-    Animation:CancelTree(previous)
-    destination.Visible, destination.GroupTransparency = true, 1
-    destination.Position = UDim2.fromOffset(Settings.ReducedMotion and 0 or (newIndex > oldIndex and 8 or -8), 0)
-    Animation:To(destination, { GroupTransparency = 0, Position = UDim2.fromOffset(0, 0) }, Motion.Page, function()
-        if token == State.PageToken then
-            previous.Visible = false
+    -- Every root is reconciled on every switch. Old completion closures cannot
+    -- resurrect a third page after A -> B -> C -> A in the same animation window.
+    for _, root in ipairs({ UI.Auth, UI.Products, UI.LicensePanel }) do
+        Animation:CancelProperty(root, "Position")
+        Animation:CancelProperty(root, "GroupTransparency")
+        if root ~= previous and root ~= destination then
+            root.Visible, root.GroupTransparency = false, 1
+            root.Position = UDim2.fromOffset(0, 0)
         end
-    end)
+    end
+    if previous ~= destination then
+        Animation:CancelTree(previous)
+        if Settings.ReducedMotion then
+            previous.Visible = false
+        else
+            Animation:To(previous, {
+                Position = UDim2.fromOffset(-direction * Motion.PageDistance / 2, 0),
+            }, Motion.PageExit)
+            Animation:To(previous, { GroupTransparency = 1 }, Motion.PageExit, function()
+                if token == State.PageToken and State.Page == page then
+                    previous.Visible = false
+                    previous.Position = UDim2.fromOffset(0, 0)
+                end
+            end)
+        end
+    end
+    if not continuing and not Settings.ReducedMotion then
+        destination.GroupTransparency = 1
+        destination.Position = UDim2.fromOffset(direction * Motion.PageDistance, 0)
+    end
+    destination.Visible = true
+    Animation:To(destination, { Position = UDim2.fromOffset(0, 0) }, Motion.Page)
+    Animation:To(destination, { GroupTransparency = 0 }, Motion.Page)
     Cards:ResetHover()
     Responsive:Update()
     if page == "Auth" then
@@ -6891,7 +7230,9 @@ function Responsive:Auth(width, height, narrow)
     place(UI.GamePlaceholder, 0, 4, 48, 48)
     place(UI.GameFallback.Root, 14, 14, 20, 20)
     place(UI.GameImage, 0, 0, 48, 48)
-    place(UI.GameName, 64, 3, math.max(1, left - 72), 26)
+    UI.GameContextTag.Visible = left >= 400
+    place(UI.GameContextTag, math.max(0, left - 56), 3, 56, 26)
+    place(UI.GameName, 64, 3, math.max(1, left - (left >= 400 and 136 or 72)), 26)
     place(UI.GameSupport, 64, 30, math.max(1, left - 72), 20)
     UI.CurrentGame.BackgroundTransparency = 1
     UI.GameName.TextSize = 14
@@ -6934,6 +7275,9 @@ function Responsive:Auth(width, height, narrow)
         node.Label.TextSize = 11
         place(node.Label, 0, 12, nodeWidth, 16)
     end
+    for index, rail in ipairs(UI.AuthJourneyRails) do
+        place(rail.Root, 8 + (index - 0.5) * nodeWidth + 10, 7, math.max(1, nodeWidth - 20), 1)
+    end
     place(UI.AuthStatus, 8, 33, left - 16, 22)
     UI.AuthStatus.TextSize, UI.AuthStatus.TextXAlignment = 12, Enum.TextXAlignment.Left
     UI.AuthJourneyNote.Visible = false
@@ -6962,9 +7306,10 @@ function Responsive:Auth(width, height, narrow)
     UI.AsideShield.Root.Visible = Settings.Artwork == nil
     if aside then
         place(UI.AccessAside, left + 24, 0, asideWidth, 294)
-        place(UI.AsideTitle, 16, 16, asideWidth - 32, 46)
-        place(UI.AsideCopy, 16, 70, asideWidth - 32, 80)
-        place(UI.AsideShield.Root, (asideWidth - 28) / 2, 200, 28, 28)
+        place(UI.AsideTitle, 16, 64, asideWidth - 32, 50)
+        UI.AsideTitle.TextSize, UI.AsideTitle.Font = 16, Theme.Medium
+        place(UI.AsideCopy, 16, 126, asideWidth - 32, 84)
+        place(UI.AsideShield.Root, 16, 20, 24, 24)
         place(UI.AuthArtwork.Root, left + 40, 148, asideWidth - 32, 130)
         UI.AuthArtwork:Layout(asideWidth - 32, 130)
         -- The miniature mark is art, not unreadable microcopy at a fractional scale.
@@ -7010,6 +7355,7 @@ function Responsive:Update()
     if not State.Alive or not UI.Pages then
         return
     end
+    local oldLayout = State.Layout
     local safe = safeSize()
     local narrow = (safe.X < 620 and safe.X / safe.Y < 1.35) or (safe.X < 850 and safe.X / safe.Y < 1.22)
     local width = narrow and math.min(560, safe.X - 20) or math.min(912, safe.X - 20)
@@ -7049,6 +7395,7 @@ function Responsive:Update()
     Animation:CancelProperty(UI.Window, "Position")
     UI.Window.Position = UDim2.fromOffset(center.X, center.Y)
     UI.Sidebar.Visible, UI.Header.Visible = not keyboardCompact, header > 0
+    place(UI.ContentSurface, rail, 0, width - rail, height)
     place(UI.Sidebar, 0, 0, rail, height)
     place(UI.SidebarDivider, rail - 1, 0, 1, height)
     UI.RailSurface.Visible = false
@@ -7059,7 +7406,9 @@ function Responsive:Update()
     UI.Brand.TextSize, UI.Brand.Font = 18, Theme.Bold
     place(UI.Brand, 54, 12, rail - 66, 40)
     local navStep = hit + 4
-    local navY = header + (height < 400 and 4 or 20)
+    local navY = header + (height < 400 and 4 or 32)
+    UI.NavigationCaption.Visible = expanded and height >= 420
+    place(UI.NavigationCaption, 22, header + 8, rail - 40, 16)
     local labelInset = 44
     for index, button in ipairs({ UI.AuthNav, UI.ProductsNav, UI.LicenseNav, UI.RefreshNav }) do
         place(
@@ -7078,13 +7427,6 @@ function Responsive:Update()
     UI.RefreshNav.Root.Visible = height >= 420
     UI.ProductsNav.Root.Visible = height >= navY + navStep + hit
     UI.LicenseNav.Root.Visible = LicenseOffer:Enabled() and height >= navY + navStep * 2 + hit + 8
-    place(
-        UI.ActiveNav,
-        0,
-        navY + (State.Page == "Auth" and 0 or State.Page == "Products" and navStep or navStep * 2) + 8,
-        2,
-        hit - 16
-    )
     local headerWidth = width - rail
     local controls = hit * 2 + 12
     local avatarVisible = headerWidth >= 460
@@ -7114,6 +7456,8 @@ function Responsive:Update()
     local optionY = height - hit * 2 - 16
     local footerFits = optionY >= navY + navStep * 2 + hit + 4
     UI.Options.Root.Visible = footerFits
+    UI.UtilityDivider.Visible = expanded and footerFits
+    place(UI.UtilityDivider, 20, optionY - 10, math.max(1, rail - 40), 1)
     UI.Options.Label.Visible = expanded
     place(UI.Options.Root, expanded and 8 or (rail - hit) / 2, optionY, expanded and rail - 16 or hit, hit)
     UI.Options.Icon.Root.Position = UDim2.new(expanded and 0 or 0.5, expanded and 14 or -9, 0.5, 0)
@@ -7122,6 +7466,8 @@ function Responsive:Update()
     place(UI.LanguageToggle, expanded and 8 or (rail - hit) / 2, height - hit - 8, expanded and rail - 16 or hit, hit)
     UI.LanguageToggle.Visible = height >= header + hit + 16
     UI.LanguageChevron.Root.Visible = expanded
+    UI.LanguageName.Visible = expanded
+    place(UI.LanguageName, 48, 0, math.max(1, rail - 96), hit)
     place(UI.LanguageFlag, expanded and 12 or (hit - 26) / 2, (hit - 26) / 2, 26, 26)
     place(UI.LanguageChevron.Root, expanded and rail - 48 or 16, (hit - 12) / 2, 12, 12)
     for index, id in ipairs({ "discord", "telegram", "youtube" }) do
@@ -7150,7 +7496,7 @@ function Responsive:Update()
     UI.AuthScroll.Size = UDim2.new(1, 0, 1, -dockHeight)
     self:Auth(contentWidth, authHeight, narrow)
     Community:LayoutDock(rail + pad, pageTop + contentHeight - dockHeight, contentWidth, height)
-    Navigation:Refresh()
+    Navigation:Refresh(oldLayout.Rail ~= rail or oldLayout.Hit ~= hit or oldLayout.Header ~= header)
     Cards:Layout()
     LicenseOffer:Layout(true)
     Modal:Layout(true)
@@ -7236,6 +7582,7 @@ local function bindInput()
         end
     end)
     Runtime:Connect(Services.Input.InputEnded, function(input)
+        Button:Release(input)
         if
             State.Drag
             and (
@@ -7250,6 +7597,10 @@ local function bindInput()
         end
     end)
     Runtime:Connect(Services.Input.WindowFocusReleased, function()
+        Button:Release(nil, true)
+        LanguageController.Pressed, LanguageController.Hovered = false, false
+        LanguageController:Paint()
+        Cards:ResetHover()
         State.Drag = nil
     end)
     Runtime:Connect(Services.Input.InputBegan, function(input, processed)
@@ -8161,8 +8512,6 @@ function Loader:ShowPreferences(visible)
     Experience:RefreshOptions()
     Responsive:Update()
     if Experience.OptionsOpen and not wasOpen then
-        UI.Preferences.GroupTransparency = Settings.ReducedMotion and 0 or 1
-        Animation:To(UI.Preferences, { GroupTransparency = 0 }, Motion.Page)
         if Accessibility.Keyboard then
             Accessibility:Focus(UI.PreferenceClose.Root)
         end
@@ -8284,6 +8633,7 @@ function Loader:Hide()
     if not State.Alive then
         return self
     end
+    Button:Release(nil, true)
     State.VisibilityToken = State.VisibilityToken + 1
     local token = State.VisibilityToken
     State.Visible = false
@@ -8339,6 +8689,7 @@ function Loader:Destroy()
     Experience:SavePrefs()
     State.AuthInfo = nil
     State.SlowAuthTimer = nil
+    Button.Capture = nil
     State.Alive = false
     State.Visible = false
     State.Drag = nil
@@ -8487,6 +8838,7 @@ local function initialize()
     Loader:SetProducts(loadSupportedGames())
     Diagnostics.ReadyAt = os.clock()
     reconcile()
+    State.Presented = true
     if State.Visible then
         Animation:To(UI.Window, { GroupTransparency = 0 }, Motion.Enter)
         UI.AuthArtwork:Reveal()
