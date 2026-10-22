@@ -1,4 +1,4 @@
--- NeronUi 2.1 — reference-measured, client-only, dependency-free.
+-- NeronUi 2.2 — reference-measured, client-only, dependency-free.
 -- require(ModuleScript) or loadstring(readfile(...))() returns the library; nothing auto-opens.
 -- Set(value [, silent]) fires Callback only on change. Defaults are silent.
 -- Range:Set(low, high [, silent]); Color:Set(color [, silent]); callbacks receive snapshots.
@@ -6,7 +6,10 @@
 -- Textbox Numeric=true restricts editing to a finite signed decimal while preserving Textbox string callbacks.
 -- Parent may be supplied for Studio. Otherwise protected UI -> CoreGui -> PlayerGui.
 -- Same Id replaces the previous window, including listeners, across library re-execution.
--- Window > Tab > SubTab > controls remains the public hierarchy; Settings is a separate overlay.
+-- Window > Tab > optional SubTab > optional Section > controls; Settings stays a separate overlay.
+-- Tab:Add* supports direct elements; mixed direct/SubTab content exposes a General page.
+-- AddSection owns only explicitly added children. Empty legacy headings retain Get/Set(text).
+-- Sections fold without changing child values/Flags; AddSectionHeader is always heading-only.
 -- CreateWindow also accepts Theme, Language, Settings=false, Autoload=false, GameName, Filesystem.
 -- ManualSize accepts Vector2.new(w,h), offset UDim2 or {w,h}; nil/false keeps Size/default.
 -- Legacy ManualSize=true still selects500x480. Resizable defaults true; MinSize/MaxSize bound it.
@@ -110,6 +113,10 @@ local T = {
         Header = 64,
         Strip = 40,
         ContentTop = 110,
+        DirectContentTop = 70,
+        SectionHeader = 44,
+        SectionDescriptionHeader = 60,
+        SectionRow = 44,
         ContentLeft = 12,
         ContentRight = 42,
         LabelInset = 16,
@@ -168,7 +175,7 @@ local T = {
         MaximumRegions = 32,
         InspectorHeight = 404,
     },
-    Radius = { Window = 6, Row = 2, Popover = 3, Input = 2, Button = 3 },
+    Radius = { Window = 6, Row = 2, Section = 4, Popover = 3, Input = 2, Button = 3 },
     Spacing = { Tiny = 4, Small = 8, Normal = 12, Medium = 16, Large = 24, Wide = 32 },
     Type = {
         Brand = 18,
@@ -200,12 +207,16 @@ local U, Maid, Motion, Icons, Input, Overlay, Scroll = {}, {}, {}, {}, {}, {}, {
 local Window, Tab, SubTab, Control, Components = {}, {}, {}, {}, {}
 local Presentation, Locale, Storage, Profiles, SettingsUI = {}, {}, {}, {}, {}
 local Tooltip, Geometry, Premium, Dependency, Async, Webhook = {}, {}, {}, {}, {}, {}
-local Visual, Radial, Spatial = {}, {}, {}
-local Library = { Version = "2.1.0", Tokens = T, Theme = Theme, Icons = {} }
+local Visual, Radial, Spatial, Sections = {}, {}, {}, {}
+local Library = { Version = "2.2.0", Tokens = T, Theme = Theme, Icons = {} }
 Window.__index = Window
 Tab.__index = Tab
 SubTab.__index = SubTab
 Control.__index = Control
+Sections.__index = Sections
+setmetatable(Sections, { __index = Control })
+Sections.Group = setmetatable({}, { __index = Dependency })
+Sections.Group.__index = Sections.Group
 
 function Maid.new(motion)
     return setmetatable({ items = {}, dead = false, motion = motion }, { __index = Maid })
@@ -1384,7 +1395,7 @@ function Window:_selectTab(tab)
     end
     self.activeTab = tab
     tab.header.Visible = true
-    tab.strip.Visible = true
+    tab:_syncPages()
     for _, other in ipairs(self.tabs) do
         other:_render()
     end
@@ -1521,6 +1532,7 @@ function Window:_responsive(preserveCapture)
     for _, tab in ipairs(self.tabs) do
         tab.title.Position = UDim2.fromOffset(drawer and 48 or 16, 10)
         tab.description.Position = UDim2.fromOffset(drawer and 48 or 16, 32)
+        tab:_syncPages()
         for _, sub in ipairs(tab.subtabs) do
             local reserve = self.resizeEnabled and not self.compact and 44 or 0
             sub.scroll.frame.Size = UDim2.new(1, -T.Geometry.ContentRight, 1, -reserve)
@@ -1768,6 +1780,43 @@ function Tab:_render()
         { BackgroundColor3 = w.theme.RowHover, BackgroundTransparency = (selected or self.hover) and 0.12 or 1 }
     )
 end
+-- A direct page is still a real SubTab owner internally. No parallel flag or canvas registry.
+function Tab:_syncPages()
+    if self.destroyed then
+        return
+    end
+    local explicit = false
+    for _, sub in ipairs(self.subtabs) do
+        if not sub.direct and not sub.destroyed and sub.visible then
+            explicit = true
+            break
+        end
+    end
+    self.hasSubTabs = explicit
+    self.strip.Visible = self.window.activeTab == self and explicit
+    local top = explicit and T.Geometry.ContentTop or T.Geometry.DirectContentTop
+    for _, sub in ipairs(self.subtabs) do
+        sub.button.Visible = sub.visible and (not sub.direct or explicit)
+        if sub.contentTop ~= top then
+            sub.contentTop = top
+            self.window.motion:Cancel(sub.host, "Position")
+            sub.host.Position = UDim2.fromOffset(0, top)
+            sub.host.Size = UDim2.new(1, 0, 1, -top)
+        end
+    end
+    self:_indicator()
+end
+function Tab:_direct()
+    assert(not self.destroyed, "Neron tab is destroyed")
+    if not self.directPage or self.directPage.destroyed then
+        self.directPage = self:_addSubTab({ Name = "General", LocaleKey = "General" }, true)
+    end
+    return self.directPage
+end
+function Tab:SelectDirect()
+    self:_direct():Select()
+    return self
+end
 function Tab:_selectSub(sub)
     if self.window.tooltip then
         self.window.tooltip:Cancel()
@@ -1801,14 +1850,15 @@ function Tab:_selectSub(sub)
         end
     end
     self.activeSub = sub
+    self:_syncPages()
     sub.host.Visible = true
     w.motion:Cancel(sub.host)
     sub.host.GroupTransparency = 0.65
-    sub.host.Position = UDim2.fromOffset(-12, T.Geometry.ContentTop)
+    sub.host.Position = UDim2.fromOffset(-12, sub.contentTop)
     w.motion:To(
         sub.host,
         T.Motion.Structural,
-        { GroupTransparency = 0, Position = UDim2.fromOffset(0, T.Geometry.ContentTop) }
+        { GroupTransparency = 0, Position = UDim2.fromOffset(0, sub.contentTop) }
     )
     for _, other in ipairs(self.subtabs) do
         other:_render()
@@ -1822,7 +1872,7 @@ function Tab:_indicator()
         self.indicator.Visible = false
         return
     end
-    self.indicator.Visible = self.window.activeTab == self
+    self.indicator.Visible = self.window.activeTab == self and self.hasSubTabs == true
     local x = (sub.button.AbsolutePosition.X - self.strip.AbsolutePosition.X) / self.window.scale
     self.window.motion:To(
         self.indicator,
@@ -1831,6 +1881,9 @@ function Tab:_indicator()
     )
 end
 function Tab:AddSubTab(config)
+    return self:_addSubTab(config, false)
+end
+function Tab:_addSubTab(config, direct)
     assert(not self.destroyed, "Neron tab is destroyed")
     config = config or {}
     local w = self.window
@@ -1842,6 +1895,7 @@ function Tab:AddSubTab(config)
         name = tostring(config.Name or "General"),
         visible = config.Visible ~= false,
         disabled = config.Disabled == true,
+        direct = direct == true,
         controls = {},
         tooltipText = config.Tooltip or config.ToolTip,
     }, SubTab)
@@ -1851,7 +1905,7 @@ function Tab:AddSubTab(config)
     sub.button = U.button(self.stripScroll, {
         Name = sub.name,
         Size = UDim2.fromOffset(width, T.Geometry.Strip - 1),
-        LayoutOrder = self.subSerial,
+        LayoutOrder = direct and 0 or self.subSerial,
         Visible = sub.visible,
         ZIndex = self.strip.ZIndex + 1,
     })
@@ -1910,6 +1964,7 @@ function Tab:AddSubTab(config)
     end)
     Locale.enroll(w, sub, config, "SubTab")
     sub:_render()
+    self:_syncPages()
     if not self.activeSub and sub.visible and not sub.disabled then
         self.activeSub = sub
         if w.activeTab == self then
@@ -2088,6 +2143,7 @@ function SubTab:SetVisible(value)
             self:Select()
         end
     end
+    self.tab:_syncPages()
     self.window:_indexChanged()
     return self
 end
@@ -2119,6 +2175,10 @@ function SubTab:Destroy()
     end
     U.remove(self.tab.subtabs, self)
     self.bag:Destroy()
+    if self.tab.directPage == self then
+        self.tab.directPage = nil
+    end
+    self.tab:_syncPages()
 end
 
 -- One continuous row system. No component cards; separators and typography carry hierarchy.
@@ -2179,6 +2239,9 @@ function Components.row(page, config, kind)
     }, dependency and dependency.body or page.scroll.frame)
     if dependency then
         table.insert(dependency.controls, self)
+        if dependency.section then
+            dependency.promoted = true
+        end
     end
     self.row.BackgroundTransparency = 0
     self.row.BackgroundColor3 = w.theme.RowBackground
@@ -2198,7 +2261,7 @@ function Components.row(page, config, kind)
         Size = UDim2.new(1, -T.Geometry.LabelInset * 2, 0, 1),
         ZIndex = self.row.ZIndex + 1,
     }, w, "Separator")
-    if dependency then
+    if dependency and not dependency.section then
         self.dependencyBranch = U.frame(self.row, {
             Name = "DependentBranch",
             Position = UDim2.fromOffset(-2, 32),
@@ -2253,7 +2316,7 @@ function Components.row(page, config, kind)
     Tooltip.bind(w, self, self.row, self.bag, function()
         return self.displayTooltip or self.displayDescription or self.description
     end, function()
-        return self:_available()
+        return self:_available() and (not self.sectionGroup or not self.sectionGroup.promoted)
     end)
     if not page.system then
         Locale.enroll(w, self, config, "Control")
@@ -2309,7 +2372,7 @@ function Control:_layout()
         or ((self.window.manualSize or self.window.defaultDesktopSize) and not self.columnInline and width < 400)
     local description = self.displayDescription or self.description
     local hasDesc = description ~= ""
-    local h = T.Geometry.Row
+    local h = self.dependentGroup and self.dependentGroup.section and T.Geometry.SectionRow or T.Geometry.Row
     local descriptionHeight = 0
     if hasDesc then
         local width = math.max(80, self.row.AbsoluteSize.X / self.window.scale - 32)
@@ -3032,10 +3095,14 @@ function Dependency:Sync(immediate)
     local height = 0
     for _, c in ipairs(self.controls) do
         if not c.destroyed and not c.inlineOwner and c.state.Visible then
-            height += c.row.Size.Y.Offset
             if c.settingsGroup then
                 c.settingsGroup:Sync(immediate)
-                height += c.settingsGroup.targetHeight or 0
+            end
+            height += c.sectionGroup and c.sectionGroup.envelopeHeight or c.row.Size.Y.Offset
+            if c.settingsGroup then
+                if not c.settingsGroup.embedded then
+                    height += c.settingsGroup.targetHeight or 0
+                end
             end
         end
     end
@@ -3134,6 +3201,22 @@ function Dependency.target(control)
     group.expanded = true
     group:Sync(true)
     return control
+end
+function Dependency.location(control, source)
+    local page, tab = control.page, control.page.tab
+    local parts = { not source and tab.displayName or tab.name }
+    if not page.direct or tab.hasSubTabs then
+        table.insert(parts, not source and page.displayName or page.name)
+    end
+    local ancestors, group = {}, control.dependentGroup
+    while group do
+        table.insert(ancestors, not source and group.owner.displayName or group.owner.name)
+        group = group.owner.dependentGroup
+    end
+    for i = #ancestors, 1, -1 do
+        table.insert(parts, ancestors[i])
+    end
+    return table.concat(parts, " / ")
 end
 function Control:GetSettings()
     return self.settingsGroup
@@ -3236,6 +3319,7 @@ for _, name in ipairs({
     "AddParagraph",
     "AddSeparator",
     "AddSection",
+    "AddSectionHeader",
     "AddNotice",
 }) do
     Dependency[name] = function(self, config)
@@ -3251,6 +3335,14 @@ for _, name in ipairs({
         return control
     end
     Async[name] = Dependency[name]
+    Sections[name] = function(self, config)
+        assert(not self.destroyed, "Neron section is destroyed")
+        return Dependency[name](self.sectionGroup, config)
+    end
+    Tab[name] = function(self, config)
+        local page = self:_direct()
+        return page[name](page, config)
+    end
 end
 
 -- Dynamic sections retain their real controls; network presentation is never profile state.
@@ -8263,7 +8355,311 @@ end
 function SubTab:AddSeparator(config)
     return Components.info(self, config or {}, "Separator")
 end
+-- Ordinary Sections own retained controls, not a boolean or a loader. Their embedded
+-- body shares the page's existing index/flags/profile/scroll ownership.
+function Sections.Group:IsActive()
+    local owner = self.owner
+    return not self.destroyed
+        and not owner.destroyed
+        and not owner.state.Disabled
+        and (not owner.dependentGroup or owner.dependentGroup:IsActive())
+end
+function Sections.Group:Layout()
+    local c, w = self.owner, self.owner.window
+    local description = c.displayDescription or c.description
+    local inset = T.Geometry.LabelInset
+    local iconWidth = self.icon and 28 or 0
+    local width = math.max(80, c.row.AbsoluteSize.X / w.scale)
+    local labelWidth = math.max(24, width - inset * 2 - iconWidth - 36)
+    local described = description ~= "" or (self.showCount and self.promoted)
+    local descriptionHeight = 0
+    if self.promoted and description ~= "" then
+        if self.measuredDescription ~= description or self.measuredWidth ~= labelWidth then
+            self.measuredDescription, self.measuredWidth = description, labelWidth
+            self.descriptionHeight = math.ceil(
+                S.Text:GetTextSize(description, T.Type.Description, Enum.Font.Gotham, Vector2.new(labelWidth, 2000)).Y
+            )
+        end
+        descriptionHeight = self.descriptionHeight
+    end
+    self.headerHeight = self.promoted
+            and (described and math.max(T.Geometry.SectionDescriptionHeader, 36 + descriptionHeight) or T.Geometry.SectionHeader)
+        or 32
+    c.label.TextSize = self.promoted and T.Type.ElementTitle or T.Type.Category
+    c.label.Font = Enum.Font.GothamBold
+    c.label.Position =
+        UDim2.fromOffset(inset + iconWidth, self.promoted and (described and 10 or self.headerHeight / 2 - 10) or 6)
+    c.label.Size = UDim2.fromOffset(labelWidth, 20)
+    c.desc.Visible = self.promoted and described
+    c.desc.Position = UDim2.fromOffset(inset + iconWidth, 32)
+    c.desc.Size = UDim2.fromOffset(labelWidth, math.max(16, self.headerHeight - 36))
+    local count = #self.controls
+    c.desc.Text = description ~= "" and description
+        or string.format(Locale.text(w, count == 1 and "SectionItem" or "SectionItems"), count)
+    self.header.Size = UDim2.new(1, 0, 0, self.headerHeight)
+    self.headerHit.Size = UDim2.new(1, -44, 0, self.headerHeight)
+    self.chevronButton.Visible = self.promoted and self.collapsible
+    self.chevronButton.Size = UDim2.fromOffset(44, self.headerHeight)
+    self.chevron.Position = UDim2.new(0.5, -5, 0.5, -5)
+    if self.icon then
+        self.icon.Visible = self.promoted
+        self.icon.Position = UDim2.fromOffset(inset, self.headerHeight / 2 - 8)
+    end
+    self.row.Position = UDim2.fromOffset(0, self.headerHeight + 1)
+    self.divider.Position = UDim2.fromOffset(inset, self.headerHeight)
+    self.divider.Size = UDim2.new(1, -inset * 2, 0, 1)
+    self.border.Enabled = self.promoted
+    self.corner.CornerRadius = UDim.new(0, self.promoted and T.Radius.Section or T.Radius.Row)
+end
+function Sections.Group:_render(immediate)
+    local c, w = self.owner, self.owner.window
+    local disabled = c.state.Disabled or not self:IsActive()
+    local duration = immediate and 0 or T.Motion.Micro
+    local hover = self.hover or c.state.Highlight
+    w.motion:To(
+        c.row,
+        duration,
+        { BackgroundColor3 = self.promoted and w.theme.SurfaceSecondary or w.theme.RowBackground }
+    )
+    w.motion:To(self.header, duration, {
+        BackgroundColor3 = c.state.Pressed and w.theme.RowPressed
+            or (hover and w.theme.RowHover or w.theme.SurfaceSecondary),
+        BackgroundTransparency = self.promoted and 0 or 1,
+    })
+    w.motion:To(c.label, duration, { TextColor3 = disabled and w.theme.TextDisabled or w.theme.TextPrimary })
+    w.motion:To(c.desc, duration, { TextColor3 = disabled and w.theme.TextDisabled or w.theme.TextSecondary })
+    self.border.Color = w.theme.BorderWeak
+    self.border.Transparency = c.state.Highlight and 0 or 0.25
+    Icons.color(
+        self.chevron,
+        disabled and w.theme.TextDisabled or (hover and w.theme.TextPrimary or w.theme.TextSecondary)
+    )
+    if self.icon then
+        Icons.color(self.icon, disabled and w.theme.TextDisabled or w.theme.Accent)
+    end
+    w.motion:To(self.chevron, immediate and 0 or T.Motion.Fast, { Rotation = self.expanded and 180 or 0 })
+end
+function Sections.Group:Sync(immediate)
+    if self.destroyed or self.owner.destroyed or self.syncing then
+        return
+    end
+    self.syncing = true
+    local c, w = self.owner, self.owner.window
+    local ancestor = c.dependentGroup
+    local active = self:IsActive()
+    local shown = self.visible and c.state.Visible and self.expanded and (not ancestor or ancestor.shown)
+    local changed = self.shown ~= shown or self.lastActive ~= active
+    self.shown, self.lastActive = shown, active
+    if changed and (not shown or not active) then
+        if w.tooltip then
+            w.tooltip:Cancel()
+        end
+        for _, child in ipairs(self.controls) do
+            Dependency.cancel(child)
+        end
+    end
+    local height = 0
+    for _, child in ipairs(self.controls) do
+        if not child.destroyed then
+            if changed then
+                child:_render()
+            end
+            if child.settingsGroup then
+                child.settingsGroup:Sync(immediate)
+            end
+            if child.state.Visible and not child.inlineOwner then
+                height += child.sectionGroup and child.sectionGroup.envelopeHeight or child.row.Size.Y.Offset
+                if child.settingsGroup and not child.settingsGroup.embedded then
+                    height += child.settingsGroup.targetHeight or 0
+                end
+            end
+        end
+    end
+    self:Layout()
+    self.body.Size = UDim2.new(1, 0, 0, height)
+    self.row.Size = UDim2.new(1, 0, 0, height)
+    self.divider.Visible = shown and height > 0 and self.promoted
+    self.targetHeight = shown and height > 0 and (height + 1) or 0
+    self.envelopeHeight = self.headerHeight + self.targetHeight
+    local duration = immediate and 0 or T.Motion.Normal
+    w.motion:To(c.row, duration, { Size = UDim2.new(1, 0, 0, self.envelopeHeight) })
+    -- Clipping owns visibility. A stale delayed callback cannot resurrect/hide a reopened body.
+    w.motion:To(self.row, duration, {
+        GroupTransparency = shown and (active and 0 or T.Geometry.DependentDim) or 1,
+    })
+    self:_render(immediate)
+    self.syncing = false
+    c.page.scroll:Update()
+    if ancestor and not ancestor.syncing then
+        ancestor:Sync(immediate)
+    end
+end
+function Sections.Group:Destroy()
+    if self.destroyed then
+        return
+    end
+    self.destroyed = true
+    for i = #self.controls, 1, -1 do
+        self.controls[i]:Destroy()
+    end
+    self.bag:Destroy()
+    self.owner.settingsGroup = nil
+end
+function Sections:_layout()
+    self.sectionGroup:Sync(self.applyOptions and self.applyOptions.Animate == false)
+end
+function Sections:_render()
+    if not self.destroyed then
+        self.sectionGroup:Sync(self.applyOptions and self.applyOptions.Animate == false)
+    end
+end
+function Sections:GetControls()
+    return self.destroyed and {} or self.sectionGroup:GetControls()
+end
+function Sections:IsExpanded()
+    return not self.destroyed and self.sectionGroup.expanded
+end
+function Sections:SetExpanded(value)
+    if not self.destroyed and self.sectionGroup.collapsible then
+        self.sectionGroup.expanded = value == true
+        self.sectionGroup:Sync()
+    end
+    return self
+end
+function Sections:Expand()
+    return self:SetExpanded(true)
+end
+function Sections:Collapse()
+    return self:SetExpanded(false)
+end
+function Sections:ToggleExpanded()
+    return self:SetExpanded(not self:IsExpanded())
+end
+function Sections:SetCollapsible(value)
+    if not self.destroyed then
+        self.sectionGroup.promoted = true
+        self.sectionGroup.collapsible = value == true
+        if not self.sectionGroup.collapsible then
+            self.sectionGroup.expanded = true
+        end
+        self.sectionGroup:Sync()
+    end
+    return self
+end
+function Sections:IsCollapsible()
+    return not self.destroyed and self.sectionGroup.collapsible
+end
+function Sections:SetDescription(text)
+    if not self.destroyed and tostring(text or "") ~= "" then
+        self.sectionGroup.promoted = true
+    end
+    return Control.SetDescription(self, text)
+end
 function SubTab:AddSection(config)
+    if type(config) == "string" then
+        config = { Name = config }
+    end
+    config = config or {}
+    assert(type(config) == "table" and not config.InlineWith, "Neron Section expects a standalone config or name")
+    local c = Components.info(self, config, "Section")
+    local w = c.window
+    local group = setmetatable({
+        owner = c,
+        controls = {},
+        bag = Maid.new(w.motion),
+        section = true,
+        embedded = true,
+        visible = true,
+        expanded = config.Collapsible == false or config.Expanded ~= false,
+        collapsible = config.Collapsible ~= false,
+        showCount = config.ShowCount ~= false,
+        promoted = config.Icon ~= nil
+            or config.Description ~= nil
+            or config.Expanded ~= nil
+            or config.Collapsible ~= nil,
+        shown = false,
+    }, Sections.Group)
+    c.sectionGroup, c.settingsGroup = group, group
+    setmetatable(c, Sections)
+    c.lane.Visible, c.separator.Visible = false, false
+    c.row.ClipsDescendants = true
+    group.corner = c.row:FindFirstChildOfClass("UICorner")
+    group.border = U.stroke(c.row, w.theme.BorderWeak)
+    group.border.Transparency = 0.25
+    group.header = U.frame(c.row, { Name = "SectionHeader", ZIndex = c.row.ZIndex }, w, "SurfaceSecondary")
+    U.corner(group.header, T.Radius.Section)
+    -- Header text stays above its surface; only the header hitbox toggles the Section.
+    c.label.ZIndex, c.desc.ZIndex = c.row.ZIndex + 2, c.row.ZIndex + 2
+    group.chevronButton = U.button(c.row, {
+        Name = "SectionHeaderHitbox",
+        Size = UDim2.new(1, 0, 0, T.Geometry.SectionHeader),
+        AnchorPoint = Vector2.new(1, 0),
+        Position = UDim2.fromScale(1, 0),
+        ZIndex = c.row.ZIndex + 3,
+    })
+    group.chevron = Icons.make(group.chevronButton, "chevron", 10, w.theme.TextSecondary, w)
+    group.row = U.new("CanvasGroup", {
+        Name = "SectionContent",
+        Size = UDim2.new(1, 0, 0, 0),
+        ClipsDescendants = true,
+        GroupTransparency = 0,
+        ZIndex = c.row.ZIndex + 1,
+    }, c.row)
+    group.body = U.frame(group.row, { Name = "Elements", Size = UDim2.new(1, 0, 0, 0), ZIndex = group.row.ZIndex }, w)
+    group.layout =
+        U.new("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 0) }, group.body)
+    group.divider = U.frame(c.row, { Name = "SectionDivider", ZIndex = c.row.ZIndex + 2 }, w, "Separator")
+    if config.Icon then
+        group.icon = Icons.make(c.row, config.Icon, 16, w.theme.Accent, w)
+        group.icon.ZIndex = c.row.ZIndex + 2
+    end
+    -- One header-sized hit area gives touch a safe target without hijacking child clicks.
+    group.headerHit =
+        U.button(c.row, { Name = "SectionTitleHitbox", Size = UDim2.new(1, -44, 0, 44), ZIndex = c.row.ZIndex + 3 })
+    for _, hit in ipairs({ group.headerHit, group.chevronButton }) do
+        Tooltip.bind(w, c, hit, group.bag, function()
+            return c.displayTooltip or c.displayDescription or c.description
+        end, function()
+            return c:_available() and group.promoted
+        end)
+        U.connect(group.bag, hit.Activated, function()
+            if c:_usable() and group.promoted and group.collapsible then
+                c:ToggleExpanded()
+            end
+        end)
+        U.connect(group.bag, hit.MouseEnter, function()
+            group.hover = true
+            group:_render()
+        end)
+        U.connect(group.bag, hit.MouseLeave, function()
+            group.hover = false
+            c.state.Pressed = false
+            group:_render()
+        end)
+        U.connect(group.bag, hit.InputBegan, function(event)
+            if U.primary(event) and c:_usable() then
+                c.state.Pressed = true
+                w.pressed[c] = event
+                group:_render()
+            end
+        end)
+        U.connect(group.bag, hit.InputEnded, function(event)
+            if U.primary(event) then
+                c.state.Pressed = false
+                group:_render()
+            end
+        end)
+    end
+    U.connect(group.bag, group.layout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
+        group:Sync()
+    end)
+    U.connect(group.bag, c.row:GetPropertyChangedSignal("Size"), function()
+        c.page.scroll:Update()
+    end)
+    group:Sync(true)
+    return c
+end
+function SubTab:AddSectionHeader(config)
     return Components.info(self, config, "Section")
 end
 function SubTab:AddNotice(config)
@@ -8317,6 +8713,10 @@ function Window:_searchResults(query)
                 .. (control.displayName or control.name)
                 .. " "
                 .. (control.displayDescription or control.description)
+                .. " "
+                .. Dependency.location(control)
+                .. " "
+                .. Dependency.location(control, true)
             ):lower()
             local match = true
             for word in query:gmatch("%S+") do
@@ -8353,14 +8753,7 @@ function Window:_searchResults(query)
                 })
                 U.label(
                     row,
-                    (tab.displayName or tab.name)
-                        .. " / "
-                        .. (page.displayName or page.name)
-                        .. (
-                            control.dependentGroup
-                                and " / " .. (control.dependentGroup.owner.displayName or control.dependentGroup.owner.name)
-                            or ""
-                        ),
+                    Dependency.location(control),
                     T.Type.Description,
                     self.theme.TextMuted,
                     { Position = UDim2.fromOffset(16, 38), Size = UDim2.new(1, -32, 0, 18) }
@@ -11070,6 +11463,8 @@ Locale.rows["Player"] = { "Player", "Jugador", "Игрок", "Jogador" }
 Locale.rows["Players"] = { "Players", "Jugadores", "Игроки", "Jogadores" }
 Locale.rows["Interface"] = { "Interface", "Interfaz", "Интерфейс", "Interface" }
 Locale.rows["Behavior"] = { "Behavior", "Comportamiento", "Поведение", "Comportamento" }
+Locale.rows.SectionItem = { "%d setting", "%d ajuste", "%d параметр", "%d ajuste" }
+Locale.rows.SectionItems = { "%d settings", "%d ajustes", "%d параметров", "%d ajustes" }
 Locale.dictionaries = {}
 for i, language in ipairs(Locale.order) do
     local dictionary = {}
