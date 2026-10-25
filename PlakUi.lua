@@ -5443,7 +5443,8 @@ function Community:Refresh()
     end
     UI.CommunityRestore:SetDisabled(State.Activity ~= "Idle" or not Settings.CommunityEnabled or self:Link() == "")
     if UI.CommunityDetails then
-        UI.CommunityDetails.Root.Visible = self:Enabled()
+        -- The dock's Details target replaced this old form action; refresh must not resurrect it.
+        UI.CommunityDetails.Root.Visible = false
         UI.CommunityDetails:SetDisabled(State.Activity ~= "Idle")
     end
     UI.CommunityClose.Root:SetAttribute("ActionLabel", Localization:Get("communityDismiss"))
@@ -6996,7 +6997,8 @@ local function buildAuth()
     Material:Tone(UI.KeyContainer)
     UI.KeyRim = Material:Rim(UI.KeyContainer, Theme.Rim, 0.96)
     UI.KeyFocusLine = frame(UI.KeyContainer, "FocusUnderline", Theme.Accent)
-    UI.KeyFocusLine.Position = UDim2.new(0, 12, 1, -3)
+    UI.KeyFocusLine.AnchorPoint = Vector2.new(0.5, 0)
+    UI.KeyFocusLine.Position = UDim2.new(0.5, 0, 1, -3)
     UI.KeyFocusLine.Size = UDim2.fromOffset(0, 1)
     corner(UI.KeyFocusLine, 2)
     UI.KeyIcon = Icon.new(UI.KeyContainer, "key", Theme.Muted, 19)
@@ -7090,10 +7092,12 @@ local function buildAuth()
     UI.Validate = Button.new(UI.AuthBody, "Validate", "", true, nil, function()
         validate(UI.Key.Text)
     end, Runtime, AuthField.Interactive)
+    UI.Validate.Icon = Icon.new(UI.Validate.Root, "chevron-right", Theme.ButtonText, 18)
     Localization:Bind(UI.Validate.Label, "journeyKey")
     UI.GetKey = Button.new(UI.AuthBody, "GetKey", "", false, "support", function()
         requestKeyLink()
     end, Runtime, AuthField.Interactive)
+    UI.GetKey.Ghost = true
     Localization:Bind(UI.GetKey.Label, "getKey")
     UI.AuthBusyTrack = frame(UI.Validate.Root, "WaitingTrack", Theme.AccentDark)
     UI.AuthBusyTrack.Position = UDim2.new(0, 14, 1, -8)
@@ -7103,19 +7107,10 @@ local function buildAuth()
     corner(UI.AuthBusyTrack, 2)
     UI.AuthBusyFill = frame(UI.AuthBusyTrack, "IndeterminateFill", Theme.Text)
     corner(UI.AuthBusyFill, 2)
-    UI.AccessAside = frame(UI.AuthBody, "AccessContext", Theme.Elevated)
-    corner(UI.AccessAside, Theme.PanelRadius)
-    stroke(UI.AccessAside, Theme.Edge, 1, 0.25)
-    Material:Panel(UI.AccessAside)
+    UI.AccessAside = group(UI.AuthBody, "AccessIdentity")
     UI.AsideDivider = frame(UI.AccessAside, "ContextDivider", Theme.Line)
-    UI.AsideDivider.Position, UI.AsideDivider.Size = UDim2.new(0, 16, 1, -64), UDim2.new(1, -32, 0, 1)
     UI.AsideDivider.BackgroundTransparency = 0.5
-    UI.AsideTitle = localized(UI.AccessAside, "ContextTitle", "asideTitle", 14, Theme.Text, Theme.Medium)
-    UI.AsideTitle.TextWrapped = true
-    UI.AsideCopy = localized(UI.AccessAside, "ContextCopy", "asideCopy", 12, Theme.Secondary)
-    UI.AsideCopy.TextWrapped, UI.AsideCopy.TextYAlignment = true, Enum.TextYAlignment.Top
-    UI.AsideShield = Icon.new(UI.AccessAside, "key", Theme.AccentText, 28)
-    UI.AuthArtwork = BrandArt.new(UI.AuthBody, "HeroArtwork")
+    UI.AuthArtwork = BrandArt.new(UI.AccessAside, "HeroArtwork")
     UI.AuthArtwork:Set(Settings.Artwork)
     Experience:Build()
     for _, root in ipairs({
@@ -7130,7 +7125,7 @@ local function buildAuth()
     }) do
         root.Parent = UI.AuthForm
     end
-    Stagecraft.Groups = { UI.AuthHeading, UI.AuthForm }
+    Stagecraft.Groups = { UI.AuthHeading, UI.AuthForm, UI.AccessAside }
     Runtime.Finalizers[#Runtime.Finalizers + 1] = function()
         Stagecraft:Cancel(false)
         table.clear(Stagecraft.Groups)
@@ -7850,42 +7845,61 @@ end
 function Responsive:Auth(width, height, narrow)
     local hit = math.max(44, math.ceil(44 / math.max(0.1, State.Layout.Scale or 1)))
     local aside = not narrow and width >= 640 and height >= 300
-    local asideWidth = aside and 200 or 0
-    local left = aside and width - asideWidth - 24 or width
+    local asideWidth = aside and 224 or 0
+    local left = aside and width - asideWidth - 28 or width
     local tiny = height < 180
     local hero = not State.Layout.KeyboardCompact and height >= 260
-    local fontSize = left >= 400 and 30 or 26
+    local fontSize = aside and (left >= 400 and 40 or 36) or left >= 400 and 30 or 26
     -- Always measure canonical copy, never the intermediate language-decode glyphs.
     local a = TextMetrics:Get(Localization:Get("homeHeroA"), fontSize, Theme.Display, 10000)
     local b = TextMetrics:Get(Localization:Get("homeHeroB"), fontSize, Theme.Display, 10000)
     local aWidth, bWidth = math.ceil(a and a.X or left), math.ceil(b and b.X or left)
-    local inline = aWidth + bWidth + 12 <= left
-    local headingHeight = hero and (inline and 44 or 76) or 0
+    local inline = not aside and aWidth + bWidth + 12 <= left
+    local lineHeight = fontSize + 6
+    local secondY = fontSize + 4
+    local headingHeight = hero and (inline and lineHeight + 8 or secondY + lineHeight + 4) or 0
     UI.AuthHeading.Visible = hero
     UI.HeroA.Visible, UI.HeroB.Visible, UI.AuthCopy.Visible = hero, hero, false
     UI.HeroA.TextSize, UI.HeroB.TextSize = fontSize, fontSize
-    place(UI.HeroA, 0, 0, inline and aWidth + 2 or left, 36)
-    place(UI.HeroB, inline and aWidth + 12 or 0, inline and 0 or 34, inline and left - aWidth - 12 or left, 36)
+    place(UI.HeroA, 0, 0, inline and aWidth + 2 or left, lineHeight)
+    place(
+        UI.HeroB,
+        inline and aWidth + 12 or 0,
+        inline and 0 or secondY,
+        inline and left - aWidth - 12 or left,
+        lineHeight
+    )
     Stagecraft:Place(UI.AuthHeading, 0, 0, left, headingHeight)
     local gameY = hero and headingHeight + 12 or 0
     local gameHeight = tiny and 0 or 52
+    UI.CurrentGame.Parent = aside and UI.AccessAside or UI.AuthBody
     UI.CurrentGame.Visible = not tiny
-    place(UI.CurrentGame, 0, gameY, left, gameHeight)
-    place(UI.GamePlaceholder, 0, 2, 48, 48)
-    place(UI.GameFallback.Root, 14, 14, 20, 20)
-    place(UI.GameImage, 0, 0, 48, 48)
-    UI.GameContextTag.Visible = left >= 400
+    local contextWidth = aside and asideWidth or left
+    local iconSize = aside and 40 or 48
+    local textX = iconSize + 16
+    place(UI.CurrentGame, 0, aside and 260 or gameY, contextWidth, aside and 68 or gameHeight)
+    place(UI.GamePlaceholder, 0, 2, iconSize, iconSize)
+    place(UI.GameFallback.Root, (iconSize - 20) / 2, (iconSize - 20) / 2, 20, 20)
+    place(UI.GameImage, 0, 0, iconSize, iconSize)
+    UI.GameContextTag.Visible = not aside and left >= 400
     place(UI.GameContextTag, math.max(0, left - 56), 3, 56, 26)
-    place(UI.GameName, 64, 3, math.max(1, left - (left >= 400 and 136 or 72)), 26)
-    place(UI.GameSupport, 64, 30, math.max(1, left - 72), 20)
+    UI.GameName.TextWrapped = aside
+    place(
+        UI.GameName,
+        textX,
+        1,
+        math.max(1, contextWidth - textX - (not aside and left >= 400 and 64 or 0)),
+        aside and 36 or 26
+    )
+    place(UI.GameSupport, textX, aside and 39 or 30, math.max(1, contextWidth - textX), 20)
     UI.CurrentGame.BackgroundTransparency = 1
     UI.GameName.TextSize = 14
     UI.GameSupport.TextSize = 12
-    local formY = State.Layout.KeyboardCompact and 0 or gameY + gameHeight + 14
+    local formY = State.Layout.KeyboardCompact and 0 or aside and headingHeight + 20 or gameY + gameHeight + 14
     local labelY = 0
     UI.KeyFieldLabel.Visible = not State.Layout.KeyboardCompact
     place(UI.KeyFieldLabel, 0, labelY, left, 20)
-    local inputY, controlHeight = State.Layout.KeyboardCompact and 0 or labelY + 22, math.max(hit, 52)
+    local inputY, controlHeight = State.Layout.KeyboardCompact and 0 or labelY + 22, math.max(hit, aside and 60 or 52)
     place(UI.KeyContainer, 0, inputY, left, controlHeight)
     local hasIcon = left >= 244
     UI.KeyIcon.Root.Visible = hasIcon
@@ -7902,8 +7916,7 @@ function Responsive:Auth(width, height, narrow)
     place(UI.RevealEye.Root, (hit - 19) / 2, (hit - 19) / 2, 19, 19)
     place(UI.ConcealEye.Root, (hit - 19) / 2, (hit - 19) / 2, 19, 19)
     local guidanceY = inputY + controlHeight + 10
-    local guidanceHeight = (State.Activity ~= "Idle" or State.AuthFeedback ~= nil or UI.AuthJourney.Visible) and 58
-        or math.max(20, measure(Localization:Get("keyGuidance"), 12, Theme.Font, left))
+    local guidanceHeight = math.max(58, measure(Localization:Get("keyGuidance"), 12, Theme.Font, left))
     local feedback = State.AuthFeedback
     local text = feedback and (feedback.Message or Localization:Get(feedback.Key)) or ""
     local needDetails = feedback and measure(text, 12, Theme.Medium, math.max(1, left - hit - 8)) > guidanceHeight
@@ -7931,11 +7944,21 @@ function Responsive:Auth(width, height, narrow)
     UI.KeyFeedbackMore.Root.Visible = needDetails == true
     place(UI.KeyFeedbackMore.Root, left - hit, guidanceY, hit, hit)
     local buttonY = guidanceY + guidanceHeight + 8
-    place(UI.Validate.Root, 0, buttonY, left, hit)
+    local primaryBounds = TextMetrics:Get(Localization:Get("journeyKey"), 14, Theme.Medium, 10000)
+    local busyBounds = TextMetrics:Get(Localization:Get("validating"), 14, Theme.Medium, 10000)
+    local primaryText = math.max(primaryBounds and primaryBounds.X or left, busyBounds and busyBounds.X or left)
+    local secondaryBounds = TextMetrics:Get(Localization:Get("getKey"), 13, Theme.Medium, 10000)
+    local secondaryWidth = math.max(hit * 2, math.ceil(secondaryBounds and secondaryBounds.X or left) + 28)
+    local paired = left >= 360 and primaryText + 52 + secondaryWidth + 12 <= left
+    local verifyWidth = paired and left - secondaryWidth - 12 or left
+    place(UI.Validate.Root, 0, buttonY, verifyWidth, hit)
     UI.Validate.Label.TextSize = 14
-    local getKeyY = buttonY + hit + 2
-    place(UI.GetKey.Root, 0, getKeyY, left, hit)
-    UI.GetKey.Root.BackgroundTransparency = 1
+    UI.Validate.Label.TextXAlignment = Enum.TextXAlignment.Left
+    UI.Validate.Label.Position, UI.Validate.Label.Size = UDim2.fromOffset(16, 0), UDim2.new(1, -52, 1, 0)
+    UI.Validate.Icon.Root.AnchorPoint = Vector2.new(0, 0.5)
+    place(UI.Validate.Icon.Root, verifyWidth - 32, hit / 2, 18, 18)
+    local getKeyY = paired and buttonY or buttonY + hit + 2
+    place(UI.GetKey.Root, paired and verifyWidth + 12 or 0, getKeyY, paired and secondaryWidth or left, hit)
     UI.GetKey.TextColor = Theme.AccentText
     UI.GetKey:Apply()
     UI.GetKey.Label.TextSize, UI.GetKey.Label.TextWrapped = 13, true
@@ -7948,17 +7971,15 @@ function Responsive:Auth(width, height, narrow)
     Stagecraft:Place(UI.AuthForm, 0, formY, left, formHeight)
     local extrasY = formY + formHeight + 4
     Experience:Layout(left, extrasY)
-    local bodyHeight = math.max(height, extrasY + Experience:Height() + 8)
+    local bodyHeight = math.max(height, extrasY + Experience:Height() + 8, aside and 336 or 0)
     UI.AuthBody.Size, UI.AuthScroll.CanvasSize = UDim2.fromOffset(width, bodyHeight), UDim2.fromOffset(0, bodyHeight)
     UI.AccessAside.Visible = aside
     UI.AuthArtwork.Root.Visible = aside
-    UI.AsideShield.Root.Visible, UI.AsideTitle.Visible = false, false
+    Stagecraft:Place(UI.AccessAside, left + 28, 0, asideWidth, aside and 328 or 0)
     if aside then
-        place(UI.AccessAside, left + 24, 0, asideWidth, 354)
-        place(UI.AsideCopy, 16, 292, asideWidth - 32, 52)
-        place(UI.AsideDivider, 16, 280, asideWidth - 32, 1)
-        place(UI.AuthArtwork.Root, left + 24, 0, asideWidth, 266)
-        UI.AuthArtwork:Layout(asideWidth, 266)
+        place(UI.AsideDivider, 0, 248, asideWidth, 1)
+        place(UI.AuthArtwork.Root, 0, 0, asideWidth, 232)
+        UI.AuthArtwork:Layout(asideWidth, 232)
         -- The miniature mark is art, not unreadable microcopy at a fractional scale.
         UI.AuthArtwork.Caption.Visible, UI.AuthArtwork.Serial.Visible, UI.AuthArtwork.Signature.Visible =
             false, false, false
