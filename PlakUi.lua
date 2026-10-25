@@ -76,6 +76,7 @@ local Motion = {
     StageDistance = 4,
     StageDelay = 0.035,
     SheetDistance = 8,
+    AccessGate = TweenInfo.new(0.32, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
 }
 local Settings = {
     Title = "PLAK",
@@ -1642,6 +1643,43 @@ do
     end
 end
 
+do
+    local copy = {
+        en = {
+            accessSceneTitle = "You're in.",
+            accessSceneVerified = "Access verified",
+            accessSceneHandoff = "Your script starts after this window closes.",
+            accessSceneClosing = "Closing this window",
+            accessSceneMessage = "Your key has been accepted.",
+        },
+        es = {
+            accessSceneTitle = "Ya estás dentro.",
+            accessSceneVerified = "Acceso verificado",
+            accessSceneHandoff = "Tu script empieza después de cerrar esta ventana.",
+            accessSceneClosing = "Cerrando esta ventana",
+            accessSceneMessage = "Tu key ha sido aceptada.",
+        },
+        pt = {
+            accessSceneTitle = "Você entrou.",
+            accessSceneVerified = "Acesso verificado",
+            accessSceneHandoff = "Seu script começa depois que esta janela fechar.",
+            accessSceneClosing = "Fechando esta janela",
+            accessSceneMessage = "Sua chave foi aceita.",
+        },
+        ru = {
+            accessSceneTitle = "Доступ открыт.",
+            accessSceneVerified = "Доступ подтверждён",
+            accessSceneHandoff = "Скрипт запустится после закрытия этого окна.",
+            accessSceneClosing = "Закрываем это окно",
+            accessSceneMessage = "Ваш ключ принят.",
+        },
+    }
+    for id, values in pairs(copy) do
+        for key, value in pairs(values) do
+            Translations[id][key] = value
+        end
+    end
+end
 local Languages = {
     { Id = "en", Name = "English", Aliases = { "english", "en-us", "en-gb" } },
     { Id = "ru", Name = "Русский", Aliases = { "russian", "русский", "ru-ru" } },
@@ -2408,7 +2446,8 @@ function BrandArt:Set(value)
     settle()
     self.OverrideConnection = Runtime:Connect(self.OverrideImage:GetPropertyChangedSignal("IsLoaded"), settle)
 end
-local Modal = { Config = nil, ProgressHandle = nil }
+local AccessScene = { View = nil, Mode = nil }
+local Modal = { Config = nil, ProgressHandle = nil, SurfaceGeometry = {} }
 local Navigation = {}
 local Stagecraft = { Token = 0, Tasks = {}, Rests = {}, Groups = {}, HeaderPage = "Auth" }
 local Responsive = {}
@@ -2896,28 +2935,285 @@ end
 local function setButtonKey(button, key)
     Localization:Bind(button.Label, key)
 end
+-- A presentation of acceptance, never a validator, progress simulator or host runner.
+function AccessScene:Build(parent)
+    if self.View then
+        return
+    end
+    local v = {}
+    self.View = v
+    v.Root = frame(parent, "AccessGrantedScene")
+    v.Root.BackgroundTransparency, v.Root.Size = 1, UDim2.fromScale(1, 1)
+    v.Graphic = frame(v.Root, "GraphicPlane", Theme.AccentMuted)
+    v.Brand = label(v.Graphic, "Brand", Settings.Title, 14, Theme.Text, Theme.Bold)
+    v.Art = frame(v.Graphic, "AccessGate")
+    v.Art.BackgroundTransparency, v.Art.ClipsDescendants = 1, true
+    v.Mark = group(v.Art, "RevealedIdentity")
+    v.MarkIcon = Icon.new(v.Mark, "plak", Theme.AccentText, 128)
+    for _, segment in ipairs(v.MarkIcon.Root:GetChildren()) do
+        if segment:IsA("Frame") then
+            segment.Size = UDim2.new(segment.Size.X.Scale, segment.Size.X.Offset, 0, 4)
+        end
+    end
+    v.LeftShutter = frame(v.Art, "LeftGate", Theme.AccentMuted)
+    v.RightShutter = frame(v.Art, "RightGate", Theme.AccentMuted)
+    v.GateEdge = frame(v.LeftShutter, "Seam", Theme.Line)
+    v.GateEdge.Size, v.GateEdge.Position = UDim2.new(0, 1, 1, 0), UDim2.new(1, -1, 0, 0)
+    v.Verified = localized(v.Graphic, "Verified", "accessSceneVerified", 12, Theme.AccentText, Theme.Medium)
+    v.Verified.TextWrapped, v.Verified.TextTruncate = true, Enum.TextTruncate.AtEnd
+    v.MiniMark = Icon.new(v.Root, "plak", Theme.AccentText, 26)
+    v.MiniBrand = label(v.Root, "CompactBrand", Settings.Title, 14, Theme.Text, Theme.Bold)
+    v.Scroll = create("ScrollingFrame", {
+        Name = "AcceptedContext",
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ScrollBarThickness = 3,
+        ScrollBarImageColor3 = Theme.Accent,
+        ScrollingDirection = Enum.ScrollingDirection.Y,
+        VerticalScrollBarInset = Enum.ScrollBarInset.None,
+        ElasticBehavior = Enum.ElasticBehavior.WhenScrollable,
+        ClipsDescendants = true,
+    }, v.Root)
+    v.Body = frame(v.Scroll, "Body")
+    v.Body.BackgroundTransparency = 1
+    v.Title = localized(v.Body, "Title", "accessSceneTitle", 34, Theme.Text, Theme.Bold)
+    v.Message = label(v.Body, "AcceptedMessage", "", 13, Theme.Secondary)
+    v.ContextDivider = frame(v.Body, "ContextDivider", Theme.Edge)
+    v.ContextDivider.BackgroundTransparency = 0.45
+    v.Game = label(v.Body, "CurrentExperience", "", 22, Theme.Text, Theme.Bold)
+    v.License = label(v.Body, "ActualAccess", "", 12, Theme.AccentText, Theme.Medium)
+    for _, text in ipairs({ v.Title, v.Message, v.Game, v.License }) do
+        text.TextWrapped, text.TextYAlignment, text.TextTruncate =
+            true, Enum.TextYAlignment.Top, Enum.TextTruncate.AtEnd
+    end
+    v.Divider = frame(v.Root, "FooterDivider", Theme.Edge)
+    v.Divider.BackgroundTransparency = 0.45
+    v.Note = label(v.Root, "HandoffNote", "", 11, Theme.Secondary)
+    v.Note.TextWrapped, v.Note.TextTruncate = true, Enum.TextTruncate.AtEnd
+    v.Brand.TextTruncate, v.MiniBrand.TextTruncate = Enum.TextTruncate.AtEnd, Enum.TextTruncate.AtEnd
+    Runtime.Finalizers[#Runtime.Finalizers + 1] = function()
+        self:Cancel(true)
+        v.Root:Destroy()
+        self.View, self.Mode, self.MessageValue = nil, nil, nil
+        self.LastGame, self.LastLicense, self.LayoutMode = nil, nil, nil
+        self.HasHandoff = nil
+    end
+end
+function AccessScene:GameTitle()
+    local id = GameMedia:PlaceId(game.PlaceId)
+    for _, product in ipairs(State.Products) do
+        if id and product.GameId == id then
+            return productName(product)
+        end
+    end
+    return Experience.CurrentGameCard and Experience.CurrentGameCard.Product.ResolvedName
+        or Localization:Get("currentGame")
+end
+function AccessScene:Refresh()
+    local v = self.View
+    if not v or not self.Mode then
+        return
+    end
+    v.Brand.Text, v.MiniBrand.Text = Settings.Title, Settings.Title
+    Localization:Bind(v.Message, "accessSceneMessage", "Text", function()
+        return self.MessageValue and localizedValue(self.MessageValue) or Localization:Get("accessSceneMessage")
+    end)
+    Localization:Bind(v.Game, "currentGame", "Text", function()
+        return self:GameTitle()
+    end)
+    local currentGame, license = self:GameTitle(), Experience:LicenseText()
+    local changed = self.LastGame ~= currentGame or self.LastLicense ~= license
+    self.LastGame, self.LastLicense = currentGame, license
+    v.License.Text = license
+    Localization:Bind(v.Note, "accessSceneClosing", "Text", function()
+        return Localization:Get(self.HasHandoff and "accessSceneHandoff" or "accessSceneClosing")
+    end)
+    if changed and self.LayoutMode == self.Mode then
+        Responsive:Request()
+    end
+end
+function AccessScene:Mount(parent, mode, message)
+    self:Build(parent)
+    self:Cancel(true)
+    self.Mode, self.MessageValue = mode, message
+    self.HasHandoff = mode == "exit" and type(State.Callbacks.Authorized) == "function"
+    local v = self.View
+    v.Root.Parent, v.Root.Visible = parent, true
+    v.Scroll.CanvasPosition = Vector2.new(0, 0)
+    self:Refresh()
+end
+function AccessScene:Cancel(settle)
+    local v = self.View
+    if not v then
+        return
+    end
+    Animation:CancelTree(v.Root)
+    if settle then
+        v.LeftShutter.Position = self.LeftRest or UDim2.fromOffset(-65, 0)
+        v.RightShutter.Position = self.RightRest or UDim2.fromOffset(129, 0)
+        v.Mark.GroupTransparency = 0
+    end
+end
+function AccessScene:Hide()
+    self:Cancel(true)
+    if self.View then
+        self.View.Root.Visible = false
+    end
+    self.Mode, self.MessageValue = nil, nil
+    self.HasHandoff = nil
+end
+function AccessScene:Layout(width, height, settle)
+    local v = self.View
+    if not v or not self.Mode then
+        return
+    end
+    local wide = width >= 560 and height >= 300
+    local short = height < 280
+    local pad = width < 280 and 16 or 24
+    local x, top = wide and 220 or pad, wide and 28 or short and 18 or 64
+    local controlInner = math.max(44, width - x - pad)
+    local inner = controlInner
+    local titleWidth = math.max(44, inner - (self.Mode == "confirm" and (wide or short) and 44 or 0))
+    local titleSize = wide and 34 or short and 24 or 28
+    local title = Localization:Get("accessSceneTitle")
+    local titleHeight = math.max(titleSize + 6, measure(title, titleSize, Theme.Bold, titleWidth) + 6)
+    local footer = self.Mode == "confirm" and 64 or 58
+    local bodyTop = math.max(top + titleHeight + 12, self.Mode == "confirm" and 64 or 0)
+    -- Fit actual translated lines, not just a fixed viewport breakpoint.
+    local ultra = height < 200 or bodyTop + 26 + footer + 12 > height
+    if ultra then
+        top, bodyTop, titleSize = 18, 18, 18
+        inner = math.max(44, controlInner - (self.Mode == "confirm" and 44 or 0))
+        titleWidth = inner
+        titleHeight = math.max(24, measure(title, titleSize, Theme.Bold, titleWidth) + 6)
+    end
+    v.Graphic.Visible = wide
+    place(v.Graphic, 0, 0, 192, height)
+    place(v.Brand, 24, 20, 144, 24)
+    place(v.Art, 32, (height - 128) / 2, 128, 128)
+    place(v.Mark, 0, 0, 128, 128)
+    place(v.MarkIcon.Root, 0, 0, 128, 128)
+    v.LeftShutter.Size, v.RightShutter.Size = UDim2.fromOffset(65, 128), UDim2.fromOffset(65, 128)
+    self.LeftRest, self.RightRest = UDim2.fromOffset(-65, 0), UDim2.fromOffset(129, 0)
+    place(v.Verified, 24, height - 58, 144, 38)
+    v.MiniMark.Root.Visible, v.MiniBrand.Visible =
+        not wide and not short and not ultra, not wide and not short and not ultra
+    place(v.MiniMark.Root, pad, 18, 26, 26)
+    place(v.MiniBrand, pad + 38, 17, width - pad * 2 - 82, 28)
+    v.Title.TextSize = titleSize
+    -- At the minimum supported height, the entire heading/context scrolls in a lane beside Close.
+    v.Title.Parent = ultra and v.Body or v.Root
+    local message = self.MessageValue and localizedValue(self.MessageValue) or Localization:Get("accessSceneMessage")
+    local messageHeight = math.clamp(measure(message, 13, Theme.Font, inner - 8) + 4, 24, 100)
+    local gameSize = ultra and 16 or 22
+    v.Game.TextSize = gameSize
+    local gameHeight = math.clamp(measure(self:GameTitle(), gameSize, Theme.Bold, inner - 8) + 4, 28, 72)
+    local licenseHeight = math.clamp(measure(Experience:LicenseText(), 12, Theme.Medium, inner - 8) + 4, 20, 48)
+    place(v.Title, ultra and 0 or x, ultra and 0 or top, titleWidth, titleHeight)
+    local viewportHeight = math.max(20, height - footer - bodyTop - 12)
+    local messageY = ultra and titleHeight + 8 or 0
+    place(v.Message, 0, messageY, inner - 8, messageHeight)
+    local contextY = math.max(messageY + messageHeight + 20, viewportHeight - gameHeight - 6 - licenseHeight - 16)
+    place(v.ContextDivider, 0, contextY - 10, inner - 8, 1)
+    place(v.Game, 0, contextY, inner - 8, gameHeight)
+    place(v.License, 0, contextY + gameHeight + 6, inner - 8, licenseHeight)
+    local bodyHeight = math.max(viewportHeight, contextY + gameHeight + 6 + licenseHeight + 8)
+    place(v.Scroll, x, bodyTop, inner, viewportHeight)
+    v.Body.Size, v.Scroll.CanvasSize = UDim2.fromOffset(inner, bodyHeight), UDim2.fromOffset(0, bodyHeight)
+    v.Scroll.ScrollingEnabled = bodyHeight > viewportHeight
+    v.Scroll.CanvasPosition =
+        Vector2.new(0, math.clamp(v.Scroll.CanvasPosition.Y, 0, math.max(0, bodyHeight - viewportHeight)))
+    place(v.Divider, x, height - footer - 2, controlInner, 1)
+    v.Note.Visible = self.Mode ~= "confirm"
+    place(v.Note, x + 24, height - 46, controlInner - 24, 34)
+    if self.Mode == "confirm" then
+        place(UI.ResultAction.Root, x, height - 56, controlInner, 44)
+        place(UI.ResultClose.Root, width - 52, 12, 44, 44)
+    else
+        place(UI.ProgressCheck.Root, x, height - 37, 14, 14)
+        UI.ProgressCheck:SetColor(Theme.AccentText)
+    end
+    local changed = self.LayoutWidth ~= width or self.LayoutHeight ~= height or self.LayoutMode ~= self.Mode
+    self.LayoutWidth, self.LayoutHeight, self.LayoutMode = width, height, self.Mode
+    if changed or (settle and Settings.ReducedMotion) then
+        self:Cancel(true)
+    end
+end
+function AccessScene:Reveal()
+    local v = self.View
+    if not v then
+        return
+    end
+    self:Cancel(true)
+    if not Settings.ReducedMotion and v.Graphic.Visible then
+        v.LeftShutter.Position, v.RightShutter.Position = UDim2.fromOffset(0, 0), UDim2.fromOffset(64, 0)
+        v.Mark.GroupTransparency = 0.45
+        Animation:To(v.LeftShutter, { Position = self.LeftRest }, Motion.AccessGate)
+        Animation:To(v.RightShutter, { Position = self.RightRest }, Motion.AccessGate)
+        Animation:To(v.Mark, { GroupTransparency = 0 }, Motion.AccessGate)
+    end
+end
+function AccessScene:ScrollKey(key)
+    local v = self.View
+    if
+        not State.Alive
+        or not State.Visible
+        or State.Activity ~= "Idle"
+        or State.Modal ~= "result"
+        or self.Mode ~= "confirm"
+        or not v
+        or not v.Root.Visible
+        or not v.Scroll.ScrollingEnabled
+    then
+        return false
+    end
+    local direction = key == Enum.KeyCode.PageDown and 1 or key == Enum.KeyCode.PageUp and -1 or 0
+    if direction == 0 then
+        return false
+    end
+    local height = v.Scroll.Size.Y.Offset
+    local bottom = math.max(0, v.Scroll.CanvasSize.Y.Offset - height)
+    v.Scroll.CanvasPosition =
+        Vector2.new(0, math.clamp(v.Scroll.CanvasPosition.Y + direction * math.max(20, height - 16), 0, bottom))
+    return true
+end
+-- A queued layout must compare canonical bounds, not animated positions.
+function Modal:PlaceSurface(root, width, height, position, settleMotion)
+    local size = UDim2.fromOffset(width, height)
+    local previous = self.SurfaceGeometry[root]
+    local changed = not previous or previous.Size ~= size or previous.Position ~= position
+    self.SurfaceGeometry[root] = { Size = size, Position = position }
+    root.Size = size
+    if changed then
+        Animation:CancelProperty(root, "Position")
+        root.Position = position
+        if settleMotion and root.Visible then
+            Animation:CancelProperty(root, "GroupTransparency")
+            root.GroupTransparency = 0
+            if root == UI.Result then
+                Animation:CancelProperty(UI.ResultScale, "Scale")
+                UI.ResultScale.Scale = 1
+            end
+        end
+    end
+end
 function Modal:Layout(settleMotion)
     local size = UI.Stage.AbsoluteSize
     if settleMotion then
         if not State.Modal and UI.Overlay.Visible then
             self:Close(true)
         end
-        if State.Modal then
-            Animation:CancelProperty(UI.Result, "Position")
-            Animation:CancelProperty(UI.ResultScale, "Scale")
-            Animation:CancelProperty(UI.ProgressPanel, "Position")
-            UI.Result.GroupTransparency, UI.ProgressPanel.GroupTransparency = 0, 0
-        end
     end
-    local width = math.min(420, math.max(200, size.X - 24))
-    local height = math.min(320, math.max(180, size.Y - 24))
+    local verified = State.Authorized and self.Config and self.Config.VerifiedAccess == true
+    local width = verified and math.min(620, math.max(128, size.X - 24)) or math.min(420, math.max(200, size.X - 24))
+    local height = verified and math.min(width >= 560 and 360 or 400, math.max(128, size.Y - 24))
+        or math.min(320, math.max(180, size.Y - 24))
     local center = State.WindowCenter or size / 2
     center = Vector2.new(
         math.clamp(center.X, width / 2 + 8, math.max(width / 2 + 8, size.X - width / 2 - 8)),
         math.clamp(center.Y, height / 2 + 8, math.max(height / 2 + 8, size.Y - height / 2 - 8))
     )
-    UI.Result.Size, UI.Result.Position = UDim2.fromOffset(width, height), UDim2.fromOffset(center.X, center.Y)
-    UI.ResultScale.Scale = 1
+    self:PlaceSurface(UI.Result, width, height, UDim2.fromOffset(center.X, center.Y), settleMotion)
     local inner = width - 40
     local hasLink = self.Config
         and type(self.Config.Link) == "string"
@@ -2938,22 +3234,47 @@ function Modal:Layout(settleMotion)
     place(UI.ResultSupport, 20, height - 100, inner, 28)
     place(UI.ResultAction.Root, 20, height - 64, inner, 44)
     place(UI.ResultClose.Root, width - 48, 12, 44, 44)
-    local progressWidth = math.min(440, math.max(200, size.X - 24))
+    UI.ResultSymbol.Visible, UI.ResultTitle.Visible = not verified, not verified
+    if verified then
+        UI.ResultDescription.Visible, UI.ResultSupport.Visible, UI.ResultDivider.Visible = false, false, false
+        UI.ResultCopy.Visible, UI.ResultLink.Root.Visible = false, false
+    end
+    local completion = self.AuthCompletion == true and State.Authorized and State.Modal == "progress"
+    local progressWidth = completion and math.min(620, math.max(128, size.X - 24))
+        or math.min(440, math.max(200, size.X - 24))
+    local progressHeight = completion and math.min(progressWidth >= 560 and 340 or 384, math.max(128, size.Y - 24))
+        or 76
     local progressCenter = Vector2.new(
         math.clamp(center.X, progressWidth / 2 + 8, math.max(progressWidth / 2 + 8, size.X - progressWidth / 2 - 8)),
-        center.Y
+        completion
+                and math.clamp(
+                    center.Y,
+                    progressHeight / 2 + 8,
+                    math.max(progressHeight / 2 + 8, size.Y - progressHeight / 2 - 8)
+                )
+            or center.Y
     )
-    local completion = self.AuthCompletion == true
-    UI.ProgressPanel.Size = UDim2.fromOffset(progressWidth, completion and 100 or 76)
-    UI.ProgressPanel.Position = UDim2.fromOffset(progressCenter.X, progressCenter.Y)
+    self:PlaceSurface(
+        UI.ProgressPanel,
+        progressWidth,
+        progressHeight,
+        UDim2.fromOffset(progressCenter.X, progressCenter.Y),
+        settleMotion
+    )
     place(UI.ProgressText, completion and 52 or 20, 12, progressWidth - (completion and 72 or 100), 26)
     if UI.ProgressCheck then
         place(UI.ProgressCheck.Root, 20, 16, 20, 20)
         place(UI.ProgressLicense, 20, 42, progressWidth - 40, 22)
-        UI.ProgressLicense.Visible, UI.ProgressPercent.Visible = completion, not completion
+        UI.ProgressLicense.Visible, UI.ProgressPercent.Visible = false, not completion
     end
+    UI.ProgressText.Visible, UI.ProgressTrack.Visible = not completion, not completion
     place(UI.ProgressPercent, progressWidth - 80, 12, 60, 26)
     place(UI.ProgressTrack, 20, completion and 76 or 48, progressWidth - 40, 4)
+    if AccessScene.Mode == "confirm" and verified then
+        AccessScene:Layout(width, height, settleMotion)
+    elseif AccessScene.Mode == "exit" and completion then
+        AccessScene:Layout(progressWidth, progressHeight, settleMotion)
+    end
 end
 
 function Modal:Refresh()
@@ -2982,6 +3303,10 @@ function Modal:Refresh()
         return config.Description and localizedValue(config.Description) or Localization:Get(descriptionKey)
     end)
     setButtonKey(UI.ResultAction, config.ActionKey or (kind == "disabled" and "support" or "report"))
+    local verified = State.Authorized and config.VerifiedAccess == true
+    UI.ResultAction.BaseColor = verified and Theme.AccentHover or Theme.Input
+    UI.ResultAction.TextColor = verified and Theme.ButtonText or nil
+    UI.ResultAction:Apply()
     Localization:Bind(UI.ResultSupport, kind == "disabled" and "supportCopy" or "problems")
     UI.ResultIcon.Root:Destroy()
     UI.ResultIcon = Icon.new(
@@ -3007,7 +3332,7 @@ function Modal:Refresh()
     UI.ResultCopy.Visible = config.CopyText ~= nil
     UI.ResultCopy.Text = config.CopyText or ""
     self:Layout()
-    UI.ResultDescription.Visible = config.CopyText == nil
+    UI.ResultDescription.Visible = config.CopyText == nil and not verified
 end
 function Modal:Open(config)
     if not State.Alive then
@@ -3022,6 +3347,12 @@ function Modal:Open(config)
         LicenseOffer:CancelReveal()
     end
     self.Config = config or {}
+    self.AuthCompletion = false
+    if State.Authorized and self.Config.VerifiedAccess == true then
+        AccessScene:Mount(UI.Result, "confirm", self.Config.Description)
+    else
+        AccessScene:Hide()
+    end
     self.ActionBusy = false
     State.Modal = "result"
     reconcile()
@@ -3033,17 +3364,21 @@ function Modal:Open(config)
     self:Refresh()
     UI.Result.GroupTransparency = 1
     UI.ResultScale.Scale = Settings.ReducedMotion and 1 or 0.992
-    local destination = UI.Result.Position
+    local destination = self.SurfaceGeometry[UI.Result].Position
     UI.Result.Position = destination + UDim2.fromOffset(0, Settings.ReducedMotion and 0 or Motion.PanelDistance)
     Animation:To(UI.Backdrop, { BackgroundTransparency = 0.48 }, Motion.Enter)
     Animation:To(UI.Result, { GroupTransparency = 0, Position = destination }, Motion.Enter)
     Animation:To(UI.ResultScale, { Scale = 1 }, Motion.Enter)
+    if AccessScene.Mode == "confirm" then
+        AccessScene:Reveal()
+    end
 end
 function Modal:Close(immediate)
     if not State.Alive then
         return
     end
     State.ModalToken = State.ModalToken + 1
+    AccessScene:Cancel(true)
     local token = State.ModalToken
     if LicenseOffer then
         LicenseOffer:CancelReveal()
@@ -3058,6 +3393,7 @@ function Modal:Close(immediate)
             UI.Overlay.Visible = false
             UI.Result.Visible = false
             UI.ProgressPanel.Visible = false
+            AccessScene:Hide()
             Localization.Bindings[UI.ResultTitle] = nil
             Localization.Bindings[UI.ResultDescription] = nil
             Accessibility:RestoreModal()
@@ -3091,7 +3427,12 @@ function Modal:Loading(config)
         LicenseOffer:CancelReveal()
     end
     Accessibility:CaptureModal()
-    self.AuthCompletion = config.AuthCompletion == true
+    self.AuthCompletion = config.AuthCompletion == true and State.Authorized
+    if self.AuthCompletion then
+        AccessScene:Mount(UI.ProgressPanel, "exit", config.Text)
+    else
+        AccessScene:Hide()
+    end
     if UI.ProgressCheck then
         UI.ProgressCheck.Root.Visible = false
     end
@@ -3105,12 +3446,15 @@ function Modal:Loading(config)
     Animation:CancelTree(UI.Result)
     UI.ProgressPanel.GroupTransparency = 1
     self:Layout()
-    local destination = UI.ProgressPanel.Position
+    local destination = self.SurfaceGeometry[UI.ProgressPanel].Position
     UI.ProgressPanel.Position = destination + UDim2.fromOffset(0, Motion.PanelDistance)
     Animation:To(UI.ProgressPanel, { GroupTransparency = 0, Position = destination }, Motion.Enter)
     Animation:To(UI.Backdrop, { BackgroundTransparency = 0.48 }, Motion.Enter)
     self:SetText(config.Text)
     self:SetProgress(finite(config.Progress, 0), true)
+    if self.AuthCompletion then
+        AccessScene:Reveal()
+    end
     local generation = State.ModalToken
     local handle = {}
     function handle:SetProgress(value)
@@ -3165,6 +3509,11 @@ function Modal:SetText(value)
     Localization:Bind(UI.ProgressText, "loading", "Text", function()
         return value and localizedValue(value) or Localization:Get("loading")
     end)
+    if self.AuthCompletion and AccessScene.Mode == "exit" then
+        AccessScene.MessageValue = value
+        AccessScene:Refresh()
+        self:Layout()
+    end
 end
 local function openLink(url, config)
     if type(url) ~= "string" or trim(url) == "" then
@@ -5510,6 +5859,9 @@ function Experience:RefreshGame()
         UI.GameImage.Image = image
     end
     UI.GameImage.Visible = image ~= "" and UI.GameImage.IsLoaded
+    if AccessScene.Mode then
+        AccessScene:Refresh()
+    end
 end
 function Experience:SavePrefs()
     if not self.PrefDirty then
@@ -5785,8 +6137,8 @@ function Experience:SuccessCheck()
         return
     end
     UI.ProgressCheck.Root.Visible = true
-    UI.ProgressCheckScale.Scale = Settings.ReducedMotion and 1 or 0.78
-    Animation:To(UI.ProgressCheckScale, { Scale = 1 }, Motion.Page)
+    UI.ProgressCheckScale.Scale = 1
+    AccessScene:Refresh()
     UI.ProgressLicense.Text = self:LicenseText()
 end
 -- Frontend milestones only: key request, actual acceptance, pending host handoff.
@@ -6481,6 +6833,7 @@ local function completeAuthorized(token, key, message)
         Modal:Open({
             Type = "success",
             TitleKey = "granted",
+            VerifiedAccess = true,
             Description = resultMessage,
             ActionKey = "continue",
             OnAction = function()
@@ -7942,6 +8295,9 @@ local function bindInput()
         if processed or (focused and not ownedTextbox) then
             return
         end
+        if not focused and AccessScene:ScrollKey(input.KeyCode) then
+            return
+        end
         if (input.KeyCode == Enum.KeyCode.Return or input.KeyCode == Enum.KeyCode.KeypadEnter) and not focused then
             if Accessibility:Activate() then
                 return
@@ -8022,6 +8378,9 @@ function Loader:SetTitle(title)
     Localization:Bind(UI.Brand, "brand", "Text", function()
         return Settings.Title
     end)
+    if AccessScene.Mode then
+        AccessScene:Refresh()
+    end
     updateFooter()
     return self
 end
@@ -8671,6 +9030,7 @@ function Loader:SetReducedMotion(value)
         Settings.ReducedMotion = value == true
         if Settings.ReducedMotion then
             Stagecraft:Cancel(true)
+            AccessScene:Cancel(true)
             Accessibility:HideTooltip()
             -- Settle destinations and lifecycle finalizers; cancelling alone strands exiting notifications.
             Animation:Finish()
@@ -8960,6 +9320,7 @@ function Loader:Hide()
     end
     Button:Release(nil, true)
     Stagecraft:Cancel(true)
+    AccessScene:Cancel(true)
     State.VisibilityToken = State.VisibilityToken + 1
     local token = State.VisibilityToken
     State.Visible = false
@@ -9051,6 +9412,7 @@ function Loader:Destroy()
     Cards.Hovered = nil
     Modal.Config = nil
     Modal.ProgressHandle = nil
+    table.clear(Modal.SurfaceGeometry)
     if UI.Key then
         pcall(function()
             UI.Key:ReleaseFocus(false)
