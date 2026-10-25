@@ -15,29 +15,29 @@ local Services = {
     Text = game:GetService("TextService"),
     Http = game:GetService("HttpService"),
 }
--- Shared visual language with Neron; Plak keeps its own auth/runtime owners.
+-- Plak access studio: graphic charcoal/lavender, native geometry, host-owned auth.
 local Theme = {
-    Surface = Color3.fromRGB(14, 13, 18),
-    Sidebar = Color3.fromRGB(18, 17, 23),
-    Header = Color3.fromRGB(17, 16, 22),
-    Content = Color3.fromRGB(15, 14, 19),
-    Input = Color3.fromRGB(21, 20, 27),
-    Elevated = Color3.fromRGB(24, 23, 31),
-    Inactive = Color3.fromRGB(27, 26, 35),
-    Hover = Color3.fromRGB(31, 29, 40),
-    Edge = Color3.fromRGB(33, 31, 42),
-    Line = Color3.fromRGB(49, 46, 61),
+    Surface = Color3.fromRGB(15, 15, 21),
+    Sidebar = Color3.fromRGB(19, 19, 26),
+    Header = Color3.fromRGB(17, 17, 24),
+    Content = Color3.fromRGB(12, 12, 17),
+    Input = Color3.fromRGB(24, 24, 33),
+    Elevated = Color3.fromRGB(28, 27, 38),
+    Inactive = Color3.fromRGB(33, 31, 45),
+    Hover = Color3.fromRGB(39, 36, 52),
+    Edge = Color3.fromRGB(43, 40, 56),
+    Line = Color3.fromRGB(55, 51, 69),
     WindowEdge = Color3.fromRGB(64, 59, 77),
     Rim = Color3.fromRGB(193, 185, 211),
     MaterialLow = Color3.fromRGB(239, 237, 245),
-    Text = Color3.fromRGB(229, 227, 236),
-    Secondary = Color3.fromRGB(173, 170, 184),
-    Muted = Color3.fromRGB(149, 146, 162),
-    Accent = Color3.fromRGB(116, 111, 177),
-    AccentHover = Color3.fromRGB(130, 124, 192),
-    AccentDark = Color3.fromRGB(47, 43, 68),
-    AccentMuted = Color3.fromRGB(36, 33, 52),
-    AccentText = Color3.fromRGB(164, 157, 218),
+    Text = Color3.fromRGB(240, 238, 247),
+    Secondary = Color3.fromRGB(178, 175, 192),
+    Muted = Color3.fromRGB(133, 129, 152),
+    Accent = Color3.fromRGB(145, 131, 226),
+    AccentHover = Color3.fromRGB(165, 152, 241),
+    AccentDark = Color3.fromRGB(49, 41, 80),
+    AccentMuted = Color3.fromRGB(34, 30, 51),
+    AccentText = Color3.fromRGB(182, 169, 246),
     ButtonText = Color3.fromRGB(17, 15, 25),
     Success = Color3.fromRGB(98, 177, 106),
     Warning = Color3.fromRGB(183, 153, 92),
@@ -47,10 +47,10 @@ local Theme = {
     ToggleKnobOff = Color3.fromRGB(48, 44, 58),
     ToggleKnobOn = Color3.fromRGB(119, 113, 180),
     ToggleKnobDisabled = Color3.fromRGB(36, 35, 43),
-    Radius = 3,
-    InputRadius = 2,
-    PanelRadius = 6,
-    WindowRadius = 6,
+    Radius = 5,
+    InputRadius = 6,
+    PanelRadius = 8,
+    WindowRadius = 10,
     Font = Enum.Font.Gotham,
     Medium = Enum.Font.GothamMedium,
     Bold = Enum.Font.GothamBold,
@@ -73,6 +73,8 @@ local Motion = {
     PageDistance = 6,
     PanelDistance = 6,
     RevealDistance = 6,
+    StageDistance = 4,
+    StageDelay = 0.035,
 }
 local Settings = {
     Title = "PLAK",
@@ -684,6 +686,9 @@ function Icon.new(parent, name, color, size)
         circle(13, 10, 1.2, true)
         line(7, 4, 6, 6)
         line(13, 4, 14, 6)
+    elseif name == "plak" then
+        path({ { 3, 18 }, { 3, 2 }, { 18, 10 }, { 9, 15 }, { 6, 13 } })
+        path({ { 7, 7 }, { 12, 10 }, { 7, 13 } })
     elseif name == "rosette" then
         circle(10, 10, 8)
         for i = 0, 7 do
@@ -2394,6 +2399,7 @@ function BrandArt:Set(value)
 end
 local Modal = { Config = nil, ProgressHandle = nil }
 local Navigation = {}
+local Stagecraft = { Token = 0, Tasks = {}, Rests = {}, Groups = {}, HeaderPage = "Auth" }
 local Responsive = {}
 local Toasts = { Items = {}, Queue = {} }
 local Statuses = {
@@ -2996,6 +3002,7 @@ function Modal:Open(config)
     if not State.Alive then
         return
     end
+    Stagecraft:Cancel(true)
     Experience.OptionsOpen = false
     Experience:RefreshOptions()
     Accessibility:CaptureModal()
@@ -3062,6 +3069,7 @@ function Modal:Loading(config)
     if not State.Alive then
         return
     end
+    Stagecraft:Cancel(true)
     Experience.OptionsOpen = false
     Experience:RefreshOptions()
     if type(config) == "string" then
@@ -3619,7 +3627,7 @@ local function buildShell(parent)
     UI.Header.BackgroundColor3 = Theme.Header
     UI.Header.BackgroundTransparency = 0
     UI.Header.Active = true
-    UI.BrandLogo = Icon.new(UI.Header, "rosette", Theme.Accent, 28)
+    UI.BrandLogo = Icon.new(UI.Header, "plak", Theme.AccentText, 28)
     UI.Brand = localized(UI.Header, "Brand", "brand", 14, Theme.Text, Theme.Medium)
     UI.Brand.TextTruncate = Enum.TextTruncate.AtEnd
     UI.User = label(UI.Header, "User", Settings.User, 13, Theme.Text, Theme.Medium)
@@ -3729,7 +3737,8 @@ local function buildShell(parent)
     UI.BrandLogo.Root.Parent, UI.Brand.Parent = UI.Sidebar, UI.Sidebar
     UI.SidebarDivider = frame(UI.Sidebar, "SidebarDivider", Theme.Edge)
     UI.HeaderDivider = frame(UI.Header, "HeaderDivider", Theme.Edge)
-    UI.PageDescription = localized(UI.Header, "PageDescription", "pageAccess", 12, Theme.Secondary)
+    UI.PageHeading = group(UI.Header, "RouteHeading")
+    UI.PageDescription = localized(UI.PageHeading, "PageDescription", "pageAccess", 12, Theme.Secondary)
     UI.PageDescription.TextTruncate = Enum.TextTruncate.AtEnd
     UI.RailSurface = frame(UI.Sidebar, "NavigationSurface", Theme.Sidebar)
     corner(UI.RailSurface, Theme.PanelRadius)
@@ -3771,7 +3780,7 @@ local function buildShell(parent)
     UI.ProductMark.Visible = false
     local mark = Icon.new(UI.ProductMark, "play", Theme.Surface, 16)
     place(mark.Root, 8, 8, 16, 16)
-    UI.Breadcrumb = label(UI.Header, "PageTitle", "", 16, Theme.Text, Theme.Bold)
+    UI.Breadcrumb = label(UI.PageHeading, "PageTitle", "", 17, Theme.Text, Theme.Bold)
     UI.Social = {}
     for _, name in ipairs({ "discord", "send", "youtube" }) do
         local id = name == "send" and "telegram" or name
@@ -4866,11 +4875,28 @@ function LicenseOffer:Layout(settle)
     local viewportHeight = math.max(20, height - footer)
     UI.LicensePanel.Size = UDim2.fromOffset(width, height)
     UI.LicenseMark.Visible, UI.LicenseTag.Visible, UI.LicenseDivider.Visible = false, false, false
-    UI.LicenseHeroA.Visible, UI.LicenseHeroB.Visible = false, false
+    local showHeading = height >= 260
+    UI.LicenseHeroA.Visible, UI.LicenseHeroB.Visible = showHeading, showHeading
     place(UI.LicenseScroll, 0, 0, width, viewportHeight)
+    local headingA = TextMetrics:Get(Localization:Get("offerHeroA"), 26, Theme.Display, 10000)
+    local headingB = TextMetrics:Get(Localization:Get("offerHeroB"), 26, Theme.Display, 10000)
+    local headingWidth = math.ceil(headingA and headingA.X or width)
+    local inlineHeading = headingWidth + (headingB and headingB.X or width) + 10 <= width
+    local headingHeight = showHeading and (inlineHeading and 34 or 66) or 0
+    UI.LicenseHeroA.TextSize, UI.LicenseHeroB.TextSize = 26, 26
+    UI.LicenseHeroB.TextColor3 = Theme.AccentText
+    place(UI.LicenseHeroA, 0, 0, inlineHeading and headingWidth + 2 or width, 32)
+    place(
+        UI.LicenseHeroB,
+        inlineHeading and headingWidth + 10 or 0,
+        inlineHeading and 0 or 32,
+        inlineHeading and width - headingWidth - 10 or width,
+        32
+    )
     local subheadHeight = math.max(18, measure(Localization:Get("offerSubhead"), 12, Theme.Font, width))
-    place(UI.LicenseSubhead, 0, 0, width, subheadHeight)
-    local cardsY = subheadHeight + 16
+    local subheadY = showHeading and headingHeight + 6 or 0
+    place(UI.LicenseSubhead, 0, subheadY, width, subheadHeight)
+    local cardsY = subheadY + subheadHeight + 14
     UI.LicenseJumpLife.Root.Visible, UI.LicenseJumpMonth.Root.Visible = stacked, stacked
     if stacked then
         local half = (width - 8) / 2
@@ -4878,11 +4904,13 @@ function LicenseOffer:Layout(settle)
         place(UI.LicenseJumpMonth.Root, half + 8, cardsY, half, hit)
         cardsY = cardsY + hit + 12
     end
-    local gap = 12
-    local cardWidth = stacked and width or (width - gap) / 2
+    local gap = 16
+    local firstWidth = stacked and width or math.floor((width - gap) * 0.56)
+    local widths = { firstWidth, stacked and width or width - gap - firstWidth }
     -- Measure both before placing either so translated terms retain equal-height comparison.
-    local cardHeight, badgeExtra = 244, 0
-    for _, card in ipairs(UI.LicenseCards) do
+    local cardHeight, badgeExtra = 248, 0
+    for index, card in ipairs(UI.LicenseCards) do
+        local cardWidth = widths[index]
         -- Language decoding is presentation only: never size from its transient
         -- scrambled label text, otherwise a later resize changes the final layout.
         card.BadgeCopy = Localization:Get(card.Primary and "offerOneTime" or "offerMonthlyBadge")
@@ -4895,12 +4923,14 @@ function LicenseOffer:Layout(settle)
     end
     cardHeight = cardHeight + badgeExtra
     for index, card in ipairs(UI.LicenseCards) do
-        local x = stacked and 0 or (index - 1) * (cardWidth + gap)
+        local cardWidth = widths[index]
+        local x = stacked and 0 or (index == 1 and 0 or firstWidth + gap)
         local y = cardsY + (stacked and (index - 1) * (cardHeight + gap) or 0)
         card.Rest = UDim2.fromOffset(x, y)
         card.Root.Position, card.Root.Size = card.Rest, UDim2.fromOffset(cardWidth, cardHeight)
         card.Facet.Visible, card.Sweep.Visible = false, false
         place(card.Title, 16, 16, cardWidth - 32, 24)
+        card.Title.TextSize = 18
         local termBounds = TextMetrics:Get(card.BadgeCopy, Theme.BadgeSize, Theme.Medium, 10000)
         local badgeWidth = math.min(cardWidth - 32, math.ceil(termBounds and termBounds.X or cardWidth - 48) + 24)
         place(card.Badge, 16, 48, badgeWidth, card.BadgeHeight)
@@ -4909,7 +4939,7 @@ function LicenseOffer:Layout(settle)
         local keyVisible = cardWidth >= 250
         card.Seal.Root.Visible = keyVisible
         place(card.Seal.Root, cardWidth - 76, 72 + badgeExtra, 56, 84)
-        card.Price.TextSize = cardWidth < 220 and 36 or cardWidth < 300 and 40 or 44
+        card.Price.TextSize = cardWidth < 220 and 36 or cardWidth < 300 and 44 or 48
         place(card.Price, 16, 78 + badgeExtra, math.max(1, cardWidth - 32 - (keyVisible and 70 or 0)), 52)
         place(card.Currency, 16, 130 + badgeExtra, cardWidth - 32, 20)
         place(card.Term, 16, 156 + badgeExtra, cardWidth - 32, card.TermHeight)
@@ -6537,11 +6567,13 @@ local function buildAuth()
     }, UI.Auth)
     UI.AuthBody = frame(UI.AuthScroll, "Body")
     UI.AuthBody.BackgroundTransparency = 1
-    UI.HeroA = localized(UI.AuthBody, "HeroAccent", "homeHeroA", 38, Theme.Text, Theme.Bold)
-    UI.HeroB = localized(UI.AuthBody, "HeroWhite", "homeHeroB", 38, Theme.Accent, Theme.Bold)
+    UI.AuthHeading = group(UI.AuthBody, "AccessHeading")
+    UI.AuthForm = group(UI.AuthBody, "AccessForm")
+    UI.HeroA = localized(UI.AuthHeading, "HeroAccent", "homeHeroA", 30, Theme.Text, Theme.Display)
+    UI.HeroB = localized(UI.AuthHeading, "HeroWhite", "homeHeroB", 30, Theme.AccentText, Theme.Display)
     UI.HeroA.TextYAlignment = Enum.TextYAlignment.Top
     UI.HeroB.TextYAlignment = Enum.TextYAlignment.Top
-    UI.AuthCopy = localized(UI.AuthBody, "Copy", "homeCopy", 13, Theme.Secondary)
+    UI.AuthCopy = localized(UI.AuthHeading, "Copy", "homeCopy", 13, Theme.Secondary)
     UI.AuthCopy.TextWrapped = true
     UI.AuthCopy.TextYAlignment = Enum.TextYAlignment.Bottom
     UI.KeyFieldLabel = localized(UI.AuthBody, "KeyFieldLabel", "fieldLabel", 12, Theme.Text, Theme.Medium)
@@ -6673,6 +6705,24 @@ local function buildAuth()
     UI.AuthArtwork = BrandArt.new(UI.AuthBody, "HeroArtwork")
     UI.AuthArtwork:Set(Settings.Artwork)
     Experience:Build()
+    for _, root in ipairs({
+        UI.KeyFieldLabel,
+        UI.KeyContainer,
+        UI.KeyFeedback,
+        UI.KeyGuidance,
+        UI.AuthJourney,
+        UI.KeyFeedbackMore.Root,
+        UI.Validate.Root,
+        UI.GetKey.Root,
+    }) do
+        root.Parent = UI.AuthForm
+    end
+    Stagecraft.Groups = { UI.AuthHeading, UI.AuthForm }
+    Runtime.Finalizers[#Runtime.Finalizers + 1] = function()
+        Stagecraft:Cancel(false)
+        table.clear(Stagecraft.Groups)
+        table.clear(Stagecraft.Rests)
+    end
 end
 function Cards:Clear()
     for _, card in ipairs(self) do
@@ -6841,7 +6891,7 @@ function Cards:Create(product, index)
     card.CurrentLabel.TextTruncate = Enum.TextTruncate.AtEnd
     card.Footer = frame(card.Root, "CardFooter", Theme.Input)
     Material:Rim(card.Footer, Theme.Rim, 0.96)
-    card.Logo = Icon.new(card.Footer, "rosette", Theme.Accent, 22)
+    card.Logo = Icon.new(card.Footer, "plak", Theme.AccentText, 22)
     card.Name = label(card.Footer, "ProductName", "", 17, Theme.Text, Theme.Bold)
     card.Name.TextWrapped, card.Name.TextTruncate = true, Enum.TextTruncate.AtEnd
     Localization:Bind(card.Name, "umbrella", "Text", function()
@@ -6854,6 +6904,11 @@ function Cards:Create(product, index)
     stroke(card.Details, Theme.Edge, 1, 0.2)
     Material:Panel(card.Details)
     card.DetailsTitle = localized(card.Details, "About", "gameAbout", 12, Theme.Secondary, Theme.Medium)
+    card.DetailsName = label(card.Details, "GameIdentity", "", 17, Theme.Text, Theme.Bold)
+    card.DetailsName.TextWrapped, card.DetailsName.TextTruncate = true, Enum.TextTruncate.AtEnd
+    Localization:Bind(card.DetailsName, "umbrella", "Text", function()
+        return productName(product)
+    end)
     card.Description = label(card.Details, "Description", "", 12, Theme.Text)
     card.Description.TextWrapped, card.Description.TextYAlignment, card.Description.TextTruncate =
         true, Enum.TextYAlignment.Top, Enum.TextTruncate.AtEnd
@@ -6873,7 +6928,7 @@ function Cards:Create(product, index)
         card.Footer,
         "Launch",
         "",
-        false,
+        true,
         "play",
         function()
             launchProduct(product)
@@ -7027,7 +7082,8 @@ function Cards:Layout()
         card.Details.Visible, card.Details.GroupTransparency = card.DetailsOpen, card.DetailsOpen and 0 or 1
         card.Details.BackgroundColor3 = Theme.Elevated
         place(card.DetailsTitle, 16, 12, dw - 32, 22)
-        place(card.Description, 16, 42, dw - 32, math.max(32, dh - 58))
+        place(card.DetailsName, 16, side and 44 or 36, dw - 32, side and 44 or 24)
+        place(card.Description, 16, side and 108 or 72, dw - 32, math.max(32, dh - (side and 124 or 88)))
         local currentId = GameMedia:PlaceId(game.PlaceId)
         local current = currentId ~= nil and card.Product.GameId == currentId
         card.Current.Visible = current
@@ -7149,6 +7205,7 @@ function Navigation:Go(page, force)
         LicenseOffer:Build()
     end
     Button:Release(nil, true)
+    Stagecraft:Cancel(true)
     closeLanguage()
     Accessibility:Clear()
     UI.AuthArtwork:CancelReveal()
@@ -7202,12 +7259,95 @@ function Navigation:Go(page, force)
     Responsive:Update()
     if page == "Auth" then
         UI.AuthArtwork:Reveal()
+        Stagecraft:Reveal()
     elseif page == "Products" then
         Cards:Reveal()
     else
         LicenseOffer:Reveal()
     end
+    Stagecraft:Header(page)
     return true
+end
+-- Two bounded visual stages, never an auth/progress owner. Each new route wins.
+function Stagecraft:Cancel(settle)
+    self.Token = self.Token + 1
+    for thread in pairs(self.Tasks) do
+        Runtime:Cancel(thread)
+        self.Tasks[thread] = nil
+    end
+    for _, root in ipairs(self.Groups) do
+        Animation:CancelProperty(root, "Position")
+        Animation:CancelProperty(root, "GroupTransparency")
+        if settle and root.Parent then
+            root.GroupTransparency = 0
+            root.Position = self.Rests[root] or root.Position
+        end
+    end
+    if UI.PageHeading then
+        Animation:CancelProperty(UI.PageHeading, "Position")
+        Animation:CancelProperty(UI.PageHeading, "GroupTransparency")
+        if settle and UI.PageHeading.Parent then
+            UI.PageHeading.GroupTransparency = 0
+            UI.PageHeading.Position = self.Rests[UI.PageHeading] or UDim2.fromOffset(0, 0)
+        end
+    end
+end
+function Stagecraft:Place(root, x, y, width, height)
+    local rest, size = UDim2.fromOffset(x, y), UDim2.fromOffset(width, height)
+    if self.Rests[root] ~= rest or root.Size ~= size then
+        for thread, owner in pairs(self.Tasks) do
+            if owner == root then
+                Runtime:Cancel(thread)
+                self.Tasks[thread] = nil
+            end
+        end
+        Animation:CancelProperty(root, "Position")
+        Animation:CancelProperty(root, "GroupTransparency")
+        root.Position, root.GroupTransparency = rest, 0
+        root.Size = size
+    end
+    self.Rests[root] = rest
+end
+function Stagecraft:Reveal()
+    self:Cancel(true)
+    if not State.Alive or Settings.ReducedMotion or not State.Visible or State.Page ~= "Auth" or State.Modal then
+        return
+    end
+    local token = self.Token
+    for index, root in ipairs(self.Groups) do
+        if root.Visible then
+            local target = self.Rests[root] or root.Position
+            root.GroupTransparency = 1
+            root.Position = target + UDim2.fromOffset(0, Motion.StageDistance)
+            local thread
+            thread = Runtime:Later((index - 1) * Motion.StageDelay, function()
+                self.Tasks[thread] = nil
+                if
+                    token == self.Token
+                    and State.Visible
+                    and State.Page == "Auth"
+                    and not State.Modal
+                    and root.Parent
+                then
+                    Animation:To(root, { Position = target, GroupTransparency = 0 }, Motion.Page)
+                end
+            end)
+            if thread then
+                self.Tasks[thread] = root
+            end
+        end
+    end
+end
+function Stagecraft:Header(page)
+    local changed = self.HeaderPage ~= page
+    self.HeaderPage = page
+    local root = UI.PageHeading
+    if not root or not root.Visible or not changed or Settings.ReducedMotion or not State.Visible then
+        return
+    end
+    local target = self.Rests[root] or UDim2.fromOffset(0, 0)
+    root.Position, root.GroupTransparency = target + UDim2.fromOffset(Motion.StageDistance, 0), 1
+    Animation:To(root, { Position = target, GroupTransparency = 0 }, Motion.Page)
 end
 local function displayFontSize(text, width, maximum)
     local size = math.min(maximum, math.floor(width / math.max(1, #characters(text))))
@@ -7220,14 +7360,28 @@ end
 function Responsive:Auth(width, height, narrow)
     local hit = math.max(44, math.ceil(44 / math.max(0.1, State.Layout.Scale or 1)))
     local aside = not narrow and width >= 640 and height >= 300
-    local asideWidth = aside and 176 or 0
+    local asideWidth = aside and 200 or 0
     local left = aside and width - asideWidth - 24 or width
     local tiny = height < 180
-    UI.HeroA.Visible, UI.HeroB.Visible, UI.AuthCopy.Visible = false, false, false
-    local gameHeight = tiny and 0 or 56
+    local hero = not State.Layout.KeyboardCompact and height >= 260
+    local fontSize = left >= 400 and 30 or 26
+    -- Always measure canonical copy, never the intermediate language-decode glyphs.
+    local a = TextMetrics:Get(Localization:Get("homeHeroA"), fontSize, Theme.Display, 10000)
+    local b = TextMetrics:Get(Localization:Get("homeHeroB"), fontSize, Theme.Display, 10000)
+    local aWidth, bWidth = math.ceil(a and a.X or left), math.ceil(b and b.X or left)
+    local inline = aWidth + bWidth + 12 <= left
+    local headingHeight = hero and (inline and 44 or 76) or 0
+    UI.AuthHeading.Visible = hero
+    UI.HeroA.Visible, UI.HeroB.Visible, UI.AuthCopy.Visible = hero, hero, false
+    UI.HeroA.TextSize, UI.HeroB.TextSize = fontSize, fontSize
+    place(UI.HeroA, 0, 0, inline and aWidth + 2 or left, 36)
+    place(UI.HeroB, inline and aWidth + 12 or 0, inline and 0 or 34, inline and left - aWidth - 12 or left, 36)
+    Stagecraft:Place(UI.AuthHeading, 0, 0, left, headingHeight)
+    local gameY = hero and headingHeight + 12 or 0
+    local gameHeight = tiny and 0 or 52
     UI.CurrentGame.Visible = not tiny
-    place(UI.CurrentGame, 0, 0, left, gameHeight)
-    place(UI.GamePlaceholder, 0, 4, 48, 48)
+    place(UI.CurrentGame, 0, gameY, left, gameHeight)
+    place(UI.GamePlaceholder, 0, 2, 48, 48)
     place(UI.GameFallback.Root, 14, 14, 20, 20)
     place(UI.GameImage, 0, 0, 48, 48)
     UI.GameContextTag.Visible = left >= 400
@@ -7237,10 +7391,11 @@ function Responsive:Auth(width, height, narrow)
     UI.CurrentGame.BackgroundTransparency = 1
     UI.GameName.TextSize = 14
     UI.GameSupport.TextSize = 12
-    local labelY = tiny and 0 or gameHeight + 20
+    local formY = State.Layout.KeyboardCompact and 0 or gameY + gameHeight + 14
+    local labelY = 0
     UI.KeyFieldLabel.Visible = not State.Layout.KeyboardCompact
     place(UI.KeyFieldLabel, 0, labelY, left, 20)
-    local inputY, controlHeight = State.Layout.KeyboardCompact and 0 or labelY + 26, math.max(hit, 48)
+    local inputY, controlHeight = State.Layout.KeyboardCompact and 0 or labelY + 22, math.max(hit, 52)
     place(UI.KeyContainer, 0, inputY, left, controlHeight)
     local hasIcon = left >= 244
     UI.KeyIcon.Root.Visible = hasIcon
@@ -7256,7 +7411,9 @@ function Responsive:Auth(width, height, narrow)
     place(UI.PasteGlyph.Root, (hit - 18) / 2, (hit - 18) / 2, 18, 18)
     place(UI.RevealEye.Root, (hit - 19) / 2, (hit - 19) / 2, 19, 19)
     place(UI.ConcealEye.Root, (hit - 19) / 2, (hit - 19) / 2, 19, 19)
-    local guidanceY, guidanceHeight = inputY + controlHeight + 10, tiny and 48 or 58
+    local guidanceY = inputY + controlHeight + 10
+    local guidanceHeight = (State.Activity ~= "Idle" or State.AuthFeedback ~= nil or UI.AuthJourney.Visible) and 58
+        or math.max(20, measure(Localization:Get("keyGuidance"), 12, Theme.Font, left))
     local feedback = State.AuthFeedback
     local text = feedback and (feedback.Message or Localization:Get(feedback.Key)) or ""
     local needDetails = feedback and measure(text, 12, Theme.Medium, math.max(1, left - hit - 8)) > guidanceHeight
@@ -7286,7 +7443,7 @@ function Responsive:Auth(width, height, narrow)
     local buttonY = guidanceY + guidanceHeight + 8
     place(UI.Validate.Root, 0, buttonY, left, hit)
     UI.Validate.Label.TextSize = 14
-    local getKeyY = buttonY + hit + 6
+    local getKeyY = buttonY + hit + 2
     place(UI.GetKey.Root, 0, getKeyY, left, hit)
     UI.GetKey.Root.BackgroundTransparency = 1
     UI.GetKey.TextColor = Theme.AccentText
@@ -7297,21 +7454,21 @@ function Responsive:Auth(width, height, narrow)
     Community:Measure(left)
     Diagnostics:Measure(left)
     Experience:Measure(left)
-    local extrasY = getKeyY + hit + 8
+    local formHeight = getKeyY + hit
+    Stagecraft:Place(UI.AuthForm, 0, formY, left, formHeight)
+    local extrasY = formY + formHeight + 4
     Experience:Layout(left, extrasY)
     local bodyHeight = math.max(height, extrasY + Experience:Height() + 8)
     UI.AuthBody.Size, UI.AuthScroll.CanvasSize = UDim2.fromOffset(width, bodyHeight), UDim2.fromOffset(0, bodyHeight)
     UI.AccessAside.Visible = aside
-    UI.AuthArtwork.Root.Visible = aside and Settings.Artwork ~= nil
-    UI.AsideShield.Root.Visible = Settings.Artwork == nil
+    UI.AuthArtwork.Root.Visible = aside
+    UI.AsideShield.Root.Visible, UI.AsideTitle.Visible = false, false
     if aside then
-        place(UI.AccessAside, left + 24, 0, asideWidth, 294)
-        place(UI.AsideTitle, 16, 64, asideWidth - 32, 50)
-        UI.AsideTitle.TextSize, UI.AsideTitle.Font = 16, Theme.Medium
-        place(UI.AsideCopy, 16, 126, asideWidth - 32, 84)
-        place(UI.AsideShield.Root, 16, 20, 24, 24)
-        place(UI.AuthArtwork.Root, left + 40, 148, asideWidth - 32, 130)
-        UI.AuthArtwork:Layout(asideWidth - 32, 130)
+        place(UI.AccessAside, left + 24, 0, asideWidth, 354)
+        place(UI.AsideCopy, 16, 292, asideWidth - 32, 52)
+        place(UI.AsideDivider, 16, 280, asideWidth - 32, 1)
+        place(UI.AuthArtwork.Root, left + 24, 0, asideWidth, 266)
+        UI.AuthArtwork:Layout(asideWidth, 266)
         -- The miniature mark is art, not unreadable microcopy at a fractional scale.
         UI.AuthArtwork.Caption.Visible, UI.AuthArtwork.Serial.Visible, UI.AuthArtwork.Signature.Visible =
             false, false, false
@@ -7432,6 +7589,7 @@ function Responsive:Update()
     local avatarVisible = headerWidth >= 460
     local avatarSpace = avatarVisible and 128 or 0
     local titleWidth = math.max(40, headerWidth - controls - avatarSpace - pad * 2)
+    Stagecraft:Place(UI.PageHeading, 0, 0, headerWidth, header)
     UI.PageDescription.Visible = headerWidth >= 280 and height >= 250
     place(UI.Breadcrumb, pad, UI.PageDescription.Visible and 10 or (header - 24) / 2, titleWidth, 24)
     place(UI.PageDescription, pad, 35, titleWidth, 20)
@@ -8350,6 +8508,7 @@ function Loader:SetReducedMotion(value)
     if State.Alive then
         Settings.ReducedMotion = value == true
         if Settings.ReducedMotion then
+            Stagecraft:Cancel(true)
             Accessibility:HideTooltip()
             -- Settle destinations and lifecycle finalizers; cancelling alone strands exiting notifications.
             Animation:Finish()
@@ -8622,6 +8781,7 @@ function Loader:Show()
     Animation:To(UI.Window, { GroupTransparency = 0 }, Motion.Enter)
     if State.Page == "Auth" then
         UI.AuthArtwork:Reveal()
+        Stagecraft:Reveal()
     elseif State.Page == "Products" then
         Cards:Reveal()
     else
@@ -8634,6 +8794,7 @@ function Loader:Hide()
         return self
     end
     Button:Release(nil, true)
+    Stagecraft:Cancel(true)
     State.VisibilityToken = State.VisibilityToken + 1
     local token = State.VisibilityToken
     State.Visible = false
@@ -8842,6 +9003,7 @@ local function initialize()
     if State.Visible then
         Animation:To(UI.Window, { GroupTransparency = 0 }, Motion.Enter)
         UI.AuthArtwork:Reveal()
+        Stagecraft:Reveal()
     end
     Runtime:Later(Settings.ReducedMotion and 0 or Motion.Enter.Time, function()
         GameMedia.Ready = true
