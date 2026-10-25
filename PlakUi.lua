@@ -75,6 +75,7 @@ local Motion = {
     RevealDistance = 6,
     StageDistance = 4,
     StageDelay = 0.035,
+    SheetDistance = 8,
 }
 local Settings = {
     Title = "PLAK",
@@ -686,6 +687,13 @@ function Icon.new(parent, name, color, size)
         circle(13, 10, 1.2, true)
         line(7, 4, 6, 6)
         line(13, 4, 14, 6)
+    elseif name == "chevron-right" then
+        path({ { 7, 5 }, { 12, 10 }, { 7, 15 } })
+    elseif name == "globe" then
+        circle(10, 10, 8)
+        line(2, 10, 18, 10)
+        path({ { 10, 2 }, { 6, 6 }, { 6, 14 }, { 10, 18 } })
+        path({ { 10, 2 }, { 14, 6 }, { 14, 14 }, { 10, 18 } })
     elseif name == "plak" then
         path({ { 3, 18 }, { 3, 2 }, { 18, 10 }, { 9, 15 }, { 6, 13 } })
         path({ { 7, 7 }, { 12, 10 }, { 7, 13 } })
@@ -878,6 +886,9 @@ function Button.new(parent, name, text, accent, iconName, onActivated, scope, al
             }, preset)
         end
         Animation:To(self.Label, { TextColor3 = textColor }, preset)
+        if self.NavHint then
+            self.NavHint.TextColor3 = self.Disabled and Theme.Muted or self.Selected and Theme.Secondary or Theme.Muted
+        end
         if self.Icon then
             self.Icon:SetColor(
                 self.Navigation and (self.Selected and Theme.AccentText or textColor) or textColor,
@@ -3703,7 +3714,7 @@ local function buildShell(parent)
         "RestoreLoader",
         "",
         false,
-        "rosette",
+        "plak",
         function()
             Loader:Show()
         end,
@@ -3755,7 +3766,8 @@ local function buildShell(parent)
     UI.ActiveNav.BackgroundTransparency = 0.7
     corner(UI.ActiveNav, 1)
     UI.ActiveNav.BackgroundColor3 = Theme.AccentText
-    UI.ActiveNav.BackgroundTransparency = 0.12
+    UI.ActiveNav.BackgroundTransparency = 1
+    UI.NavigationCaret = Icon.new(UI.ActiveNav, "chevron-right", Theme.AccentText, 10)
     UI.AuthNav = Button.new(UI.Sidebar, "Authorization", "", false, "home", function()
         Navigation:Go("Auth")
     end)
@@ -5044,6 +5056,12 @@ function LicenseOffer:BuildTriggers()
     UI.LicenseNav.Root.BackgroundTransparency = 1
     UI.LicenseNav.Label.Visible = false
     UI.LicenseNav.Icon.Root.Position = UDim2.new(0.5, -10, 0.5, 0)
+    for index, button in ipairs({ UI.AuthNav, UI.ProductsNav, UI.LicenseNav, UI.RefreshNav }) do
+        button.NavHint = label(button.Root, "RouteGuidance", "", 11, Theme.Muted)
+        button.NavHint.TextWrapped, button.NavHint.TextTruncate = true, Enum.TextTruncate.AtEnd
+        button.NavHint.TextYAlignment = Enum.TextYAlignment.Top
+        Localization:Bind(button.NavHint, ({ "pageAccess", "pageGames", "pageLicenses", "tipRefresh" })[index])
+    end
     self:Refresh()
 end
 
@@ -5382,6 +5400,8 @@ function Community:Build()
             self:Dismiss()
         end
     end)
+    UI.CommunityRestore.Ghost = true
+    UI.CommunityRestore.Icon = Icon.new(UI.CommunityRestore.Root, "discord", Theme.Secondary, 18)
     Runtime:Connect(UI.AuthScroll:GetPropertyChangedSignal("CanvasPosition"), function()
         self:RevealCard()
     end)
@@ -5639,7 +5659,7 @@ function Experience:PresentOptions()
     if open then
         if not UI.Preferences.Visible then
             UI.Preferences.GroupTransparency = Settings.ReducedMotion and 0 or 1
-            UI.Preferences.Position = rest + UDim2.fromOffset(0, Settings.ReducedMotion and 0 or Motion.PanelDistance)
+            UI.Preferences.Position = rest + UDim2.fromOffset(Settings.ReducedMotion and 0 or Motion.SheetDistance, 0)
         end
         UI.Preferences.Visible, UI.PreferencesBackdrop.Visible = true, true
         Animation:To(UI.Preferences, { Position = rest }, Motion.Panel)
@@ -5648,7 +5668,7 @@ function Experience:PresentOptions()
     else
         Animation:To(UI.PreferencesBackdrop, { BackgroundTransparency = 1 }, Motion.Exit)
         Animation:To(UI.Preferences, {
-            Position = rest + UDim2.fromOffset(0, Settings.ReducedMotion and 0 or Motion.PanelDistance),
+            Position = rest + UDim2.fromOffset(Settings.ReducedMotion and 0 or Motion.SheetDistance, 0),
         }, Motion.Exit)
         Animation:To(UI.Preferences, { GroupTransparency = 1 }, Motion.Exit, function()
             if token == self.OptionsToken and not self.OptionsOpen then
@@ -5872,38 +5892,56 @@ function Experience:Layout(width, y)
     end
     UI.CommunityDetails.Root.Visible = false -- The persistent invitation has its own Details target.
     Community:Layout(width, y)
-    local panelWidth = math.min(392, State.Layout.Width - 24)
+    local panelWidth = math.min(420, State.Layout.Width - 24)
     local inner = panelWidth - 32
-    local step = hit + 2
-    place(UI.PreferenceSectionLabel, 0, 0, inner, 20)
+    local step = math.max(hit, 52)
+    place(UI.PreferenceWell, 0, 0, inner, step * 3)
     for index, button in ipairs({ UI.PreferenceLanguage, UI.PreferenceScale, UI.PreferenceMotion }) do
-        place(button.Root, 0, 26 + (index - 1) * step, inner, hit)
-        place(button.RowIcon.Root, 12, (hit - 18) / 2, 18, 18)
+        place(button.Root, 0, (index - 1) * step, inner, step)
+        place(button.RowIcon.Root, 12, (step - 18) / 2, 18, 18)
         local valueWidth = button == UI.PreferenceMotion and math.min(162, inner * 0.45) or 60
         if inner < 260 then
             button.Label.Position, button.Label.Size = UDim2.fromOffset(42, 5), UDim2.new(1, -76, 0, 18)
             button.ValueLabel.Position, button.ValueLabel.Size =
-                UDim2.fromOffset(42, hit - 21), UDim2.new(1, -76, 0, 17)
+                UDim2.fromOffset(42, step - 21), UDim2.new(1, -76, 0, 17)
             button.ValueLabel.TextXAlignment = Enum.TextXAlignment.Left
         else
-            place(button.ValueLabel, inner - valueWidth - 30, 0, valueWidth, hit)
+            place(button.ValueLabel, inner - valueWidth - 30, 0, valueWidth, step)
             button.ValueLabel.TextXAlignment = Enum.TextXAlignment.Right
             button.Label.Position, button.Label.Size = UDim2.fromOffset(42, 0), UDim2.new(1, -valueWidth - 82, 1, 0)
         end
-        place(button.ValueChevron.Root, inner - 24, (hit - 12) / 2, 12, 12)
+        place(button.ValueChevron.Root, inner - 24, (step - 12) / 2, 12, 12)
     end
-    place(UI.PreferenceReset.Root, 0, 26 + step * 3 + 10, inner, hit)
-    place(UI.CommunityRestore.Root, 0, 26 + step * 4 + 12, inner, hit)
-    local noteY = 26 + step * 5 + 22
+    for index, divider in ipairs(UI.PreferenceDividers) do
+        place(divider, 42, index * step, inner - 54, 1)
+    end
+    local actionsY, splitActions = step * 3 + 12, inner >= 320
+    local actionWidth = splitActions and (inner - 12) / 2 or inner
+    for index, button in ipairs({ UI.PreferenceReset, UI.CommunityRestore }) do
+        place(
+            button.Root,
+            splitActions and (index - 1) * (actionWidth + 12) or 0,
+            actionsY + (splitActions and 0 or (index - 1) * (hit + 4)),
+            actionWidth,
+            hit
+        )
+        button.Icon.Root.AnchorPoint = Vector2.new(0, 0.5)
+        place(button.Icon.Root, 8, hit / 2, 18, 18)
+        button.Label.Position, button.Label.Size = UDim2.fromOffset(36, 0), UDim2.new(1, -44, 1, 0)
+        button.Label.TextXAlignment = Enum.TextXAlignment.Left
+    end
+    local noteY = actionsY + (splitActions and hit or hit * 2 + 4) + 16
     local noteHeight =
         math.max(36, measure(Localization:Get(self.PrefSaveState or "prefSession"), 12, Theme.Font, inner))
     place(UI.PreferenceNote, 0, noteY, inner, noteHeight)
     local diagY = noteY + noteHeight + 12
     place(UI.DiagnosticsToggle.Root, 0, diagY, inner, hit)
+    UI.DiagnosticsToggle.Icon.Root.AnchorPoint = Vector2.new(0, 0.5)
+    place(UI.DiagnosticsToggle.Icon.Root, 8, hit / 2, 18, 18)
     Diagnostics.Top = diagY + hit + 12
     Diagnostics:Layout(inner)
     local bodyHeight = Diagnostics.Top + Diagnostics:Height() + 8
-    local header = hit + 12
+    local header = math.max(78, hit + 24)
     place(UI.PreferencesHeaderDivider, 16, header - 2, inner, 1)
     local panelHeight = math.min(State.Layout.Height - 24, header + bodyHeight + 24)
     local rest = UDim2.fromOffset(State.Layout.Width - panelWidth - 12, 12)
@@ -5913,9 +5951,15 @@ function Experience:Layout(width, y)
         self.PreferencesRest = rest
     end
     UI.Preferences.Size = UDim2.fromOffset(panelWidth, math.max(hit + 48, panelHeight))
-    place(UI.PreferencesTitle, 16, 12, panelWidth - hit - 36, hit)
+    local headerIcon = panelWidth >= 260
+    local titleX = headerIcon and 56 or 16
+    UI.PreferencesTitle.TextSize = headerIcon and 20 or 18
+    UI.PreferencesIcon.Root.Visible = headerIcon
+    place(UI.PreferencesIcon.Root, 16, 20, 24, 24)
+    place(UI.PreferencesTitle, titleX, 12, panelWidth - hit - titleX - 24, 28)
+    place(UI.PreferenceSectionLabel, titleX, 43, panelWidth - titleX - 20, 20)
     place(UI.PreferenceClose.Root, panelWidth - hit - 8, 8, hit, hit)
-    place(UI.PreferencesScroll, 16, header, inner, math.max(20, panelHeight - header - 16))
+    place(UI.PreferencesScroll, 16, header + 8, inner, math.max(20, panelHeight - header - 24))
     UI.PreferencesContent.Size = UDim2.fromOffset(inner, bodyHeight)
     UI.PreferencesScroll.CanvasSize = UDim2.fromOffset(0, bodyHeight)
     UI.PreferencesScroll.ScrollingEnabled = bodyHeight > UI.PreferencesScroll.Size.Y.Offset
@@ -6096,7 +6140,8 @@ function Experience:Build()
     stroke(UI.Preferences, Theme.WindowEdge, 1, 0.35)
     Material:Panel(UI.Preferences)
     UI.PreferencesHeaderDivider = frame(UI.Preferences, "HeaderDivider", Theme.Edge)
-    UI.PreferencesTitle = localized(UI.Preferences, "Title", "preferencesTitle", 16, Theme.Text, Theme.Medium)
+    UI.PreferencesIcon = Icon.new(UI.Preferences, "sliders", Theme.AccentText, 24)
+    UI.PreferencesTitle = localized(UI.Preferences, "Title", "preferencesTitle", 20, Theme.Text, Theme.Bold)
     UI.PreferenceClose = Button.new(UI.Preferences, "ClosePreferences", "", false, "x", function()
         Loader:ShowPreferences(false)
     end, Runtime, canInteract)
@@ -6118,7 +6163,14 @@ function Experience:Build()
     }, UI.Preferences)
     UI.PreferencesContent = frame(UI.PreferencesScroll, "PreferenceContent")
     UI.PreferencesContent.BackgroundTransparency = 1
-    UI.PreferenceSectionLabel = localized(UI.PreferencesContent, "Section", "session", 11, Theme.Muted, Theme.Medium)
+    UI.PreferenceSectionLabel = localized(UI.Preferences, "Section", "session", 11, Theme.Muted, Theme.Medium)
+    UI.PreferenceWell = frame(UI.PreferencesContent, "SettingWell", Theme.Input)
+    corner(UI.PreferenceWell, Theme.InputRadius)
+    UI.PreferenceDividers = {}
+    for index = 1, 2 do
+        UI.PreferenceDividers[index] = frame(UI.PreferenceWell, "Divider", Theme.Edge)
+        UI.PreferenceDividers[index].BackgroundTransparency = 0.5
+    end
     UI.PreferenceLanguage = secondary("Language", "languageOption", function()
         local order = { en = "es", es = "pt", pt = "ru", ru = "en" }
         Loader:SetLanguage(order[Settings.Language] or "en")
@@ -6137,11 +6189,14 @@ function Experience:Build()
         Community:Restore()
         self:PreferenceChanged()
     end, UI.PreferencesContent)
+    UI.PreferenceReset.Ghost = true
+    UI.PreferenceReset.Icon = Icon.new(UI.PreferenceReset.Root, "refresh", Theme.Secondary, 18)
     for index, button in ipairs({ UI.PreferenceLanguage, UI.PreferenceScale, UI.PreferenceMotion }) do
-        button.BaseColor = Theme.Input
+        button.BaseColor, button.Ghost = Theme.Hover, true
+        button:Apply()
         button.Label.TextXAlignment = Enum.TextXAlignment.Left
         button.RowIcon =
-            Icon.new(button.Root, index == 1 and "rosette" or index == 2 and "sliders" or "clock", Theme.Secondary, 18)
+            Icon.new(button.Root, index == 1 and "globe" or index == 2 and "sliders" or "clock", Theme.Secondary, 18)
         button.ValueLabel = label(button.Root, "Value", "", 12, Theme.Secondary, Theme.Medium)
         button.ValueLabel.TextXAlignment = Enum.TextXAlignment.Right
         button.ValueLabel.TextTruncate = Enum.TextTruncate.AtEnd
@@ -6159,6 +6214,11 @@ function Experience:Build()
     UI.DiagnosticsToggle = secondary("DiagnosticsToggle", "diagShow", function()
         Diagnostics:Toggle()
     end, UI.PreferencesContent)
+    UI.DiagnosticsToggle.Ghost = true
+    UI.DiagnosticsToggle.Icon = Icon.new(UI.DiagnosticsToggle.Root, "info", Theme.Secondary, 18)
+    UI.DiagnosticsToggle.Label.Position, UI.DiagnosticsToggle.Label.Size =
+        UDim2.fromOffset(36, 0), UDim2.new(1, -44, 1, 0)
+    UI.DiagnosticsToggle.Label.TextXAlignment = Enum.TextXAlignment.Left
     self:Refresh()
 end
 
@@ -6815,8 +6875,11 @@ function Cards:ResetHover()
         return
     end
     Animation:To(card.Artwork.Image, { ImageColor3 = Color3.fromRGB(240, 240, 244) }, Motion.Hover)
-    if not card.DetailsOpen then
+    if not card.Article and not card.DetailsOpen then
         Animation:To(card.Border, { Color = Theme.Line, Transparency = 0.35 }, Motion.Hover)
+    end
+    if card.Divider then
+        Animation:To(card.Divider, { BackgroundColor3 = Theme.Edge }, Motion.Hover)
     end
 end
 function Cards:Select(card)
@@ -6851,6 +6914,8 @@ function Cards:Create(product, index)
         product.Artwork or (product.GameId and GameMedia:Thumbnail(product.GameId))
     )
     card.Artwork.Root.Size = UDim2.new(1, 0, 1, -76)
+    card.Artwork.Root.ClipsDescendants = true
+    corner(card.Artwork.Root, Theme.InputRadius)
     card.Artwork.Image.ImageColor3 = Color3.fromRGB(240, 240, 244)
     card.Shade = frame(card.Root, "ImageLegibility", Color3.new(0, 0, 0))
     card.Shade.Size, card.Shade.BackgroundTransparency = UDim2.new(1, 0, 1, -76), 0.65
@@ -6890,19 +6955,28 @@ function Cards:Create(product, index)
     card.CurrentLabel.TextXAlignment = Enum.TextXAlignment.Center
     card.CurrentLabel.TextTruncate = Enum.TextTruncate.AtEnd
     card.Footer = frame(card.Root, "CardFooter", Theme.Input)
-    Material:Rim(card.Footer, Theme.Rim, 0.96)
+    card.FooterRim = Material:Rim(card.Footer, Theme.Rim, 0.96)
     card.Logo = Icon.new(card.Footer, "plak", Theme.AccentText, 22)
     card.Name = label(card.Footer, "ProductName", "", 17, Theme.Text, Theme.Bold)
     card.Name.TextWrapped, card.Name.TextTruncate = true, Enum.TextTruncate.AtEnd
     Localization:Bind(card.Name, "umbrella", "Text", function()
         return productName(product)
     end)
+    card.Synopsis = label(card.Footer, "Synopsis", "", 12, Theme.Secondary)
+    card.Synopsis.TextWrapped, card.Synopsis.TextTruncate, card.Synopsis.TextYAlignment =
+        true, Enum.TextTruncate.AtEnd, Enum.TextYAlignment.Top
+    Localization:Bind(card.Synopsis, "productCopy", "Text", function()
+        return localizedValue(product.Description, Localization:Get(product.GameId and "gameCopy" or "productCopy"))
+    end)
+    card.Divider = frame(card.Root, "ArticleDivider", Theme.Edge)
+    card.Divider.BackgroundTransparency = 0.35
     card.Details = group(card.Root, "InspectionDetails")
     card.Details.BackgroundColor3, card.Details.BackgroundTransparency, card.Details.Visible =
         Theme.Surface, 0.03, false
     corner(card.Details, Theme.PanelRadius)
-    stroke(card.Details, Theme.Edge, 1, 0.2)
+    card.DetailsBorder = stroke(card.Details, Theme.Edge, 1, 0.2)
     Material:Panel(card.Details)
+    card.DetailsRim = card.Details:FindFirstChild("SurfaceRim")
     card.DetailsTitle = localized(card.Details, "About", "gameAbout", 12, Theme.Secondary, Theme.Medium)
     card.DetailsName = label(card.Details, "GameIdentity", "", 17, Theme.Text, Theme.Bold)
     card.DetailsName.TextWrapped, card.DetailsName.TextTruncate = true, Enum.TextTruncate.AtEnd
@@ -6952,7 +7026,11 @@ function Cards:Create(product, index)
             { ImageColor3 = hovered and Color3.new(1, 1, 1) or Color3.fromRGB(240, 240, 244) },
             Motion.Hover
         )
-        if not other.DetailsOpen then
+        if other.Article then
+            Animation:To(other.Divider, {
+                BackgroundColor3 = hovered and Theme.Line or Theme.Edge,
+            }, Motion.Hover)
+        elseif not other.DetailsOpen then
             Animation:To(other.Border, {
                 Color = hovered and Theme.Line:Lerp(Theme.AccentText, 0.22) or Theme.Line,
                 Transparency = hovered and 0.15 or 0.45,
@@ -7034,56 +7112,103 @@ function Cards:Layout()
     local scale = math.max(0.1, UI.Scale.Scale)
     local hit = math.max(44, math.ceil(44 / scale))
     local width = UI.Catalog.AbsoluteSize.X / scale
-    local side = #self == 1 and self.Selected ~= nil and width >= 600
-    local inspectorWidth, gap = 218, 16
-    local mainWidth = side and width - inspectorWidth - gap or width
-    local columns = mainWidth >= 590 and #self > 1 and 2 or 1
-    local cardWidth = math.floor((mainWidth - gap * (columns - 1)) / columns)
-    if #self == 1 and not side and width >= 590 then
-        cardWidth = math.min(cardWidth, 460)
-    end
-    local artHeight = math.clamp(math.floor(cardWidth * 9 / 16), 156, 252)
-    local footerHeight, rowY, rowHeight = hit + 32, 0, 0
-    local baseHeight = artHeight + footerHeight
+    local article, gap = width >= 600, 20
+    local cardWidth = article and math.floor((width - gap) * 0.52) or width
+    local copyWidth = article and width - cardWidth - gap or width
+    local artHeight = math.clamp(math.floor(cardWidth * 9 / 16), article and 196 or 156, 252)
+    local footerHeight, rowY = hit + 32, 0
     for index, card in ipairs(self) do
         self:SettleReveal(card)
-        local column = (index - 1) % columns
-        if column == 0 and index > 1 then
-            rowY, rowHeight = rowY + rowHeight + gap, 0
-        end
-        local disclosure = card.DetailsOpen and not side and 138 or 0
-        local cardHeight = baseHeight + disclosure
-        local rootWidth = side and width or cardWidth
-        local x = column * (cardWidth + gap)
-        place(card.Root, x, rowY, rootWidth, cardHeight)
+        local titleHeight = article
+                and math.clamp(measure(productName(card.Product), 24, Theme.Bold, copyWidth) + 4, 32, 60)
+            or footerHeight - 24
+        local statusY = titleHeight + 8
+        local copyY = statusY + 36
+        local inspectionHeight = article
+                and 24 + math.clamp(
+                    measure(
+                        localizedValue(
+                            card.Product.Description,
+                            Localization:Get(card.Product.GameId and "gameCopy" or "productCopy")
+                        ),
+                        12,
+                        Theme.Font,
+                        copyWidth
+                    ),
+                    48,
+                    240
+                )
+            or 126
+        local baseHeight = article
+                and math.max(artHeight, copyY + (card.DetailsOpen and inspectionHeight or 60) + 16 + hit)
+            or artHeight + footerHeight
+        local disclosure = not article and card.DetailsOpen and 138 or 0
+        local cardHeight = baseHeight + disclosure + (article and 20 or 0)
+        card.Article = article
+        place(card.Root, 0, rowY, width, cardHeight)
         card.RestPosition = card.Root.Position
-        card.Root.BackgroundTransparency = side and 1 or 0
+        card.Root.BackgroundTransparency = article and 1 or 0
         Animation:To(card.Border, {
             Color = card.DetailsOpen and Theme.Accent or Theme.Line,
-            Transparency = side and 1 or card.DetailsOpen and 0.1 or 0.35,
+            Transparency = article and 1 or card.DetailsOpen and 0.1 or 0.35,
         }, Motion.Hover)
-        card.Artwork.Root.Size = UDim2.fromOffset(cardWidth, artHeight)
+        place(card.Artwork.Root, 0, 0, cardWidth, artHeight)
+        place(card.Shade, 0, 0, cardWidth, artHeight)
         place(card.Select.Root, 0, 0, cardWidth, artHeight)
         place(card.InspectBadge, 12, artHeight - 40, 28, 28)
         place(card.InspectGlyph.Root, 6, 6, 16, 16)
-        place(card.Footer, 0, artHeight, cardWidth, footerHeight)
+        place(
+            card.Footer,
+            article and cardWidth + gap or 0,
+            article and 0 or artHeight,
+            copyWidth,
+            article and baseHeight or footerHeight
+        )
+        card.Footer.BackgroundTransparency = article and 1 or 0
+        card.FooterRim.Visible = not article
+        card.Divider.Visible = article
+        place(card.Divider, 0, cardHeight - 1, width, 1)
         card.Logo.Root.Visible = false
-        local actionWidth = cardWidth >= 340 and 116 or hit
-        card.Name.TextSize = 14
-        place(card.Name, 16, 12, math.max(1, cardWidth - actionWidth - 44), footerHeight - 24)
-        place(card.Open.Root, cardWidth - actionWidth - 12, 16, actionWidth, hit)
+        local actionWidth = article and math.min(180, copyWidth) or cardWidth >= 340 and 116 or hit
+        card.Name.TextSize = article and 24 or 14
+        place(
+            card.Name,
+            article and 0 or 16,
+            article and 0 or 12,
+            article and copyWidth or math.max(1, cardWidth - actionWidth - 44),
+            titleHeight
+        )
+        card.Name.TextYAlignment = article and Enum.TextYAlignment.Top or Enum.TextYAlignment.Center
+        card.Synopsis.Visible = article and not card.DetailsOpen
+        place(card.Synopsis, 0, copyY, copyWidth, 60)
+        place(
+            card.Open.Root,
+            article and 0 or cardWidth - actionWidth - 12,
+            article and baseHeight - hit or 16,
+            actionWidth,
+            hit
+        )
         card.Open.Label.Visible = actionWidth > hit
         card.Open.Icon.Root.Position = actionWidth > hit and UDim2.new(0, 14, 0.5, 0) or UDim2.new(0.5, -9, 0.5, 0)
-        local dw, dh = side and inspectorWidth or cardWidth, side and baseHeight or 126
-        card.DetailsRest = side and UDim2.fromOffset(cardWidth + gap, 0) or UDim2.fromOffset(0, baseHeight + 12)
+        local dw, dh = article and copyWidth or cardWidth, inspectionHeight
+        card.DetailsRest = article and UDim2.fromOffset(cardWidth + gap, copyY) or UDim2.fromOffset(0, baseHeight + 12)
         Animation:CancelTree(card.Details)
         card.DetailsToken = (card.DetailsToken or 0) + 1
         card.Details.Position, card.Details.Size = card.DetailsRest, UDim2.fromOffset(dw, dh)
         card.Details.Visible, card.Details.GroupTransparency = card.DetailsOpen, card.DetailsOpen and 0 or 1
         card.Details.BackgroundColor3 = Theme.Elevated
-        place(card.DetailsTitle, 16, 12, dw - 32, 22)
-        place(card.DetailsName, 16, side and 44 or 36, dw - 32, side and 44 or 24)
-        place(card.Description, 16, side and 108 or 72, dw - 32, math.max(32, dh - (side and 124 or 88)))
+        card.Details.BackgroundTransparency = article and 1 or 0.03
+        card.DetailsBorder.Transparency = article and 1 or 0.2
+        card.DetailsRim.Visible, card.DetailsName.Visible = not article, not article
+        place(card.DetailsTitle, article and 0 or 16, article and 0 or 12, dw - (article and 0 or 32), 22)
+        place(card.DetailsName, 16, article and 0 or 36, dw - 32, 24)
+        place(
+            card.Description,
+            article and 0 or 16,
+            article and 24 or 72,
+            dw - (article and 0 or 32),
+            math.max(32, dh - (article and 24 or 88))
+        )
         local currentId = GameMedia:PlaceId(game.PlaceId)
         local current = currentId ~= nil and card.Product.GameId == currentId
         card.Current.Visible = current
@@ -7092,22 +7217,31 @@ function Cards:Layout()
         local badgeWidth = math.min(cardWidth - 76, math.max(80, #characters(Localization:Get(badgeKey)) * 5.8 + 20))
         place(card.Current, 12, 12, badgeWidth, 26)
         place(card.CurrentLabel, 6, 0, badgeWidth - 12, 26)
-        card.Status.Visible = not current or cardWidth >= 340
+        card.Status.Visible = article or not current or cardWidth >= 340
         local statusText = Localization:Get((Statuses[card.Product.Status] or Statuses.Disabled).Key)
         local maximum = math.max(40, cardWidth - (current and badgeWidth + 86 or 72))
         local statusWidth = math.clamp(#characters(statusText) * 5.8 + 20, math.min(88, maximum), maximum)
-        place(card.Status, cardWidth - statusWidth - 50, 12, statusWidth, 26)
-        place(card.StatusLabel, 6, 0, statusWidth - 12, 26)
-        place(card.StatusIconBox, cardWidth - 38, 12, 26, 26)
+        card.Status.BackgroundTransparency = article and 1 or 0
+        card.StatusIconBox.BackgroundTransparency = article and 1 or 0
+        card.StatusLabel.TextXAlignment = article and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center
+        place(
+            card.Status,
+            article and cardWidth + gap + 26 or cardWidth - statusWidth - 50,
+            article and statusY or 12,
+            article and copyWidth - 26 or statusWidth,
+            26
+        )
+        place(card.StatusLabel, article and 0 or 6, 0, article and copyWidth - 26 or statusWidth - 12, 26)
+        place(card.StatusIconBox, article and cardWidth + gap - 4 or cardWidth - 38, article and statusY or 12, 26, 26)
         place(card.StatusIcon.Root, 5, 5, 16, 16)
         card.Select.Root:SetAttribute(
             "ActionLabel",
             Localization:Get("gameInspect") .. " · " .. productName(card.Product)
         )
         card.StatusIconBox:SetAttribute("ActionLabel", statusText)
-        rowHeight = math.max(rowHeight, cardHeight)
+        rowY = rowY + cardHeight + gap
     end
-    UI.Catalog.CanvasSize = UDim2.fromOffset(0, #self > 0 and rowY + rowHeight + 2 or 0)
+    UI.Catalog.CanvasSize = UDim2.fromOffset(0, #self > 0 and rowY - gap + 2 or 0)
 end
 
 function Cards:Rebuild()
@@ -7175,8 +7309,11 @@ function Navigation:Refresh(instant)
         or State.Page == "Products" and UI.ProductsNav.Root
         or UI.LicenseNav.Root
     UI.ActiveNav.Visible, UI.NavigationPlate.Visible = selected.Visible, selected.Visible
-    local marker = UDim2.fromOffset(selected.Position.X.Offset + 3, selected.Position.Y.Offset + 12)
-    local markerSize = UDim2.fromOffset(2, math.max(12, selected.Size.Y.Offset - 24))
+    local marker = UDim2.fromOffset(
+        selected.Position.X.Offset + selected.Size.X.Offset - 14,
+        selected.Position.Y.Offset + (selected.Size.Y.Offset - 10) / 2
+    )
+    local markerSize = UDim2.fromOffset(10, 10)
     if instant or not self.PlateReady or Settings.ReducedMotion then
         Animation:CancelProperty(UI.NavigationPlate, "Position")
         Animation:CancelProperty(UI.NavigationPlate, "Size")
@@ -7562,8 +7699,22 @@ function Responsive:Update()
     UI.Brand.Visible = expanded
     UI.Brand.TextSize, UI.Brand.Font = 18, Theme.Bold
     place(UI.Brand, 54, 12, rail - 66, 40)
-    local navStep = hit + 4
     local navY = header + (height < 400 and 4 or 32)
+    local optionY = height - hit * 2 - 16
+    local socialWanted = height >= 450
+        and (
+            State.Callbacks.Social ~= nil
+            or Settings.SocialLinks.discord ~= nil
+            or Settings.SocialLinks.telegram ~= nil
+            or Settings.SocialLinks.youtube ~= nil
+        )
+    local utilityTop = socialWanted and optionY - hit - 8 or optionY - 10
+    local detailedHeight = math.max(hit, 64)
+    local detailedNavigation = expanded
+        and height >= 500
+        and navY + (detailedHeight + 4) * 3 + detailedHeight + 12 <= utilityTop
+    local navHeight = detailedNavigation and detailedHeight or hit
+    local navStep = navHeight + 4
     UI.NavigationCaption.Visible = expanded and height >= 420
     place(UI.NavigationCaption, 22, header + 8, rail - 40, 16)
     local labelInset = 44
@@ -7573,17 +7724,27 @@ function Responsive:Update()
             expanded and 8 or (rail - hit) / 2,
             navY + (index - 1) * navStep,
             expanded and rail - 16 or hit,
-            hit
+            navHeight
         )
         button.Icon.Root.Position = UDim2.new(expanded and 0 or 0.5, expanded and 14 or -9, 0.5, 0)
         button.Icon.Root.Size = UDim2.fromOffset(18, 18)
         button.Label.Visible = expanded
-        button.Label.Position, button.Label.Size = UDim2.fromOffset(labelInset, 0), UDim2.new(1, -labelInset - 8, 1, 0)
+        button.Label.Position, button.Label.Size =
+            UDim2.fromOffset(labelInset, detailedNavigation and 5 or 0),
+            UDim2.new(1, -labelInset - 18, detailedNavigation and 0 or 1, detailedNavigation and 26 or 0)
         button.Label.TextXAlignment, button.Label.TextWrapped = Enum.TextXAlignment.Left, true
+        button.NavHint.Visible = detailedNavigation
+        place(button.NavHint, labelInset, 34, rail - labelInset - 34, 28)
     end
-    UI.RefreshNav.Root.Visible = height >= 420
+    UI.RefreshNav.Root.Visible = height >= 420 and optionY >= UI.RefreshNav.Root.Position.Y.Offset + navHeight + 14
     UI.ProductsNav.Root.Visible = height >= navY + navStep + hit
     UI.LicenseNav.Root.Visible = LicenseOffer:Enabled() and height >= navY + navStep * 2 + hit + 8
+    local navigationBottom = 0
+    for _, button in ipairs({ UI.AuthNav, UI.ProductsNav, UI.LicenseNav, UI.RefreshNav }) do
+        if button.Root.Visible then
+            navigationBottom = math.max(navigationBottom, button.Root.Position.Y.Offset + navHeight)
+        end
+    end
     local headerWidth = width - rail
     local controls = hit * 2 + 12
     local avatarVisible = headerWidth >= 460
@@ -7611,8 +7772,7 @@ function Responsive:Update()
     place(UI.RestoreDock, math.max(8, safe.X - restoreSize - 12), restoreY, restoreSize, restoreSize)
     UI.Minimize.Root:SetAttribute("ActionLabel", Localization:Get("minimize"))
     UI.Restore.Root:SetAttribute("ActionLabel", Localization:Get("restore"))
-    local optionY = height - hit * 2 - 16
-    local footerFits = optionY >= navY + navStep * 2 + hit + 4
+    local footerFits = optionY >= navigationBottom + 14
     UI.Options.Root.Visible = footerFits
     UI.UtilityDivider.Visible = expanded and footerFits
     place(UI.UtilityDivider, 20, optionY - 10, math.max(1, rail - 40), 1)
@@ -7630,7 +7790,9 @@ function Responsive:Update()
     place(UI.LanguageChevron.Root, expanded and rail - 48 or 16, (hit - 12) / 2, 12, 12)
     for index, id in ipairs({ "discord", "telegram", "youtube" }) do
         local button = UI.Social[id]
-        local show = (State.Callbacks.Social ~= nil or Settings.SocialLinks[id] ~= nil) and height >= 450
+        local show = (State.Callbacks.Social ~= nil or Settings.SocialLinks[id] ~= nil)
+            and height >= 450
+            and optionY - hit - 8 >= navigationBottom + 8
         button.Root.Visible = show
         local x = expanded and 8 + (index - 1) * (hit + 4) or (rail - hit) / 2
         place(button.Root, x, optionY - hit - 8, hit, hit)
@@ -7639,7 +7801,7 @@ function Responsive:Update()
         end
     end
     UI.Version.Visible = expanded and Settings.Version ~= "" and height >= 500
-    place(UI.Version, 16, header - 8, rail - 32, 20)
+    place(UI.Version, 54, header - 20, rail - 66, 16)
     UI.Version.TextXAlignment = Enum.TextXAlignment.Left
     LanguageController:Layout(width, height, rail)
     place(UI.Pages, rail + pad, pageTop, contentWidth, contentHeight)
@@ -8664,6 +8826,9 @@ function Loader:ShowPreferences(visible)
     end
     local wasOpen = Experience.OptionsOpen
     Experience.OptionsOpen = visible ~= false
+    if Experience.OptionsOpen then
+        Stagecraft:Cancel(true)
+    end
     closeLanguage()
     UI.Key:ReleaseFocus(false)
     UI.Key.TextEditable = not Experience.OptionsOpen and State.Page == "Auth"
