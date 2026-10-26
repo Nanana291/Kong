@@ -80,6 +80,10 @@ local Motion = {
     ChromeHover = TweenInfo.new(0.14, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
     ChromePress = TweenInfo.new(0.085, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
     ChromeGlide = TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+    DockEnter = TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+    DockExit = TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+    RestoreEnter = TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+    MinimizeExit = TweenInfo.new(0.20, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
 }
 local Settings = {
     Title = "PLAK",
@@ -137,6 +141,7 @@ local Accessibility
 local Diagnostics
 local ExternalAuth
 local LanguageController
+local Presence
 local Scope = {}
 Scope.__index = Scope
 function Scope.new()
@@ -556,6 +561,9 @@ local function reconcile()
     if UI.ToastLayer then
         UI.ToastLayer.Visible = State.Alive and State.Visible and not State.Modal
     end
+    if Presence and UI.Restore and State.Activity == "Completing" then
+        Presence:SetDockVisible(false)
+    end
 end
 
 local function canInteract()
@@ -601,6 +609,15 @@ function Icon.new(parent, name, color, size)
     if name == "search" then
         circle(8, 8, 5)
         line(12, 12, 18, 18)
+    elseif name == "restore-window" then
+        line(7, 3, 17, 3, 1.15)
+        line(7, 3, 7, 7, 1.15)
+        line(17, 3, 17, 13, 1.15)
+        line(17, 13, 13, 13, 1.15)
+        line(3, 7, 13, 7, 1.15)
+        line(13, 7, 13, 17, 1.15)
+        line(13, 17, 3, 17, 1.15)
+        line(3, 17, 3, 7, 1.15)
     elseif name == "home" then
         path({ { 3, 8 }, { 10, 3 }, { 17, 8 }, { 15, 17 }, { 5, 17 } }, true)
     elseif name == "grid" then
@@ -4253,6 +4270,197 @@ function HeaderChrome:Layout(width, height, hit, pad, windowHeight)
     self:RefreshUser()
     self:Paint()
 end
+Presence = { Wanted = false, DockToken = 0 }
+function Presence:RefreshDock()
+    if not UI.RestoreTitle then
+        return
+    end
+    UI.RestoreTitle.Text = Settings.Title
+    UI.RestoreRoute.Text = Localization:Get(
+        State.Page == "Products" and "gamesNav" or State.Page == "Licenses" and "licensesNav" or "homeNav"
+    )
+    UI.Restore.Root:SetAttribute("ActionLabel", Localization:Get("restore"))
+end
+function Presence:PaintDock()
+    local button = UI.Restore
+    if not button or not State.Alive then
+        return
+    end
+    local available = self.Wanted and not State.Visible and State.Activity ~= "Completing" and not button.Disabled
+    local engaged = available and (button.Hovered or button.Pressed)
+    local timing = button.Pressed and Motion.ChromePress or Motion.ChromeHover
+    button.Root.BackgroundTransparency, button.Scale.Scale, UI.RestoreDockScale.Scale = 1, 1, 1
+    button.Root.Selectable, button.Root.Active = available, available
+    Animation:To(UI.RestoreDock, {
+        BackgroundColor3 = button.Pressed and Theme.Input or engaged and Theme.Elevated or Theme.Surface,
+    }, timing)
+    Animation:To(UI.RestoreEdge, {
+        Color = engaged and Theme.AccentText or Theme.Line,
+        Transparency = engaged and 0.5 or 0.28,
+    }, timing)
+    Animation:To(UI.RestoreTitle, { TextColor3 = engaged and Theme.Text or Theme.Secondary }, timing)
+    UI.Restore.Icon:SetColor(engaged and Theme.AccentText or Theme.Accent, timing)
+    Animation:To(UI.RestoreWindow, {
+        Position = UDim2.new(1, engaged and -34 or -32, 0.5, button.Pressed and 1 or 0),
+    }, timing)
+    UI.RestoreArrow:SetColor(engaged and Theme.AccentText or Theme.Secondary, timing)
+end
+function Presence:ResetDock()
+    UI.Restore.Hovered, UI.Restore.Pressed = false, false
+    self:PaintDock()
+end
+function Presence:BuildDock()
+    UI.RestoreDock = group(UI.Stage, "RestoreDock")
+    UI.RestoreDock.Visible, UI.RestoreDock.ZIndex = false, 25
+    UI.RestoreDock:SetAttribute("RestoreAvailable", false)
+    UI.RestoreDock.GroupTransparency, UI.RestoreDock.BackgroundTransparency = 1, 0
+    UI.RestoreDock.BackgroundColor3 = Theme.Surface
+    corner(UI.RestoreDock, Theme.PanelRadius)
+    UI.RestoreEdge = stroke(UI.RestoreDock, Theme.Line, 1, 0.28)
+    Material:Rim(UI.RestoreDock, Theme.Rim, 0.94)
+    UI.RestoreDockScale = create("UIScale", { Scale = 1 }, UI.RestoreDock)
+    UI.Restore = Button.new(
+        UI.RestoreDock,
+        "RestoreLoader",
+        "",
+        false,
+        "plak",
+        function()
+            Loader:Show()
+        end,
+        Runtime,
+        function()
+            return State.Alive and not State.Visible and State.Activity ~= "Completing" and self.Wanted
+        end
+    )
+    UI.Restore.Root.Size = UDim2.fromScale(1, 1)
+    UI.Restore.Root.BackgroundTransparency, UI.Restore.Label.Visible = 1, false
+    UI.Restore.Icon.Root.Size = UDim2.fromOffset(28, 28)
+    UI.RestoreTitle = label(UI.Restore.Root, "DockTitle", "", 13, Theme.Secondary, Theme.Medium)
+    UI.RestoreRoute = label(UI.Restore.Root, "DockRoute", "", 11, Theme.Muted)
+    UI.RestoreTitle.TextTruncate, UI.RestoreRoute.TextTruncate = Enum.TextTruncate.AtEnd, Enum.TextTruncate.AtEnd
+    UI.RestoreWindow = frame(UI.Restore.Root, "RestoreWindow")
+    UI.RestoreWindow.BackgroundTransparency = 1
+    UI.RestoreWindow.AnchorPoint = Vector2.new(0, 0.5)
+    UI.RestoreWindow.Size = UDim2.fromOffset(20, 20)
+    UI.RestoreArrow = Icon.new(UI.RestoreWindow, "restore-window", Theme.Secondary, 20)
+    place(UI.RestoreArrow.Root, 0, 0, 20, 20)
+    function UI.Restore:Apply()
+        Presence:PaintDock()
+    end
+    UI.Restore:SetDisabled(true)
+    self:RefreshDock()
+    Runtime.Finalizers[#Runtime.Finalizers + 1] = function()
+        self.Wanted, self.Phase = false, nil
+        self.DockToken = self.DockToken + 1
+    end
+end
+function Presence:LayoutDock(safe, center, hit)
+    self:RefreshDock()
+    local expanded = safe.X >= 620 and safe.Y >= 300
+    local height = math.max(52, hit)
+    local title = TextMetrics:Get(UI.RestoreTitle.Text, 13, Theme.Medium, 10000)
+    local route = TextMetrics:Get(UI.RestoreRoute.Text, 11, Theme.Font, 10000)
+    local width = expanded
+            and math.clamp(math.ceil(math.max(title and title.X or 80, route and route.X or 80) + 98), 176, 240)
+        or height
+    local y = math.clamp(center.Y - height / 2, 8, math.max(8, safe.Y - height - 8))
+    local rest = UDim2.fromOffset(math.max(8, safe.X - width - 12), y)
+    if self.DockRest ~= rest then
+        Animation:CancelProperty(UI.RestoreDock, "Position")
+        UI.RestoreDock.Position = rest
+        self.DockRest = rest
+    end
+    UI.RestoreDock.Size = UDim2.fromOffset(width, height)
+    UI.Restore.Icon.Root.Position = expanded and UDim2.new(0, 14, 0.5, 0) or UDim2.new(0.5, -14, 0.5, 0)
+    UI.RestoreTitle.Visible, UI.RestoreRoute.Visible, UI.RestoreWindow.Visible = expanded, expanded, expanded
+    place(UI.RestoreTitle, 52, (height - 38) / 2, math.max(1, width - 90), 20)
+    place(UI.RestoreRoute, 52, (height - 38) / 2 + 22, math.max(1, width - 90), 16)
+    self:PaintDock()
+end
+function Presence:SetDockVisible(visible)
+    local wanted = visible == true and State.Alive and not State.Visible and State.Activity ~= "Completing"
+    if wanted == self.Wanted then
+        return
+    end
+    self.DockToken = self.DockToken + 1
+    local token = self.DockToken
+    self.Wanted = wanted
+    UI.RestoreDock:SetAttribute("RestoreAvailable", wanted)
+    if UI.Restore.Disabled ~= not wanted then
+        UI.Restore:SetDisabled(not wanted)
+    end
+    if not wanted then
+        UI.Restore.Hovered, UI.Restore.Pressed = false, false
+    end
+    self:PaintDock()
+    local rest = self.DockRest or UI.RestoreDock.Position
+    if wanted then
+        local wasVisible = UI.RestoreDock.Visible
+        UI.RestoreDock.Visible = true
+        if not wasVisible and not Settings.ReducedMotion then
+            Animation:CancelProperty(UI.RestoreDock, "Position")
+            UI.RestoreDock.Position = rest + UDim2.fromOffset(8, 0)
+            UI.RestoreDock.GroupTransparency = 1
+        end
+        Animation:To(UI.RestoreDock, { Position = rest }, Motion.DockEnter)
+        Animation:To(UI.RestoreDock, { GroupTransparency = 0 }, Motion.DockEnter)
+    elseif UI.RestoreDock.Visible then
+        Animation:To(UI.RestoreDock, { Position = rest + UDim2.fromOffset(8, 0) }, Motion.DockExit)
+        Animation:To(UI.RestoreDock, { GroupTransparency = 1 }, Motion.DockExit, function()
+            if token == self.DockToken and not self.Wanted then
+                UI.RestoreDock.Visible = false
+            end
+        end)
+    end
+end
+function Presence:WindowOffset()
+    if State.Activity == "Completing" then
+        return UDim2.fromOffset(0, -6)
+    end
+    return UDim2.fromOffset(State.Layout.Narrow and 0 or 14, 6)
+end
+function Presence:BeginWindow(visible)
+    self.FromHidden = visible and not UI.Window.Visible
+    self.Phase = visible and "show" or "hide"
+end
+function Presence:LayoutWindow(center, scale)
+    local rest = UDim2.fromOffset(center.X, center.Y)
+    local size = UI.Window.Size
+    local changed = self.WindowRest ~= rest or self.WindowScale ~= scale or self.WindowSize ~= size
+    self.WindowRest, self.WindowScale, self.WindowSize = rest, scale, size
+    -- Unchanged layout cannot own an in-flight pose. Real geometry changes win immediately.
+    if not self.Phase or changed then
+        Animation:CancelProperty(UI.Scale, "Scale")
+        Animation:CancelProperty(UI.Window, "Position")
+        UI.Scale.Scale = scale * (State.Visible and 1 or 0.985)
+        UI.Window.Position = State.Visible and rest or rest + self:WindowOffset()
+    end
+end
+function Presence:AnimateWindow(visible, token)
+    local rest, scale = self.WindowRest, self.WindowScale
+    local preset = visible and Motion.RestoreEnter
+        or State.Activity == "Completing" and Motion.Exit
+        or Motion.MinimizeExit
+    if visible and self.FromHidden and not Settings.ReducedMotion then
+        Animation:CancelProperty(UI.Window, "Position")
+        Animation:CancelProperty(UI.Scale, "Scale")
+        UI.Window.Position = rest + self:WindowOffset()
+        UI.Scale.Scale = scale * 0.985
+        UI.Window.GroupTransparency = 1
+    end
+    Animation:To(UI.Scale, { Scale = scale * (visible and 1 or 0.985) }, preset)
+    Animation:To(UI.Window, { Position = visible and rest or rest + self:WindowOffset() }, preset)
+    -- Keep alpha/finalization independent: responsive geometry can replace the pose tween.
+    Animation:To(UI.Window, { GroupTransparency = visible and 0 or 1 }, preset, function()
+        if State.VisibilityToken == token then
+            self.Phase = nil
+            if not State.Visible then
+                UI.Window.Visible = false
+            end
+        end
+    end)
+end
 local function buildShell(parent)
     UI.Gui = create(
         "ScreenGui",
@@ -4289,34 +4497,8 @@ local function buildShell(parent)
     UI.Brand = localized(UI.Header, "Brand", "brand", 14, Theme.Text, Theme.Medium)
     UI.Brand.TextTruncate = Enum.TextTruncate.AtEnd
     HeaderChrome:Build()
-    -- A sibling of Window remains reachable when the full window (including its modal) is hidden.
-    UI.RestoreDock = group(UI.Stage, "RestoreDock")
-    UI.RestoreDock.Visible = false
-    UI.RestoreDock.ZIndex = 25
-    UI.RestoreDock.GroupTransparency = 1
-    UI.RestoreDockScale = create("UIScale", { Scale = 1 }, UI.RestoreDock)
-    UI.Restore = Button.new(
-        UI.RestoreDock,
-        "RestoreLoader",
-        "",
-        false,
-        "plak",
-        function()
-            Loader:Show()
-        end,
-        Runtime,
-        function()
-            return State.Alive and not State.Visible
-        end
-    )
-    UI.Restore.Root.Size = UDim2.fromScale(1, 1)
-    corner(UI.Restore.Root, Theme.PanelRadius)
-    stroke(UI.Restore.Root, Theme.Line, 1)
-    UI.Restore.Icon.Root.Size = UDim2.fromOffset(28, 28)
-    UI.Restore.Icon.Root.Position = UDim2.new(0.5, -14, 0.5, 0)
-    UI.Restore.Icon:SetColor(Theme.Accent)
-    Localization:Bind(UI.Restore.Label, "restore")
-    UI.Restore.Label.Visible = false
+    -- Independent from Window/modal clipping; completion can revoke this action immediately.
+    Presence:BuildDock()
     UI.UserAction = create(
         "TextButton",
         { Name = "UserAction", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Visible = false },
@@ -8726,12 +8908,9 @@ function Responsive:Update()
     }
     UI.Window.Size = UDim2.fromOffset(width, height)
     State.VisibilityRestScale = scale
-    Animation:CancelProperty(UI.Scale, "Scale")
-    UI.Scale.Scale = scale * (State.Visible and 1 or 0.965)
     local center = self:Clamp(State.WindowCenter or safe / 2, safe, Vector2.new(width * scale, height * scale))
     State.WindowCenter, State.Drag = center, nil
-    Animation:CancelProperty(UI.Window, "Position")
-    UI.Window.Position = UDim2.fromOffset(center.X, center.Y)
+    Presence:LayoutWindow(center, scale)
     UI.Sidebar.Visible, UI.Header.Visible = not keyboardCompact, header > 0
     place(UI.ContentSurface, rail, 0, width - rail, height)
     place(UI.Sidebar, 0, 0, rail, height)
@@ -8792,9 +8971,7 @@ function Responsive:Update()
     local headerWidth = width - rail
     Stagecraft:Place(UI.PageHeading, 0, 0, headerWidth, header)
     HeaderChrome:Layout(headerWidth, header, hit, pad, height)
-    local restoreSize = math.max(48, hit)
-    local restoreY = math.clamp(center.Y - restoreSize / 2, 8, math.max(8, safe.Y - restoreSize - 8))
-    place(UI.RestoreDock, math.max(8, safe.X - restoreSize - 12), restoreY, restoreSize, restoreSize)
+    Presence:LayoutDock(safe, center, hit)
     UI.Minimize.Root:SetAttribute("ActionLabel", Localization:Get("minimize"))
     UI.Restore.Root:SetAttribute("ActionLabel", Localization:Get("restore"))
     local footerFits = optionY >= navigationBottom + 14
@@ -8944,6 +9121,7 @@ local function bindInput()
     Runtime:Connect(Services.Input.WindowFocusReleased, function()
         Button:Release(nil, true)
         HeaderChrome:Reset()
+        Presence:ResetDock()
         Cards:ReleaseSearch()
         LanguageController.Pressed, LanguageController.Hovered = false, false
         LanguageController:Paint()
@@ -9025,18 +9203,7 @@ local function bindInput()
     end)
 end
 local function restoreAffordance(visible)
-    if visible then
-        UI.RestoreDock.Visible = true
-        UI.RestoreDockScale.Scale = Settings.ReducedMotion and 1 or 0.84
-        Animation:To(UI.RestoreDockScale, { Scale = 1 }, Motion.Enter)
-        Animation:To(UI.RestoreDock, { GroupTransparency = 0 }, Motion.Enter)
-    else
-        Animation:To(UI.RestoreDock, { GroupTransparency = 1 }, Motion.Exit, function()
-            if State.Visible then
-                UI.RestoreDock.Visible = false
-            end
-        end)
-    end
+    Presence:SetDockVisible(visible)
 end
 function Loader:SetKeyVisible(visible)
     if not State.Alive then
@@ -9064,6 +9231,8 @@ function Loader:SetTitle(title)
         AccessScene:Refresh()
     end
     updateFooter()
+    Presence:RefreshDock()
+    Responsive:Request()
     return self
 end
 function Loader:SetVersion(version)
@@ -9970,24 +10139,17 @@ function Loader:Show()
     if not State.Alive then
         return self
     end
-    local wasVisible = State.Visible
     State.VisibilityToken = State.VisibilityToken + 1
     State.Visible = true
     reconcile()
     restoreAffordance(false)
+    Presence:BeginWindow(true)
     UI.Window.Visible = true
     UI.Key.TextEditable = State.Activity ~= "Validating" and State.Page == "Auth"
     UI.Key.Active = UI.Key.TextEditable
     Responsive:Update()
     UI.Overlay.Visible = State.Modal ~= nil
-    local destination = UI.Window.Position
-    if not wasVisible and not Settings.ReducedMotion then
-        UI.Window.Position = destination + UDim2.fromOffset(0, 8)
-        UI.Scale.Scale = (State.VisibilityRestScale or 1) * 0.98
-    end
-    Animation:To(UI.Scale, { Scale = State.VisibilityRestScale or 1 }, Motion.Enter)
-    Animation:To(UI.Window, { Position = destination }, Motion.Enter)
-    Animation:To(UI.Window, { GroupTransparency = 0 }, Motion.Enter)
+    Presence:AnimateWindow(true, State.VisibilityToken)
     if State.Page == "Auth" then
         UI.AuthArtwork:Reveal()
         Stagecraft:Reveal()
@@ -10022,28 +10184,12 @@ function Loader:Hide()
     end
     UI.Key:ReleaseFocus(false)
     UI.Key.TextEditable = false
+    Presence:BeginWindow(false)
     Responsive:Update()
     -- Authentication exits never expose an interactive restore chip.
     restoreAffordance(State.Activity ~= "Completing")
     UI.Overlay.Visible = false
-    local rest = UI.Window.Position
-    local offset = State.Activity == "Completing" and Vector2.new(0, -6) or Vector2.new(12, 18)
-    if State.Activity ~= "Completing" then
-        local dock = UI.RestoreDock.Position
-        offset = Vector2.new((dock.X.Offset - rest.X.Offset) * 0.045, (dock.Y.Offset - rest.Y.Offset) * 0.045)
-    end
-    Animation:To(
-        UI.Scale,
-        { Scale = (State.VisibilityRestScale or 1) * (State.Activity == "Completing" and 0.985 or 0.965) },
-        Motion.Exit
-    )
-    -- Keep fade/finalizer separate: resize owns Position and may cancel its tween.
-    Animation:To(UI.Window, { Position = rest + UDim2.fromOffset(offset.X, offset.Y) }, Motion.Exit)
-    Animation:To(UI.Window, { GroupTransparency = 1 }, Motion.Exit, function()
-        if State.VisibilityToken == token and not State.Visible then
-            UI.Window.Visible = false
-        end
-    end)
+    Presence:AnimateWindow(false, token)
     return self
 end
 function Loader:Destroy()
