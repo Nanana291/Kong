@@ -84,6 +84,8 @@ local Motion = {
     DockExit = TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
     RestoreEnter = TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
     MinimizeExit = TweenInfo.new(0.20, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+    RouteHover = TweenInfo.new(0.14, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+    RoutePress = TweenInfo.new(0.085, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
 }
 local Settings = {
     Title = "PLAK",
@@ -91,7 +93,7 @@ local Settings = {
     KeyLink = KEY_REWARD_URL,
     Expiry = 0,
     Language = "en",
-    User = "Hi!",
+    User = "", -- Identity is opt-in through SetUser, never an unsolicited greeting.
     Artwork = nil,
     SuccessBehavior = "destroy",
     ToggleKey = Enum.KeyCode.RightShift,
@@ -585,12 +587,12 @@ function Icon.new(parent, name, color, size)
         corner(part, 2)
         parts[#parts + 1] = part
     end
-    local function path(points, closed)
+    local function path(points, closed, thickness)
         for i = 1, #points - 1 do
-            line(points[i][1], points[i][2], points[i + 1][1], points[i + 1][2])
+            line(points[i][1], points[i][2], points[i + 1][1], points[i + 1][2], thickness)
         end
         if closed then
-            line(points[#points][1], points[#points][2], points[1][1], points[1][2])
+            line(points[#points][1], points[#points][2], points[1][1], points[1][2], thickness)
         end
     end
     local function circle(x, y, r, solid)
@@ -618,6 +620,38 @@ function Icon.new(parent, name, color, size)
         line(13, 7, 13, 17, 1.15)
         line(13, 17, 3, 17, 1.15)
         line(3, 17, 3, 7, 1.15)
+    elseif name == "route-access" then
+        path({ { 11, 3 }, { 4, 3 }, { 4, 17 }, { 11, 17 } }, false, 1.2)
+        path({ { 8, 10 }, { 17, 10 } }, false, 1.2)
+        path({ { 13, 6 }, { 17, 10 }, { 13, 14 } }, false, 1.2)
+    elseif name == "route-games" then
+        path({ { 3, 12 }, { 3, 3 }, { 13, 3 } }, false, 1.2)
+        path({ { 7, 7 }, { 17, 7 }, { 17, 17 }, { 7, 17 } }, true, 1.2)
+        line(10, 10, 10, 14, 1.2)
+        line(8, 12, 12, 12, 1.2)
+        line(14, 10, 14.1, 10, 1.2)
+        line(14, 14, 14.1, 14, 1.2)
+    elseif name == "route-license" then
+        path({
+            { 3, 4 },
+            { 17, 4 },
+            { 17, 8 },
+            { 15, 10 },
+            { 17, 12 },
+            { 17, 16 },
+            { 3, 16 },
+            { 3, 12 },
+            { 5, 10 },
+            { 3, 8 },
+        }, true, 1.2)
+        line(11, 6, 11, 8, 1.2)
+        line(11, 12, 11, 14, 1.2)
+        line(7, 8, 7, 12, 1.2)
+    elseif name == "route-refresh" then
+        path({ { 4, 8 }, { 6, 4 }, { 12, 3 }, { 16, 7 } }, false, 1.2)
+        path({ { 12, 7 }, { 16, 7 }, { 16, 3 } }, false, 1.2)
+        path({ { 16, 12 }, { 14, 16 }, { 8, 17 }, { 4, 13 } }, false, 1.2)
+        path({ { 8, 13 }, { 4, 13 }, { 4, 17 } }, false, 1.2)
     elseif name == "home" then
         path({ { 3, 8 }, { 10, 3 }, { 17, 8 }, { 15, 17 }, { 5, 17 } }, true)
     elseif name == "grid" then
@@ -4249,7 +4283,8 @@ function HeaderChrome:Layout(width, height, hit, pad, windowHeight)
     local userBounds = TextMetrics:Get(Settings.User, 12, Theme.Medium, 10000)
     local userWidth = math.clamp(math.ceil(userBounds and userBounds.X or 80), 24, 84)
     local profileWidth = userWidth + 36
-    self.UserVisible = left - pad * 2 - profileWidth - 20 >= 220
+    local configured = Settings.User:match("%S") ~= nil or UI.CustomAvatar ~= nil
+    self.UserVisible = configured and left - pad * 2 - profileWidth - 20 >= 220
     local titleWidth = math.max(0, left - pad - 12 - (self.UserVisible and profileWidth + 20 or 0))
     UI.PageHeading.Visible = titleWidth >= 56
     UI.PageDescription.Visible = titleWidth >= 160 and windowHeight >= 250
@@ -4258,6 +4293,7 @@ function HeaderChrome:Layout(width, height, hit, pad, windowHeight)
     UI.Breadcrumb.TextTruncate = Enum.TextTruncate.AtEnd
     UI.User.Visible = self.UserVisible
     UI.UserAction.Visible = self.UserVisible and type(State.Callbacks.User) == "function"
+    UI.UserAction.Active, UI.UserAction.Selectable = UI.UserAction.Visible, UI.UserAction.Visible
     local profileX = left - profileWidth - 20
     place(UI.Avatar.Root, profileX, (height - 28) / 2, 28, 28)
     place(UI.User, profileX + 36, 0, userWidth, height)
@@ -4499,13 +4535,17 @@ local function buildShell(parent)
     HeaderChrome:Build()
     -- Independent from Window/modal clipping; completion can revoke this action immediately.
     Presence:BuildDock()
-    UI.UserAction = create(
-        "TextButton",
-        { Name = "UserAction", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Visible = false },
-        UI.Header
-    )
+    UI.UserAction = create("TextButton", {
+        Name = "UserAction",
+        Text = "",
+        AutoButtonColor = false,
+        BackgroundTransparency = 1,
+        Visible = false,
+        Active = false,
+        Selectable = false,
+    }, UI.Header)
     Runtime:Connect(UI.UserAction.Activated, function()
-        if canInteract() then
+        if UI.UserAction.Visible and UI.UserAction.Active and canInteract() then
             invokeHost(State.Callbacks.User, Loader)
         end
     end)
@@ -4524,25 +4564,26 @@ local function buildShell(parent)
     UI.NavigationCaption = localized(UI.Sidebar, "NavigationCaption", "main", 10, Theme.Muted, Theme.Medium)
     UI.NavigationCaption.TextTransparency = 0.25
     UI.NavigationCaption.TextTruncate = Enum.TextTruncate.AtEnd
+    UI.NavigationHover = frame(UI.Sidebar, "NavigationHover", Theme.Hover)
+    UI.NavigationHover.BackgroundTransparency = 1
+    corner(UI.NavigationHover, 4)
     UI.NavigationPlate = frame(UI.Sidebar, "NavigationSelection", Theme.Inactive)
+    UI.NavigationPlate.BackgroundTransparency = 0.28
     corner(UI.NavigationPlate, 4)
     stroke(UI.NavigationPlate, Theme.Line, 1, 0.72)
     Material:Rim(UI.NavigationPlate, Theme.Rim, 0.96)
     UI.UtilityDivider = frame(UI.Sidebar, "UtilityDivider", Theme.Edge)
     UI.ContextIcon = Icon.new(UI.Sidebar, "home", Theme.Muted, 18)
-    UI.ActiveNav = frame(UI.Sidebar, "Active", Theme.AccentDark)
-    UI.ActiveNav.BackgroundTransparency = 0.7
+    UI.ActiveNav = frame(UI.Sidebar, "Active", Theme.AccentText)
+    UI.ActiveNav.BackgroundTransparency = 0.12
     corner(UI.ActiveNav, 1)
-    UI.ActiveNav.BackgroundColor3 = Theme.AccentText
-    UI.ActiveNav.BackgroundTransparency = 1
-    UI.NavigationCaret = Icon.new(UI.ActiveNav, "chevron-right", Theme.AccentText, 10)
-    UI.AuthNav = Button.new(UI.Sidebar, "Authorization", "", false, "home", function()
+    UI.AuthNav = Button.new(UI.Sidebar, "Authorization", "", false, "route-access", function()
         Navigation:Go("Auth")
     end)
-    UI.ProductsNav = Button.new(UI.Sidebar, "Products", "", false, "grid", function()
+    UI.ProductsNav = Button.new(UI.Sidebar, "Products", "", false, "route-games", function()
         Navigation:Go("Products")
     end)
-    UI.RefreshNav = Button.new(UI.Sidebar, "Refresh", "", false, "refresh", function()
+    UI.RefreshNav = Button.new(UI.Sidebar, "Refresh", "", false, "route-refresh", function()
         if State.Callbacks.Refresh then
             invokeHost(State.Callbacks.Refresh, Loader)
         else
@@ -5827,7 +5868,7 @@ function LicenseOffer:Open()
     return Navigation:Go("Licenses")
 end
 function LicenseOffer:BuildTriggers()
-    UI.LicenseNav = Button.new(UI.Sidebar, "Licenses", "", false, "key", function()
+    UI.LicenseNav = Button.new(UI.Sidebar, "Licenses", "", false, "route-license", function()
         self:Open()
     end)
     UI.LicenseNav.Root.BackgroundTransparency = 1
@@ -5839,6 +5880,7 @@ function LicenseOffer:BuildTriggers()
         button.NavHint.TextYAlignment = Enum.TextYAlignment.Top
         Localization:Bind(button.NavHint, ({ "pageAccess", "pageGames", "pageLicenses", "tipRefresh" })[index])
     end
+    Navigation:BindPresentation()
     self:Refresh()
 end
 
@@ -8477,6 +8519,120 @@ end
 function Navigation:PageRoot(page)
     return page == "Auth" and UI.Auth or page == "Products" and UI.Products or UI.LicensePanel
 end
+-- Presentation only. Button retains capture, activation, disabled state and cleanup.
+function Navigation:BindPresentation()
+    self.Controls = { UI.AuthNav, UI.ProductsNav, UI.LicenseNav, UI.RefreshNav }
+    for index, button in ipairs(self.Controls) do
+        button.Navigation = true
+        button.NavKey = ({ "homeNav", "gamesNav", "licensesNav", "refreshNav" })[index]
+        button.Label.TextSize = 12
+        function button:Apply()
+            Navigation:Paint(self)
+        end
+    end
+    Runtime.Finalizers[#Runtime.Finalizers + 1] = function()
+        self.Hovered = nil
+    end
+end
+function Navigation:Paint(changed)
+    if not State.Alive or not self.Controls then
+        return
+    end
+    if changed then
+        if not changed.Disabled and changed.Root.Visible and (changed.Hovered or changed.Pressed) then
+            self.Hovered = changed
+        elseif self.Hovered == changed then
+            self.Hovered = nil
+        end
+    end
+    local hovered = self.Hovered
+    if not canInteract() or (hovered and (hovered.Disabled or not hovered.Root.Visible)) then
+        hovered = nil
+        self.Hovered = nil
+    end
+    if hovered and not hovered.Selected then
+        if self.GeometryChanged then
+            Animation:CancelProperty(UI.NavigationHover, "Position")
+            Animation:CancelProperty(UI.NavigationHover, "Size")
+            UI.NavigationHover.Position, UI.NavigationHover.Size = hovered.Root.Position, hovered.Root.Size
+        end
+        Animation:To(UI.NavigationHover, {
+            Position = hovered.Root.Position,
+            Size = hovered.Root.Size,
+            BackgroundTransparency = hovered.Pressed and 0.34 or 0.65,
+        }, hovered.Pressed and Motion.RoutePress or Motion.RouteHover)
+    else
+        if self.GeometryChanged then
+            Animation:CancelTree(UI.NavigationHover)
+            UI.NavigationHover.BackgroundTransparency = 1
+        end
+        Animation:To(UI.NavigationHover, { BackgroundTransparency = 1 }, Motion.RouteHover)
+    end
+    local selected
+    for _, button in ipairs(self.Controls) do
+        local engaged = button == hovered
+        local pressed = engaged and button.Pressed
+        local timing = pressed and Motion.RoutePress or Motion.RouteHover
+        local ink = button.Disabled and Theme.Muted or (button.Selected or engaged) and Theme.Text or Theme.Secondary
+        button.Root.BackgroundTransparency, button.Scale.Scale = 1, 1
+        button.Root.Selectable = not button.Disabled
+        Animation:To(button.HoverStroke, { Transparency = 1 }, timing)
+        Animation:To(button.Label, { TextColor3 = ink }, timing)
+        Animation:To(button.NavHint, {
+            TextColor3 = button.Disabled and Theme.Muted or button.Selected and Theme.Secondary or Theme.Muted,
+            TextTransparency = button.Disabled and 0.35 or 0,
+        }, timing)
+        button.Icon:SetColor(button.Disabled and Theme.Muted or button.Selected and Theme.AccentText or ink, timing)
+        if button.NavIconRest then
+            local offset = UDim2.fromOffset(0, pressed and 1 or 0)
+            Animation:To(button.Icon.Root, { Position = button.NavIconRest + offset }, timing)
+            Animation:To(button.Label, { Position = button.NavLabelRest + offset }, timing)
+        end
+        if button.Selected then
+            selected = button
+        end
+    end
+    if selected then
+        local engaged = selected == hovered
+        Animation:To(UI.NavigationPlate, {
+            BackgroundColor3 = selected.Pressed and Theme.Inactive:Lerp(Theme.Surface, 0.15)
+                or engaged and Theme.Inactive:Lerp(Theme.Text, 0.025)
+                or Theme.Inactive,
+        }, selected.Pressed and Motion.RoutePress or Motion.RouteHover)
+        Animation:To(UI.ActiveNav, {
+            BackgroundTransparency = selected.Disabled and 0.65 or 0.12,
+        }, Motion.RouteHover)
+    end
+end
+function Navigation:ResetHover()
+    self.Hovered = nil
+    for _, button in ipairs(self.Controls or {}) do
+        button.Hovered, button.Pressed = false, false
+    end
+    self:Paint()
+end
+function Navigation:LayoutControl(button, expanded, detailed, rail)
+    local labelInset = 44
+    button.NavIconRest =
+        UDim2.new(expanded and 0 or 0.5, expanded and 14 or -9, detailed and 0 or 0.5, detailed and 18 or 0)
+    button.NavLabelRest = UDim2.fromOffset(labelInset, detailed and 7 or 0)
+    if self.GeometryChanged then
+        Animation:CancelProperty(button.Icon.Root, "Position")
+        Animation:CancelProperty(button.Label, "Position")
+        local pressed = self.Hovered == button and button.Pressed and not button.Disabled and canInteract()
+        local offset = UDim2.fromOffset(0, pressed and 1 or 0)
+        button.Icon.Root.Position, button.Label.Position = button.NavIconRest + offset, button.NavLabelRest + offset
+    end
+    button.Icon.Root.Size = UDim2.fromOffset(18, 18)
+    button.Label.Visible = expanded
+    button.Label.Size = UDim2.new(1, -labelInset - 8, detailed and 0 or 1, detailed and 22 or 0)
+    local bounds = TextMetrics:Get(Localization:Get(button.NavKey), 12, Theme.Medium, 10000)
+    local available = button.Root.Size.X.Offset - labelInset - 8
+    button.Label.TextSize = expanded and bounds and bounds.X > available and 11 or 12
+    button.Label.TextXAlignment, button.Label.TextWrapped = Enum.TextXAlignment.Left, false
+    button.NavHint.Visible = detailed
+    place(button.NavHint, labelInset, 32, rail - labelInset - 28, 28)
+end
 function Navigation:Refresh(instant)
     UI.AuthNav.Root:SetAttribute("ActionLabel", Localization:Get("homeNav"))
     UI.ProductsNav.Root:SetAttribute("ActionLabel", Localization:Get("tipProducts"))
@@ -8493,27 +8649,23 @@ function Navigation:Refresh(instant)
         )
     end)
     for index, button in ipairs({ UI.AuthNav, UI.ProductsNav, UI.LicenseNav, UI.RefreshNav }) do
-        button.Navigation = true
         button.Selected = index == (State.Page == "Auth" and 1 or State.Page == "Products" and 2 or 3)
-        button.BaseColor = Theme.Hover
-        button:Apply()
     end
     Localization:Bind(UI.AuthNav.Label, "homeNav")
     Localization:Bind(UI.ProductsNav.Label, "gamesNav")
     Localization:Bind(UI.LicenseNav.Label, "licensesNav")
     Localization:Bind(UI.RefreshNav.Label, "refreshNav")
     LicenseOffer:Refresh()
+    self:Paint()
     UI.ProductMark.Visible, UI.ContextIcon.Root.Visible, UI.Copyright.Visible = false, false, false
     local selected = State.Page == "Auth" and UI.AuthNav.Root
         or State.Page == "Products" and UI.ProductsNav.Root
         or UI.LicenseNav.Root
     UI.ActiveNav.Visible, UI.NavigationPlate.Visible = selected.Visible, selected.Visible
-    local marker = UDim2.fromOffset(
-        selected.Position.X.Offset + selected.Size.X.Offset - 14,
-        selected.Position.Y.Offset + (selected.Size.Y.Offset - 10) / 2
-    )
-    local markerSize = UDim2.fromOffset(10, 10)
-    if instant or not self.PlateReady or Settings.ReducedMotion then
+    local marker =
+        UDim2.fromOffset(selected.Position.X.Offset + 2, selected.Position.Y.Offset + (selected.Size.Y.Offset - 24) / 2)
+    local markerSize = UDim2.fromOffset(2, 24)
+    if instant or not self.PlateReady or self.GeometryChanged or Settings.ReducedMotion then
         Animation:CancelProperty(UI.NavigationPlate, "Position")
         Animation:CancelProperty(UI.NavigationPlate, "Size")
         Animation:CancelProperty(UI.ActiveNav, "Position")
@@ -8524,7 +8676,7 @@ function Navigation:Refresh(instant)
         UI.ActiveNav.Size = markerSize
         Animation:To(UI.ActiveNav, { Position = marker }, Motion.Indicator)
     end
-    self.PlateReady = true
+    self.PlateReady, self.GeometryChanged = true, false
 end
 
 function Navigation:Go(page, force)
@@ -8542,6 +8694,7 @@ function Navigation:Go(page, force)
     end
     Cards:ReleaseSearch()
     Button:Release(nil, true)
+    self:ResetHover()
     Stagecraft:Cancel(true)
     closeLanguage()
     Accessibility:Clear()
@@ -8940,24 +9093,20 @@ function Responsive:Update()
     local navStep = navHeight + 4
     UI.NavigationCaption.Visible = expanded and height >= 420
     place(UI.NavigationCaption, 22, header + 8, rail - 40, 16)
-    local labelInset = 44
+    -- Compare actual row bounds: social/utility fit can change row height with
+    -- no viewport change. Route selection itself never invalidates this rest grid.
+    local navX, navWidth = expanded and 8 or (rail - hit) / 2, expanded and rail - 16 or hit
+    local geometry = Navigation.Geometry or {}
+    Navigation.GeometryChanged = geometry.X ~= navX
+        or geometry.Y ~= navY
+        or geometry.Width ~= navWidth
+        or geometry.Height ~= navHeight
+        or geometry.Step ~= navStep
+    geometry.X, geometry.Y, geometry.Width, geometry.Height, geometry.Step = navX, navY, navWidth, navHeight, navStep
+    Navigation.Geometry = geometry
     for index, button in ipairs({ UI.AuthNav, UI.ProductsNav, UI.LicenseNav, UI.RefreshNav }) do
-        place(
-            button.Root,
-            expanded and 8 or (rail - hit) / 2,
-            navY + (index - 1) * navStep,
-            expanded and rail - 16 or hit,
-            navHeight
-        )
-        button.Icon.Root.Position = UDim2.new(expanded and 0 or 0.5, expanded and 14 or -9, 0.5, 0)
-        button.Icon.Root.Size = UDim2.fromOffset(18, 18)
-        button.Label.Visible = expanded
-        button.Label.Position, button.Label.Size =
-            UDim2.fromOffset(labelInset, detailedNavigation and 5 or 0),
-            UDim2.new(1, -labelInset - 18, detailedNavigation and 0 or 1, detailedNavigation and 26 or 0)
-        button.Label.TextXAlignment, button.Label.TextWrapped = Enum.TextXAlignment.Left, true
-        button.NavHint.Visible = detailedNavigation
-        place(button.NavHint, labelInset, 34, rail - labelInset - 34, 28)
+        place(button.Root, navX, navY + (index - 1) * navStep, navWidth, navHeight)
+        Navigation:LayoutControl(button, expanded, detailedNavigation, rail)
     end
     UI.RefreshNav.Root.Visible = height >= 420 and optionY >= UI.RefreshNav.Root.Position.Y.Offset + navHeight + 14
     UI.ProductsNav.Root.Visible = height >= navY + navStep + hit
@@ -9121,6 +9270,7 @@ local function bindInput()
     Runtime:Connect(Services.Input.WindowFocusReleased, function()
         Button:Release(nil, true)
         HeaderChrome:Reset()
+        Navigation:ResetHover()
         Presence:ResetDock()
         Cards:ReleaseSearch()
         LanguageController.Pressed, LanguageController.Hovered = false, false
@@ -9713,7 +9863,7 @@ function Loader:SetUser(user, avatar)
         avatar = user.Avatar
         user = user.Name
     end
-    Settings.User = safeText(user or "Hi!", 96)
+    Settings.User = safeText(user or "", 96)
     UI.User.Text = Settings.User
     Runtime:Disconnect(UI.AvatarConnection)
     UI.AvatarConnection = nil
@@ -9980,6 +10130,7 @@ function Loader:SetOnUser(callback)
         UI.UserAction.Visible = callback ~= nil
             and UI.User.Visible
             and (UI.Avatar.Root.Visible or UI.CustomAvatar ~= nil)
+        UI.UserAction.Active, UI.UserAction.Selectable = UI.UserAction.Visible, UI.UserAction.Visible
     end
     return self
 end
@@ -10167,6 +10318,7 @@ function Loader:Hide()
     end
     Button:Release(nil, true)
     HeaderChrome:Reset()
+    Navigation:ResetHover()
     Stagecraft:Cancel(true)
     AccessScene:Cancel(true)
     State.VisibilityToken = State.VisibilityToken + 1
