@@ -86,6 +86,7 @@ local Motion = {
     MinimizeExit = TweenInfo.new(0.20, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
     RouteHover = TweenInfo.new(0.14, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
     RoutePress = TweenInfo.new(0.085, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+    Value = TweenInfo.new(0.16, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
 }
 local Settings = {
     Title = "PLAK",
@@ -620,6 +621,37 @@ function Icon.new(parent, name, color, size)
         line(13, 7, 13, 17, 1.15)
         line(13, 17, 3, 17, 1.15)
         line(3, 17, 3, 7, 1.15)
+    elseif name == "control-language" then
+        path({ { 10, 2 }, { 15, 4 }, { 18, 10 }, { 15, 16 }, { 10, 18 }, { 5, 16 }, { 2, 10 }, { 5, 4 } }, true, 1.2)
+        path({ { 10, 2 }, { 7, 7 }, { 7, 13 }, { 10, 18 }, { 13, 13 }, { 13, 7 }, { 10, 2 } }, false, 1.2)
+        line(3, 7, 17, 7, 1.2)
+        line(3, 13, 17, 13, 1.2)
+    elseif name == "control-scale" then
+        path({ { 3, 7 }, { 3, 3 }, { 7, 3 } }, false, 1.2)
+        path({ { 13, 3 }, { 17, 3 }, { 17, 7 } }, false, 1.2)
+        path({ { 17, 13 }, { 17, 17 }, { 13, 17 } }, false, 1.2)
+        path({ { 7, 17 }, { 3, 17 }, { 3, 13 } }, false, 1.2)
+        path({ { 7, 7 }, { 13, 7 }, { 13, 13 }, { 7, 13 } }, true, 1.2)
+    elseif name == "control-motion" then
+        line(3, 5, 13, 5, 1.2)
+        line(6, 10, 17, 10, 1.2)
+        line(3, 15, 13, 15, 1.2)
+        path({ { 14, 7 }, { 17, 10 }, { 14, 13 } }, false, 1.2)
+    elseif name == "control-sheet" then
+        line(4, 3, 4, 8, 1.2)
+        line(4, 12, 4, 17, 1.2)
+        line(10, 3, 10, 5, 1.2)
+        line(10, 9, 10, 17, 1.2)
+        line(16, 3, 16, 11, 1.2)
+        line(16, 15, 16, 17, 1.2)
+        line(2, 10, 6, 10, 1.2)
+        line(8, 7, 12, 7, 1.2)
+        line(14, 13, 18, 13, 1.2)
+    elseif name == "control-next" then
+        path({ { 7, 5 }, { 12, 10 }, { 7, 15 } }, false, 1.2)
+    elseif name == "control-close" then
+        line(5, 5, 15, 15, 1.2)
+        line(15, 5, 5, 15, 1.2)
     elseif name == "route-access" then
         path({ { 11, 3 }, { 4, 3 }, { 4, 17 }, { 11, 17 } }, false, 1.2)
         path({ { 8, 10 }, { 17, 10 } }, false, 1.2)
@@ -2084,6 +2116,9 @@ do
             keyHint = "Paste your key",
             closeLoader = "Close loader",
             preferencesTitle = "Preferences",
+            prefLanguageHint = "Labels and help text",
+            prefScaleHint = "Fits within your screen",
+            prefMotionHint = "Transitions and feedback",
             motionOption = "Motion",
             asideTitle = "One key. Your access.",
             asideCopy = "Enter your key, or get a free key to continue. Verification stays in your hands.",
@@ -2104,6 +2139,9 @@ do
             keyHint = "Pega tu key",
             closeLoader = "Cerrar loader",
             preferencesTitle = "Preferencias",
+            prefLanguageHint = "Textos de la interfaz",
+            prefScaleHint = "Ajustado a tu pantalla",
+            prefMotionHint = "Transiciones y respuesta",
             motionOption = "Animación",
             asideTitle = "Una key. Tu acceso.",
             asideCopy = "Introduce tu key u obtén una gratis para continuar. Tú decides cuándo verificar.",
@@ -2124,6 +2162,9 @@ do
             keyHint = "Cole sua key",
             closeLoader = "Fechar loader",
             preferencesTitle = "Preferências",
+            prefLanguageHint = "Textos da interface",
+            prefScaleHint = "Ajuste à sua tela",
+            prefMotionHint = "Transições e resposta",
             motionOption = "Animação",
             asideTitle = "Uma key. Seu acesso.",
             asideCopy = "Insira sua key ou obtenha uma grátis para continuar. Você decide quando verificar.",
@@ -2144,6 +2185,9 @@ do
             keyHint = "Вставьте ключ",
             closeLoader = "Закрыть загрузчик",
             preferencesTitle = "Настройки",
+            prefLanguageHint = "Текст интерфейса",
+            prefScaleHint = "В пределах экрана",
+            prefMotionHint = "Переходы и отклик",
             motionOption = "Анимация",
             asideTitle = "Один ключ. Ваш доступ.",
             asideCopy = "Введите ключ или получите бесплатный, чтобы продолжить. Вы сами запускаете проверку.",
@@ -5291,9 +5335,20 @@ function Diagnostics:Build()
     end
     UI.DiagnosticsNote = localized(UI.DiagnosticsPanel, "Privacy", "diagNote", 11, Theme.Secondary)
     UI.DiagnosticsNote.TextWrapped = true
-    UI.DiagnosticsCopy = Button.new(UI.DiagnosticsPanel, "CopyDiagnostics", "", false, "copy", function()
-        self:Copy()
-    end, Runtime, canInteract)
+    UI.DiagnosticsCopy = Button.new(
+        UI.DiagnosticsPanel,
+        "CopyDiagnostics",
+        "",
+        false,
+        "copy",
+        function()
+            self:Copy()
+        end,
+        Runtime,
+        function()
+            return Experience:CanUsePreferences() and self.Open
+        end
+    )
     Localization:Bind(UI.DiagnosticsCopy.Label, "copyDetails")
     self:Refresh()
 end
@@ -6134,7 +6189,13 @@ function Community:Build()
         return self:Interactive()
     end
     local function secondary(parent, name, key, callback, icon)
-        local button = Button.new(parent, name, "", false, icon, callback, Runtime, allowed)
+        local guard = allowed
+        if parent == UI.PreferencesContent then
+            guard = function()
+                return Experience:CanUsePreferences() and allowed()
+            end
+        end
+        local button = Button.new(parent, name, "", false, icon, callback, Runtime, guard)
         button.BaseColor = Theme.Surface
         button:Apply()
         if key ~= "empty" then
@@ -6238,6 +6299,240 @@ end
 
 -- One owner for frontend-only UX. No license decision or FlowAuth request lives here.
 Experience = { Stage = "authReady", OptionsOpen = false, PrefDirty = false }
+function Experience:CanUsePreferences()
+    return self.OptionsOpen == true and canInteract()
+end
+-- Sheet presentation never owns preferences, persistence, authentication or input capture.
+Experience.Sheet = {}
+function Experience.Sheet:Build()
+    self.Rows = { UI.PreferenceLanguage, UI.PreferenceScale, UI.PreferenceMotion }
+    UI.PreferenceHover = frame(UI.PreferenceWell, "SharedHover", Theme.Hover)
+    UI.PreferenceHover.BackgroundTransparency = 1
+    corner(UI.PreferenceHover, 4)
+    for index, button in ipairs(self.Rows) do
+        button.PreferenceRow = true
+        button.Label.TextSize, button.Label.TextWrapped = 13, false
+        button.Hint = localized(
+            button.Root,
+            "Hint",
+            ({ "prefLanguageHint", "prefScaleHint", "prefMotionHint" })[index],
+            11,
+            Theme.Muted
+        )
+        button.Hint.TextWrapped, button.Hint.TextTruncate = true, Enum.TextTruncate.AtEnd
+        button.Hint.TextYAlignment = Enum.TextYAlignment.Top
+        button.ValueShell = group(button.Root, "ValueShell")
+        button.ValueLabel.Parent = button.ValueShell
+        button.ValueLabel.TextSize = 12
+        button.Specimen = frame(button.ValueShell, "StateSpecimen")
+        button.Specimen.BackgroundTransparency = 1
+        button.Specimen.Size = UDim2.fromOffset(20, 20)
+        function button:Apply()
+            Experience.Sheet:Paint(self)
+        end
+    end
+    UI.PreferenceLanguage.Flags = {}
+    for _, language in ipairs(Languages) do
+        local mark = flag(UI.PreferenceLanguage.Specimen, language.Id)
+        mark.Size, mark.Position = UDim2.fromOffset(18, 18), UDim2.fromOffset(1, 1)
+        UI.PreferenceLanguage.Flags[language.Id] = mark
+    end
+    UI.PreferenceScale.SizeMarks, UI.PreferenceMotion.MotionMarks = {}, {}
+    for index = 1, 3 do
+        local sizeMark = frame(UI.PreferenceScale.Specimen, "SizeMark", Theme.Muted)
+        place(sizeMark, 1, index * 5 - 2, 4 + index * 4, 1.2)
+        UI.PreferenceScale.SizeMarks[index] = sizeMark
+        local motionMark = frame(UI.PreferenceMotion.Specimen, "MotionMark", Theme.Secondary)
+        place(motionMark, 0, index * 5 - 2, 14, 1.2)
+        UI.PreferenceMotion.MotionMarks[index] = motionMark
+    end
+    Runtime.Finalizers[#Runtime.Finalizers + 1] = function()
+        self.Hovered = nil
+    end
+end
+function Experience.Sheet:Paint(changed)
+    if not State.Alive or not self.Rows then
+        return
+    end
+    if changed then
+        if not changed.Disabled and (changed.Hovered or changed.Pressed) then
+            self.Hovered = changed
+        elseif self.Hovered == changed then
+            self.Hovered = nil
+        end
+    end
+    local hovered = self.Hovered
+    if not Experience.OptionsOpen or not canInteract() or (hovered and hovered.Disabled) then
+        hovered, self.Hovered = nil, nil
+    end
+    if hovered then
+        Animation:To(UI.PreferenceHover, {
+            Position = hovered.Root.Position,
+            Size = hovered.Root.Size,
+            BackgroundTransparency = hovered.Pressed and 0.38 or 0.72,
+        }, hovered.Pressed and Motion.ChromePress or Motion.ChromeHover)
+    else
+        Animation:To(UI.PreferenceHover, { BackgroundTransparency = 1 }, Motion.ChromeHover)
+    end
+    for _, button in ipairs(self.Rows) do
+        local engaged = button == hovered
+        local pressed = engaged and button.Pressed
+        local timing = pressed and Motion.ChromePress or Motion.ChromeHover
+        button.Root.BackgroundTransparency, button.Scale.Scale = 1, 1
+        button.Root.Selectable = not button.Disabled
+        Animation:To(button.HoverStroke, { Transparency = 1 }, timing)
+        Animation:To(button.Label, {
+            TextColor3 = button.Disabled and Theme.Muted or engaged and Theme.Text or Theme.Secondary,
+        }, timing)
+        Animation:To(button.Hint, { TextTransparency = button.Disabled and 0.45 or 0 }, timing)
+        Animation:To(button.ValueLabel, {
+            TextColor3 = button.Disabled and Theme.Muted or engaged and Theme.AccentText or Theme.Text,
+        }, timing)
+        button.RowIcon:SetColor(
+            button.Disabled and Theme.Muted or engaged and Theme.AccentText or Theme.Secondary,
+            timing
+        )
+        button.ValueChevron:SetColor(engaged and Theme.AccentText or Theme.Muted, timing)
+        if button.LabelRest then
+            local offset = UDim2.fromOffset(0, pressed and 1 or 0)
+            Animation:To(button.Label, { Position = button.LabelRest + offset }, timing)
+            Animation:To(button.RowIcon.Root, { Position = button.IconRest + offset }, timing)
+        end
+    end
+end
+function Experience.Sheet:Reset()
+    self.Hovered = nil
+    if Button.Capture and Button.Capture.Control.PreferenceRow then
+        Button:Release(nil, true)
+    end
+    for _, button in ipairs(self.Rows or {}) do
+        button.Hovered, button.Pressed = false, false
+        if button.LabelRest then
+            Animation:CancelProperty(button.Label, "Position")
+            Animation:CancelProperty(button.RowIcon.Root, "Position")
+            Animation:CancelTree(button.ValueShell)
+            button.Label.Position, button.RowIcon.Root.Position = button.LabelRest, button.IconRest
+            button.ValueShell.Position, button.ValueShell.GroupTransparency = button.ValueRest, 0
+        end
+    end
+    self:Paint()
+    if UI.PreferenceHover then
+        Animation:CancelTree(UI.PreferenceHover)
+        UI.PreferenceHover.BackgroundTransparency = 1
+    end
+end
+function Experience.Sheet:Refresh()
+    if not self.Rows then
+        return
+    end
+    local language = Settings.Language
+    for _, info in ipairs(Languages) do
+        if info.Id == language then
+            UI.PreferenceLanguage.ValueLabel.Text = info.Name
+            UI.PreferenceLanguage.DisplayValue = info.Name
+            break
+        end
+    end
+    for id, mark in pairs(UI.PreferenceLanguage.Flags) do
+        mark.Visible = id == language
+    end
+    local selected = Settings.UIScale < 0.95 and 1 or Settings.UIScale <= 1.05 and 2 or 3
+    UI.PreferenceScale.SelectedMark = selected
+    UI.PreferenceScale.DisplayValue = math.floor(Settings.UIScale * 100 + 0.5) .. "%"
+    UI.PreferenceMotion.DisplayValue = Localization:Get(Settings.ReducedMotion and "motionReduced" or "motionFull")
+    for index, mark in ipairs(UI.PreferenceScale.SizeMarks) do
+        Animation:To(mark, {
+            BackgroundColor3 = index == selected and Theme.AccentText or Theme.Muted,
+            BackgroundTransparency = index == selected and 0 or 0.45,
+        }, Motion.Value)
+    end
+    for index, mark in ipairs(UI.PreferenceMotion.MotionMarks) do
+        Animation:To(mark, {
+            Position = UDim2.fromOffset(Settings.ReducedMotion and 0 or index == 2 and 4 or 1, index * 5 - 2),
+            Size = UDim2.fromOffset(Settings.ReducedMotion and 14 or index == 2 and 11 or 14, 1.2),
+            BackgroundColor3 = Settings.ReducedMotion and Theme.Secondary or Theme.AccentText,
+        }, Motion.Value)
+    end
+    local values = { language, tostring(Settings.UIScale), tostring(Settings.ReducedMotion) .. language }
+    for index, button in ipairs(self.Rows) do
+        local changed = button.CanonicalValue ~= nil and button.CanonicalValue ~= values[index]
+        button.CanonicalValue = values[index]
+        self:LayoutValue(button)
+        if button.ValueRest then
+            if not Experience.OptionsOpen or not State.Visible or State.Modal then
+                Animation:CancelTree(button.ValueShell)
+                button.ValueShell.Position, button.ValueShell.GroupTransparency = button.ValueRest, 0
+            elseif changed and not Settings.ReducedMotion then
+                local moving = Animation.Objects[button.ValueShell]
+                if not moving then
+                    button.ValueShell.Position = button.ValueRest + UDim2.fromOffset(0, 3)
+                    button.ValueShell.GroupTransparency = 0.4
+                end
+                -- Geometry may supersede position without cancelling the independent fade.
+                Animation:To(button.ValueShell, { Position = button.ValueRest }, Motion.Value)
+                Animation:To(button.ValueShell, { GroupTransparency = 0 }, Motion.Value)
+            end
+        end
+    end
+    local save = Experience.PrefSaveState or "prefSession"
+    Animation:To(UI.PreferenceSaveDot, {
+        BackgroundColor3 = save == "prefSaved" and Theme.Success
+            or (save == "prefPending" or save == "prefUnsaved") and Theme.Warning
+            or Theme.Muted,
+    }, Motion.ChromeHover)
+    self:Paint()
+end
+function Experience.Sheet:LayoutValue(button)
+    local width = button.ValueShell.Size.X.Offset
+    if width < 28 then
+        return
+    end
+    local bounds = TextMetrics:Get(button.DisplayValue or "", 12, Theme.Medium, 10000)
+    local textWidth = math.min(width - 28, math.ceil(bounds and bounds.X or width - 28) + 8)
+    place(button.Specimen, width - textWidth - 28, 2, 20, 20)
+    place(button.ValueLabel, width - textWidth, 0, textWidth, 24)
+end
+function Experience.Sheet:Layout(inner, step, stacked)
+    local geometry = self.Width ~= inner or self.Step ~= step or self.Stacked ~= stacked
+    self.Width, self.Step, self.Stacked = inner, step, stacked
+    place(UI.PreferenceWell, 0, 0, inner, step * 3)
+    for index, button in ipairs(self.Rows) do
+        place(button.Root, 0, (index - 1) * step, inner, step)
+        local valueWidth = math.min(160, stacked and inner - 32 or math.max(128, inner * 0.42))
+        local valueX = inner - valueWidth - 20
+        local titleWidth = stacked and inner - 32 or math.max(1, valueX - 44)
+        button.LabelRest, button.IconRest = UDim2.fromOffset(32, 10), UDim2.fromOffset(0, 12)
+        button.ValueRest = UDim2.fromOffset(valueX, stacked and step - 30 or (step - 24) / 2)
+        button.Label.Size = UDim2.fromOffset(titleWidth, 20)
+        button.Label.TextSize, button.Label.TextWrapped = 13, false
+        place(button.Hint, 32, 34, stacked and inner - 40 or titleWidth, stacked and 24 or 26)
+        button.RowIcon.Root.Size = UDim2.fromOffset(18, 18)
+        button.ValueShell.Size = UDim2.fromOffset(valueWidth, 24)
+        self:LayoutValue(button)
+        button.ValueLabel.TextXAlignment = Enum.TextXAlignment.Right
+        place(button.ValueChevron.Root, inner - 12, stacked and step - 24 or (step - 12) / 2, 12, 12)
+        if geometry or not button.LayoutReady then
+            Animation:CancelProperty(button.Label, "Position")
+            Animation:CancelProperty(button.RowIcon.Root, "Position")
+            Animation:CancelProperty(button.ValueShell, "Position")
+            local offset = UDim2.fromOffset(0, self.Hovered == button and button.Pressed and 1 or 0)
+            button.Label.Position, button.RowIcon.Root.Position = button.LabelRest + offset, button.IconRest + offset
+            button.ValueShell.Position = button.ValueRest
+        end
+        button.LayoutReady = true
+    end
+    for index, divider in ipairs(UI.PreferenceDividers) do
+        place(divider, 32, index * step, inner - 32, 1)
+    end
+    if geometry then
+        Animation:CancelTree(UI.PreferenceHover)
+        UI.PreferenceHover.BackgroundTransparency = 1
+        if self.Hovered then
+            UI.PreferenceHover.Position, UI.PreferenceHover.Size = self.Hovered.Root.Position, self.Hovered.Root.Size
+        end
+    end
+    self:Paint()
+end
 function Experience:SetStage(stage)
     local changed = self.Stage ~= stage
     self.Stage = stage
@@ -6471,6 +6766,9 @@ function Experience:PresentOptions()
     self.OptionsToken = (self.OptionsToken or 0) + 1
     local token = self.OptionsToken
     local rest = self.PreferencesRest or UI.Preferences.Position
+    if not open then
+        self.Sheet:Reset()
+    end
     if blocked or (not open and not UI.Preferences.Visible) then
         Animation:CancelTree(UI.Preferences)
         Animation:CancelTree(UI.PreferencesBackdrop)
@@ -6520,6 +6818,7 @@ function Experience:RefreshOptions()
     UI.PreferenceScale.ValueLabel.Text = math.floor(Settings.UIScale * 100 + 0.5) .. "%"
     Localization:Bind(UI.PreferenceMotion.Label, "motionOption")
     Localization:Bind(UI.PreferenceMotion.ValueLabel, Settings.ReducedMotion and "motionReduced" or "motionFull")
+    self.Sheet:Refresh()
     for _, button in ipairs({ UI.PreferenceLanguage, UI.PreferenceScale, UI.PreferenceMotion }) do
         button.Root:SetAttribute("ActionLabel", button.Label.Text .. ": " .. button.ValueLabel.Text)
     end
@@ -6695,7 +6994,7 @@ function Experience:Height()
 end
 
 function Experience:FitButton(button)
-    if not button then
+    if not button or button.PreferenceRow then
         return
     end
     local inset = button.Track and 52 or button.Icon and button.Icon.Root.Visible and 44 or 16
@@ -6715,29 +7014,12 @@ function Experience:Layout(width, y)
     end
     UI.CommunityDetails.Root.Visible = false -- The persistent invitation has its own Details target.
     Community:Layout(width, y)
-    local panelWidth = math.min(420, State.Layout.Width - 24)
-    local inner = panelWidth - 32
-    local step = math.max(hit, 52)
-    place(UI.PreferenceWell, 0, 0, inner, step * 3)
-    for index, button in ipairs({ UI.PreferenceLanguage, UI.PreferenceScale, UI.PreferenceMotion }) do
-        place(button.Root, 0, (index - 1) * step, inner, step)
-        place(button.RowIcon.Root, 12, (step - 18) / 2, 18, 18)
-        local valueWidth = button == UI.PreferenceMotion and math.min(162, inner * 0.45) or 60
-        if inner < 260 then
-            button.Label.Position, button.Label.Size = UDim2.fromOffset(42, 5), UDim2.new(1, -76, 0, 18)
-            button.ValueLabel.Position, button.ValueLabel.Size =
-                UDim2.fromOffset(42, step - 21), UDim2.new(1, -76, 0, 17)
-            button.ValueLabel.TextXAlignment = Enum.TextXAlignment.Left
-        else
-            place(button.ValueLabel, inner - valueWidth - 30, 0, valueWidth, step)
-            button.ValueLabel.TextXAlignment = Enum.TextXAlignment.Right
-            button.Label.Position, button.Label.Size = UDim2.fromOffset(42, 0), UDim2.new(1, -valueWidth - 82, 1, 0)
-        end
-        place(button.ValueChevron.Root, inner - 24, (step - 12) / 2, 12, 12)
-    end
-    for index, divider in ipairs(UI.PreferenceDividers) do
-        place(divider, 42, index * step, inner - 54, 1)
-    end
+    local panelWidth = math.min(440, State.Layout.Width - 24)
+    local pad = panelWidth < 300 and 16 or 24
+    local inner = panelWidth - pad * 2
+    local stacked = inner < 280
+    local step = math.max(hit, stacked and 92 or 64)
+    self.Sheet:Layout(inner, step, stacked)
     local actionsY, splitActions = step * 3 + 12, inner >= 320
     local actionWidth = splitActions and (inner - 12) / 2 or inner
     for index, button in ipairs({ UI.PreferenceReset, UI.CommunityRestore }) do
@@ -6755,8 +7037,10 @@ function Experience:Layout(width, y)
     end
     local noteY = actionsY + (splitActions and hit or hit * 2 + 4) + 16
     local noteHeight =
-        math.max(36, measure(Localization:Get(self.PrefSaveState or "prefSession"), 12, Theme.Font, inner))
-    place(UI.PreferenceNote, 0, noteY, inner, noteHeight)
+        math.max(44, measure(Localization:Get(self.PrefSaveState or "prefSession"), 11, Theme.Font, inner - 40) + 20)
+    place(UI.PreferenceFeedback, 0, noteY, inner, noteHeight)
+    place(UI.PreferenceSaveDot, 12, noteHeight / 2 - 2, 4, 4)
+    place(UI.PreferenceNote, 26, 8, inner - 38, noteHeight - 16)
     local diagY = noteY + noteHeight + 12
     place(UI.DiagnosticsToggle.Root, 0, diagY, inner, hit)
     UI.DiagnosticsToggle.Icon.Root.AnchorPoint = Vector2.new(0, 0.5)
@@ -6764,25 +7048,41 @@ function Experience:Layout(width, y)
     Diagnostics.Top = diagY + hit + 12
     Diagnostics:Layout(inner)
     local bodyHeight = Diagnostics.Top + Diagnostics:Height() + 8
-    local header = math.max(78, hit + 24)
-    place(UI.PreferencesHeaderDivider, 16, header - 2, inner, 1)
-    local panelHeight = math.min(State.Layout.Height - 24, header + bodyHeight + 24)
-    local rest = UDim2.fromOffset(State.Layout.Width - panelWidth - 12, 12)
+    -- Yield decorative clearance before a short landscape viewport loses a full
+    -- setting hit target. Normal desktop proportions remain exactly unchanged.
+    local verticalInset = math.min(12, math.max(0, (State.Layout.Height - hit * 2) / 2))
+    local availableHeight = math.max(hit, State.Layout.Height - verticalInset * 2)
+    local header = math.min(math.max(88, hit + 28), math.max(hit, availableHeight - hit))
+    local clearance = math.max(0, availableHeight - header - hit)
+    local scrollGap = math.min(8, clearance)
+    local scrollBottom = math.min(16, math.max(0, clearance - scrollGap))
+    place(UI.PreferencesHeaderSurface, 0, 0, panelWidth, header)
+    place(UI.PreferencesHeaderDivider, pad, header - 1, inner, 1)
+    local panelHeight = math.min(availableHeight, header + scrollGap + bodyHeight + scrollBottom)
+    local rest = UDim2.fromOffset(State.Layout.Width - panelWidth - 12, verticalInset)
     if self.PreferencesRest ~= rest then
         Animation:CancelProperty(UI.Preferences, "Position")
         UI.Preferences.Position = rest
         self.PreferencesRest = rest
     end
-    UI.Preferences.Size = UDim2.fromOffset(panelWidth, math.max(hit + 48, panelHeight))
-    local headerIcon = panelWidth >= 260
-    local titleX = headerIcon and 56 or 16
+    UI.Preferences.Size = UDim2.fromOffset(panelWidth, panelHeight)
+    local caption = header >= 76
+    local headerIcon = panelWidth >= 260 and header >= 60
+    local titleX = headerIcon and pad + 32 or pad
     UI.PreferencesTitle.TextSize = headerIcon and 20 or 18
     UI.PreferencesIcon.Root.Visible = headerIcon
-    place(UI.PreferencesIcon.Root, 16, 20, 24, 24)
-    place(UI.PreferencesTitle, titleX, 12, panelWidth - hit - titleX - 24, 28)
-    place(UI.PreferenceSectionLabel, titleX, 43, panelWidth - titleX - 20, 20)
-    place(UI.PreferenceClose.Root, panelWidth - hit - 8, 8, hit, hit)
-    place(UI.PreferencesScroll, 16, header + 8, inner, math.max(20, panelHeight - header - 24))
+    UI.PreferenceSectionLabel.Visible = caption
+    place(UI.PreferencesIcon.Root, pad, caption and 24 or (header - 20) / 2, 20, 20)
+    place(UI.PreferencesTitle, titleX, caption and 19 or (header - 28) / 2, panelWidth - hit - titleX - 16, 28)
+    place(UI.PreferenceSectionLabel, titleX, 49, panelWidth - titleX - 20, 20)
+    place(UI.PreferenceClose.Root, panelWidth - hit - 8, caption and 12 or (header - hit) / 2, hit, hit)
+    place(
+        UI.PreferencesScroll,
+        pad,
+        header + scrollGap,
+        inner,
+        math.max(1, panelHeight - header - scrollGap - scrollBottom)
+    )
     UI.PreferencesContent.Size = UDim2.fromOffset(inner, bodyHeight)
     UI.PreferencesScroll.CanvasSize = UDim2.fromOffset(0, bodyHeight)
     UI.PreferencesScroll.ScrollingEnabled = bodyHeight > UI.PreferencesScroll.Size.Y.Offset
@@ -6813,7 +7113,10 @@ end
 function Experience:Build()
     local function secondary(name, key, callback, parent)
         local button = Button.new(parent or UI.AuthBody, name, "", false, nil, callback, Runtime, function()
-            return parent == UI.PreferencesContent and canInteract() or AuthField.Interactive()
+            if parent == UI.PreferencesContent then
+                return self:CanUsePreferences()
+            end
+            return AuthField.Interactive()
         end)
         button.BaseColor = Theme.Surface
         button:Apply()
@@ -6957,15 +7260,17 @@ function Experience:Build()
         Loader:ShowPreferences(false)
     end)
     UI.Preferences = group(UI.Window, "Preferences")
-    UI.Preferences.BackgroundColor3, UI.Preferences.BackgroundTransparency = Theme.Elevated, 0
+    UI.Preferences.BackgroundColor3, UI.Preferences.BackgroundTransparency = Theme.Sidebar, 0
     UI.Preferences.ZIndex, UI.Preferences.Visible, UI.Preferences.Active = 12, false, true
     corner(UI.Preferences, Theme.PanelRadius)
-    stroke(UI.Preferences, Theme.WindowEdge, 1, 0.35)
+    stroke(UI.Preferences, Theme.WindowEdge, 1, 0.5)
     Material:Panel(UI.Preferences)
+    UI.PreferencesHeaderSurface = frame(UI.Preferences, "HeaderSurface", Theme.Header)
+    corner(UI.PreferencesHeaderSurface, Theme.PanelRadius)
     UI.PreferencesHeaderDivider = frame(UI.Preferences, "HeaderDivider", Theme.Edge)
-    UI.PreferencesIcon = Icon.new(UI.Preferences, "sliders", Theme.AccentText, 24)
+    UI.PreferencesIcon = Icon.new(UI.Preferences, "control-sheet", Theme.AccentText, 20)
     UI.PreferencesTitle = localized(UI.Preferences, "Title", "preferencesTitle", 20, Theme.Text, Theme.Bold)
-    UI.PreferenceClose = Button.new(UI.Preferences, "ClosePreferences", "", false, "x", function()
+    UI.PreferenceClose = Button.new(UI.Preferences, "ClosePreferences", "", false, "control-close", function()
         Loader:ShowPreferences(false)
     end, Runtime, canInteract)
     UI.PreferenceClose.Root.BackgroundTransparency = 1
@@ -6987,8 +7292,8 @@ function Experience:Build()
     UI.PreferencesContent = frame(UI.PreferencesScroll, "PreferenceContent")
     UI.PreferencesContent.BackgroundTransparency = 1
     UI.PreferenceSectionLabel = localized(UI.Preferences, "Section", "session", 11, Theme.Muted, Theme.Medium)
-    UI.PreferenceWell = frame(UI.PreferencesContent, "SettingWell", Theme.Input)
-    corner(UI.PreferenceWell, Theme.InputRadius)
+    UI.PreferenceWell = frame(UI.PreferencesContent, "SettingWell")
+    UI.PreferenceWell.BackgroundTransparency = 1
     UI.PreferenceDividers = {}
     for index = 1, 2 do
         UI.PreferenceDividers[index] = frame(UI.PreferenceWell, "Divider", Theme.Edge)
@@ -7013,22 +7318,31 @@ function Experience:Build()
         self:PreferenceChanged()
     end, UI.PreferencesContent)
     UI.PreferenceReset.Ghost = true
-    UI.PreferenceReset.Icon = Icon.new(UI.PreferenceReset.Root, "refresh", Theme.Secondary, 18)
+    UI.PreferenceReset.Icon = Icon.new(UI.PreferenceReset.Root, "route-refresh", Theme.Secondary, 18)
     for index, button in ipairs({ UI.PreferenceLanguage, UI.PreferenceScale, UI.PreferenceMotion }) do
         button.BaseColor, button.Ghost = Theme.Hover, true
         button:Apply()
         button.Label.TextXAlignment = Enum.TextXAlignment.Left
-        button.RowIcon =
-            Icon.new(button.Root, index == 1 and "globe" or index == 2 and "sliders" or "clock", Theme.Secondary, 18)
+        button.RowIcon = Icon.new(
+            button.Root,
+            index == 1 and "control-language" or index == 2 and "control-scale" or "control-motion",
+            Theme.Secondary,
+            18
+        )
         button.ValueLabel = label(button.Root, "Value", "", 12, Theme.Secondary, Theme.Medium)
         button.ValueLabel.TextXAlignment = Enum.TextXAlignment.Right
         button.ValueLabel.TextTruncate = Enum.TextTruncate.AtEnd
-        button.ValueChevron = Icon.new(button.Root, "chevron", Theme.Muted, 12)
-        button.ValueChevron.Root.Rotation = -90
+        button.ValueChevron = Icon.new(button.Root, "control-next", Theme.Muted, 12)
         button:Apply()
     end
-    UI.PreferenceNote = label(UI.PreferencesContent, "SaveState", "", 12, Theme.Secondary)
+    UI.PreferenceFeedback = frame(UI.PreferencesContent, "SaveFeedback", Theme.Input)
+    corner(UI.PreferenceFeedback, 4)
+    stroke(UI.PreferenceFeedback, Theme.Line, 1, 0.8)
+    UI.PreferenceSaveDot = frame(UI.PreferenceFeedback, "SaveState", Theme.Muted)
+    corner(UI.PreferenceSaveDot, 100)
+    UI.PreferenceNote = label(UI.PreferenceFeedback, "SaveMessage", "", 11, Theme.Secondary)
     UI.PreferenceNote.TextWrapped = true
+    self.Sheet:Build()
     Community:Build()
     LicenseOffer:BuildTriggers()
     UI.CommunityDetails = secondary("CommunityDetails", "secondaryCommunity", function()
@@ -9271,6 +9585,7 @@ local function bindInput()
         Button:Release(nil, true)
         HeaderChrome:Reset()
         Navigation:ResetHover()
+        Experience.Sheet:Reset()
         Presence:ResetDock()
         Cards:ReleaseSearch()
         LanguageController.Pressed, LanguageController.Hovered = false, false
