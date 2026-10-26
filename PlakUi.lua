@@ -77,6 +77,9 @@ local Motion = {
     StageDelay = 0.035,
     SheetDistance = 8,
     AccessGate = TweenInfo.new(0.32, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+    ChromeHover = TweenInfo.new(0.14, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+    ChromePress = TweenInfo.new(0.085, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+    ChromeGlide = TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
 }
 local Settings = {
     Title = "PLAK",
@@ -1686,6 +1689,7 @@ end
 do
     local copy = {
         en = {
+            headerHide = "Hide",
             catalogSearch = "Search games",
             catalogAll = "All",
             catalogReady = "Available",
@@ -1700,6 +1704,7 @@ do
             catalogViewStatus = "View status",
         },
         es = {
+            headerHide = "Ocultar",
             catalogSearch = "Buscar juegos",
             catalogAll = "Todos",
             catalogReady = "Disponibles",
@@ -1714,6 +1719,7 @@ do
             catalogViewStatus = "Ver estado",
         },
         pt = {
+            headerHide = "Ocultar",
             catalogSearch = "Buscar jogos",
             catalogAll = "Todos",
             catalogReady = "Disponíveis",
@@ -1728,6 +1734,7 @@ do
             catalogViewStatus = "Ver status",
         },
         ru = {
+            headerHide = "Скрыть",
             catalogSearch = "Поиск игр",
             catalogAll = "Все",
             catalogReady = "Доступные",
@@ -4029,6 +4036,223 @@ end
 local function closeLanguage()
     LanguageController:SetOpen(false)
 end
+-- Window commands share one surface, but retain Button's canonical input/capture lifecycle.
+local HeaderChrome = {}
+function HeaderChrome:RefreshUser()
+    local initials = characters(Settings.User:match("%S.*") or "")
+    UI.UserInitial.Text = initials[1] and string.upper(initials[1]) or "P"
+    local visible = self.UserVisible == true
+    UI.Avatar.Root.Visible = visible and not (UI.CustomAvatar and UI.CustomAvatar.IsLoaded)
+    if UI.CustomAvatar then
+        UI.CustomAvatar.Visible = visible
+    end
+end
+function HeaderChrome:Paint(changed)
+    if not UI.WindowCommands or not State.Alive then
+        return
+    end
+    if changed then
+        if not changed.Disabled and (changed.Hovered or changed.Pressed) then
+            self.Active = changed
+        elseif self.Active == changed then
+            self.Active = nil
+        end
+    end
+    local active = self.Active
+    if not active then
+        for _, button in ipairs(self.Controls) do
+            if not button.Disabled and (button.Hovered or button.Pressed) then
+                active = button
+            end
+        end
+    end
+    if not State.Visible then
+        active = nil
+    end
+    self.Active = active
+    local preset = active and active.Pressed and Motion.ChromePress or Motion.ChromeGlide
+    if active then
+        Animation:To(UI.CommandHighlight, {
+            Position = UDim2.fromOffset(active.Root.Position.X.Offset + 3, 3),
+            Size = UDim2.new(0, math.max(1, active.Root.Size.X.Offset - 6), 1, -6),
+            BackgroundColor3 = active == UI.CloseWindow and Theme.Danger or Theme.AccentDark,
+            BackgroundTransparency = active == UI.CloseWindow and (active.Pressed and 0.76 or 0.88)
+                or active.Pressed and 0.15
+                or 0.38,
+        }, preset)
+    else
+        Animation:To(UI.CommandHighlight, { BackgroundTransparency = 1 }, Motion.ChromeHover)
+    end
+    for _, button in ipairs(self.Controls) do
+        local engaged = button == active
+        local ink = button.Disabled and Theme.Muted
+            or engaged and (button == UI.CloseWindow and Theme.Danger or Theme.Text)
+            or Theme.Secondary
+        local timing = button.Pressed and Motion.ChromePress or Motion.ChromeHover
+        button.Root.Selectable = not button.Disabled
+        button.Root.BackgroundTransparency, button.Scale.Scale = 1, 1
+        Animation:To(button.Label, { TextColor3 = ink }, timing)
+        Animation:To(button.Icon.Root, {
+            Position = UDim2.new(button.IconXScale or 0, button.IconX or 10, 0.5, button.Pressed and 1 or 0),
+        }, timing)
+        if button.WindowOutline then
+            Animation:To(button.WindowOutline, {
+                Position = UDim2.fromOffset(2, engaged and 5 or 3),
+                Size = UDim2.fromOffset(16, engaged and 7 or 10),
+            }, timing)
+            Animation:To(button.WindowEdge, { Color = ink, Transparency = button.Disabled and 0.6 or 0.08 }, timing)
+            Animation:To(button.WindowLine, { BackgroundColor3 = ink }, timing)
+            Animation:To(button.Dock, {
+                Size = UDim2.fromOffset(engaged and 12 or 8, 1),
+                BackgroundColor3 = ink,
+                BackgroundTransparency = engaged and 0.05 or 0.35,
+            }, timing)
+        else
+            for _, bar in ipairs(button.CrossBars) do
+                Animation:To(bar, {
+                    Size = UDim2.fromOffset(button.Pressed and 12 or engaged and 15 or 13, 1.25),
+                    BackgroundColor3 = ink,
+                }, timing)
+            end
+        end
+    end
+end
+function HeaderChrome:Reset()
+    self.Active = nil
+    for _, button in ipairs(self.Controls or {}) do
+        button.Hovered, button.Pressed = false, false
+    end
+    self:Paint()
+end
+function HeaderChrome:Build()
+    UI.WindowCommands = frame(UI.Header, "WindowCommands", Theme.Input)
+    UI.WindowCommands.BackgroundTransparency = 0.3
+    corner(UI.WindowCommands, Theme.Radius)
+    stroke(UI.WindowCommands, Theme.Line, 1, 0.7)
+    UI.CommandHighlight = frame(UI.WindowCommands, "CommandHighlight", Theme.AccentDark)
+    UI.CommandHighlight.BackgroundTransparency = 1
+    corner(UI.CommandHighlight, math.max(2, Theme.Radius - 2))
+    UI.CommandDivider = frame(UI.WindowCommands, "CommandDivider", Theme.Line)
+    UI.CommandDivider.BackgroundTransparency = 0.5
+    UI.Minimize = Button.new(
+        UI.WindowCommands,
+        "Minimize",
+        "",
+        false,
+        nil,
+        function()
+            Loader:Hide()
+        end,
+        Runtime,
+        function()
+            return State.Alive and State.Visible
+        end
+    )
+    UI.CloseWindow = Button.new(
+        UI.WindowCommands,
+        "CloseLoader",
+        "",
+        false,
+        nil,
+        function()
+            Loader:Destroy()
+        end,
+        Runtime,
+        function()
+            return State.Alive and State.Visible
+        end
+    )
+    self.Controls = { UI.Minimize, UI.CloseWindow }
+    for _, button in ipairs(self.Controls) do
+        button.Root.BackgroundTransparency, button.Root.ZIndex = 1, 2
+        button.Ghost = true
+        button.Label.TextSize = 12
+        button.Label.TextXAlignment = Enum.TextXAlignment.Left
+        button.Icon = { Root = frame(button.Root, button == UI.Minimize and "HideGlyph" or "CloseGlyph") }
+        button.Icon.Root.BackgroundTransparency = 1
+        button.Icon.Root.AnchorPoint = Vector2.new(0, 0.5)
+        button.Icon.Root.Size = UDim2.fromOffset(20, 20)
+        function button:Apply()
+            HeaderChrome:Paint(self)
+        end
+    end
+    local hide = UI.Minimize
+    hide.WindowOutline = frame(hide.Icon.Root, "Window", Theme.Input)
+    hide.WindowOutline.BackgroundTransparency = 1
+    place(hide.WindowOutline, 2, 3, 16, 10)
+    corner(hide.WindowOutline, 2)
+    hide.WindowEdge = stroke(hide.WindowOutline, Theme.Secondary, 1.1, 0.08)
+    hide.WindowLine = frame(hide.WindowOutline, "WindowLine", Theme.Secondary)
+    place(hide.WindowLine, 3, 3, 10, 1)
+    hide.WindowLine.BackgroundTransparency = 0.4
+    hide.Dock = frame(hide.Icon.Root, "Dock", Theme.Secondary)
+    hide.Dock.AnchorPoint = Vector2.new(0.5, 0)
+    place(hide.Dock, 10, 17, 8, 1)
+    hide.Dock.BackgroundTransparency = 0.35
+    UI.CloseWindow.CrossBars = {}
+    for index, rotation in ipairs({ 45, -45 }) do
+        local bar = frame(UI.CloseWindow.Icon.Root, "CrossStroke", Theme.Secondary)
+        bar.AnchorPoint = Vector2.new(0.5, 0.5)
+        place(bar, 10, 10, 13, 1.25)
+        bar.Rotation = rotation
+        corner(bar, 0.6)
+        UI.CloseWindow.CrossBars[index] = bar
+    end
+    UI.CloseWindow.Label.Visible = false
+    Localization:Bind(hide.Label, "headerHide")
+    UI.User = label(UI.Header, "User", Settings.User, 12, Theme.Secondary, Theme.Medium)
+    UI.User.TextTruncate = Enum.TextTruncate.AtEnd
+    UI.Avatar = { Root = frame(UI.Header, "UserInitialTile", Theme.Inactive) }
+    corner(UI.Avatar.Root, Theme.Radius)
+    stroke(UI.Avatar.Root, Theme.Line, 1, 0.72)
+    UI.UserInitial = label(UI.Avatar.Root, "Initial", "", 11, Theme.Secondary, Theme.Medium)
+    UI.UserInitial.TextXAlignment = Enum.TextXAlignment.Center
+    UI.UserInitial.Size = UDim2.fromScale(1, 1)
+    Runtime.Finalizers[#Runtime.Finalizers + 1] = function()
+        self.Active = nil
+    end
+    self:RefreshUser()
+end
+function HeaderChrome:Layout(width, height, hit, pad, windowHeight)
+    local words = width >= 440 and windowHeight >= 240
+    local bounds = TextMetrics:Get(Localization:Get("headerHide"), 12, Theme.Medium, 10000)
+    local hideWidth = words and math.max(hit, math.ceil(bounds and bounds.X or 64) + 48) or hit
+    local railWidth = hideWidth + hit + 16
+    local left = width - railWidth - 12
+    place(UI.WindowCommands, left, (height - hit) / 2, railWidth, hit)
+    place(UI.Minimize.Root, 4, 0, hideWidth, hit)
+    place(UI.CloseWindow.Root, hideWidth + 12, 0, hit, hit)
+    place(UI.CommandDivider, hideWidth + 7, (hit - 14) / 2, 1, 14)
+    UI.Minimize.Label.Visible = words
+    place(UI.Minimize.Label, 38, 0, math.max(1, hideWidth - 44), hit)
+    UI.Minimize.IconXScale, UI.Minimize.IconX = words and 0 or 0.5, words and 10 or -10
+    UI.CloseWindow.IconXScale, UI.CloseWindow.IconX = 0.5, -10
+    UI.Minimize.Root:SetAttribute("ActionLabel", Localization:Get("minimize"))
+    UI.CloseWindow.Root:SetAttribute("ActionLabel", Localization:Get("closeLoader"))
+    local userBounds = TextMetrics:Get(Settings.User, 12, Theme.Medium, 10000)
+    local userWidth = math.clamp(math.ceil(userBounds and userBounds.X or 80), 24, 84)
+    local profileWidth = userWidth + 36
+    self.UserVisible = left - pad * 2 - profileWidth - 20 >= 220
+    local titleWidth = math.max(0, left - pad - 12 - (self.UserVisible and profileWidth + 20 or 0))
+    UI.PageHeading.Visible = titleWidth >= 56
+    UI.PageDescription.Visible = titleWidth >= 160 and windowHeight >= 250
+    place(UI.Breadcrumb, pad, UI.PageDescription.Visible and 10 or (height - 24) / 2, titleWidth, 24)
+    place(UI.PageDescription, pad, 35, titleWidth, 20)
+    UI.Breadcrumb.TextTruncate = Enum.TextTruncate.AtEnd
+    UI.User.Visible = self.UserVisible
+    UI.UserAction.Visible = self.UserVisible and type(State.Callbacks.User) == "function"
+    local profileX = left - profileWidth - 20
+    place(UI.Avatar.Root, profileX, (height - 28) / 2, 28, 28)
+    place(UI.User, profileX + 36, 0, userWidth, height)
+    place(UI.UserAction, profileX - 4, (height - hit) / 2, profileWidth + 8, hit)
+    if UI.CustomAvatar then
+        UI.CustomAvatar.Position, UI.CustomAvatar.Size = UI.Avatar.Root.Position, UI.Avatar.Root.Size
+    end
+    -- At ultra-narrow widths the commands may borrow the decorative brand area, never a navigation target.
+    UI.BrandLogo.Root.Visible = left >= 0
+    self:RefreshUser()
+    self:Paint()
+end
 local function buildShell(parent)
     UI.Gui = create(
         "ScreenGui",
@@ -4060,71 +4284,11 @@ local function buildShell(parent)
     UI.Header.BackgroundColor3 = Theme.Header
     UI.Header.BackgroundTransparency = 0
     UI.Header.Active = true
+    UI.Header.ZIndex = 3 -- Compact commands can extend over the decorative sidebar brand zone.
     UI.BrandLogo = Icon.new(UI.Header, "plak", Theme.AccentText, 28)
     UI.Brand = localized(UI.Header, "Brand", "brand", 14, Theme.Text, Theme.Medium)
     UI.Brand.TextTruncate = Enum.TextTruncate.AtEnd
-    UI.User = label(UI.Header, "User", Settings.User, 13, Theme.Text, Theme.Medium)
-    UI.User.TextXAlignment = Enum.TextXAlignment.Right
-    UI.User.TextTruncate = Enum.TextTruncate.AtEnd
-    UI.Avatar = Icon.new(UI.Header, "owl", Theme.Accent, 36)
-    UI.Minimize = Button.new(
-        UI.Header,
-        "Minimize",
-        "",
-        false,
-        "collapse-window",
-        function()
-            Loader:Hide()
-        end,
-        Runtime,
-        function()
-            return State.Alive and State.Visible
-        end
-    )
-    UI.Minimize.BaseColor = Theme.Header
-    UI.Minimize.Ghost = true
-    UI.Minimize:Apply()
-    UI.Minimize.Root:FindFirstChildOfClass("UICorner").CornerRadius = UDim.new(0, Theme.Radius)
-    UI.Minimize.Icon.Root.Position = UDim2.new(0.5, -10, 0.5, 0)
-    UI.Minimize.Icon:SetColor(Theme.Secondary)
-    UI.CloseWindow = Button.new(
-        UI.Header,
-        "CloseLoader",
-        "",
-        false,
-        "x",
-        function()
-            Loader:Destroy()
-        end,
-        Runtime,
-        function()
-            return State.Alive and State.Visible
-        end
-    )
-    UI.CloseWindow.Root.BackgroundTransparency = 1
-    UI.CloseWindow.Ghost = true
-    UI.CloseWindow.Label.Visible = false
-    UI.CloseWindow.Icon.Root.Position = UDim2.new(0.5, -9, 0.5, 0)
-    UI.CloseWindow.Root:SetAttribute("ActionLabel", Localization:Get("closeLoader"))
-    UI.MinimizeGlyphScale = create("UIScale", { Scale = 1 }, UI.Minimize.Icon.Root)
-    local function paintHide(hovered)
-        UI.Minimize.Icon:SetColor(hovered and Theme.Accent or Theme.Secondary)
-        Animation:To(UI.MinimizeGlyphScale, { Scale = hovered and 1.035 or 1 }, Motion.Hover)
-    end
-    Runtime:Connect(UI.Minimize.Root.MouseEnter, function()
-        paintHide(true)
-    end)
-    Runtime:Connect(UI.Minimize.Root.MouseLeave, function()
-        paintHide(false)
-    end)
-    Runtime:Connect(UI.Minimize.Root.SelectionGained, function()
-        paintHide(true)
-    end)
-    Runtime:Connect(UI.Minimize.Root.SelectionLost, function()
-        paintHide(false)
-    end)
-    Localization:Bind(UI.Minimize.Label, "minimize")
-    UI.Minimize.Label.Visible = false
+    HeaderChrome:Build()
     -- A sibling of Window remains reachable when the full window (including its modal) is hidden.
     UI.RestoreDock = group(UI.Stage, "RestoreDock")
     UI.RestoreDock.Visible = false
@@ -8626,27 +8790,8 @@ function Responsive:Update()
         end
     end
     local headerWidth = width - rail
-    local controls = hit * 2 + 12
-    local avatarVisible = headerWidth >= 460
-    local avatarSpace = avatarVisible and 128 or 0
-    local titleWidth = math.max(40, headerWidth - controls - avatarSpace - pad * 2)
     Stagecraft:Place(UI.PageHeading, 0, 0, headerWidth, header)
-    UI.PageDescription.Visible = headerWidth >= 280 and height >= 250
-    place(UI.Breadcrumb, pad, UI.PageDescription.Visible and 10 or (header - 24) / 2, titleWidth, 24)
-    place(UI.PageDescription, pad, 35, titleWidth, 20)
-    UI.Breadcrumb.TextTruncate = Enum.TextTruncate.AtEnd
-    place(UI.Minimize.Root, headerWidth - controls, (header - hit) / 2, hit, hit)
-    place(UI.CloseWindow.Root, headerWidth - hit - 6, (header - hit) / 2, hit, hit)
-    UI.CloseWindow.Root:SetAttribute("ActionLabel", Localization:Get("closeLoader"))
-    UI.User.Visible, UI.Avatar.Root.Visible = avatarVisible, avatarVisible
-    UI.UserAction.Visible = avatarVisible and type(State.Callbacks.User) == "function"
-    place(UI.User, headerWidth - controls - 128, 0, 82, header)
-    place(UI.Avatar.Root, headerWidth - controls - 38, (header - 28) / 2, 28, 28)
-    place(UI.UserAction, headerWidth - controls - 128, 0, 122, header)
-    if UI.CustomAvatar then
-        UI.CustomAvatar.Visible = avatarVisible
-        UI.CustomAvatar.Position, UI.CustomAvatar.Size = UI.Avatar.Root.Position, UI.Avatar.Root.Size
-    end
+    HeaderChrome:Layout(headerWidth, header, hit, pad, height)
     local restoreSize = math.max(48, hit)
     local restoreY = math.clamp(center.Y - restoreSize / 2, 8, math.max(8, safe.Y - restoreSize - 8))
     place(UI.RestoreDock, math.max(8, safe.X - restoreSize - 12), restoreY, restoreSize, restoreSize)
@@ -8798,6 +8943,7 @@ local function bindInput()
     end)
     Runtime:Connect(Services.Input.WindowFocusReleased, function()
         Button:Release(nil, true)
+        HeaderChrome:Reset()
         Cards:ReleaseSearch()
         LanguageController.Pressed, LanguageController.Hovered = false, false
         LanguageController:Paint()
@@ -9417,14 +9563,16 @@ function Loader:SetUser(user, avatar)
             Size = UI.Avatar.Root.Size,
             ScaleType = Enum.ScaleType.Crop,
         }, UI.Header)
-        corner(UI.CustomAvatar, 100)
+        corner(UI.CustomAvatar, Theme.Radius)
         UI.Avatar.Root.Visible = not UI.CustomAvatar.IsLoaded
         UI.AvatarConnection = Runtime:Connect(UI.CustomAvatar:GetPropertyChangedSignal("IsLoaded"), function()
             if UI.CustomAvatar then
-                UI.Avatar.Root.Visible = not UI.CustomAvatar.IsLoaded
+                HeaderChrome:RefreshUser()
             end
         end)
     end
+    HeaderChrome:RefreshUser()
+    Responsive:Request()
     return self
 end
 function Loader:SetArtwork(artwork)
@@ -9856,6 +10004,7 @@ function Loader:Hide()
         return self
     end
     Button:Release(nil, true)
+    HeaderChrome:Reset()
     Stagecraft:Cancel(true)
     AccessScene:Cancel(true)
     State.VisibilityToken = State.VisibilityToken + 1
