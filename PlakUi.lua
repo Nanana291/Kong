@@ -595,7 +595,10 @@ function Icon.new(parent, name, color, size)
             parts[#parts + 1] = part
         end
     end
-    if name == "home" then
+    if name == "search" then
+        circle(8, 8, 5)
+        line(12, 12, 18, 18)
+    elseif name == "home" then
         path({ { 3, 8 }, { 10, 3 }, { 17, 8 }, { 15, 17 }, { 5, 17 } }, true)
     elseif name == "grid" then
         for _, p in ipairs({ { 3, 3 }, { 12, 3 }, { 3, 12 }, { 12, 12 } }) do
@@ -1680,6 +1683,71 @@ do
         end
     end
 end
+do
+    local copy = {
+        en = {
+            catalogSearch = "Search games",
+            catalogAll = "All",
+            catalogReady = "Available",
+            catalogCurrent = "This game",
+            catalogCount = "%d of %d games",
+            catalogNoResults = "No games found",
+            catalogNoResultsCopy = "Try another name or reset the filters",
+            catalogEmptyTitle = "No games listed",
+            catalogEmptyCopy = "The catalog is empty right now",
+            catalogReset = "Reset filters",
+            catalogClear = "Clear search",
+            catalogViewStatus = "View status",
+        },
+        es = {
+            catalogSearch = "Buscar juegos",
+            catalogAll = "Todos",
+            catalogReady = "Disponibles",
+            catalogCurrent = "Este juego",
+            catalogCount = "%d de %d juegos",
+            catalogNoResults = "Sin coincidencias",
+            catalogNoResultsCopy = "Prueba otro nombre o restablece los filtros",
+            catalogEmptyTitle = "No hay juegos",
+            catalogEmptyCopy = "El catálogo está vacío por ahora",
+            catalogReset = "Restablecer filtros",
+            catalogClear = "Borrar búsqueda",
+            catalogViewStatus = "Ver estado",
+        },
+        pt = {
+            catalogSearch = "Buscar jogos",
+            catalogAll = "Todos",
+            catalogReady = "Disponíveis",
+            catalogCurrent = "Este jogo",
+            catalogCount = "%d de %d jogos",
+            catalogNoResults = "Nenhum jogo encontrado",
+            catalogNoResultsCopy = "Tente outro nome ou redefina os filtros",
+            catalogEmptyTitle = "Nenhum jogo listado",
+            catalogEmptyCopy = "O catálogo está vazio no momento",
+            catalogReset = "Redefinir filtros",
+            catalogClear = "Limpar busca",
+            catalogViewStatus = "Ver status",
+        },
+        ru = {
+            catalogSearch = "Поиск игр",
+            catalogAll = "Все",
+            catalogReady = "Доступные",
+            catalogCurrent = "Эта игра",
+            catalogCount = "%d из %d игр",
+            catalogNoResults = "Игры не найдены",
+            catalogNoResultsCopy = "Попробуйте другое название или сбросьте фильтры",
+            catalogEmptyTitle = "Список игр пуст",
+            catalogEmptyCopy = "В каталоге пока нет игр",
+            catalogReset = "Сбросить фильтры",
+            catalogClear = "Очистить поиск",
+            catalogViewStatus = "Статус",
+        },
+    }
+    for language, values in pairs(copy) do
+        for key, value in pairs(values) do
+            Translations[language][key] = value
+        end
+    end
+end
 local Languages = {
     { Id = "en", Name = "English", Aliases = { "english", "en-us", "en-gb" } },
     { Id = "ru", Name = "Русский", Aliases = { "russian", "русский", "ru-ru" } },
@@ -2459,7 +2527,7 @@ local Statuses = {
     Updating = { Key = "updating", Icon = "clock", Launch = false },
     Disabled = { Key = "disabled", Icon = "shield-alert", Launch = false },
 }
-local Cards = {}
+local Cards = { Query = "", QueryFolded = "", Terms = {}, Filter = "all", VisibleCount = 0 }
 local SUPPORTED_GAMES_URL = "https://raw.githubusercontent.com/Nanana291/Plak/main/Games.json"
 local SupportedGamesFallback = {
     { Id = "roll-a-fisherman", GameId = 90920025162454, FallbackName = "Roll a Fisherman", Status = "Available" },
@@ -2681,6 +2749,9 @@ function GameMedia:Apply(card, info)
     end
     if Experience then
         Experience:RefreshGame()
+    end
+    if UI.CatalogSearch then
+        Responsive:Request()
     end
 end
 function GameMedia:Drain()
@@ -3339,6 +3410,7 @@ function Modal:Open(config)
         return
     end
     Stagecraft:Cancel(true)
+    Cards:ReleaseSearch()
     Experience.OptionsOpen = false
     Experience:RefreshOptions()
     Accessibility:CaptureModal()
@@ -3417,6 +3489,7 @@ function Modal:Loading(config)
         return
     end
     Stagecraft:Cancel(true)
+    Cards:ReleaseSearch()
     Experience.OptionsOpen = false
     Experience:RefreshOptions()
     if type(config) == "string" then
@@ -4519,13 +4592,13 @@ function Accessibility:Focus(root)
         return false
     end
     local native = Services.Input:GetFocusedTextBox()
-    if native == UI.Key or native == UI.ResultCopy then
+    if native == UI.Key or native == UI.ResultCopy or native == UI.CatalogSearch then
         native:ReleaseFocus(false)
     end
     self.Focused = root
     self.Keyboard = true
     self:EnsureVisible(root)
-    if root == UI.Key or root == UI.ResultCopy then
+    if root == UI.Key or root == UI.ResultCopy or root == UI.CatalogSearch then
         root:CaptureFocus()
     elseif self.GuiService then
         pcall(function()
@@ -4606,6 +4679,12 @@ function Accessibility:Order()
             add(UI.LicenseStore)
             add(UI.LicenseHaveKey)
         else
+            add(UI.CatalogSearch)
+            add(UI.CatalogClear)
+            for _, button in ipairs(UI.CatalogFilters or {}) do
+                add(button)
+            end
+            add(UI.CatalogReset)
             for _, card in ipairs(Cards) do
                 add(card.Select)
                 add(card.Open)
@@ -4648,7 +4727,7 @@ function Accessibility:Activate()
     if not self.Keyboard or not self:Available(root) then
         return false
     end
-    if root == UI.Key or root == UI.ResultCopy then
+    if root == UI.Key or root == UI.ResultCopy or root == UI.CatalogSearch then
         return false
     end -- Native TextBox owns Enter/IME.
     local entry = self.ByRoot[root]
@@ -4723,6 +4802,9 @@ function Accessibility:Build()
         end)
     end)
     self:Register(UI.Key, nil, AuthField.Interactive)
+    self:Register(UI.CatalogSearch, nil, function()
+        return canInteract() and State.Page == "Products"
+    end)
     UI.ResultCopy.Selectable = true
     self:Register(UI.ResultCopy, nil, function()
         return State.Modal == "result" and State.Activity == "Idle"
@@ -6664,6 +6746,9 @@ function AuthField:SetVisible(value)
 end
 local function authBusy(value)
     if value then
+        Cards:ReleaseSearch()
+    end
+    if value then
         Experience.OptionsOpen = false
     end
     UI.Validate:SetDisabled(value)
@@ -6680,6 +6765,7 @@ local function authBusy(value)
     Accessibility:Layout()
     UI.DiagnosticsToggle:SetDisabled(value)
     UI.AuthBusyTrack.Visible = value
+    Cards:PaintSearch()
     Experience:SetStage(value and "authChecking" or "authReady")
     Experience:RefreshOptions()
     if value then
@@ -7132,8 +7218,257 @@ local function buildAuth()
         table.clear(Stagecraft.Rests)
     end
 end
+function Cards:Fold(value)
+    local result = {}
+    for _, code in utf8.codes(safeText(value, 4096)) do
+        if
+            code >= 65 and code <= 90
+            or code >= 192 and code <= 214
+            or code >= 216 and code <= 222
+            or code >= 1040 and code <= 1071
+        then
+            code = code + 32
+        elseif code == 1025 then
+            code = 1105
+        end
+        if code >= 224 and code <= 229 then
+            code = 97
+        elseif code == 231 then
+            code = 99
+        elseif code >= 232 and code <= 235 then
+            code = 101
+        elseif code >= 236 and code <= 239 then
+            code = 105
+        elseif code == 241 then
+            code = 110
+        elseif code >= 242 and code <= 246 then
+            code = 111
+        elseif code >= 249 and code <= 252 then
+            code = 117
+        elseif code == 253 or code == 255 then
+            code = 121
+        elseif code == 1105 then
+            code = 1077
+        end
+        result[#result + 1] = utf8.char(code)
+    end
+    return table.concat(result)
+end
+function Cards:Matches(card)
+    local product = card.Product
+    if self.Filter == "ready" and not (Statuses[product.Status] or Statuses.Disabled).Launch then
+        return false
+    end
+    if self.Filter == "current" then
+        local current = GameMedia:PlaceId(game.PlaceId)
+        if not current or product.GameId ~= current then
+            return false
+        end
+    end
+    if self.QueryFolded == "" then
+        return true
+    end
+    local name, description = productName(product), localizedValue(product.Description, "")
+    local status = Localization:Get((Statuses[product.Status] or Statuses.Disabled).Key)
+    if card.SearchName ~= name or card.SearchDescription ~= description or card.SearchStatus ~= status then
+        card.SearchName, card.SearchDescription, card.SearchStatus = name, description, status
+        card.SearchIndex = self:Fold(
+            name
+                .. " "
+                .. localizedValue(product.FallbackName, "")
+                .. " "
+                .. tostring(product.Id)
+                .. " "
+                .. tostring(product.GameId or "")
+                .. " "
+                .. description
+                .. " "
+                .. status
+        )
+    end
+    for _, term in ipairs(self.Terms) do
+        if not string.find(card.SearchIndex, term, 1, true) then
+            return false
+        end
+    end
+    return true
+end
+function Cards:ReleaseSearch()
+    local focused = State.CatalogFocused
+    if UI.CatalogSearch and Services.Input:GetFocusedTextBox() == UI.CatalogSearch then
+        UI.CatalogSearch:ReleaseFocus(false)
+    end
+    State.CatalogFocused = false
+    if focused then
+        Responsive:Request()
+    end
+end
+function Cards:SetQuery(value)
+    local query = safeText(value, 160):gsub("[\r\n]", " ")
+    local changed = self.Query ~= query
+    self.Query = query
+    if UI.CatalogSearch.Text ~= query then
+        UI.CatalogSearch.Text = query
+    end
+    if not changed then
+        return
+    end
+    self.QueryFolded = self:Fold(query)
+    table.clear(self.Terms)
+    for term in self.QueryFolded:gmatch("%S+") do
+        self.Terms[#self.Terms + 1] = term
+    end
+    self:ResetHover()
+    UI.Catalog.CanvasPosition = Vector2.new(0, 0)
+    self:Layout()
+    self:Reveal(true)
+end
+function Cards:SetFilter(value)
+    if value ~= "all" and value ~= "ready" and value ~= "current" or self.Filter == value then
+        return
+    end
+    self.Filter = value
+    self:ResetHover()
+    UI.Catalog.CanvasPosition = Vector2.new(0, 0)
+    self:Layout()
+    self:Reveal(true)
+end
+function Cards:ResetSearch()
+    self.Filter = "all"
+    if self.Query ~= "" then
+        self:SetQuery("")
+    else
+        self:Layout()
+        self:Reveal(true)
+    end
+end
+function Cards:PaintSearch()
+    if not UI.CatalogSearch then
+        return
+    end
+    local enabled = canInteract() and State.Page == "Products"
+    UI.CatalogSearch.TextEditable, UI.CatalogSearch.Active = enabled, enabled
+    UI.CatalogClear.Root.Visible = self.Query ~= "" or self.Filter ~= "all"
+    UI.CatalogClear:SetDisabled(not enabled)
+    UI.CatalogReset:SetDisabled(not enabled)
+    UI.CatalogClear.Root:SetAttribute(
+        "ActionLabel",
+        Localization:Get(self.Query ~= "" and "catalogClear" or "catalogReset")
+    )
+    local width = UI.Products.AbsoluteSize.X / math.max(0.1, UI.Scale.Scale)
+    UI.CatalogCount.Text =
+        string.format(width >= 560 and Localization:Get("catalogCount") or "%d / %d", self.VisibleCount, #self)
+    for _, button in ipairs(UI.CatalogFilters) do
+        button.TextColor = self.Filter == button.Filter and Theme.Text or Theme.Secondary
+        button.Root:SetAttribute("Selected", self.Filter == button.Filter)
+        button:SetDisabled(not enabled)
+    end
+    Animation:To(UI.CatalogSearchStroke, {
+        Color = State.CatalogFocused and Theme.AccentText or Theme.Line,
+        Transparency = State.CatalogFocused and 0.18 or 0.6,
+    }, Motion.Hover)
+end
+function Cards:LayoutTools(width, height, hit)
+    local short = height < hit * 3 + 36
+    local countInline = width >= 260
+    local countWidth = width >= 560 and 160 or 64
+    local searchWidth = countInline and width - countWidth - 12 or width
+    place(UI.CatalogSearchWell, 0, 0, searchWidth, hit)
+    local icon = searchWidth >= 200
+    UI.CatalogSearchIcon.Root.Visible = icon
+    place(UI.CatalogSearchIcon.Root, 12, (hit - 18) / 2, 18, 18)
+    local inset = icon and 40 or 12
+    place(UI.CatalogSearch, inset, 0, math.max(1, searchWidth - inset - hit - 8), hit)
+    place(UI.CatalogClear.Root, searchWidth - hit, 0, hit, hit)
+    UI.CatalogClear.Icon.Root.Position = UDim2.new(0.5, -9, 0.5, 0)
+    local x, y = 0, hit + 8
+    for _, button in ipairs(UI.CatalogFilters) do
+        local bounds = TextMetrics:Get(Localization:Get(button.FilterKey), 12, Theme.Medium, 10000)
+        local size = math.min(width, math.max(hit, math.ceil(bounds and bounds.X or width) + 24))
+        if x > 0 and x + size > width then
+            x, y = 0, y + hit + 4
+        end
+        place(button.Root, x, y, size, hit)
+        button.Root.Visible = not short
+        if self.Filter == button.Filter then
+            local position, length = UDim2.fromOffset(x + 12, y + hit - 2), UDim2.fromOffset(math.max(8, size - 24), 2)
+            if self.IndicatorFilter ~= self.Filter and not Settings.ReducedMotion then
+                Animation:To(UI.CatalogFilterIndicator, { Position = position, Size = length }, Motion.Indicator)
+            elseif self.IndicatorPosition ~= position or self.IndicatorSize ~= length then
+                Animation:CancelTree(UI.CatalogFilterIndicator)
+                UI.CatalogFilterIndicator.Position, UI.CatalogFilterIndicator.Size = position, length
+            end
+            self.IndicatorPosition, self.IndicatorSize = position, length
+        end
+        x = x + size + 8
+    end
+    self.IndicatorFilter = self.Filter
+    -- Wrapped translated filters must leave a useful results viewport, not just fit a fixed breakpoint.
+    if y + hit + (countInline and 0 or 24) + 17 + math.min(hit * 2, 88) > height then
+        short = true
+    end
+    for _, button in ipairs(UI.CatalogFilters) do
+        button.Root.Visible = not short
+    end
+    UI.CatalogFilterIndicator.Visible = not short
+    local bottom = short and hit or y + hit
+    UI.CatalogCount.Visible = countInline or not short
+    if countInline then
+        place(UI.CatalogCount, searchWidth + 12, 0, countWidth, hit)
+    elseif not short then
+        place(UI.CatalogCount, 0, bottom + 4, width, 20)
+        bottom = bottom + 24
+    end
+    -- Yield decorative clearance before clipping the first reachable result target above a keyboard.
+    local gap = math.min(17, math.max(0, height - bottom - hit))
+    place(UI.CatalogToolbar, 0, 0, width, math.min(height, bottom + math.min(5, gap)))
+    UI.CatalogToolbarDivider.Visible = gap >= 5
+    place(UI.CatalogToolbarDivider, 0, math.max(0, math.min(height - 1, bottom + 4)), width, 1)
+    local top = math.min(height, bottom + gap)
+    place(UI.Catalog, 0, top, width, math.max(0, height - top))
+    place(UI.CatalogEmpty, 0, top, width, math.max(0, height - top))
+    local h = math.max(0, height - top)
+    local title = Localization:Get(#self == 0 and "catalogEmptyTitle" or "catalogNoResults")
+    local note = Localization:Get(#self == 0 and "catalogEmptyCopy" or "catalogNoResultsCopy")
+    UI.CatalogEmptyTitle.TextSize = width < 180 and 16 or 18
+    local titleHeight = math.max(
+        0,
+        math.min(
+            h - 8,
+            math.clamp(measure(title, UI.CatalogEmptyTitle.TextSize, Theme.Bold, math.max(1, width - 24)) + 4, 28, 84)
+        )
+    )
+    local noteHeight = math.clamp(measure(note, 12, Theme.Font, math.max(1, width - 32)) + 4, 24, 72)
+    local resetVisible = #self > 0 and h >= titleHeight + hit + 24
+    local noteVisible = h >= titleHeight + noteHeight + (resetVisible and hit + 28 or 16) + 24
+    local contentHeight = titleHeight + (noteVisible and noteHeight + 8 or 0) + (resetVisible and hit + 12 or 0)
+    local iconVisible = h >= contentHeight + 80
+    if iconVisible then
+        contentHeight = contentHeight + 56
+    end
+    local start = math.max(4, (h - contentHeight) / 2)
+    local titleY = start + (iconVisible and 56 or 0)
+    UI.CatalogEmptyIcon.Root.Visible = iconVisible
+    place(UI.CatalogEmptyIcon.Root, width / 2 - 20, titleY - 56, 40, 40)
+    place(UI.CatalogEmptyTitle, 12, titleY, math.max(1, width - 24), titleHeight)
+    UI.CatalogEmptyCopy.Visible = noteVisible
+    place(UI.CatalogEmptyCopy, 16, titleY + titleHeight + 8, math.max(1, width - 32), noteHeight)
+    UI.CatalogReset.Root.Visible = resetVisible
+    local resetWidth = math.max(44, math.min(width - 24, 200))
+    place(
+        UI.CatalogReset.Root,
+        (width - resetWidth) / 2,
+        titleY + titleHeight + (noteVisible and noteHeight + 8 or 0) + 12,
+        resetWidth,
+        hit
+    )
+end
+function Cards:ForgetIndex(card)
+    card.SearchName, card.SearchDescription, card.SearchStatus, card.SearchIndex = nil, nil, nil, nil
+end
 function Cards:Clear()
     for _, card in ipairs(self) do
+        self:ForgetIndex(card)
         card.Scope:Destroy()
         Localization:Forget(card.Root)
         card.Artwork:Destroy()
@@ -7149,6 +7484,7 @@ local function launchProduct(product)
     if not canInteract() then
         return false, "busy"
     end
+    Cards:ReleaseSearch()
     State.SelectedProduct = product
     local status = Statuses[product.Status] or Statuses.Disabled
     if not status.Launch then
@@ -7231,7 +7567,7 @@ function Cards:ResetHover()
     end
 end
 function Cards:Select(card)
-    if not canInteract() or State.Page ~= "Products" then
+    if not canInteract() or State.Page ~= "Products" or not card.Root.Visible then
         return false
     end
     local opening = self.Selected ~= card or not card.DetailsOpen
@@ -7286,7 +7622,7 @@ function Cards:Create(product, index)
         end,
         card.Scope,
         function()
-            return canInteract() and State.Page == "Products"
+            return canInteract() and State.Page == "Products" and card.Root.Visible
         end
     )
     card.Select.Root.BackgroundTransparency, card.Select.Label.Visible = 1, false
@@ -7350,19 +7686,19 @@ function Cards:Create(product, index)
         card.Footer,
         "Launch",
         "",
-        true,
-        "play",
+        status.Launch,
+        status.Launch and "play" or "info",
         function()
             launchProduct(product)
         end,
         card.Scope,
         function()
-            return canInteract() and State.Page == "Products"
+            return canInteract() and State.Page == "Products" and card.Root.Visible
         end
     )
     card.Open.BaseColor = Theme.Inactive
     card.Open:Apply()
-    Localization:Bind(card.Open.Label, "gameLaunch")
+    Localization:Bind(card.Open.Label, status.Launch and "gameLaunch" or "catalogViewStatus")
     card.Dim = frame(card.Root, "InactiveShade", Theme.Surface)
     card.Dim.BackgroundTransparency, card.Dim.Size, card.Dim.Active = 1, UDim2.fromScale(1, 1), false
     local function paint(other, hovered)
@@ -7386,7 +7722,7 @@ function Cards:Create(product, index)
         end
     end
     local function hover(value)
-        if value and (not canInteract() or State.Page ~= "Products") then
+        if value and (not canInteract() or State.Page ~= "Products" or not card.Root.Visible) then
             return
         end
         -- Only old/new hovered cards are painted. No all-catalog hover tween fanout.
@@ -7435,17 +7771,26 @@ function Cards:SettleReveal(card)
     end
     card.Root.GroupTransparency = 0
 end
-function Cards:Reveal()
+function Cards:Reveal(onlyNew)
     if not State.Alive or not State.Visible or State.Page ~= "Products" then
         return
     end
-    for index, card in ipairs(self) do
+    local shown = 0
+    for _, card in ipairs(self) do
         self:SettleReveal(card)
-        if not Settings.ReducedMotion and card.RestPosition then
+        if card.Root.Visible then
+            shown = shown + 1
+        end
+        if
+            card.Root.Visible
+            and not Settings.ReducedMotion
+            and card.RestPosition
+            and (not onlyNew or card.NewMatch)
+        then
             local token = card.RevealToken
             card.Root.GroupTransparency = 1
             card.Root.Position = card.RestPosition + UDim2.fromOffset(0, Motion.RevealDistance)
-            card.RevealThread = card.Scope:Later(math.min(index - 1, 5) * 0.025, function()
+            card.RevealThread = card.Scope:Later(math.min(shown - 1, 5) * 0.025, function()
                 card.RevealThread = nil
                 if State.Visible and State.Page == "Products" and token == card.RevealToken then
                     Animation:To(card.Root, { GroupTransparency = 0, Position = card.RestPosition }, Motion.Enter)
@@ -7459,137 +7804,175 @@ end
 function Cards:Layout()
     local scale = math.max(0.1, UI.Scale.Scale)
     local hit = math.max(44, math.ceil(44 / scale))
-    local width = UI.Catalog.AbsoluteSize.X / scale
+    local width = UI.Products.AbsoluteSize.X / scale
+    self:LayoutTools(width, UI.Products.AbsoluteSize.Y / scale, hit)
     local article, gap = width >= 600, 20
     local cardWidth = article and math.floor((width - gap) * 0.52) or width
     local copyWidth = article and width - cardWidth - gap or width
     local artHeight = math.clamp(math.floor(cardWidth * 9 / 16), article and 196 or 156, 252)
     local footerHeight, rowY = hit + 32, 0
+    local visibleCount = 0
     for index, card in ipairs(self) do
         self:SettleReveal(card)
-        local titleHeight = article
-                and math.clamp(measure(productName(card.Product), 24, Theme.Bold, copyWidth) + 4, 32, 60)
-            or footerHeight - 24
-        local statusY = titleHeight + 8
-        local copyY = statusY + 36
-        local inspectionHeight = article
-                and 24 + math.clamp(
-                    measure(
-                        localizedValue(
-                            card.Product.Description,
-                            Localization:Get(card.Product.GameId and "gameCopy" or "productCopy")
+        local visible = self:Matches(card)
+        card.NewMatch = visible and not card.Root.Visible
+        card.Root.Visible = visible
+        if not visible then
+            if self.Selected == card then
+                self.Selected = nil
+            end
+            card.DetailsOpen, card.Details.Visible = false, false
+            Animation:CancelTree(card.Details)
+        else
+            visibleCount = visibleCount + 1
+            local titleHeight = article
+                    and math.clamp(measure(productName(card.Product), 24, Theme.Bold, copyWidth) + 4, 32, 60)
+                or footerHeight - 24
+            local statusY = titleHeight + 8
+            local copyY = statusY + 36
+            local inspectionHeight = article
+                    and 24 + math.clamp(
+                        measure(
+                            localizedValue(
+                                card.Product.Description,
+                                Localization:Get(card.Product.GameId and "gameCopy" or "productCopy")
+                            ),
+                            12,
+                            Theme.Font,
+                            copyWidth
                         ),
-                        12,
-                        Theme.Font,
-                        copyWidth
-                    ),
-                    48,
-                    240
-                )
-            or 126
-        local baseHeight = article
-                and math.max(artHeight, copyY + (card.DetailsOpen and inspectionHeight or 60) + 16 + hit)
-            or artHeight + footerHeight
-        local disclosure = not article and card.DetailsOpen and 138 or 0
-        local cardHeight = baseHeight + disclosure + (article and 20 or 0)
-        card.Article = article
-        place(card.Root, 0, rowY, width, cardHeight)
-        card.RestPosition = card.Root.Position
-        card.Root.BackgroundTransparency = article and 1 or 0
-        Animation:To(card.Border, {
-            Color = card.DetailsOpen and Theme.Accent or Theme.Line,
-            Transparency = article and 1 or card.DetailsOpen and 0.1 or 0.35,
-        }, Motion.Hover)
-        place(card.Artwork.Root, 0, 0, cardWidth, artHeight)
-        place(card.Shade, 0, 0, cardWidth, artHeight)
-        place(card.Select.Root, 0, 0, cardWidth, artHeight)
-        place(card.InspectBadge, 12, artHeight - 40, 28, 28)
-        place(card.InspectGlyph.Root, 6, 6, 16, 16)
-        place(
-            card.Footer,
-            article and cardWidth + gap or 0,
-            article and 0 or artHeight,
-            copyWidth,
-            article and baseHeight or footerHeight
-        )
-        card.Footer.BackgroundTransparency = article and 1 or 0
-        card.FooterRim.Visible = not article
-        card.Divider.Visible = article
-        place(card.Divider, 0, cardHeight - 1, width, 1)
-        card.Logo.Root.Visible = false
-        local actionWidth = article and math.min(180, copyWidth) or cardWidth >= 340 and 116 or hit
-        card.Name.TextSize = article and 24 or 14
-        place(
-            card.Name,
-            article and 0 or 16,
-            article and 0 or 12,
-            article and copyWidth or math.max(1, cardWidth - actionWidth - 44),
-            titleHeight
-        )
-        card.Name.TextYAlignment = article and Enum.TextYAlignment.Top or Enum.TextYAlignment.Center
-        card.Synopsis.Visible = article and not card.DetailsOpen
-        place(card.Synopsis, 0, copyY, copyWidth, 60)
-        place(
-            card.Open.Root,
-            article and 0 or cardWidth - actionWidth - 12,
-            article and baseHeight - hit or 16,
-            actionWidth,
-            hit
-        )
-        card.Open.Label.Visible = actionWidth > hit
-        card.Open.Icon.Root.Position = actionWidth > hit and UDim2.new(0, 14, 0.5, 0) or UDim2.new(0.5, -9, 0.5, 0)
-        local dw, dh = article and copyWidth or cardWidth, inspectionHeight
-        card.DetailsRest = article and UDim2.fromOffset(cardWidth + gap, copyY) or UDim2.fromOffset(0, baseHeight + 12)
-        Animation:CancelTree(card.Details)
-        card.DetailsToken = (card.DetailsToken or 0) + 1
-        card.Details.Position, card.Details.Size = card.DetailsRest, UDim2.fromOffset(dw, dh)
-        card.Details.Visible, card.Details.GroupTransparency = card.DetailsOpen, card.DetailsOpen and 0 or 1
-        card.Details.BackgroundColor3 = Theme.Elevated
-        card.Details.BackgroundTransparency = article and 1 or 0.03
-        card.DetailsBorder.Transparency = article and 1 or 0.2
-        card.DetailsRim.Visible, card.DetailsName.Visible = not article, not article
-        place(card.DetailsTitle, article and 0 or 16, article and 0 or 12, dw - (article and 0 or 32), 22)
-        place(card.DetailsName, 16, article and 0 or 36, dw - 32, 24)
-        place(
-            card.Description,
-            article and 0 or 16,
-            article and 24 or 72,
-            dw - (article and 0 or 32),
-            math.max(32, dh - (article and 24 or 88))
-        )
-        local currentId = GameMedia:PlaceId(game.PlaceId)
-        local current = currentId ~= nil and card.Product.GameId == currentId
-        card.Current.Visible = current
-        local badgeKey = cardWidth < 220 and "currentBadgeShort" or "currentBadge"
-        Localization:Bind(card.CurrentLabel, badgeKey)
-        local badgeWidth = math.min(cardWidth - 76, math.max(80, #characters(Localization:Get(badgeKey)) * 5.8 + 20))
-        place(card.Current, 12, 12, badgeWidth, 26)
-        place(card.CurrentLabel, 6, 0, badgeWidth - 12, 26)
-        card.Status.Visible = article or not current or cardWidth >= 340
-        local statusText = Localization:Get((Statuses[card.Product.Status] or Statuses.Disabled).Key)
-        local maximum = math.max(40, cardWidth - (current and badgeWidth + 86 or 72))
-        local statusWidth = math.clamp(#characters(statusText) * 5.8 + 20, math.min(88, maximum), maximum)
-        card.Status.BackgroundTransparency = article and 1 or 0
-        card.StatusIconBox.BackgroundTransparency = article and 1 or 0
-        card.StatusLabel.TextXAlignment = article and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center
-        place(
-            card.Status,
-            article and cardWidth + gap + 26 or cardWidth - statusWidth - 50,
-            article and statusY or 12,
-            article and copyWidth - 26 or statusWidth,
-            26
-        )
-        place(card.StatusLabel, article and 0 or 6, 0, article and copyWidth - 26 or statusWidth - 12, 26)
-        place(card.StatusIconBox, article and cardWidth + gap - 4 or cardWidth - 38, article and statusY or 12, 26, 26)
-        place(card.StatusIcon.Root, 5, 5, 16, 16)
-        card.Select.Root:SetAttribute(
-            "ActionLabel",
-            Localization:Get("gameInspect") .. " · " .. productName(card.Product)
-        )
-        card.StatusIconBox:SetAttribute("ActionLabel", statusText)
-        rowY = rowY + cardHeight + gap
+                        48,
+                        240
+                    )
+                or 126
+            local baseHeight = article
+                    and math.max(artHeight, copyY + (card.DetailsOpen and inspectionHeight or 60) + 16 + hit)
+                or artHeight + footerHeight
+            local disclosure = not article and card.DetailsOpen and 138 or 0
+            local cardHeight = baseHeight + disclosure + (article and 20 or 0)
+            card.Article = article
+            place(card.Root, 0, rowY, width, cardHeight)
+            card.RestPosition = card.Root.Position
+            card.Root.BackgroundTransparency = article and 1 or 0
+            Animation:To(card.Border, {
+                Color = card.DetailsOpen and Theme.Accent or Theme.Line,
+                Transparency = article and 1 or card.DetailsOpen and 0.1 or 0.35,
+            }, Motion.Hover)
+            place(card.Artwork.Root, 0, 0, cardWidth, artHeight)
+            place(card.Shade, 0, 0, cardWidth, artHeight)
+            place(card.Select.Root, 0, 0, cardWidth, artHeight)
+            place(card.InspectBadge, 12, artHeight - 40, 28, 28)
+            place(card.InspectGlyph.Root, 6, 6, 16, 16)
+            place(
+                card.Footer,
+                article and cardWidth + gap or 0,
+                article and 0 or artHeight,
+                copyWidth,
+                article and baseHeight or footerHeight
+            )
+            card.Footer.BackgroundTransparency = article and 1 or 0
+            card.FooterRim.Visible = not article
+            card.Divider.Visible = article
+            place(card.Divider, 0, cardHeight - 1, width, 1)
+            card.Logo.Root.Visible = false
+            local actionWidth = article and math.min(180, copyWidth) or cardWidth >= 340 and 116 or hit
+            card.Name.TextSize = article and 24 or 14
+            place(
+                card.Name,
+                article and 0 or 16,
+                article and 0 or 12,
+                article and copyWidth or math.max(1, cardWidth - actionWidth - 44),
+                titleHeight
+            )
+            card.Name.TextYAlignment = article and Enum.TextYAlignment.Top or Enum.TextYAlignment.Center
+            card.Synopsis.Visible = article and not card.DetailsOpen
+            place(card.Synopsis, 0, copyY, copyWidth, 60)
+            place(
+                card.Open.Root,
+                article and 0 or cardWidth - actionWidth - 12,
+                article and baseHeight - hit or 16,
+                actionWidth,
+                hit
+            )
+            card.Open.Label.Visible = actionWidth > hit
+            card.Open.Icon.Root.Position = actionWidth > hit and UDim2.new(0, 14, 0.5, 0) or UDim2.new(0.5, -9, 0.5, 0)
+            local dw, dh = article and copyWidth or cardWidth, inspectionHeight
+            card.DetailsRest = article and UDim2.fromOffset(cardWidth + gap, copyY)
+                or UDim2.fromOffset(0, baseHeight + 12)
+            Animation:CancelTree(card.Details)
+            card.DetailsToken = (card.DetailsToken or 0) + 1
+            card.Details.Position, card.Details.Size = card.DetailsRest, UDim2.fromOffset(dw, dh)
+            card.Details.Visible, card.Details.GroupTransparency = card.DetailsOpen, card.DetailsOpen and 0 or 1
+            card.Details.BackgroundColor3 = Theme.Elevated
+            card.Details.BackgroundTransparency = article and 1 or 0.03
+            card.DetailsBorder.Transparency = article and 1 or 0.2
+            card.DetailsRim.Visible, card.DetailsName.Visible = not article, not article
+            place(card.DetailsTitle, article and 0 or 16, article and 0 or 12, dw - (article and 0 or 32), 22)
+            place(card.DetailsName, 16, article and 0 or 36, dw - 32, 24)
+            place(
+                card.Description,
+                article and 0 or 16,
+                article and 24 or 72,
+                dw - (article and 0 or 32),
+                math.max(32, dh - (article and 24 or 88))
+            )
+            local currentId = GameMedia:PlaceId(game.PlaceId)
+            local current = currentId ~= nil and card.Product.GameId == currentId
+            card.Current.Visible = current
+            local badgeKey = cardWidth < 220 and "currentBadgeShort" or "currentBadge"
+            Localization:Bind(card.CurrentLabel, badgeKey)
+            local badgeWidth =
+                math.min(cardWidth - 76, math.max(80, #characters(Localization:Get(badgeKey)) * 5.8 + 20))
+            place(card.Current, 12, 12, badgeWidth, 26)
+            place(card.CurrentLabel, 6, 0, badgeWidth - 12, 26)
+            card.Status.Visible = article or not current or cardWidth >= 340
+            local statusText = Localization:Get((Statuses[card.Product.Status] or Statuses.Disabled).Key)
+            local maximum = math.max(40, cardWidth - (current and badgeWidth + 86 or 72))
+            local statusWidth = math.clamp(#characters(statusText) * 5.8 + 20, math.min(88, maximum), maximum)
+            card.Status.BackgroundTransparency = article and 1 or 0
+            card.StatusIconBox.BackgroundTransparency = article and 1 or 0
+            card.StatusLabel.TextXAlignment = article and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center
+            place(
+                card.Status,
+                article and cardWidth + gap + 26 or cardWidth - statusWidth - 50,
+                article and statusY or 12,
+                article and copyWidth - 26 or statusWidth,
+                26
+            )
+            place(card.StatusLabel, article and 0 or 6, 0, article and copyWidth - 26 or statusWidth - 12, 26)
+            place(
+                card.StatusIconBox,
+                article and cardWidth + gap - 4 or cardWidth - 38,
+                article and statusY or 12,
+                26,
+                26
+            )
+            place(card.StatusIcon.Root, 5, 5, 16, 16)
+            card.Select.Root:SetAttribute(
+                "ActionLabel",
+                Localization:Get("gameInspect") .. " · " .. productName(card.Product)
+            )
+            card.StatusIconBox:SetAttribute("ActionLabel", statusText)
+            rowY = rowY + cardHeight + gap
+        end
     end
-    UI.Catalog.CanvasSize = UDim2.fromOffset(0, #self > 0 and rowY - gap + 2 or 0)
+    self.VisibleCount = visibleCount
+    UI.Catalog.CanvasSize = UDim2.fromOffset(0, visibleCount > 0 and rowY - gap + 2 or 0)
+    UI.Catalog.CanvasPosition = Vector2.new(
+        0,
+        math.clamp(
+            UI.Catalog.CanvasPosition.Y,
+            0,
+            math.max(0, UI.Catalog.CanvasSize.Y.Offset - UI.Catalog.Size.Y.Offset)
+        )
+    )
+    UI.CatalogEmpty.Visible = visibleCount == 0
+    UI.CatalogEmptyTitle.Text = Localization:Get(#self == 0 and "catalogEmptyTitle" or "catalogNoResults")
+    UI.CatalogEmptyCopy.Text = Localization:Get(#self == 0 and "catalogEmptyCopy" or "catalogNoResultsCopy")
+    self:PaintSearch()
+    if Accessibility then
+        Accessibility:Layout()
+    end
 end
 
 function Cards:Rebuild()
@@ -7605,6 +7988,78 @@ local function buildProducts()
     UI.Products = group(UI.Pages, "Products")
     UI.Products.Size = UDim2.fromScale(1, 1)
     UI.Products.Visible = false
+    UI.CatalogToolbar = frame(UI.Products, "DiscoveryRail")
+    UI.CatalogToolbar.BackgroundTransparency = 1
+    UI.CatalogSearchWell = frame(UI.CatalogToolbar, "SearchField", Theme.Input)
+    corner(UI.CatalogSearchWell, Theme.InputRadius)
+    Material:Tone(UI.CatalogSearchWell)
+    UI.CatalogSearchStroke = stroke(UI.CatalogSearchWell, Theme.Line, 1, 0.6)
+    UI.CatalogSearchIcon = Icon.new(UI.CatalogSearchWell, "search", Theme.Secondary, 18)
+    UI.CatalogSearch = create("TextBox", {
+        Name = "SearchGames",
+        Text = "",
+        ClearTextOnFocus = false,
+        MultiLine = false,
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        TextSize = 13,
+        Font = Theme.Medium,
+        TextColor3 = Theme.Text,
+        PlaceholderColor3 = Theme.Secondary,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ClipsDescendants = true,
+        Selectable = true,
+    }, UI.CatalogSearchWell)
+    pcall(function()
+        UI.CatalogSearch.ShowNativeInput = false
+    end)
+    Localization:Bind(UI.CatalogSearch, "catalogSearch", "PlaceholderText")
+    UI.CatalogClear = Button.new(
+        UI.CatalogSearchWell,
+        "ClearSearch",
+        "",
+        false,
+        "x",
+        function()
+            if Cards.Query ~= "" then
+                Cards:SetQuery("")
+            else
+                Cards:ResetSearch()
+            end
+        end,
+        Runtime,
+        function()
+            return canInteract() and State.Page == "Products"
+        end
+    )
+    UI.CatalogClear.Ghost, UI.CatalogClear.Label.Visible = true, false
+    UI.CatalogCount = label(UI.CatalogToolbar, "ResultCount", "", 12, Theme.Secondary, Theme.Medium)
+    UI.CatalogCount.TextXAlignment, UI.CatalogCount.TextTruncate = Enum.TextXAlignment.Right, Enum.TextTruncate.AtEnd
+    UI.CatalogFilters = {}
+    for index, spec in ipairs({ { "all", "catalogAll" }, { "ready", "catalogReady" }, { "current", "catalogCurrent" } }) do
+        local id, key = spec[1], spec[2]
+        local button = Button.new(
+            UI.CatalogToolbar,
+            "Filter_" .. id,
+            "",
+            false,
+            nil,
+            function()
+                Cards:SetFilter(id)
+            end,
+            Runtime,
+            function()
+                return canInteract() and State.Page == "Products"
+            end
+        )
+        button.Filter, button.FilterKey, button.Ghost = id, key, true
+        button.Label.TextSize = 12
+        Localization:Bind(button.Label, key)
+        UI.CatalogFilters[index] = button
+    end
+    UI.CatalogFilterIndicator = frame(UI.CatalogToolbar, "FilterIndicator", Theme.Accent)
+    UI.CatalogToolbarDivider = frame(UI.CatalogToolbar, "DiscoveryDivider", Theme.Edge)
+    UI.CatalogToolbarDivider.BackgroundTransparency = 0.4
     UI.Catalog = create("ScrollingFrame", {
         Name = "Catalog",
         BackgroundTransparency = 1,
@@ -7617,11 +8072,61 @@ local function buildProducts()
         VerticalScrollBarInset = Enum.ScrollBarInset.None,
         ElasticBehavior = Enum.ElasticBehavior.WhenScrollable,
     }, UI.Products)
-    UI.CatalogEmpty = localized(UI.Products, "Empty", "unavailable", 14, Theme.Secondary)
-    UI.CatalogEmpty.TextWrapped = true
-    UI.CatalogEmpty.TextXAlignment = Enum.TextXAlignment.Center
-    UI.CatalogEmpty.Size = UDim2.fromScale(1, 1)
+    UI.CatalogEmpty = frame(UI.Products, "EmptyState")
+    UI.CatalogEmpty.BackgroundTransparency = 1
+    UI.CatalogEmptyIcon = Icon.new(UI.CatalogEmpty, "search", Theme.Muted, 40)
+    UI.CatalogEmptyTitle = label(UI.CatalogEmpty, "Title", "", 18, Theme.Text, Theme.Bold)
+    UI.CatalogEmptyCopy = label(UI.CatalogEmpty, "Explanation", "", 12, Theme.Secondary)
+    UI.CatalogEmptyTitle.TextXAlignment, UI.CatalogEmptyCopy.TextXAlignment =
+        Enum.TextXAlignment.Center, Enum.TextXAlignment.Center
+    UI.CatalogEmptyTitle.TextWrapped, UI.CatalogEmptyCopy.TextWrapped = true, true
+    UI.CatalogEmptyTitle.TextTruncate, UI.CatalogEmptyCopy.TextTruncate =
+        Enum.TextTruncate.AtEnd, Enum.TextTruncate.AtEnd
+    UI.CatalogReset = Button.new(
+        UI.CatalogEmpty,
+        "ResetFilters",
+        "",
+        false,
+        nil,
+        function()
+            Cards:ResetSearch()
+        end,
+        Runtime,
+        function()
+            return canInteract() and State.Page == "Products"
+        end
+    )
+    UI.CatalogReset.Ghost, UI.CatalogReset.TextColor = true, Theme.AccentText
+    Localization:Bind(UI.CatalogReset.Label, "catalogReset")
     UI.CatalogEmpty.Visible = false
+    Runtime:Connect(UI.CatalogSearch:GetPropertyChangedSignal("Text"), function()
+        Cards:SetQuery(UI.CatalogSearch.Text)
+    end)
+    Runtime:Connect(UI.CatalogSearch.Focused, function()
+        if not canInteract() or State.Page ~= "Products" then
+            UI.CatalogSearch:ReleaseFocus(false)
+            return
+        end
+        State.CatalogFocused = true
+        if Accessibility.Keyboard then
+            Accessibility.Focused = UI.CatalogSearch
+        end
+        Cards:PaintSearch()
+        Responsive:Request()
+    end)
+    Runtime:Connect(UI.CatalogSearch.FocusLost, function()
+        State.CatalogFocused = false
+        Cards:PaintSearch()
+        Responsive:Request()
+    end)
+    Runtime.Finalizers[#Runtime.Finalizers + 1] = function()
+        Cards:ReleaseSearch()
+        table.clear(Cards.Terms)
+        Cards.Query, Cards.QueryFolded = "", ""
+        for _, card in ipairs(Cards) do
+            Cards:ForgetIndex(card)
+        end
+    end
 end
 function Navigation:PageRoot(page)
     return page == "Auth" and UI.Auth or page == "Products" and UI.Products or UI.LicensePanel
@@ -7689,6 +8194,7 @@ function Navigation:Go(page, force)
         end
         LicenseOffer:Build()
     end
+    Cards:ReleaseSearch()
     Button:Release(nil, true)
     Stagecraft:Cancel(true)
     closeLanguage()
@@ -8002,14 +8508,14 @@ local function safeSize()
     end
     local height = size.Y
     pcall(function()
-        if Services.Input.VirtualKeyboardVisible and State.Focused then
+        if Services.Input.VirtualKeyboardVisible and (State.Focused or State.CatalogFocused) then
             local position = Services.Input.VirtualKeyboardPosition
             if position.Y > 0 then
                 height = math.min(height, position.Y - UI.Stage.AbsolutePosition.Y - 8)
             end
         end
     end)
-    local floor = height < size.Y and State.Focused and 80 or 160
+    local floor = height < size.Y and (State.Focused or State.CatalogFocused) and 80 or 160
     return Vector2.new(math.max(160, size.X), math.max(floor, height))
 end
 function Responsive:Clamp(center, size, windowSize)
@@ -8030,7 +8536,7 @@ function Responsive:Update()
     local height = narrow and math.min(720, safe.Y - 20) or math.min(543, safe.Y - 20)
     local scale = math.min(Settings.UIScale, (safe.X - 20) / width, (safe.Y - 20) / height)
     local hit = math.max(44, math.ceil(44 / math.max(0.1, scale)))
-    local keyboardCompact = State.Focused and safe.Y < 220
+    local keyboardCompact = (State.Focused or State.CatalogFocused) and safe.Y < 220
     local expanded = width >= 820 and not narrow and not keyboardCompact
     local rail = keyboardCompact and 0 or expanded and 196 or math.max(56, hit + 8)
     local header = math.max(height < 400 and 54 or 64, hit + 8)
@@ -8292,6 +8798,7 @@ local function bindInput()
     end)
     Runtime:Connect(Services.Input.WindowFocusReleased, function()
         Button:Release(nil, true)
+        Cards:ReleaseSearch()
         LanguageController.Pressed, LanguageController.Hovered = false, false
         LanguageController:Paint()
         Cards:ResetHover()
@@ -8299,7 +8806,7 @@ local function bindInput()
     end)
     Runtime:Connect(Services.Input.InputBegan, function(input, processed)
         local focused = Services.Input:GetFocusedTextBox()
-        local ownedTextbox = focused == UI.Key or focused == UI.ResultCopy
+        local ownedTextbox = focused == UI.Key or focused == UI.ResultCopy or focused == UI.CatalogSearch
         local ownedSelection = Accessibility.Keyboard and Accessibility:Available(Accessibility.Focused)
         if input.KeyCode == Enum.KeyCode.Tab and (not processed or ownedTextbox or ownedSelection) then
             if focused and not ownedTextbox then
@@ -8311,6 +8818,14 @@ local function bindInput()
                     or Services.Input:IsKeyDown(Enum.KeyCode.RightShift)
             end)
             Accessibility:Tab(reverse)
+            return
+        end
+        if input.KeyCode == Enum.KeyCode.Escape and focused == UI.CatalogSearch and canInteract() then
+            if Cards.Query ~= "" then
+                Cards:SetQuery("")
+            else
+                Cards:ReleaseSearch()
+            end
             return
         end
         if processed or (focused and not ownedTextbox) then
@@ -8954,7 +9469,6 @@ function Loader:SetProducts(products)
     State.SelectedProduct = nil
     if UI.Catalog then
         Cards:Rebuild()
-        UI.CatalogEmpty.Visible = #normalized == 0
         Navigation:Refresh()
         Experience:RefreshGame()
     end
@@ -9202,6 +9716,7 @@ function Loader:SetUIScale(value)
     return self
 end
 function Loader:ShowPreferences(visible)
+    Cards:ReleaseSearch()
     if not canInteract() then
         return self, false
     end
@@ -9336,6 +9851,7 @@ function Loader:Show()
     return self
 end
 function Loader:Hide()
+    Cards:ReleaseSearch()
     if not State.Alive then
         return self
     end
