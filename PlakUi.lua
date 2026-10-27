@@ -87,6 +87,11 @@ local Motion = {
     RouteHover = TweenInfo.new(0.14, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
     RoutePress = TweenInfo.new(0.085, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
     Value = TweenInfo.new(0.16, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+    NoticeEnter = TweenInfo.new(0.20, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+    NoticeReflow = TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+    NoticeExit = TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+    NoticeDistance = 6,
+    NoticeExitDistance = 4,
 }
 local Settings = {
     Title = "PLAK",
@@ -145,6 +150,7 @@ local Diagnostics
 local ExternalAuth
 local LanguageController
 local Presence
+local Toasts
 local Scope = {}
 Scope.__index = Scope
 function Scope.new()
@@ -563,6 +569,9 @@ local function reconcile()
     -- Blocking overlays own the foreground; keep queued toast lifecycle intact.
     if UI.ToastLayer then
         UI.ToastLayer.Visible = State.Alive and State.Visible and not State.Modal
+        if not UI.ToastLayer.Visible and Toasts then
+            Toasts:Reset()
+        end
     end
     if Presence and UI.Restore and State.Activity == "Completing" then
         Presence:SetDockVisible(false)
@@ -1090,6 +1099,11 @@ function Button.new(parent, name, text, accent, iconName, onActivated, scope, al
 end
 local Translations = {
     en = {
+        noticeSuccess = "Completed",
+        noticeError = "Not completed",
+        noticeWarning = "Attention",
+        noticeDisabled = "Unavailable",
+        noticeInfo = "Information",
         brand = "PLAK",
         main = "Main",
         authorization = "User authorization",
@@ -1160,6 +1174,11 @@ local Translations = {
         restore = "Restore loader",
     },
     ru = {
+        noticeSuccess = "Готово",
+        noticeError = "Не завершено",
+        noticeWarning = "Внимание",
+        noticeDisabled = "Недоступно",
+        noticeInfo = "Информация",
         brand = "PLAK",
         main = "Главная",
         authorization = "Авторизация пользователя",
@@ -1230,6 +1249,11 @@ local Translations = {
         restore = "Открыть загрузчик",
     },
     es = {
+        noticeSuccess = "Completado",
+        noticeError = "No completado",
+        noticeWarning = "Atención",
+        noticeDisabled = "No disponible",
+        noticeInfo = "Información",
         brand = "PLAK",
         main = "Inicio",
         authorization = "Autorización de usuario",
@@ -1300,6 +1324,11 @@ local Translations = {
         restore = "Restaurar loader",
     },
     pt = {
+        noticeSuccess = "Concluído",
+        noticeError = "Não concluído",
+        noticeWarning = "Atenção",
+        noticeDisabled = "Indisponível",
+        noticeInfo = "Informação",
         brand = "PLAK",
         main = "Início",
         authorization = "Autorização do usuário",
@@ -2621,7 +2650,11 @@ local Modal = { Config = nil, ProgressHandle = nil, SurfaceGeometry = {} }
 local Navigation = {}
 local Stagecraft = { Token = 0, Tasks = {}, Rests = {}, Groups = {}, HeaderPage = "Auth" }
 local Responsive = {}
-local Toasts = { Items = {}, Queue = {} }
+Toasts = {
+    Items = {},
+    Queue = {},
+    Style = { Width = 392, Margin = 12, Gap = 8, Inset = 16, Header = 44, MaxHeight = 160 },
+}
 local Statuses = {
     Available = { Key = "available", Icon = "shield-check", Launch = true },
     LimitedAccess = { Key = "limited", Icon = "user-x", Launch = false },
@@ -2975,37 +3008,133 @@ local function measure(text, size, font, width)
     local value = TextMetrics:Get(text, size, font, width)
     return value and value.Y or math.ceil(#text * size * 0.54 / math.max(1, width)) * size * 1.3
 end
-function Toasts:Layout()
-    if not UI.Stage then
+function Toasts:Reset()
+    if not State.Alive then
         return
     end
-    local size = UI.Stage.AbsoluteSize
-    local width = math.min(380, math.max(160, size.X - 24))
-    local y = 12
     for _, item in ipairs(self.Items) do
-        local titleHeight = math.min(40, math.max(18, measure(item.Title, 14, Theme.Medium, width - 90)))
-        local subHeight = math.min(88, math.max(18, measure(item.Subtitle, 12, Theme.Font, width - 90)))
-        subHeight = math.min(subHeight, math.max(18, size.Y - titleHeight - 54))
-        item.Height = math.min(size.Y - 24, math.max(80, 24 + titleHeight + subHeight + 6))
-        item.Root.Size = UDim2.fromOffset(width, item.Height)
-        place(item.TitleLabel, 52, 13, width - 90, titleHeight)
-        place(item.SubLabel, 52, 17 + titleHeight, width - 90, subHeight)
-        place(item.Close.Root, width - 48, 6, 44, 44)
-        if not item.Closing then
-            Animation:To(item.Root, { Position = UDim2.fromOffset(size.X - width - 12, y) }, Motion.Enter)
+        local button = item.Close
+        if Button.Capture and Button.Capture.Control == button then
+            Button:Release(nil, true)
         end
-        y = y + item.Height + 10
+        if button.Hovered or button.Pressed then
+            button.Hovered, button.Pressed = false, false
+            button:Apply()
+        end
     end
-    -- Bound visible notifications to the available height, not a fixed desktop-only stack count.
-    if y > size.Y - 12 and #self.Items > 1 then
+end
+function Toasts:Bounds()
+    local size = UI.Stage.AbsoluteSize
+    local height = size.Y
+    pcall(function()
+        if Services.Input.VirtualKeyboardVisible then
+            local keyboard = Services.Input.VirtualKeyboardPosition
+            if keyboard.Y > 0 then
+                height = math.min(height, keyboard.Y - UI.Stage.AbsolutePosition.Y - 8)
+            elseif Services.Input.VirtualKeyboardSize.Y > 0 then
+                height = height - Services.Input.VirtualKeyboardSize.Y - 8
+            end
+        end
+    end)
+    return Vector2.new(math.max(1, size.X), math.max(44, height))
+end
+function Toasts:Limit(size)
+    return math.clamp(
+        math.floor((size.Y - self.Style.Margin * 2 + self.Style.Gap) / (self.Style.MaxHeight + self.Style.Gap)),
+        1,
+        4
+    )
+end
+function Toasts:Measure(item, size)
+    local style = self.Style
+    local width = math.max(1, math.min(style.Width, size.X - style.Margin * 2))
+    local maximum = math.max(44, math.min(style.MaxHeight, size.Y - style.Margin * 2))
+    local inset = math.min(style.Inset, math.max(4, width / 8))
+    local inner = math.max(1, width - inset * 2)
+    local top = math.min(style.Header + style.Gap, maximum)
+    local available = math.max(0, maximum - top - 12)
+    local title = item.Title ~= "" and math.clamp(measure(item.Title, 16, Theme.Medium, inner), 20, 40) or 0
+    local body = item.Subtitle ~= "" and math.clamp(measure(item.Subtitle, 13, Theme.Font, inner), 18, 52) or 0
+    local gap = title > 0 and body > 0 and 6 or 0
+    if title + gap + body > available then
+        title = math.min(title, math.max(20, available - (body > 0 and 18 + gap or 0)))
+        body = math.min(body, math.max(0, available - title - gap))
+        if body < 13 then
+            body, gap = 0, 0
+        end
+        title = math.min(title, available)
+    end
+    item.Height = math.min(maximum, top + title + gap + body + 12)
+    item.Root.Size = UDim2.fromOffset(width, item.Height)
+    place(item.Header, 0, 0, width, style.Header)
+    place(item.HeaderLine, inset, style.Header - 1, inner, 1)
+    place(item.Icon.Root, inset, 13, 18, 18)
+    place(item.TitleLabel, inset, top, inner, title)
+    place(item.SubLabel, inset, top + title + gap, inner, body)
+    item.TitleLabel.Visible, item.SubLabel.Visible = title > 0, body > 0
+    local copy = Localization:Get("close")
+    local bounds = TextMetrics:Get(copy, 12, Theme.Medium, 10000)
+    local action = math.min(width, math.max(88, math.ceil(bounds and bounds.X or 64) + 48))
+    local actionX = math.max(0, width - action - 6)
+    place(item.Close.Root, actionX, 0, action, 44)
+    item.Close.Root:SetAttribute("ActionLabel", copy)
+    item.Close.Label.TextSize = 12
+    item.Close.Label.TextXAlignment = Enum.TextXAlignment.Right
+    place(item.Close.Label, actionX + 8, 0, math.max(1, action - 44), 44)
+    item.Close.Icon.Root.Position = UDim2.fromOffset(width - 33, 22)
+    item.Close.Icon.Root.Size = UDim2.fromOffset(14, 14)
+    local caption = TextMetrics:Get(Localization:Get(item.StatusKey), 12, Theme.Medium, 10000)
+    local captionWidth = math.max(0, actionX - inset - 28 - 8)
+    item.StatusLabel.Visible = caption ~= nil and caption.X <= captionWidth
+    place(item.StatusLabel, inset + 28, 10, captionWidth, 24)
+    return width
+end
+function Toasts:Layout()
+    if not State.Alive or not UI.Stage or self.LayoutBusy then
+        return
+    end
+    self.LayoutBusy = true
+    local size = self:Bounds()
+    local changed = self.LastBounds ~= size
+    self.LastBounds = size
+    local limit = self:Limit(size)
+    while #self.Items > limit do
         self:Close(self.Items[1], true)
     end
+    local bottom = size.Y - self.Style.Margin
+    for index = #self.Items, 1, -1 do
+        local item = self.Items[index]
+        local width = self:Measure(item, size)
+        local rest =
+            UDim2.fromOffset(math.max(0, size.X - width - self.Style.Margin), math.max(0, bottom - item.Height))
+        if changed and not item.Fresh then
+            -- New native bounds own geometry immediately; only normal stack changes glide.
+            Animation:CancelProperty(item.Root, "Position")
+            item.Root.Position = rest
+        elseif not item.Closing then
+            if item.Fresh then
+                item.Fresh = false
+                item.Root.Position = rest + UDim2.fromOffset(0, Settings.ReducedMotion and 0 or Motion.NoticeDistance)
+                Animation:To(item.Root, { Position = rest }, Motion.NoticeEnter)
+            else
+                Animation:To(item.Root, { Position = rest }, Motion.NoticeReflow)
+            end
+        end
+        bottom = bottom - item.Height - self.Style.Gap
+    end
+    self.LayoutBusy = false
+    self:Drain()
 end
 function Toasts:Close(item, immediate)
     if item.Removed or (item.Closing and not immediate) then
         return
     end
     item.Closing = true
+    if Button.Capture and Button.Capture.Control == item.Close then
+        Button:Release(nil, true)
+    end
+    item.Close.Hovered, item.Close.Pressed = false, false
+    item.Close:Apply()
     item.Scope:Cancel(item.Timer)
     local function remove()
         if item.Removed then
@@ -3027,82 +3156,110 @@ function Toasts:Close(item, immediate)
     if immediate then
         remove()
     else
+        -- Position and opacity have distinct owners: reflow cannot cancel removal or the entry fade.
         Animation:To(item.Root, {
-            GroupTransparency = 1,
-            Position = item.Root.Position + UDim2.fromOffset(Settings.ReducedMotion and 0 or 8, 0),
-        }, Motion.Exit, remove)
+            Position = item.Root.Position
+                + UDim2.fromOffset(Settings.ReducedMotion and 0 or Motion.NoticeExitDistance, 0),
+        }, Motion.NoticeExit)
+        Animation:To(item.Root, { GroupTransparency = 1 }, Motion.NoticeExit, remove)
     end
 end
 function Toasts:Drain()
-    if not State.Alive or not UI.ToastLayer then
+    if not State.Alive or not UI.ToastLayer or self.Draining or self.LayoutBusy then
         return
     end
-    local limit = math.clamp(math.floor(UI.Stage.AbsoluteSize.Y / 120), 1, 4)
+    self.Draining = true
+    local limit = self:Limit(self:Bounds())
     while #self.Items < limit and #self.Queue > 0 do
         self:Create(table.remove(self.Queue, 1))
     end
+    self.Draining = false
 end
 function Toasts:Create(config)
+    local kind = config.Type
+    local status = kind == "success" and "noticeSuccess"
+        or kind == "error" and "noticeError"
+        or kind == "warning" and "noticeWarning"
+        or kind == "disabled" and "noticeDisabled"
+        or "noticeInfo"
+    local semantic = kind == "success" and Theme.Success
+        or kind == "error" and Theme.Danger
+        or (kind == "warning" or kind == "disabled") and Theme.Warning
+        or Theme.AccentText
     local item = {
         Scope = Scope.new(),
-        Title = cleanMessage(config.Title, Localization:Get("info")),
+        Title = cleanMessage(config.Title, ""),
         Subtitle = cleanMessage(config.Subtitle, ""),
+        StatusKey = status,
         Closing = false,
+        Ready = false,
+        Fresh = true,
     }
     item.Root = group(UI.ToastLayer, "Toast")
     item.Root.BackgroundColor3 = Theme.Elevated
     item.Root.BackgroundTransparency = 0
     item.Root.GroupTransparency = 1
-    item.Root.Position = UDim2.fromOffset(UI.Stage.AbsoluteSize.X, 12)
     corner(item.Root, Theme.PanelRadius)
-    stroke(item.Root, Theme.Line, 1, 0.25)
-    Material:Panel(item.Root)
-    local accent = config.Type == "warning" and Theme.Warning
-        or config.Type == "error" and Theme.Danger
-        or config.Type == "success" and Theme.Success
-        or Theme.AccentText
-    local rail = frame(item.Root, "Accent", accent)
-    place(rail, 0, 14, 2, 48)
-    corner(rail, 2)
-    local icon = Icon.new(
-        item.Root,
+    stroke(item.Root, Theme.WindowEdge, 1, 0.45)
+    item.Header = frame(item.Root, "StatusHeader", Theme.Surface:Lerp(Theme.Elevated, 0.65))
+    item.HeaderLine = frame(item.Header, "HeaderDivider", Theme.Line)
+    item.HeaderLine.BackgroundTransparency = 0.65
+    item.StatusLabel = localized(item.Header, "Status", status, 12, semantic:Lerp(Theme.Text, 0.22), Theme.Medium)
+    item.StatusLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    item.Icon = Icon.new(
+        item.Header,
         config.Icon
             or (
-                config.Type == "success" and "check"
-                or config.Type == "error" and "shield-alert"
-                or config.Type == "warning" and "warning"
+                kind == "success" and "check"
+                or kind == "error" and "shield-alert"
+                or kind == "warning" and "warning"
+                or kind == "disabled" and "user-x"
                 or "info"
             ),
-        accent,
-        22
+        semantic,
+        18
     )
-    place(icon.Root, 16, 17, 22, 22)
-    item.TitleLabel = label(item.Root, "Title", item.Title, 14, Theme.Text, Theme.Medium)
+    item.TitleLabel = label(item.Root, "Title", item.Title, 16, Theme.Text, Theme.Medium)
     item.TitleLabel.TextWrapped = true
+    item.TitleLabel.TextYAlignment = Enum.TextYAlignment.Top
     item.TitleLabel.TextTruncate = Enum.TextTruncate.AtEnd
-    item.SubLabel = label(item.Root, "Subtitle", item.Subtitle, 12, Theme.Secondary)
+    item.SubLabel = label(item.Root, "Subtitle", item.Subtitle, 13, Theme.Secondary)
     item.SubLabel.TextWrapped = true
     item.SubLabel.TextYAlignment = Enum.TextYAlignment.Top
     item.SubLabel.TextTruncate = Enum.TextTruncate.AtEnd
     item.Close = Button.new(
-        item.Root,
+        item.Header,
         "Dismiss",
         "",
         false,
-        "x",
+        "control-close",
         function()
             self:Close(item)
         end,
         item.Scope,
         function()
-            return State.Alive
+            return State.Alive and State.Visible and not State.Modal and item.Ready and not item.Closing
         end
     )
-    item.Close.Root.BackgroundTransparency = 1
-    item.Close.Icon.Root.Position = UDim2.new(0.5, -9, 0.5, 0)
+    -- Visual ink can enter with the panel; its independent hit target exists only after reveal.
+    item.Close.Label.Parent, item.Close.Icon.Root.Parent = item.Header, item.Header
+    item.Close.Label.ZIndex, item.Close.Icon.Root.ZIndex = 2, 2
+    item.Close.Root.Visible = false
+    item.Close.Ghost, item.Close.TextColor = true, Theme.Secondary
+    item.Close:Apply()
+    Localization:Bind(item.Close.Label, "close")
+    item.Close.Root:SetAttribute("ActionLabel", Localization:Get("close"))
+    item.Scope.Finalizers[#item.Scope.Finalizers + 1] = function()
+        Localization:Forget(item.Root)
+    end
     self.Items[#self.Items + 1] = item
     self:Layout()
-    Animation:To(item.Root, { GroupTransparency = 0 }, Motion.Enter)
+    Animation:To(item.Root, { GroupTransparency = 0 }, Motion.NoticeEnter, function()
+        if item.Scope.Alive and not item.Closing then
+            item.Ready = true
+            item.Close.Root.Visible = true
+        end
+    end)
     item.Timer = item.Scope:Later(math.clamp(finite(config.Duration, 4), 0.5, 30), function()
         self:Close(item)
     end)
@@ -9630,6 +9787,7 @@ local function bindInput()
         HeaderChrome:Reset()
         Navigation:ResetHover()
         Experience.Sheet:Reset()
+        Toasts:Reset()
         Presence:ResetDock()
         Cards:ReleaseSearch()
         LanguageController.Pressed, LanguageController.Hovered = false, false
