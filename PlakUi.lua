@@ -2735,31 +2735,6 @@ function GameMedia:Get(url, json, valid)
     end)
     return decoded and type(data) == "table" and data or nil
 end
-function GameMedia:Materialize(url, id, kind, valid)
-    local host = type(url) == "string" and url:match("^https://([^/]+)/")
-    local write, custom = capability("writefile"), capability("getcustomasset") or capability("getsynasset")
-    if
-        not host
-        or not (host == "rbxcdn.com" or host:match("^[%w%-%.]+%.rbxcdn%.com$"))
-        or not write
-        or not custom
-        or not valid()
-    then
-        return nil
-    end
-    local bytes = self:Get(url, false, valid)
-    if not bytes or bytes:sub(1, 8) ~= "\137PNG\13\10\26\10" or not valid() then
-        return nil
-    end
-    local ok, image = pcall(function()
-        local path = "PlakUi_" .. kind .. "_" .. string.format("%.0f", id) .. "_" .. self.Serial .. ".png"
-        if not valid() or write(path, bytes) == false or not valid() then
-            return nil
-        end
-        return custom(path)
-    end)
-    return ok and valid() and assetId(image) or nil
-end
 function GameMedia:Resolve(placeId, valid, partial)
     local info = partial or { Image = self:Thumbnail(placeId) }
     local current = placeId == self:PlaceId(game.PlaceId)
@@ -2778,20 +2753,6 @@ function GameMedia:Resolve(placeId, valid, partial)
         if current then
             -- The Home identity is a universe GameIcon, NEVER a place's rectangular thumbnail.
             info.Icon = self:GameIcon(universeId)
-            local icons = self:Get(
-                "https://thumbnails.roblox.com/v1/games/icons?universeIds="
-                    .. suffix
-                    .. "&size=150x150&format=Png&isCircular=false",
-                true,
-                valid
-            )
-            local icon = icons and type(icons.data) == "table" and icons.data[1]
-            if type(icon) == "table" and tonumber(icon.targetId) == universeId and icon.state == "Completed" then
-                info.Icon = self:Materialize(icon.imageUrl, universeId, "icon", valid) or info.Icon
-            end
-            if valid() and Experience then
-                Experience:RefreshGame()
-            end
         end
         local games = self:Get("https://games.roblox.com/v1/games?universeIds=" .. suffix, true, valid)
         local item = games and type(games.data) == "table" and games.data[1]
@@ -2803,20 +2764,6 @@ function GameMedia:Resolve(placeId, valid, partial)
         then
             info.Name = safeText(item.name, 160)
         end
-        local thumbnails = self:Get(
-            "https://thumbnails.roblox.com/v1/games/multiget/thumbnails?universeIds="
-                .. suffix
-                .. "&countPerUniverse=1&defaults=true&size=768x432&format=Png&isCircular=false",
-            true,
-            valid
-        )
-        local set = thumbnails and type(thumbnails.data) == "table" and thumbnails.data[1]
-        local thumb = type(set) == "table"
-            and tonumber(set.universeId) == universeId
-            and type(set.thumbnails) == "table"
-            and set.thumbnails[1]
-        local url = type(thumb) == "table" and thumb.state == "Completed" and thumb.imageUrl
-        info.Image = self:Materialize(url, placeId, "game", valid) or info.Image
     end
     if not info.Name and valid() then
         local ok, data = pcall(function()
@@ -2846,28 +2793,59 @@ function GameMedia:Apply(card, info)
     Localization:Bind(card.Name, "game", "Text", function()
         return productName(product)
     end)
-    if UI.Breadcrumb then
-        Navigation:Refresh()
-    end
-    if Experience then
+    local currentId = self:PlaceId(game.PlaceId)
+    local current = currentId ~= nil and self:PlaceId(product.GameId) == currentId
+    if current and Experience then
         Experience:RefreshGame()
     end
-    if UI.CatalogSearch then
-        Responsive:Request()
+    if not State.Visible then
+        return
     end
+    if current then
+        Responsive:Request()
+    elseif State.Page == "Products" and not self.CatalogLayoutTask then
+        -- Metadata changes the catalog's measured copy/search index, not the route or window.
+        self.CatalogLayoutTask = Runtime:Later(0, function()
+            self.CatalogLayoutTask = nil
+            if State.Visible and State.Page == "Products" then
+                Cards:Layout()
+            end
+        end)
+    end
+end
+function GameMedia:QueueIndex()
+    if not State.Visible then
+        return nil
+    end
+    if State.Page == "Products" then
+        return #self.Queue > 0 and 1 or nil
+    end
+    -- Home needs only this experience. Keep the rest queued until its catalog is requested.
+    local current = self:PlaceId(game.PlaceId)
+    for index, id in ipairs(self.Queue) do
+        if id == current then
+            return index
+        end
+    end
+    return nil
 end
 function GameMedia:Drain()
     if
         not State.Alive
         or not self.Ready
         or self.Active
+        or self.NextTask
         or #self.Queue == 0
         or State.Activity == "Validating"
         or State.Activity == "Completing"
     then
         return
     end
-    local id = table.remove(self.Queue, 1)
+    local index = self:QueueIndex()
+    if not index then
+        return
+    end
+    local id = table.remove(self.Queue, index)
     self.Serial = self.Serial + 1
     local job = { Id = id, Scope = Scope.new(), Serial = self.Serial, Partial = { Image = self:Thumbnail(id) } }
     self.Active = job
@@ -2890,7 +2868,13 @@ function GameMedia:Drain()
                 self:Apply(card, info)
             end
         end
-        self:Drain()
+        if self:QueueIndex() then
+            -- One owned yield between jobs: fast/cached responses cannot burst in one frame.
+            self.NextTask = Runtime:Later(0.08, function()
+                self.NextTask = nil
+                self:Drain()
+            end)
+        end
     end
     job.Scope:Later(12, function()
         finish(nil)
@@ -2906,6 +2890,25 @@ function GameMedia:Drain()
         end
     end)
 end
+function GameMedia:Unwatch(card)
+    local id = self.Bindings[card]
+    self.Bindings[card] = nil
+    if not id or self.Active and self.Active.Id == id then
+        return
+    end
+    for _, otherId in pairs(self.Bindings) do
+        if otherId == id then
+            return
+        end
+    end
+    -- Rebuilding a hidden catalog must not accumulate requests for discarded cards.
+    for index = #self.Queue, 1, -1 do
+        if self.Queue[index] == id then
+            table.remove(self.Queue, index)
+        end
+    end
+    self.Pending[id] = nil
+end
 function GameMedia:Watch(card)
     local id = self:PlaceId(card.Product.GameId)
     if not id then
@@ -2913,7 +2916,7 @@ function GameMedia:Watch(card)
     end
     self.Bindings[card] = id
     card.Scope.Finalizers[#card.Scope.Finalizers + 1] = function()
-        self.Bindings[card] = nil
+        self:Unwatch(card)
     end
     local cached = self.Cache[id]
     if cached and cached.Expires > os.clock() then
@@ -2927,6 +2930,9 @@ function GameMedia:Watch(card)
     self:Drain()
 end
 function GameMedia:Destroy()
+    Runtime:Cancel(self.NextTask)
+    Runtime:Cancel(self.CatalogLayoutTask)
+    self.NextTask, self.CatalogLayoutTask = nil, nil
     if self.Active then
         self.Active.Scope:Destroy()
     end
@@ -4600,7 +4606,10 @@ local function buildShell(parent)
     UI.BrandLogo.Root.Parent, UI.Brand.Parent = UI.Sidebar, UI.Sidebar
     UI.SidebarDivider = frame(UI.Sidebar, "SidebarDivider", Theme.Edge)
     UI.HeaderDivider = frame(UI.Header, "HeaderDivider", Theme.Edge)
-    UI.PageHeading = group(UI.Header, "RouteHeading")
+    -- Two labels can fade natively; a full header render texture is unnecessary.
+    UI.PageHeading = frame(UI.Header, "RouteHeading")
+    UI.PageHeading.BackgroundTransparency = 1
+    UI.PageHeading.ClipsDescendants = true
     UI.PageDescription = localized(UI.PageHeading, "PageDescription", "pageAccess", 12, Theme.Secondary)
     UI.PageDescription.TextTruncate = Enum.TextTruncate.AtEnd
     UI.RailSurface = frame(UI.Sidebar, "NavigationSurface", Theme.Sidebar)
@@ -6999,8 +7008,13 @@ function Experience:FitButton(button)
     end
     local inset = button.Track and 52 or button.Icon and button.Icon.Root.Visible and 44 or 16
     local width = math.max(1, button.Root.Size.X.Offset - inset)
-    button.Label.TextSize = width < 120 and 12 or 13
-    button.Label.TextWrapped = true
+    local size = width < 120 and 12 or 13
+    if button.Label.TextSize ~= size then
+        button.Label.TextSize = size
+    end
+    if not button.Label.TextWrapped then
+        button.Label.TextWrapped = true
+    end
 end
 function Experience:Layout(width, y)
     local hit = math.max(44, math.ceil(44 / math.max(0.1, State.Layout.Scale or 1)))
@@ -9089,9 +9103,13 @@ function Stagecraft:Cancel(settle)
     end
     if UI.PageHeading then
         Animation:CancelProperty(UI.PageHeading, "Position")
-        Animation:CancelProperty(UI.PageHeading, "GroupTransparency")
+        for _, text in ipairs({ UI.Breadcrumb, UI.PageDescription }) do
+            Animation:CancelProperty(text, "TextTransparency")
+            if settle then
+                text.TextTransparency = 0
+            end
+        end
         if settle and UI.PageHeading.Parent then
-            UI.PageHeading.GroupTransparency = 0
             UI.PageHeading.Position = self.Rests[UI.PageHeading] or UDim2.fromOffset(0, 0)
         end
     end
@@ -9106,8 +9124,16 @@ function Stagecraft:Place(root, x, y, width, height)
             end
         end
         Animation:CancelProperty(root, "Position")
-        Animation:CancelProperty(root, "GroupTransparency")
-        root.Position, root.GroupTransparency = rest, 0
+        if root == UI.PageHeading then
+            for _, text in ipairs({ UI.Breadcrumb, UI.PageDescription }) do
+                Animation:CancelProperty(text, "TextTransparency")
+                text.TextTransparency = 0
+            end
+        else
+            Animation:CancelProperty(root, "GroupTransparency")
+            root.GroupTransparency = 0
+        end
+        root.Position = rest
         root.Size = size
     end
     self.Rests[root] = rest
@@ -9150,8 +9176,12 @@ function Stagecraft:Header(page)
         return
     end
     local target = self.Rests[root] or UDim2.fromOffset(0, 0)
-    root.Position, root.GroupTransparency = target + UDim2.fromOffset(Motion.StageDistance, 0), 1
-    Animation:To(root, { Position = target, GroupTransparency = 0 }, Motion.Page)
+    root.Position = target + UDim2.fromOffset(Motion.StageDistance, 0)
+    Animation:To(root, { Position = target }, Motion.Page)
+    for _, text in ipairs({ UI.Breadcrumb, UI.PageDescription }) do
+        text.TextTransparency = 1
+        Animation:To(text, { TextTransparency = 0 }, Motion.Page)
+    end
 end
 local function displayFontSize(text, width, maximum)
     local size = math.min(maximum, math.floor(width / math.max(1, #characters(text))))
@@ -9280,7 +9310,8 @@ function Responsive:Auth(width, height, narrow)
     place(UI.GetKey.Root, paired and verifyWidth + 12 or 0, getKeyY, paired and secondaryWidth or left, hit)
     UI.GetKey.TextColor = Theme.AccentText
     UI.GetKey:Apply()
-    UI.GetKey.Label.TextSize, UI.GetKey.Label.TextWrapped = 13, true
+    -- FitButton owns the final font size; do not force 13 then reset to 12.
+    UI.GetKey.Label.TextWrapped = true
     UI.GetKey.Icon.Root.Visible = false
     UI.GetKey.Label.Position, UI.GetKey.Label.Size = UDim2.fromOffset(0, 0), UDim2.fromScale(1, 1)
     Community:Measure(left)
@@ -9342,6 +9373,7 @@ function Responsive:Update()
     if not State.Alive or not UI.Pages then
         return
     end
+    self.StageSize, self.StageOrigin = UI.Stage.AbsoluteSize, UI.Stage.AbsolutePosition
     local oldLayout = State.Layout
     local safe = safeSize()
     local narrow = (safe.X < 620 and safe.X / safe.Y < 1.35) or (safe.X < 850 and safe.X / safe.Y < 1.22)
@@ -9487,6 +9519,7 @@ function Responsive:Update()
     Modal:Layout(true)
     Toasts:Layout()
     Accessibility:Layout()
+    GameMedia:Drain()
 end
 
 function Responsive:Request()
@@ -9498,16 +9531,27 @@ function Responsive:Request()
         self:Update()
     end)
 end
+function Responsive:StageChanged()
+    if not State.Alive then
+        return
+    end
+    local size, origin = UI.Stage.AbsoluteSize, UI.Stage.AbsolutePosition
+    if self.StageSize == size and self.StageOrigin == origin then
+        return
+    end
+    self.StageSize, self.StageOrigin = size, origin
+    self:Request()
+end
 local function pointer(input)
     local value = input.Position
     return Vector2.new(value.X, value.Y) - UI.Stage.AbsolutePosition
 end
 local function bindInput()
     Runtime:Connect(UI.Stage:GetPropertyChangedSignal("AbsoluteSize"), function()
-        Responsive:Request()
+        Responsive:StageChanged()
     end)
     Runtime:Connect(UI.Stage:GetPropertyChangedSignal("AbsolutePosition"), function()
-        Responsive:Request()
+        Responsive:StageChanged()
     end)
     for _, property in ipairs({ "VirtualKeyboardVisible", "VirtualKeyboardPosition", "VirtualKeyboardSize" }) do
         pcall(function()
