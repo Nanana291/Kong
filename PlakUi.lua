@@ -10425,7 +10425,7 @@ function Loader:SetProducts(products)
     assert(type(products) == "table", "SetProducts expects an array of product configurations")
     local normalized, used = {}, {}
     for index, config in ipairs(products) do
-        if index > 48 then
+        if index > 128 then
             break
         end
         if type(config) == "table" then
