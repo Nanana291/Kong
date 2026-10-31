@@ -23,7 +23,7 @@
 -- Toggle Locked=true stays OFF and opens a Premium callout; SetLocked(false) restores interaction.
 -- Buy Premium always copies the Plak SellAuth store link; it never auto-unlocks.
 -- Legacy OnBuyPremium options remain accepted but do not override this fixed purchase action.
--- Themes: Neron Dark / Graphite / OLED / Light; locales: English / Spanish / Russian / Portuguese.
+-- Themes: Neron Dark / Graphite / OLED / Light / Abyss / Ember; nine built-in locales via GetLanguages().
 -- AddNumericStepper returns numeric state with +/- controls and SetBounds; same Flag/hydration path.
 -- AddDynamicSection owns retained controls and Loader/OnLoaded with skeleton/empty/error/retry states.
 -- Dynamic request state/data are not profile state; callbacks remain consumer runtime owners.
@@ -190,7 +190,15 @@ local T = {
         Value = 12,
         PopoverOption = 12,
     },
-    Motion = { Micro = 0.10, Fast = 0.16, Normal = 0.18, Structural = 0.24 },
+    Settings = { Header = 76, Rail = 176, NavRow = 54, Inset = 16, Gap = 12, Card = 150, Language = 74 },
+    Motion = {
+        Micro = 0.10,
+        Fast = 0.16,
+        Normal = 0.18,
+        Structural = 0.24,
+        SettingsPage = 0.18,
+        SettingsIndicator = 0.18,
+    },
     Z = {
         Shell = 1,
         Content = 3,
@@ -2318,9 +2326,9 @@ function Components.row(page, config, kind)
     end, function()
         return self:_available() and (not self.sectionGroup or not self.sectionGroup.promoted)
     end)
-    if not page.system then
-        Locale.enroll(w, self, config, "Control")
-    end
+    -- System names are already localized by SettingsUI's key registry. Enroll their
+    -- endpoints too, but never reinterpret profile names, text values or callback state.
+    Locale.enroll(w, self, page.system and { Localize = false } or config, "Control")
     w:_indexChanged()
     return self
 end
@@ -9777,8 +9785,8 @@ function Premium.layoutDock(w, bodyX, bodyY, width, height)
         return 0
     end
     local hit = math.max(44, math.ceil(44 / math.max(0.1, w.scale)))
-    local full = width >= 540 and height >= 400
-    local dh = full and 96 + hit or hit
+    local full = false
+    local dh = hit
     dock.Root.Visible = w.settingsCategory ~= "Membership" and height >= dh + 92
     if dock.Root.Visible then
         dock.Root.Position, dock.Root.Size = UDim2.fromOffset(bodyX, bodyY + height - dh), UDim2.fromOffset(width, dh)
@@ -10294,7 +10302,96 @@ Presentation.themes = {
         Danger = Color3.fromRGB(179, 55, 65),
     },
 }
-Presentation.order = { "Neron Dark", "Graphite", "OLED", "Light" }
+-- Full semantic palettes: geometry, engine, and user-accent behavior stay unchanged.
+-- AccentHover/Pressed/Muted and SliderFill/Knob mirror Presentation.colors defaults.
+Presentation.themes.Abyss = {
+    AppBackground = Color3.fromRGB(17, 22, 29),
+    WindowBackground = Color3.fromRGB(12, 18, 25),
+    SidebarBackground = Color3.fromRGB(15, 23, 32),
+    ContentBackground = Color3.fromRGB(13, 20, 28),
+    RowBackground = Color3.fromRGB(20, 29, 39),
+    RowHover = Color3.fromRGB(26, 38, 50),
+    PopoverBackground = Color3.fromRGB(18, 28, 38),
+    InputBackground = Color3.fromRGB(11, 18, 26),
+    Separator = Color3.fromRGB(35, 49, 62),
+    BorderWeak = Color3.fromRGB(44, 60, 74),
+    BorderStrong = Color3.fromRGB(86, 112, 130),
+    TextPrimary = Color3.fromRGB(225, 234, 241),
+    TextSecondary = Color3.fromRGB(148, 166, 180),
+    TextMuted = Color3.fromRGB(105, 124, 139),
+    TextDisabled = Color3.fromRGB(74, 91, 105),
+    Accent = Color3.fromRGB(135, 188, 207),
+    AccentHover = Color3.fromRGB(147, 195, 212),
+    AccentPressed = Color3.fromRGB(105, 147, 161),
+    AccentMuted = Color3.fromRGB(42, 59, 69),
+    Success = Color3.fromRGB(130, 184, 157),
+    Warning = Color3.fromRGB(212, 181, 126),
+    Danger = Color3.fromRGB(215, 139, 148),
+    HeaderBackground = Color3.fromRGB(17, 26, 36),
+    RowPressed = Color3.fromRGB(33, 47, 61),
+    SurfaceSecondary = Color3.fromRGB(22, 32, 43),
+    SurfaceSelected = Color3.fromRGB(26, 49, 62),
+    SurfaceEdge = Color3.fromRGB(43, 60, 74),
+    ToggleTrackOff = Color3.fromRGB(38, 52, 66),
+    ToggleTrackOn = Color3.fromRGB(54, 97, 116),
+    ToggleKnobOff = Color3.fromRGB(144, 160, 176),
+    ToggleKnobOn = Color3.fromRGB(204, 232, 240),
+    SliderTrack = Color3.fromRGB(43, 59, 74),
+    SliderFill = Color3.fromRGB(135, 188, 207),
+    SliderKnob = Color3.fromRGB(135, 188, 207),
+    SliderCore = Color3.fromRGB(24, 47, 58),
+    DropdownBackground = Color3.fromRGB(22, 33, 45),
+    DropdownHover = Color3.fromRGB(32, 48, 62),
+    Overlay = Color3.fromRGB(2, 5, 9),
+    Shadow = Color3.fromRGB(1, 4, 8),
+    ButtonText = Color3.fromRGB(12, 25, 33),
+    SystemText = Color3.fromRGB(174, 191, 204),
+}
+Presentation.themes.Ember = {
+    AppBackground = Color3.fromRGB(31, 25, 22),
+    WindowBackground = Color3.fromRGB(27, 22, 20),
+    SidebarBackground = Color3.fromRGB(22, 19, 18),
+    ContentBackground = Color3.fromRGB(30, 25, 23),
+    RowBackground = Color3.fromRGB(37, 31, 28),
+    RowHover = Color3.fromRGB(46, 38, 33),
+    PopoverBackground = Color3.fromRGB(34, 27, 23),
+    InputBackground = Color3.fromRGB(24, 20, 18),
+    Separator = Color3.fromRGB(64, 50, 40),
+    BorderWeak = Color3.fromRGB(77, 60, 48),
+    BorderStrong = Color3.fromRGB(131, 99, 75),
+    TextPrimary = Color3.fromRGB(244, 233, 219),
+    TextSecondary = Color3.fromRGB(185, 164, 146),
+    TextMuted = Color3.fromRGB(146, 123, 105),
+    TextDisabled = Color3.fromRGB(108, 87, 73),
+    Accent = Color3.fromRGB(224, 171, 124),
+    AccentHover = Color3.fromRGB(227, 179, 137),
+    AccentPressed = Color3.fromRGB(175, 133, 97),
+    AccentMuted = Color3.fromRGB(74, 58, 45),
+    Success = Color3.fromRGB(168, 187, 126),
+    Warning = Color3.fromRGB(226, 190, 116),
+    Danger = Color3.fromRGB(220, 139, 133),
+    HeaderBackground = Color3.fromRGB(34, 28, 25),
+    RowPressed = Color3.fromRGB(57, 45, 37),
+    SurfaceSecondary = Color3.fromRGB(43, 35, 30),
+    SurfaceSelected = Color3.fromRGB(68, 46, 32),
+    SurfaceEdge = Color3.fromRGB(81, 63, 50),
+    ToggleTrackOff = Color3.fromRGB(66, 53, 44),
+    ToggleTrackOn = Color3.fromRGB(126, 81, 46),
+    ToggleKnobOff = Color3.fromRGB(188, 167, 149),
+    ToggleKnobOn = Color3.fromRGB(249, 217, 183),
+    SliderTrack = Color3.fromRGB(78, 61, 48),
+    SliderFill = Color3.fromRGB(224, 171, 124),
+    SliderKnob = Color3.fromRGB(224, 171, 124),
+    SliderCore = Color3.fromRGB(61, 39, 24),
+    DropdownBackground = Color3.fromRGB(43, 34, 28),
+    DropdownHover = Color3.fromRGB(59, 44, 34),
+    Overlay = Color3.fromRGB(12, 7, 4),
+    Shadow = Color3.fromRGB(8, 4, 2),
+    ButtonText = Color3.fromRGB(39, 24, 14),
+    SystemText = Color3.fromRGB(211, 190, 169),
+}
+
+Presentation.order = { "Neron Dark", "Graphite", "OLED", "Light", "Abyss", "Ember" }
 function Presentation.colors(name, overrides, accent)
     local theme = table.clone(Theme)
     for token, value in pairs(Presentation.themes[name] or {}) do
@@ -10497,7 +10594,7 @@ function Window:ImportTheme(json, silent)
 end
 
 -- System labels only. Consumer labels remain untouched unless explicitly bound by the consumer.
-Locale.order = { "English", "Spanish", "Russian", "Portuguese" }
+Locale.order = { "English", "Spanish", "Russian", "Portuguese", "French", "German", "Italian", "Turkish", "Indonesian" }
 Locale.rows = {
     SpatialInspectorHint = {
         "Settings for this region",
@@ -11465,6 +11562,45 @@ Locale.rows["Interface"] = { "Interface", "Interfaz", "Интерфейс", "Int
 Locale.rows["Behavior"] = { "Behavior", "Comportamiento", "Поведение", "Comportamento" }
 Locale.rows.SectionItem = { "%d setting", "%d ajuste", "%d параметр", "%d ajuste" }
 Locale.rows.SectionItems = { "%d settings", "%d ajustes", "%d параметров", "%d ajustes" }
+Locale.rows.SettingsIntro = {
+    "Your interface, your preferences.",
+    "Tu interfaz, tus preferencias.",
+    "Ваш интерфейс, ваши предпочтения.",
+    "Sua interface, suas preferências.",
+}
+Locale.rows.ProfilesHint = {
+    "Save and restore",
+    "Guardar y restaurar",
+    "Сохранение и восстановление",
+    "Salvar e restaurar",
+}
+Locale.rows.ThemesHint =
+    { "Colors and contrast", "Colores y contraste", "Цвета и контраст", "Cores e contraste" }
+Locale.rows.LanguageHint =
+    { "Display language", "Idioma de la interfaz", "Язык интерфейса", "Idioma da interface" }
+Locale.rows.GeneralHint = {
+    "Interface behavior",
+    "Comportamiento de la interfaz",
+    "Поведение интерфейса",
+    "Comportamento da interface",
+}
+Locale.rows.MembershipHint = { "Plan and access", "Plan y acceso", "Тариф и доступ", "Plano e acesso" }
+Locale.rows.ThemeSelected = { "Selected", "Seleccionado", "Выбрано", "Selecionado" }
+Locale.rows.AbyssDescription = {
+    "Ink blue and glacier accents",
+    "Azul tinta y acentos glaciares",
+    "Чернильно-синий с ледяными акцентами",
+    "Azul-tinta com detalhes glaciais",
+}
+Locale.rows.EmberDescription = {
+    "Warm charcoal and copper",
+    "Carbón cálido y cobre",
+    "Тёплый тёмно-серый и медь",
+    "Cinza-carvão quente e cobre",
+}
+Locale.rows.ThemePreview = { "Preview", "Vista previa", "Предпросмотр", "Prévia" }
+Locale.rows.LanguageSelected = { "Current language", "Idioma actual", "Текущий язык", "Idioma atual" }
+
 Locale.dictionaries = {}
 for i, language in ipairs(Locale.order) do
     local dictionary = {}
@@ -11473,6 +11609,1604 @@ for i, language in ipairs(Locale.order) do
     end
     Locale.dictionaries[language] = dictionary
 end
+-- Translation data only; no controls, values, profiles, or flags are mutated.
+Locale.extra = {
+    French = {
+        ["SpatialInspectorHint"] = "Réglages de cette zone",
+        ["SpatialCharacter"] = "Personnage",
+        ["SpatialMap"] = "Carte",
+        ["SpatialEquipment"] = "Équipement",
+        ["SpatialEnabled"] = "Activé",
+        ["SpatialPriority"] = "Priorité",
+        ["SpatialRadius"] = "Rayon",
+        ["SpatialColor"] = "Couleur",
+        ["SpatialOpacity"] = "Opacité",
+        ["SpatialApplyAll"] = "Appliquer à toutes les zones",
+        ["SpatialLocalHint"] = "Seule la zone sélectionnée est modifiée.",
+        ["SpatialTap"] = "Touchez une zone pour la régler.",
+        ["SpatialReset"] = "Réinitialiser la sélection",
+        ["SpatialNoSelection"] = "Aucune sélection",
+        ["SpatialHead"] = "Tête",
+        ["SpatialTorso"] = "Torse",
+        ["SpatialHip"] = "Hanche",
+        ["SpatialLeftUpperArm"] = "Bras gauche",
+        ["SpatialLeftForearm"] = "Avant-bras gauche",
+        ["SpatialLeftHand"] = "Main gauche",
+        ["SpatialRightUpperArm"] = "Bras droit",
+        ["SpatialRightForearm"] = "Avant-bras droit",
+        ["SpatialRightHand"] = "Main droite",
+        ["SpatialLeftThigh"] = "Cuisse gauche",
+        ["SpatialLeftShin"] = "Tibia gauche",
+        ["SpatialLeftFoot"] = "Pied gauche",
+        ["SpatialRightThigh"] = "Cuisse droite",
+        ["SpatialRightShin"] = "Tibia droit",
+        ["SpatialRightFoot"] = "Pied droit",
+        ["SpatialNorth"] = "Nord",
+        ["SpatialCourtyard"] = "Cour",
+        ["SpatialWest"] = "Ouest",
+        ["SpatialEast"] = "Est",
+        ["SpatialChest"] = "Poitrine",
+        ["SpatialLegs"] = "Jambes",
+        ["SpatialFeet"] = "Pieds",
+        ["SpatialAccessory"] = "Accessoire",
+        ["SpatialWeapon"] = "Arme",
+        ["RadialOpen"] = "Ouvrir la roue",
+        ["RadialCancel"] = "Annuler",
+        ["RadialHint"] = "Maintenir · Glisser · Relâcher",
+        ["WebhookSampleFields"] = "État : Terminé   •   Durée : 02:34",
+        ["WebhookURL"] = "URL du webhook",
+        ["WebhookURLPlaceholder"] = "Collez l’URL du webhook Discord",
+        ["WebhookEvents"] = "Notifier lors de",
+        ["WebhookEventsBody"] = "Choisissez les événements à envoyer.",
+        ["WebhookMentions"] = "Mentions",
+        ["WebhookMentionsBody"] = "Évitez les mentions indésirables.",
+        ["WebhookInterval"] = "Intervalle minimal",
+        ["WebhookIntervalBody"] = "Évitez les notifications répétées ou trop rapprochées.",
+        ["WebhookMessageTitle"] = "Titre du message",
+        ["WebhookMessageBody"] = "Texte du message",
+        ["WebhookPreview"] = "APERÇU",
+        ["WebhookPreviewOnly"] = "Aperçu uniquement · Rien n’est envoyé",
+        ["WebhookPrivate"] = "URL privée · Absente des profils",
+        ["WebhookPlaintext"] = "URL enregistrée en clair",
+        ["WebhookSendTest"] = "Envoyer un test",
+        ["WebhookEditMessage"] = "Modifier le message",
+        ["WebhookSending"] = "Envoi…",
+        ["WebhookNotTested"] = "URL valide · Non testée",
+        ["WebhookMissingURL"] = "Ajoutez une URL de webhook",
+        ["WebhookInvalidURL"] = "URL de webhook Discord invalide",
+        ["WebhookUnsupported"] = "Requête HTTP indisponible",
+        ["WebhookSent"] = "Envoi réussi",
+        ["WebhookFailed"] = "Échec de l’envoi",
+        ["WebhookUnavailable"] = "Webhook indisponible",
+        ["WebhookRejected"] = "Requête refusée",
+        ["WebhookRateLimited"] = "Limite d’envoi · Patientez",
+        ["WebhookRetryReady"] = "Nouvel essai possible",
+        ["WebhookCancelled"] = "Envoi annulé",
+        ["WebhookTimeout"] = "Délai de la requête dépassé",
+        ["WebhookTestTitle"] = "Test de webhook",
+        ["WebhookTestBody"] = "Message de test de Neron.",
+        ["DynamicIdle"] = "Non chargé",
+        ["DynamicIdleBody"] = "Chargez le contenu quand vous le souhaitez.",
+        ["DynamicLoading"] = "Chargement",
+        ["DynamicLoadingBody"] = "Récupération du contenu…",
+        ["DynamicReady"] = "Prêt",
+        ["DynamicReadyBody"] = "Le contenu est prêt.",
+        ["DynamicEmpty"] = "Aucun résultat",
+        ["DynamicEmptyBody"] = "Rien à afficher. Vous pouvez réessayer.",
+        ["DynamicError"] = "Chargement impossible",
+        ["DynamicErrorBody"] = "Réessayez. Les détails sont dans le journal du script.",
+        ["DynamicLoad"] = "Charger",
+        ["DynamicRetry"] = "Réessayer",
+        ["DynamicTimeout"] = "La requête a pris trop de temps. Réessayez.",
+        ["Settings"] = "Paramètres",
+        ["Profiles"] = "Profils",
+        ["Themes"] = "Thèmes",
+        ["Language"] = "Langue",
+        ["General"] = "Général",
+        ["Membership"] = "Abonnement",
+        ["MembershipBody"] = "Accès Premium ou communauté. À vous de choisir.",
+        ["LicenseMonthly"] = "Mensuel",
+        ["LicenseLifetime"] = "À vie",
+        ["PerMonth"] = "/ mois",
+        ["OneTime"] = "paiement unique",
+        ["MonthlyAccess"] = "Accès Premium mensuel",
+        ["LifetimeAccess"] = "Accès Premium à vie. Un seul paiement.",
+        ["BuyMonthly"] = "Acheter pour un mois",
+        ["BuyLifetime"] = "Acheter à vie",
+        ["BuyLicense"] = "Acheter une licence",
+        ["PurchaseCopyHint"] = "Les deux boutons copient le lien de la boutique. Choisissez-y votre licence.",
+        ["CommunityTitle"] = "Vous êtes chez vous",
+        ["CommunityBody"] = "Partagez vos avis, trouvez de l’aide et suivez PLAK. Rejoindre reste facultatif.",
+        ["JoinDiscord"] = "Rejoindre Discord",
+        ["CommunityCopyHint"] = "Copie le lien d’invitation",
+        ["PlakPremium"] = "PLAK Premium",
+        ["PlakCommunity"] = "Communauté PLAK",
+        ["LicensePrices"] = "5 $ / mois  ·  12 $ à vie",
+        ["PremiumActive"] = "Premium actif",
+        ["CopyLinkFailed"] = "Échec de la copie",
+        ["PremiumRequired"] = "Premium requis",
+        ["BuyPremium"] = "Acheter Premium",
+        ["UnlockPremiumFeature"] = "Débloquez %s avec Premium.",
+        ["PurchaseNotConfigured"] = "L’achat de Premium n’est pas configuré.",
+        ["Premium"] = "Premium",
+        ["PremiumBody"] = "État fourni par votre service de validation.",
+        ["PremiumStatus"] = "État",
+        ["PremiumExpiry"] = "Expire le (UTC)",
+        ["PremiumPlan"] = "Formule",
+        ["NotVerified"] = "Non vérifié",
+        ["Inactive"] = "Inactif",
+        ["Expired"] = "Expiré",
+        ["NotProvided"] = "Non renseigné",
+        ["Tooltips"] = "Infobulles",
+        ["Resizable"] = "Autoriser le redimensionnement",
+        ["RememberSize"] = "Mémoriser la taille de la fenêtre",
+        ["RememberPosition"] = "Mémoriser la position de la fenêtre",
+        ["DragToResize"] = "Faites glisser pour redimensionner.",
+        ["Close"] = "Fermer",
+        ["Create"] = "Créer",
+        ["Save"] = "Enregistrer",
+        ["Load"] = "Charger",
+        ["Rename"] = "Renommer",
+        ["Duplicate"] = "Dupliquer",
+        ["Delete"] = "Supprimer",
+        ["Refresh"] = "Actualiser",
+        ["Import"] = "Importer",
+        ["Export"] = "Exporter",
+        ["Confirm"] = "Confirmer",
+        ["Cancel"] = "Annuler",
+        ["Autoload"] = "Chargement automatique",
+        ["Enable"] = "Activer",
+        ["Disable"] = "Désactiver",
+        ["Search"] = "Rechercher un paramètre",
+        ["NoMatches"] = "Aucun paramètre correspondant",
+        ["NoOptions"] = "Aucune option",
+        ["None"] = "Aucun",
+        ["Select"] = "Sélectionner",
+        ["NoProfiles"] = "Aucun profil pour le moment",
+        ["ProfileName"] = "Nom du profil",
+        ["Saved"] = "Profil enregistré",
+        ["Loaded"] = "Profil chargé",
+        ["Deleted"] = "Profil supprimé",
+        ["Renamed"] = "Profil renommé",
+        ["Duplicated"] = "Profil dupliqué",
+        ["Imported"] = "Profil importé",
+        ["AutoloadEnabled"] = "Chargement automatique activé",
+        ["AutoloadDisabled"] = "Chargement automatique désactivé",
+        ["ThemeChanged"] = "Thème modifié",
+        ["ThemeImported"] = "Thème importé",
+        ["InvalidJSON"] = "JSON invalide",
+        ["InvalidProfile"] = "Profil invalide",
+        ["FilesystemUnavailable"] = "Système de fichiers indisponible",
+        ["SaveFailure"] = "Enregistrement impossible",
+        ["Failed"] = "Échec de l’opération",
+        ["DeleteQuestion"] = "Supprimer ce profil ? Cette action est irréversible.",
+        ["ProfileBody"] = "Enregistrez des profils pour ce jeu. Seuls les contrôles dotés d’un flag sont inclus.",
+        ["ThemeBody"] = "L’apparence change en direct ; vos contrôles et valeurs restent inchangés.",
+        ["LanguageBody"] = "Traduisez l’interface localement. Les libellés personnalisés utilisent votre dictionnaire ; les valeurs ne changent pas.",
+        ["GeneralBody"] = "Préférences de fenêtre et fonctions de sauvegarde.",
+        ["Accent"] = "Couleur d’accent personnalisée",
+        ["ResetAccent"] = "Réinitialiser l’accent",
+        ["ThemeJSON"] = "JSON du thème",
+        ["ProfileJSON"] = "JSON du profil",
+        ["Copy"] = "Copier",
+        ["ClipboardUnavailable"] = "Presse-papiers indisponible ; sélectionnez et copiez le texte.",
+        ["Copied"] = "Copié",
+        ["SilentLoad"] = "Chargement silencieux du profil",
+        ["SilentBody"] = "Met à jour les contrôles sans appeler les callbacks du développeur.",
+        ["SearchEnabled"] = "Activer la recherche",
+        ["Notifications"] = "Afficher les retours système",
+        ["PersistenceReady"] = "Sauvegarde disponible",
+        ["ProfileExists"] = "Un profil porte déjà ce nom",
+        ["MissingProfile"] = "Profil introuvable",
+        ["InvalidName"] = "Saisissez un nom de profil valide",
+        ["SetAutoload"] = "Utiliser le profil sélectionné",
+        ["Active"] = "Actif",
+        ["ResolvingGame"] = "Recherche du nom du jeu…",
+        ["WindowDestroyed"] = "La fenêtre a été détruite",
+        ["Ready"] = "Prêt",
+        ["Saving"] = "Enregistrement…",
+        ["Loading"] = "Chargement…",
+        ["Modified"] = "Modifié",
+        ["Selected"] = "Sélectionné",
+        ["LoadedWithWarnings"] = "Chargé avec des avertissements",
+        ["RestoreFailure"] = "Restauration du profil incomplète",
+        ["WaitingForControls"] = "En attente des contrôles",
+        ["RestoreSummary"] = "%d restaurés · %d indisponibles · %d échecs",
+        ["Basic Settings"] = "Paramètres de base",
+        ["Here are the main configuration parameters for the application or system."] = "Les principaux paramètres de l’application ou du système.",
+        ["Additional"] = "Compléments",
+        ["Misc"] = "Divers",
+        ["Enable autostart on system boot"] = "Lancer au démarrage du système",
+        ["Show popup notifications"] = "Afficher les notifications contextuelles",
+        ["Interface Language"] = "Langue de l’interface",
+        ["Theme"] = "Thème",
+        ["English"] = "Anglais",
+        ["Russian"] = "Russe",
+        ["Deutsch"] = "Allemand",
+        ["Dark"] = "Sombre",
+        ["Light"] = "Clair",
+        ["System"] = "Système",
+        ["Username"] = "Nom d’utilisateur",
+        ["Maximum concurrent downloads"] = "Téléchargements simultanés max.",
+        ["Log detail level"] = "Niveau de détail du journal",
+        ["Controls how much information is written to the log file. Higher values mean more details."] = "Définit la quantité d’informations du journal. Une valeur élevée ajoute des détails.",
+        ["Allowed port range"] = "Plage de ports autorisés",
+        ["Preferred server regions"] = "Régions de serveur préférées",
+        ["Select regions for potentially faster connection speeds."] = "Choisissez des régions pour une connexion potentiellement plus rapide.",
+        ["America (North)"] = "Amérique du Nord",
+        ["America (South)"] = "Amérique du Sud",
+        ["Europe (Frankfurt)"] = "Europe (Francfort)",
+        ["Europe (London)"] = "Europe (Londres)",
+        ["Asia (Tokyo)"] = "Asie (Tokyo)",
+        ["Asia (Singapore)"] = "Asie (Singapour)",
+        ["Active element color"] = "Couleur de l’élément actif",
+        ["Use custom background color"] = "Utiliser un fond personnalisé",
+        ["Overrides the theme's default background color when checked."] = "Remplace la couleur de fond du thème quand l’option est cochée.",
+        ["Custom background color"] = "Couleur de fond personnalisée",
+        ["Reset all settings to default"] = "Rétablir tous les paramètres par défaut",
+        ["Response timeout range"] = "Plage du délai de réponse",
+        ["Enable update checks"] = "Rechercher les mises à jour",
+        ["Check for updates when the application starts."] = "Recherche les mises à jour au lancement de l’application.",
+        ["Updates"] = "Mises à jour",
+        ["Additional settings use their own page and scroll position."] = "Les paramètres complémentaires ont leur propre page et position de défilement.",
+        ["INFORMATION"] = "INFORMATIONS",
+        ["Local UI only"] = "Interface locale uniquement",
+        ["The showcase does not alter gameplay."] = "La démonstration ne modifie pas le jeu.",
+        ["Accessibility"] = "Accessibilité",
+        ["Input and presentation preferences."] = "Préférences de saisie et d’apparence.",
+        ["Enable keyboard navigation"] = "Activer la navigation au clavier",
+        ["Display Settings"] = "Paramètres d’affichage",
+        ["VISUALIZATION"] = "VISUALISATION",
+        ["Parameters affecting the visual representation of data and the interface."] = "Paramètres d’affichage des données et de l’interface.",
+        ["Enable secondary display"] = "Activer l’écran secondaire",
+        ["Display information"] = "Informations d’affichage",
+        ["Color and layout controls follow the same design tokens."] = "Les couleurs et la disposition partagent les mêmes paramètres de style.",
+        ["Display grid on charts"] = "Afficher la grille des graphiques",
+        ["Automatically starts the application when your computer boots up."] = "Lance automatiquement l’application au démarrage de l’ordinateur.",
+        ["Use font anti-aliasing"] = "Lisser les polices",
+        ["Makes text appear smoother on screen; may slightly impact performance."] = "Lisse le texte à l’écran ; peut réduire légèrement les performances.",
+        ["Default chart type"] = "Type de graphique par défaut",
+        ["Line"] = "Courbe",
+        ["Bar"] = "Barres",
+        ["Pie"] = "Secteurs",
+        ["Scatter"] = "Nuage de points",
+        ["Chart line thickness"] = "Épaisseur des lignes du graphique",
+        ["Inactive element opacity"] = "Opacité des éléments inactifs",
+        ["Adjusts transparency of UI elements that are not currently active or hovered over."] = "Règle la transparence des éléments inactifs ou non survolés.",
+        ["Interface color scheme"] = "Palette de l’interface",
+        ["Contrast"] = "Contraste",
+        ["Soft"] = "Doux",
+        ["Controls the visual effects when switching between views"] = "Effets visuels lors du changement de vue",
+        ["Fast"] = "Rapide",
+        ["Smooth"] = "Fluide",
+        ["Chart background color"] = "Couleur de fond du graphique",
+        ["Data highlight color"] = "Couleur de surbrillance des données",
+        ["Font size range"] = "Plage de tailles de police",
+        ["Table columns to display"] = "Colonnes du tableau à afficher",
+        ["Name"] = "Nom",
+        ["Status"] = "État",
+        ["Date"] = "Date",
+        ["Type"] = "Type",
+        ["Watermark text"] = "Texte du filigrane",
+        ["Apply visual settings"] = "Appliquer les paramètres visuels",
+        ["Contrast range"] = "Plage de contraste",
+        ["Adjusts the difference between light and dark areas for better visibility."] = "Règle l’écart entre zones claires et sombres pour mieux voir.",
+        ["Profile Management"] = "Gestion des profils",
+        ["Advanced Parameters"] = "Paramètres avancés",
+        ["MISCELLANEOUS"] = "DIVERS",
+        ["Various settings not included in the main categories."] = "Autres paramètres hors des catégories principales.",
+        ["Interface scale"] = "Échelle de l’interface",
+        ["Enable debug mode"] = "Activer le mode débogage",
+        ["Provides more detailed error messages and logging for troubleshooting."] = "Ajoute des détails aux erreurs et journaux pour le diagnostic.",
+        ["Send anonymous usage statistics"] = "Envoyer des statistiques anonymes",
+        ["Help improve the application by sending non-personal data about how features are used."] = "Aidez à améliorer l’application avec des données d’utilisation non personnelles.",
+        ["Temporary files path"] = "Chemin des fichiers temporaires",
+        ["Autosave interval"] = "Intervalle de sauvegarde automatique",
+        ["Data Sync & Backup"] = "Synchronisation et sauvegarde",
+        ["Back up settings"] = "Sauvegarder les paramètres",
+        ["Sword"] = "Épée",
+        ["Melee"] = "Corps à corps",
+        ["Fruit"] = "Fruit",
+        ["Auto Farm"] = "Farm automatique",
+        ["Combat"] = "Combat",
+        ["Distance"] = "Distance",
+        ["Speed"] = "Vitesse",
+        ["Player"] = "Joueur",
+        ["Players"] = "Joueurs",
+        ["Interface"] = "Interface",
+        ["Behavior"] = "Comportement",
+        ["SectionItem"] = "%d paramètre",
+        ["SectionItems"] = "%d paramètres",
+        ["SettingsIntro"] = "Votre interface, vos préférences.",
+        ["ProfilesHint"] = "Enregistrer et restaurer",
+        ["ThemesHint"] = "Couleurs et contraste",
+        ["LanguageHint"] = "Langue d’affichage",
+        ["GeneralHint"] = "Comportement de l’interface",
+        ["MembershipHint"] = "Formule et accès",
+        ["ThemeSelected"] = "Sélectionné",
+        ["AbyssDescription"] = "Bleu encre et accents glacier",
+        ["EmberDescription"] = "Anthracite chaud et cuivre",
+        ["ThemePreview"] = "Aperçu",
+        ["LanguageSelected"] = "Langue actuelle",
+    },
+    German = {
+        ["SpatialInspectorHint"] = "Einstellungen für diesen Bereich",
+        ["SpatialCharacter"] = "Charakter",
+        ["SpatialMap"] = "Karte",
+        ["SpatialEquipment"] = "Ausrüstung",
+        ["SpatialEnabled"] = "Aktiviert",
+        ["SpatialPriority"] = "Priorität",
+        ["SpatialRadius"] = "Radius",
+        ["SpatialColor"] = "Farbe",
+        ["SpatialOpacity"] = "Deckkraft",
+        ["SpatialApplyAll"] = "Auf alle Bereiche anwenden",
+        ["SpatialLocalHint"] = "Änderungen gelten nur für den gewählten Bereich.",
+        ["SpatialTap"] = "Bereich antippen, um ihn einzustellen.",
+        ["SpatialReset"] = "Auswahl zurücksetzen",
+        ["SpatialNoSelection"] = "Keine Auswahl",
+        ["SpatialHead"] = "Kopf",
+        ["SpatialTorso"] = "Rumpf",
+        ["SpatialHip"] = "Hüfte",
+        ["SpatialLeftUpperArm"] = "Linker Oberarm",
+        ["SpatialLeftForearm"] = "Linker Unterarm",
+        ["SpatialLeftHand"] = "Linke Hand",
+        ["SpatialRightUpperArm"] = "Rechter Oberarm",
+        ["SpatialRightForearm"] = "Rechter Unterarm",
+        ["SpatialRightHand"] = "Rechte Hand",
+        ["SpatialLeftThigh"] = "Linker Oberschenkel",
+        ["SpatialLeftShin"] = "Linker Unterschenkel",
+        ["SpatialLeftFoot"] = "Linker Fuß",
+        ["SpatialRightThigh"] = "Rechter Oberschenkel",
+        ["SpatialRightShin"] = "Rechter Unterschenkel",
+        ["SpatialRightFoot"] = "Rechter Fuß",
+        ["SpatialNorth"] = "Norden",
+        ["SpatialCourtyard"] = "Innenhof",
+        ["SpatialWest"] = "Westen",
+        ["SpatialEast"] = "Osten",
+        ["SpatialChest"] = "Brust",
+        ["SpatialLegs"] = "Beine",
+        ["SpatialFeet"] = "Füße",
+        ["SpatialAccessory"] = "Accessoire",
+        ["SpatialWeapon"] = "Waffe",
+        ["RadialOpen"] = "Radialmenü öffnen",
+        ["RadialCancel"] = "Abbrechen",
+        ["RadialHint"] = "Halten · Ziehen · Loslassen",
+        ["WebhookSampleFields"] = "Status: Abgeschlossen   •   Dauer: 02:34",
+        ["WebhookURL"] = "Webhook-URL",
+        ["WebhookURLPlaceholder"] = "Discord-Webhook-URL einfügen",
+        ["WebhookEvents"] = "Benachrichtigen bei",
+        ["WebhookEventsBody"] = "Zu sendende Ereignisse auswählen.",
+        ["WebhookMentions"] = "Erwähnungen",
+        ["WebhookMentionsBody"] = "Unerwünschte Erwähnungen vermeiden.",
+        ["WebhookInterval"] = "Mindestintervall",
+        ["WebhookIntervalBody"] = "Doppelte oder zu häufige Mitteilungen vermeiden.",
+        ["WebhookMessageTitle"] = "Nachrichtentitel",
+        ["WebhookMessageBody"] = "Nachrichtentext",
+        ["WebhookPreview"] = "VORSCHAU",
+        ["WebhookPreviewOnly"] = "Nur Vorschau · Nichts gesendet",
+        ["WebhookPrivate"] = "Private URL · Nicht in Profilen gespeichert",
+        ["WebhookPlaintext"] = "URL als Klartext gespeichert",
+        ["WebhookSendTest"] = "Test senden",
+        ["WebhookEditMessage"] = "Nachricht bearbeiten",
+        ["WebhookSending"] = "Wird gesendet…",
+        ["WebhookNotTested"] = "URL gültig · Nicht getestet",
+        ["WebhookMissingURL"] = "Webhook-URL hinzufügen",
+        ["WebhookInvalidURL"] = "Ungültige Discord-Webhook-URL",
+        ["WebhookUnsupported"] = "HTTP-Anfrage nicht verfügbar",
+        ["WebhookSent"] = "Erfolgreich gesendet",
+        ["WebhookFailed"] = "Senden fehlgeschlagen",
+        ["WebhookUnavailable"] = "Webhook nicht verfügbar",
+        ["WebhookRejected"] = "Anfrage abgelehnt",
+        ["WebhookRateLimited"] = "Anfragelimit erreicht · Bitte warten",
+        ["WebhookRetryReady"] = "Bereit für neuen Versuch",
+        ["WebhookCancelled"] = "Senden abgebrochen",
+        ["WebhookTimeout"] = "Zeitüberschreitung der Anfrage",
+        ["WebhookTestTitle"] = "Webhook-Test",
+        ["WebhookTestBody"] = "Testnachricht von Neron.",
+        ["DynamicIdle"] = "Nicht geladen",
+        ["DynamicIdleBody"] = "Inhalt laden, wenn Sie bereit sind.",
+        ["DynamicLoading"] = "Wird geladen",
+        ["DynamicLoadingBody"] = "Inhalt wird abgerufen…",
+        ["DynamicReady"] = "Bereit",
+        ["DynamicReadyBody"] = "Inhalt ist bereit.",
+        ["DynamicEmpty"] = "Keine Ergebnisse",
+        ["DynamicEmptyBody"] = "Noch nichts anzuzeigen. Erneut versuchen.",
+        ["DynamicError"] = "Laden nicht möglich",
+        ["DynamicErrorBody"] = "Erneut versuchen. Details stehen im Skriptprotokoll.",
+        ["DynamicLoad"] = "Laden",
+        ["DynamicRetry"] = "Erneut versuchen",
+        ["DynamicTimeout"] = "Die Anfrage dauerte zu lange. Erneut versuchen.",
+        ["Settings"] = "Einstellungen",
+        ["Profiles"] = "Profile",
+        ["Themes"] = "Designs",
+        ["Language"] = "Sprache",
+        ["General"] = "Allgemein",
+        ["Membership"] = "Mitgliedschaft",
+        ["MembershipBody"] = "Premium-Zugang oder Community. Sie entscheiden.",
+        ["LicenseMonthly"] = "Monatlich",
+        ["LicenseLifetime"] = "Lebenslang",
+        ["PerMonth"] = "/ Monat",
+        ["OneTime"] = "einmalig",
+        ["MonthlyAccess"] = "Monatlicher Premium-Zugang",
+        ["LifetimeAccess"] = "Premium-Zugang auf Lebenszeit. Einmal zahlen.",
+        ["BuyMonthly"] = "Monatslizenz kaufen",
+        ["BuyLifetime"] = "Lebenslang kaufen",
+        ["BuyLicense"] = "Lizenz kaufen",
+        ["PurchaseCopyHint"] = "Beide Schaltflächen kopieren den Shop-Link. Lizenz im Shop wählen.",
+        ["CommunityTitle"] = "Hier gehören Sie dazu",
+        ["CommunityBody"] = "Feedback, Hilfe und Neuigkeiten zu PLAK. Der Beitritt ist freiwillig.",
+        ["JoinDiscord"] = "Discord beitreten",
+        ["CommunityCopyHint"] = "Kopiert den Einladungslink",
+        ["PlakPremium"] = "PLAK Premium",
+        ["PlakCommunity"] = "PLAK-Community",
+        ["LicensePrices"] = "5 $ / Monat  ·  12 $ lebenslang",
+        ["PremiumActive"] = "Premium aktiv",
+        ["CopyLinkFailed"] = "Kopieren fehlgeschlagen",
+        ["PremiumRequired"] = "Premium erforderlich",
+        ["BuyPremium"] = "Premium kaufen",
+        ["UnlockPremiumFeature"] = "%s mit Premium freischalten.",
+        ["PurchaseNotConfigured"] = "Der Premium-Kauf ist nicht eingerichtet.",
+        ["Premium"] = "Premium",
+        ["PremiumBody"] = "Status von Ihrem Validierungsdienst.",
+        ["PremiumStatus"] = "Status",
+        ["PremiumExpiry"] = "Läuft ab (UTC)",
+        ["PremiumPlan"] = "Tarif",
+        ["NotVerified"] = "Nicht verifiziert",
+        ["Inactive"] = "Inaktiv",
+        ["Expired"] = "Abgelaufen",
+        ["NotProvided"] = "Nicht angegeben",
+        ["Tooltips"] = "Hinweistexte",
+        ["Resizable"] = "Fenstergröße änderbar",
+        ["RememberSize"] = "Fenstergröße merken",
+        ["RememberPosition"] = "Fensterposition merken",
+        ["DragToResize"] = "Zum Ändern der Fenstergröße ziehen.",
+        ["Close"] = "Schließen",
+        ["Create"] = "Erstellen",
+        ["Save"] = "Speichern",
+        ["Load"] = "Laden",
+        ["Rename"] = "Umbenennen",
+        ["Duplicate"] = "Duplizieren",
+        ["Delete"] = "Löschen",
+        ["Refresh"] = "Aktualisieren",
+        ["Import"] = "Importieren",
+        ["Export"] = "Exportieren",
+        ["Confirm"] = "Bestätigen",
+        ["Cancel"] = "Abbrechen",
+        ["Autoload"] = "Automatisch laden",
+        ["Enable"] = "Aktivieren",
+        ["Disable"] = "Deaktivieren",
+        ["Search"] = "Einstellung suchen",
+        ["NoMatches"] = "Keine passenden Einstellungen",
+        ["NoOptions"] = "Keine Optionen",
+        ["None"] = "Keine",
+        ["Select"] = "Auswählen",
+        ["NoProfiles"] = "Noch keine Profile",
+        ["ProfileName"] = "Profilname",
+        ["Saved"] = "Profil gespeichert",
+        ["Loaded"] = "Profil geladen",
+        ["Deleted"] = "Profil gelöscht",
+        ["Renamed"] = "Profil umbenannt",
+        ["Duplicated"] = "Profil dupliziert",
+        ["Imported"] = "Profil importiert",
+        ["AutoloadEnabled"] = "Automatisches Laden aktiviert",
+        ["AutoloadDisabled"] = "Automatisches Laden deaktiviert",
+        ["ThemeChanged"] = "Design geändert",
+        ["ThemeImported"] = "Design importiert",
+        ["InvalidJSON"] = "Ungültiges JSON",
+        ["InvalidProfile"] = "Ungültiges Profil",
+        ["FilesystemUnavailable"] = "Dateisystem nicht verfügbar",
+        ["SaveFailure"] = "Speichern nicht möglich",
+        ["Failed"] = "Vorgang fehlgeschlagen",
+        ["DeleteQuestion"] = "Dieses Profil löschen? Dies kann nicht rückgängig gemacht werden.",
+        ["ProfileBody"] = "Benannte Konfigurationen für dieses Spiel speichern. Nur Steuerelemente mit Flag werden erfasst.",
+        ["ThemeBody"] = "Das Design ändert sich sofort; Steuerelemente und Werte bleiben erhalten.",
+        ["LanguageBody"] = "Die Oberfläche wird lokal übersetzt. Eigene Beschriftungen nutzen Ihr Wörterbuch; Werte bleiben unverändert.",
+        ["GeneralBody"] = "Fenstereinstellungen und Speicherfunktionen.",
+        ["Accent"] = "Eigene Akzentfarbe",
+        ["ResetAccent"] = "Akzentfarbe zurücksetzen",
+        ["ThemeJSON"] = "Design-JSON",
+        ["ProfileJSON"] = "Profil-JSON",
+        ["Copy"] = "Kopieren",
+        ["ClipboardUnavailable"] = "Zwischenablage nicht verfügbar; Text markieren und kopieren.",
+        ["Copied"] = "Kopiert",
+        ["SilentLoad"] = "Profil ohne Callbacks laden",
+        ["SilentBody"] = "Steuerelemente ohne Entwickler-Callbacks aktualisieren.",
+        ["SearchEnabled"] = "Suche aktivieren",
+        ["Notifications"] = "Systemmeldungen anzeigen",
+        ["PersistenceReady"] = "Speicherfunktion bereit",
+        ["ProfileExists"] = "Ein Profil mit diesem Namen existiert bereits",
+        ["MissingProfile"] = "Profil nicht gefunden",
+        ["InvalidName"] = "Gültigen Profilnamen eingeben",
+        ["SetAutoload"] = "Ausgewähltes Profil verwenden",
+        ["Active"] = "Aktiv",
+        ["ResolvingGame"] = "Spielname wird ermittelt…",
+        ["WindowDestroyed"] = "Fenster wurde zerstört",
+        ["Ready"] = "Bereit",
+        ["Saving"] = "Wird gespeichert…",
+        ["Loading"] = "Wird geladen…",
+        ["Modified"] = "Geändert",
+        ["Selected"] = "Ausgewählt",
+        ["LoadedWithWarnings"] = "Mit Warnungen geladen",
+        ["RestoreFailure"] = "Profil nicht vollständig wiederhergestellt",
+        ["WaitingForControls"] = "Warten auf Steuerelemente",
+        ["RestoreSummary"] = "%d wiederhergestellt · %d nicht verfügbar · %d fehlgeschlagen",
+        ["Basic Settings"] = "Grundeinstellungen",
+        ["Here are the main configuration parameters for the application or system."] = "Die wichtigsten Einstellungen für die Anwendung oder das System.",
+        ["Additional"] = "Weitere",
+        ["Misc"] = "Sonstiges",
+        ["Enable autostart on system boot"] = "Beim Systemstart automatisch starten",
+        ["Show popup notifications"] = "Popup-Benachrichtigungen anzeigen",
+        ["Interface Language"] = "Oberflächensprache",
+        ["Theme"] = "Design",
+        ["English"] = "Englisch",
+        ["Russian"] = "Russisch",
+        ["Deutsch"] = "Deutsch",
+        ["Dark"] = "Dunkel",
+        ["Light"] = "Hell",
+        ["System"] = "System",
+        ["Username"] = "Benutzername",
+        ["Maximum concurrent downloads"] = "Maximale gleichzeitige Downloads",
+        ["Log detail level"] = "Protokolldetailgrad",
+        ["Controls how much information is written to the log file. Higher values mean more details."] = "Bestimmt den Umfang der Protokolldatei. Höhere Werte liefern mehr Details.",
+        ["Allowed port range"] = "Erlaubter Portbereich",
+        ["Preferred server regions"] = "Bevorzugte Serverregionen",
+        ["Select regions for potentially faster connection speeds."] = "Regionen für eine möglicherweise schnellere Verbindung wählen.",
+        ["America (North)"] = "Nordamerika",
+        ["America (South)"] = "Südamerika",
+        ["Europe (Frankfurt)"] = "Europa (Frankfurt)",
+        ["Europe (London)"] = "Europa (London)",
+        ["Asia (Tokyo)"] = "Asien (Tokio)",
+        ["Asia (Singapore)"] = "Asien (Singapur)",
+        ["Active element color"] = "Farbe aktiver Elemente",
+        ["Use custom background color"] = "Eigene Hintergrundfarbe verwenden",
+        ["Overrides the theme's default background color when checked."] = "Ersetzt bei Aktivierung die Standard-Hintergrundfarbe des Designs.",
+        ["Custom background color"] = "Eigene Hintergrundfarbe",
+        ["Reset all settings to default"] = "Alle Einstellungen zurücksetzen",
+        ["Response timeout range"] = "Bereich der Antwortzeitüberschreitung",
+        ["Enable update checks"] = "Nach Updates suchen",
+        ["Check for updates when the application starts."] = "Beim Anwendungsstart nach Updates suchen.",
+        ["Updates"] = "Updates",
+        ["Additional settings use their own page and scroll position."] = "Weitere Einstellungen haben eine eigene Seite und Bildlaufposition.",
+        ["INFORMATION"] = "INFORMATIONEN",
+        ["Local UI only"] = "Nur lokale Oberfläche",
+        ["The showcase does not alter gameplay."] = "Die Demo verändert nicht das Spielgeschehen.",
+        ["Accessibility"] = "Barrierefreiheit",
+        ["Input and presentation preferences."] = "Eingabe- und Darstellungseinstellungen.",
+        ["Enable keyboard navigation"] = "Tastaturnavigation aktivieren",
+        ["Display Settings"] = "Anzeigeeinstellungen",
+        ["VISUALIZATION"] = "DARSTELLUNG",
+        ["Parameters affecting the visual representation of data and the interface."] = "Einstellungen zur Darstellung von Daten und Oberfläche.",
+        ["Enable secondary display"] = "Zweitbildschirm aktivieren",
+        ["Display information"] = "Anzeigeinformationen",
+        ["Color and layout controls follow the same design tokens."] = "Farb- und Layoutregler nutzen dieselben Designvorgaben.",
+        ["Display grid on charts"] = "Raster in Diagrammen anzeigen",
+        ["Automatically starts the application when your computer boots up."] = "Startet die Anwendung beim Hochfahren des Computers automatisch.",
+        ["Use font anti-aliasing"] = "Schriftglättung verwenden",
+        ["Makes text appear smoother on screen; may slightly impact performance."] = "Glättet Text auf dem Bildschirm; kann die Leistung leicht beeinträchtigen.",
+        ["Default chart type"] = "Standarddiagrammtyp",
+        ["Line"] = "Linie",
+        ["Bar"] = "Balken",
+        ["Pie"] = "Kreis",
+        ["Scatter"] = "Streuung",
+        ["Chart line thickness"] = "Linienstärke im Diagramm",
+        ["Inactive element opacity"] = "Deckkraft inaktiver Elemente",
+        ["Adjusts transparency of UI elements that are not currently active or hovered over."] = "Regelt die Transparenz inaktiver oder nicht überfahrener Elemente.",
+        ["Interface color scheme"] = "Farbschema der Oberfläche",
+        ["Contrast"] = "Kontrast",
+        ["Soft"] = "Weich",
+        ["Controls the visual effects when switching between views"] = "Visuelle Effekte beim Ansichtswechsel",
+        ["Fast"] = "Schnell",
+        ["Smooth"] = "Sanft",
+        ["Chart background color"] = "Hintergrundfarbe des Diagramms",
+        ["Data highlight color"] = "Hervorhebungsfarbe für Daten",
+        ["Font size range"] = "Schriftgrößenbereich",
+        ["Table columns to display"] = "Anzuzeigende Tabellenspalten",
+        ["Name"] = "Name",
+        ["Status"] = "Status",
+        ["Date"] = "Datum",
+        ["Type"] = "Typ",
+        ["Watermark text"] = "Wasserzeichentext",
+        ["Apply visual settings"] = "Anzeigeeinstellungen anwenden",
+        ["Contrast range"] = "Kontrastbereich",
+        ["Adjusts the difference between light and dark areas for better visibility."] = "Regelt den Unterschied zwischen hellen und dunklen Bereichen für bessere Sichtbarkeit.",
+        ["Profile Management"] = "Profilverwaltung",
+        ["Advanced Parameters"] = "Erweiterte Parameter",
+        ["MISCELLANEOUS"] = "SONSTIGES",
+        ["Various settings not included in the main categories."] = "Weitere Einstellungen außerhalb der Hauptkategorien.",
+        ["Interface scale"] = "Oberflächenskalierung",
+        ["Enable debug mode"] = "Debugmodus aktivieren",
+        ["Provides more detailed error messages and logging for troubleshooting."] = "Ausführlichere Fehlermeldungen und Protokolle zur Fehlerbehebung.",
+        ["Send anonymous usage statistics"] = "Anonyme Nutzungsstatistiken senden",
+        ["Help improve the application by sending non-personal data about how features are used."] = "Die Anwendung mit nicht personenbezogenen Daten zur Funktionsnutzung verbessern.",
+        ["Temporary files path"] = "Pfad für temporäre Dateien",
+        ["Autosave interval"] = "Intervall für automatisches Speichern",
+        ["Data Sync & Backup"] = "Datensynchronisierung und Sicherung",
+        ["Back up settings"] = "Einstellungen sichern",
+        ["Sword"] = "Schwert",
+        ["Melee"] = "Nahkampf",
+        ["Fruit"] = "Frucht",
+        ["Auto Farm"] = "Automatisch farmen",
+        ["Combat"] = "Kampf",
+        ["Distance"] = "Entfernung",
+        ["Speed"] = "Geschwindigkeit",
+        ["Player"] = "Spieler",
+        ["Players"] = "Spieler",
+        ["Interface"] = "Oberfläche",
+        ["Behavior"] = "Verhalten",
+        ["SectionItem"] = "%d Einstellung",
+        ["SectionItems"] = "%d Einstellungen",
+        ["SettingsIntro"] = "Ihre Oberfläche, Ihre Vorlieben.",
+        ["ProfilesHint"] = "Speichern und wiederherstellen",
+        ["ThemesHint"] = "Farben und Kontrast",
+        ["LanguageHint"] = "Anzeigesprache",
+        ["GeneralHint"] = "Verhalten der Oberfläche",
+        ["MembershipHint"] = "Tarif und Zugang",
+        ["ThemeSelected"] = "Ausgewählt",
+        ["AbyssDescription"] = "Tintenblau mit Gletscherakzenten",
+        ["EmberDescription"] = "Warmes Anthrazit und Kupfer",
+        ["ThemePreview"] = "Vorschau",
+        ["LanguageSelected"] = "Aktuelle Sprache",
+    },
+    Italian = {
+        ["SpatialInspectorHint"] = "Impostazioni di questa zona",
+        ["SpatialCharacter"] = "Personaggio",
+        ["SpatialMap"] = "Mappa",
+        ["SpatialEquipment"] = "Equipaggiamento",
+        ["SpatialEnabled"] = "Attivato",
+        ["SpatialPriority"] = "Priorità",
+        ["SpatialRadius"] = "Raggio",
+        ["SpatialColor"] = "Colore",
+        ["SpatialOpacity"] = "Opacità",
+        ["SpatialApplyAll"] = "Applica a tutte le zone",
+        ["SpatialLocalHint"] = "Le modifiche riguardano solo la zona selezionata.",
+        ["SpatialTap"] = "Tocca una zona per modificarne le impostazioni.",
+        ["SpatialReset"] = "Reimposta selezione",
+        ["SpatialNoSelection"] = "Nessuna selezione",
+        ["SpatialHead"] = "Testa",
+        ["SpatialTorso"] = "Torso",
+        ["SpatialHip"] = "Anca",
+        ["SpatialLeftUpperArm"] = "Braccio sinistro",
+        ["SpatialLeftForearm"] = "Avambraccio sinistro",
+        ["SpatialLeftHand"] = "Mano sinistra",
+        ["SpatialRightUpperArm"] = "Braccio destro",
+        ["SpatialRightForearm"] = "Avambraccio destro",
+        ["SpatialRightHand"] = "Mano destra",
+        ["SpatialLeftThigh"] = "Coscia sinistra",
+        ["SpatialLeftShin"] = "Tibia sinistra",
+        ["SpatialLeftFoot"] = "Piede sinistro",
+        ["SpatialRightThigh"] = "Coscia destra",
+        ["SpatialRightShin"] = "Tibia destra",
+        ["SpatialRightFoot"] = "Piede destro",
+        ["SpatialNorth"] = "Nord",
+        ["SpatialCourtyard"] = "Cortile",
+        ["SpatialWest"] = "Ovest",
+        ["SpatialEast"] = "Est",
+        ["SpatialChest"] = "Petto",
+        ["SpatialLegs"] = "Gambe",
+        ["SpatialFeet"] = "Piedi",
+        ["SpatialAccessory"] = "Accessorio",
+        ["SpatialWeapon"] = "Arma",
+        ["RadialOpen"] = "Apri menu radiale",
+        ["RadialCancel"] = "Annulla",
+        ["RadialHint"] = "Tieni premuto · Trascina · Rilascia",
+        ["WebhookSampleFields"] = "Stato: Completato   •   Durata: 02:34",
+        ["WebhookURL"] = "URL del webhook",
+        ["WebhookURLPlaceholder"] = "Incolla l’URL del webhook Discord",
+        ["WebhookEvents"] = "Notifica per",
+        ["WebhookEventsBody"] = "Scegli gli eventi da inviare.",
+        ["WebhookMentions"] = "Menzioni",
+        ["WebhookMentionsBody"] = "Evita menzioni indesiderate.",
+        ["WebhookInterval"] = "Intervallo minimo",
+        ["WebhookIntervalBody"] = "Evita notifiche duplicate o troppo frequenti.",
+        ["WebhookMessageTitle"] = "Titolo del messaggio",
+        ["WebhookMessageBody"] = "Testo del messaggio",
+        ["WebhookPreview"] = "ANTEPRIMA",
+        ["WebhookPreviewOnly"] = "Solo anteprima · Nessun invio",
+        ["WebhookPrivate"] = "URL privato · Non salvato nei profili",
+        ["WebhookPlaintext"] = "URL salvato in chiaro",
+        ["WebhookSendTest"] = "Invia test",
+        ["WebhookEditMessage"] = "Modifica messaggio",
+        ["WebhookSending"] = "Invio…",
+        ["WebhookNotTested"] = "URL valido · Non testato",
+        ["WebhookMissingURL"] = "Aggiungi un URL webhook",
+        ["WebhookInvalidURL"] = "URL webhook Discord non valido",
+        ["WebhookUnsupported"] = "Richiesta HTTP non disponibile",
+        ["WebhookSent"] = "Invio riuscito",
+        ["WebhookFailed"] = "Invio non riuscito",
+        ["WebhookUnavailable"] = "Webhook non disponibile",
+        ["WebhookRejected"] = "Richiesta rifiutata",
+        ["WebhookRateLimited"] = "Limite di invio · Attendi",
+        ["WebhookRetryReady"] = "Pronto per riprovare",
+        ["WebhookCancelled"] = "Invio annullato",
+        ["WebhookTimeout"] = "Tempo della richiesta scaduto",
+        ["WebhookTestTitle"] = "Test webhook",
+        ["WebhookTestBody"] = "Messaggio di prova da Neron.",
+        ["DynamicIdle"] = "Non caricato",
+        ["DynamicIdleBody"] = "Carica il contenuto quando vuoi.",
+        ["DynamicLoading"] = "Caricamento",
+        ["DynamicLoadingBody"] = "Recupero dei contenuti…",
+        ["DynamicReady"] = "Pronto",
+        ["DynamicReadyBody"] = "Il contenuto è pronto.",
+        ["DynamicEmpty"] = "Nessun risultato",
+        ["DynamicEmptyBody"] = "Nulla da mostrare. Puoi riprovare.",
+        ["DynamicError"] = "Impossibile caricare",
+        ["DynamicErrorBody"] = "Riprova. I dettagli sono nel registro dello script.",
+        ["DynamicLoad"] = "Carica",
+        ["DynamicRetry"] = "Riprova",
+        ["DynamicTimeout"] = "La richiesta ha impiegato troppo tempo. Riprova.",
+        ["Settings"] = "Impostazioni",
+        ["Profiles"] = "Profili",
+        ["Themes"] = "Temi",
+        ["Language"] = "Lingua",
+        ["General"] = "Generali",
+        ["Membership"] = "Abbonamento",
+        ["MembershipBody"] = "Accesso Premium o community. Scegli tu.",
+        ["LicenseMonthly"] = "Mensile",
+        ["LicenseLifetime"] = "A vita",
+        ["PerMonth"] = "/ mese",
+        ["OneTime"] = "una tantum",
+        ["MonthlyAccess"] = "Accesso Premium mensile",
+        ["LifetimeAccess"] = "Accesso Premium a vita. Un solo pagamento.",
+        ["BuyMonthly"] = "Acquista mensile",
+        ["BuyLifetime"] = "Acquista a vita",
+        ["BuyLicense"] = "Acquista licenza",
+        ["PurchaseCopyHint"] = "Entrambi i pulsanti copiano il link del negozio. Scegli lì la licenza.",
+        ["CommunityTitle"] = "Qui sei a casa",
+        ["CommunityBody"] = "Condividi idee, trova aiuto e segui le novità PLAK. Partecipare è facoltativo.",
+        ["JoinDiscord"] = "Unisciti a Discord",
+        ["CommunityCopyHint"] = "Copia il link d’invito",
+        ["PlakPremium"] = "PLAK Premium",
+        ["PlakCommunity"] = "Community PLAK",
+        ["LicensePrices"] = "5 $ / mese  ·  12 $ a vita",
+        ["PremiumActive"] = "Premium attivo",
+        ["CopyLinkFailed"] = "Copia non riuscita",
+        ["PremiumRequired"] = "Premium richiesto",
+        ["BuyPremium"] = "Acquista Premium",
+        ["UnlockPremiumFeature"] = "Sblocca %s con Premium.",
+        ["PurchaseNotConfigured"] = "L’acquisto di Premium non è configurato.",
+        ["Premium"] = "Premium",
+        ["PremiumBody"] = "Stato fornito dal tuo servizio di verifica.",
+        ["PremiumStatus"] = "Stato",
+        ["PremiumExpiry"] = "Scadenza (UTC)",
+        ["PremiumPlan"] = "Piano",
+        ["NotVerified"] = "Non verificato",
+        ["Inactive"] = "Inattivo",
+        ["Expired"] = "Scaduto",
+        ["NotProvided"] = "Non specificato",
+        ["Tooltips"] = "Suggerimenti",
+        ["Resizable"] = "Consenti ridimensionamento",
+        ["RememberSize"] = "Ricorda dimensioni finestra",
+        ["RememberPosition"] = "Ricorda posizione finestra",
+        ["DragToResize"] = "Trascina per ridimensionare la finestra.",
+        ["Close"] = "Chiudi",
+        ["Create"] = "Crea",
+        ["Save"] = "Salva",
+        ["Load"] = "Carica",
+        ["Rename"] = "Rinomina",
+        ["Duplicate"] = "Duplica",
+        ["Delete"] = "Elimina",
+        ["Refresh"] = "Aggiorna",
+        ["Import"] = "Importa",
+        ["Export"] = "Esporta",
+        ["Confirm"] = "Conferma",
+        ["Cancel"] = "Annulla",
+        ["Autoload"] = "Caricamento automatico",
+        ["Enable"] = "Attiva",
+        ["Disable"] = "Disattiva",
+        ["Search"] = "Cerca un’impostazione",
+        ["NoMatches"] = "Nessuna impostazione trovata",
+        ["NoOptions"] = "Nessuna opzione",
+        ["None"] = "Nessuno",
+        ["Select"] = "Seleziona",
+        ["NoProfiles"] = "Ancora nessun profilo",
+        ["ProfileName"] = "Nome del profilo",
+        ["Saved"] = "Profilo salvato",
+        ["Loaded"] = "Profilo caricato",
+        ["Deleted"] = "Profilo eliminato",
+        ["Renamed"] = "Profilo rinominato",
+        ["Duplicated"] = "Profilo duplicato",
+        ["Imported"] = "Profilo importato",
+        ["AutoloadEnabled"] = "Caricamento automatico attivo",
+        ["AutoloadDisabled"] = "Caricamento automatico disattivato",
+        ["ThemeChanged"] = "Tema cambiato",
+        ["ThemeImported"] = "Tema importato",
+        ["InvalidJSON"] = "JSON non valido",
+        ["InvalidProfile"] = "Profilo non valido",
+        ["FilesystemUnavailable"] = "File system non disponibile",
+        ["SaveFailure"] = "Impossibile salvare",
+        ["Failed"] = "Operazione non riuscita",
+        ["DeleteQuestion"] = "Eliminare questo profilo? L’azione è irreversibile.",
+        ["ProfileBody"] = "Salva configurazioni per questo gioco. Sono inclusi solo i controlli con un flag.",
+        ["ThemeBody"] = "L’aspetto cambia subito; controlli e valori restano invariati.",
+        ["LanguageBody"] = "Traduci l’interfaccia localmente. Le etichette personalizzate usano il tuo dizionario; i valori non cambiano.",
+        ["GeneralBody"] = "Preferenze della finestra e funzioni di salvataggio.",
+        ["Accent"] = "Colore d’accento personalizzato",
+        ["ResetAccent"] = "Reimposta accento",
+        ["ThemeJSON"] = "JSON del tema",
+        ["ProfileJSON"] = "JSON del profilo",
+        ["Copy"] = "Copia",
+        ["ClipboardUnavailable"] = "Appunti non disponibili; seleziona e copia il testo.",
+        ["Copied"] = "Copiato",
+        ["SilentLoad"] = "Carica profilo senza callback",
+        ["SilentBody"] = "Aggiorna i controlli senza eseguire i callback dello sviluppatore.",
+        ["SearchEnabled"] = "Attiva ricerca",
+        ["Notifications"] = "Mostra messaggi di sistema",
+        ["PersistenceReady"] = "Salvataggio disponibile",
+        ["ProfileExists"] = "Esiste già un profilo con questo nome",
+        ["MissingProfile"] = "Profilo non trovato",
+        ["InvalidName"] = "Inserisci un nome profilo valido",
+        ["SetAutoload"] = "Usa profilo selezionato",
+        ["Active"] = "Attivo",
+        ["ResolvingGame"] = "Ricerca del nome del gioco…",
+        ["WindowDestroyed"] = "La finestra è stata distrutta",
+        ["Ready"] = "Pronto",
+        ["Saving"] = "Salvataggio…",
+        ["Loading"] = "Caricamento…",
+        ["Modified"] = "Modificato",
+        ["Selected"] = "Selezionato",
+        ["LoadedWithWarnings"] = "Caricato con avvisi",
+        ["RestoreFailure"] = "Profilo non ripristinato completamente",
+        ["WaitingForControls"] = "In attesa dei controlli",
+        ["RestoreSummary"] = "%d ripristinati · %d non disponibili · %d non riusciti",
+        ["Basic Settings"] = "Impostazioni di base",
+        ["Here are the main configuration parameters for the application or system."] = "I principali parametri di configurazione dell’applicazione o del sistema.",
+        ["Additional"] = "Aggiuntive",
+        ["Misc"] = "Varie",
+        ["Enable autostart on system boot"] = "Avvia all’accensione del sistema",
+        ["Show popup notifications"] = "Mostra notifiche popup",
+        ["Interface Language"] = "Lingua dell’interfaccia",
+        ["Theme"] = "Tema",
+        ["English"] = "Inglese",
+        ["Russian"] = "Russo",
+        ["Deutsch"] = "Tedesco",
+        ["Dark"] = "Scuro",
+        ["Light"] = "Chiaro",
+        ["System"] = "Sistema",
+        ["Username"] = "Nome utente",
+        ["Maximum concurrent downloads"] = "Download simultanei massimi",
+        ["Log detail level"] = "Livello di dettaglio del registro",
+        ["Controls how much information is written to the log file. Higher values mean more details."] = "Regola le informazioni nel registro. Valori più alti aggiungono dettagli.",
+        ["Allowed port range"] = "Intervallo di porte consentite",
+        ["Preferred server regions"] = "Regioni server preferite",
+        ["Select regions for potentially faster connection speeds."] = "Scegli le regioni per una connessione potenzialmente più veloce.",
+        ["America (North)"] = "America del Nord",
+        ["America (South)"] = "America del Sud",
+        ["Europe (Frankfurt)"] = "Europa (Francoforte)",
+        ["Europe (London)"] = "Europa (Londra)",
+        ["Asia (Tokyo)"] = "Asia (Tokyo)",
+        ["Asia (Singapore)"] = "Asia (Singapore)",
+        ["Active element color"] = "Colore dell’elemento attivo",
+        ["Use custom background color"] = "Usa sfondo personalizzato",
+        ["Overrides the theme's default background color when checked."] = "Sostituisce lo sfondo predefinito del tema se selezionato.",
+        ["Custom background color"] = "Colore di sfondo personalizzato",
+        ["Reset all settings to default"] = "Ripristina tutte le impostazioni",
+        ["Response timeout range"] = "Intervallo del timeout di risposta",
+        ["Enable update checks"] = "Verifica aggiornamenti",
+        ["Check for updates when the application starts."] = "Controlla gli aggiornamenti all’avvio dell’applicazione.",
+        ["Updates"] = "Aggiornamenti",
+        ["Additional settings use their own page and scroll position."] = "Le impostazioni aggiuntive hanno pagina e scorrimento indipendenti.",
+        ["INFORMATION"] = "INFORMAZIONI",
+        ["Local UI only"] = "Solo interfaccia locale",
+        ["The showcase does not alter gameplay."] = "La demo non modifica il gioco.",
+        ["Accessibility"] = "Accessibilità",
+        ["Input and presentation preferences."] = "Preferenze di input e aspetto.",
+        ["Enable keyboard navigation"] = "Attiva navigazione da tastiera",
+        ["Display Settings"] = "Impostazioni schermo",
+        ["VISUALIZATION"] = "VISUALIZZAZIONE",
+        ["Parameters affecting the visual representation of data and the interface."] = "Parametri di visualizzazione dei dati e dell’interfaccia.",
+        ["Enable secondary display"] = "Attiva schermo secondario",
+        ["Display information"] = "Informazioni schermo",
+        ["Color and layout controls follow the same design tokens."] = "I controlli di colore e layout usano gli stessi parametri di stile.",
+        ["Display grid on charts"] = "Mostra griglia nei grafici",
+        ["Automatically starts the application when your computer boots up."] = "Avvia automaticamente l’applicazione all’accensione del computer.",
+        ["Use font anti-aliasing"] = "Usa antialiasing dei caratteri",
+        ["Makes text appear smoother on screen; may slightly impact performance."] = "Rende il testo più uniforme; può ridurre leggermente le prestazioni.",
+        ["Default chart type"] = "Tipo di grafico predefinito",
+        ["Line"] = "Linee",
+        ["Bar"] = "Barre",
+        ["Pie"] = "Torta",
+        ["Scatter"] = "Dispersione",
+        ["Chart line thickness"] = "Spessore delle linee del grafico",
+        ["Inactive element opacity"] = "Opacità degli elementi inattivi",
+        ["Adjusts transparency of UI elements that are not currently active or hovered over."] = "Regola la trasparenza degli elementi inattivi o non puntati.",
+        ["Interface color scheme"] = "Schema colori dell’interfaccia",
+        ["Contrast"] = "Contrasto",
+        ["Soft"] = "Tenue",
+        ["Controls the visual effects when switching between views"] = "Effetti visivi nel cambio di vista",
+        ["Fast"] = "Rapido",
+        ["Smooth"] = "Fluido",
+        ["Chart background color"] = "Colore di sfondo del grafico",
+        ["Data highlight color"] = "Colore di evidenziazione dei dati",
+        ["Font size range"] = "Intervallo dimensioni caratteri",
+        ["Table columns to display"] = "Colonne della tabella da mostrare",
+        ["Name"] = "Nome",
+        ["Status"] = "Stato",
+        ["Date"] = "Data",
+        ["Type"] = "Tipo",
+        ["Watermark text"] = "Testo della filigrana",
+        ["Apply visual settings"] = "Applica impostazioni visive",
+        ["Contrast range"] = "Intervallo di contrasto",
+        ["Adjusts the difference between light and dark areas for better visibility."] = "Regola la differenza tra aree chiare e scure per una migliore visibilità.",
+        ["Profile Management"] = "Gestione profili",
+        ["Advanced Parameters"] = "Parametri avanzati",
+        ["MISCELLANEOUS"] = "VARIE",
+        ["Various settings not included in the main categories."] = "Altre impostazioni fuori dalle categorie principali.",
+        ["Interface scale"] = "Scala dell’interfaccia",
+        ["Enable debug mode"] = "Attiva modalità debug",
+        ["Provides more detailed error messages and logging for troubleshooting."] = "Aggiunge dettagli a errori e registri per la diagnosi.",
+        ["Send anonymous usage statistics"] = "Invia statistiche anonime",
+        ["Help improve the application by sending non-personal data about how features are used."] = "Aiuta a migliorare l’applicazione con dati non personali sull’uso delle funzioni.",
+        ["Temporary files path"] = "Percorso file temporanei",
+        ["Autosave interval"] = "Intervallo salvataggio automatico",
+        ["Data Sync & Backup"] = "Sincronizzazione e backup",
+        ["Back up settings"] = "Esegui backup impostazioni",
+        ["Sword"] = "Spada",
+        ["Melee"] = "Corpo a corpo",
+        ["Fruit"] = "Frutto",
+        ["Auto Farm"] = "Farm automatico",
+        ["Combat"] = "Combattimento",
+        ["Distance"] = "Distanza",
+        ["Speed"] = "Velocità",
+        ["Player"] = "Giocatore",
+        ["Players"] = "Giocatori",
+        ["Interface"] = "Interfaccia",
+        ["Behavior"] = "Comportamento",
+        ["SectionItem"] = "%d impostazione",
+        ["SectionItems"] = "%d impostazioni",
+        ["SettingsIntro"] = "La tua interfaccia, le tue preferenze.",
+        ["ProfilesHint"] = "Salva e ripristina",
+        ["ThemesHint"] = "Colori e contrasto",
+        ["LanguageHint"] = "Lingua di visualizzazione",
+        ["GeneralHint"] = "Comportamento dell’interfaccia",
+        ["MembershipHint"] = "Piano e accesso",
+        ["ThemeSelected"] = "Selezionato",
+        ["AbyssDescription"] = "Blu inchiostro e accenti glaciali",
+        ["EmberDescription"] = "Antracite calda e rame",
+        ["ThemePreview"] = "Anteprima",
+        ["LanguageSelected"] = "Lingua attuale",
+    },
+    Turkish = {
+        ["SpatialInspectorHint"] = "Bu bölgenin ayarları",
+        ["SpatialCharacter"] = "Karakter",
+        ["SpatialMap"] = "Harita",
+        ["SpatialEquipment"] = "Ekipman",
+        ["SpatialEnabled"] = "Etkin",
+        ["SpatialPriority"] = "Öncelik",
+        ["SpatialRadius"] = "Yarıçap",
+        ["SpatialColor"] = "Renk",
+        ["SpatialOpacity"] = "Opaklık",
+        ["SpatialApplyAll"] = "Tüm bölgelere uygula",
+        ["SpatialLocalHint"] = "Değişiklikler yalnızca seçili bölgeyi etkiler.",
+        ["SpatialTap"] = "Ayarlarını düzenlemek için bir bölgeye dokunun.",
+        ["SpatialReset"] = "Seçimi sıfırla",
+        ["SpatialNoSelection"] = "Seçim yok",
+        ["SpatialHead"] = "Baş",
+        ["SpatialTorso"] = "Gövde",
+        ["SpatialHip"] = "Kalça",
+        ["SpatialLeftUpperArm"] = "Sol üst kol",
+        ["SpatialLeftForearm"] = "Sol ön kol",
+        ["SpatialLeftHand"] = "Sol el",
+        ["SpatialRightUpperArm"] = "Sağ üst kol",
+        ["SpatialRightForearm"] = "Sağ ön kol",
+        ["SpatialRightHand"] = "Sağ el",
+        ["SpatialLeftThigh"] = "Sol uyluk",
+        ["SpatialLeftShin"] = "Sol alt bacak",
+        ["SpatialLeftFoot"] = "Sol ayak",
+        ["SpatialRightThigh"] = "Sağ uyluk",
+        ["SpatialRightShin"] = "Sağ alt bacak",
+        ["SpatialRightFoot"] = "Sağ ayak",
+        ["SpatialNorth"] = "Kuzey",
+        ["SpatialCourtyard"] = "Avlu",
+        ["SpatialWest"] = "Batı",
+        ["SpatialEast"] = "Doğu",
+        ["SpatialChest"] = "Göğüs",
+        ["SpatialLegs"] = "Bacaklar",
+        ["SpatialFeet"] = "Ayaklar",
+        ["SpatialAccessory"] = "Aksesuar",
+        ["SpatialWeapon"] = "Silah",
+        ["RadialOpen"] = "Çarkı aç",
+        ["RadialCancel"] = "İptal",
+        ["RadialHint"] = "Basılı tut · Sürükle · Bırak",
+        ["WebhookSampleFields"] = "Durum: Tamamlandı   •   Süre: 02:34",
+        ["WebhookURL"] = "Webhook URL'si",
+        ["WebhookURLPlaceholder"] = "Discord webhook URL'sini yapıştırın",
+        ["WebhookEvents"] = "Bildirim olayları",
+        ["WebhookEventsBody"] = "Gönderilecek olayları seçin.",
+        ["WebhookMentions"] = "Etiketlemeler",
+        ["WebhookMentionsBody"] = "İstenmeyen etiketlemelerden kaçının.",
+        ["WebhookInterval"] = "En kısa aralık",
+        ["WebhookIntervalBody"] = "Yinelenen veya sık bildirimleri önleyin.",
+        ["WebhookMessageTitle"] = "Mesaj başlığı",
+        ["WebhookMessageBody"] = "Mesaj metni",
+        ["WebhookPreview"] = "ÖNİZLEME",
+        ["WebhookPreviewOnly"] = "Yalnızca önizleme · Gönderilmedi",
+        ["WebhookPrivate"] = "Özel URL · Profillere kaydedilmez",
+        ["WebhookPlaintext"] = "URL düz metin olarak kaydedildi",
+        ["WebhookSendTest"] = "Test gönder",
+        ["WebhookEditMessage"] = "Mesajı düzenle",
+        ["WebhookSending"] = "Gönderiliyor…",
+        ["WebhookNotTested"] = "URL geçerli · Test edilmedi",
+        ["WebhookMissingURL"] = "Webhook URL'si ekleyin",
+        ["WebhookInvalidURL"] = "Geçersiz Discord webhook URL'si",
+        ["WebhookUnsupported"] = "HTTP isteği kullanılamıyor",
+        ["WebhookSent"] = "Başarıyla gönderildi",
+        ["WebhookFailed"] = "Gönderilemedi",
+        ["WebhookUnavailable"] = "Webhook kullanılamıyor",
+        ["WebhookRejected"] = "İstek reddedildi",
+        ["WebhookRateLimited"] = "İstek sınırı · Lütfen bekleyin",
+        ["WebhookRetryReady"] = "Yeniden denenebilir",
+        ["WebhookCancelled"] = "Gönderim iptal edildi",
+        ["WebhookTimeout"] = "İstek zaman aşımına uğradı",
+        ["WebhookTestTitle"] = "Webhook testi",
+        ["WebhookTestBody"] = "Neron test mesajı.",
+        ["DynamicIdle"] = "Yüklenmedi",
+        ["DynamicIdleBody"] = "Hazır olduğunuzda içeriği yükleyin.",
+        ["DynamicLoading"] = "Yükleniyor",
+        ["DynamicLoadingBody"] = "İçerik alınıyor…",
+        ["DynamicReady"] = "Hazır",
+        ["DynamicReadyBody"] = "İçerik hazır.",
+        ["DynamicEmpty"] = "Sonuç yok",
+        ["DynamicEmptyBody"] = "Henüz gösterilecek bir şey yok. Yeniden deneyin.",
+        ["DynamicError"] = "Yüklenemedi",
+        ["DynamicErrorBody"] = "Yeniden deneyin. Ayrıntılar betik günlüğünde.",
+        ["DynamicLoad"] = "Yükle",
+        ["DynamicRetry"] = "Yeniden dene",
+        ["DynamicTimeout"] = "İstek çok uzun sürdü. Yeniden deneyin.",
+        ["Settings"] = "Ayarlar",
+        ["Profiles"] = "Profiller",
+        ["Themes"] = "Temalar",
+        ["Language"] = "Dil",
+        ["General"] = "Genel",
+        ["Membership"] = "Üyelik",
+        ["MembershipBody"] = "Premium erişim veya topluluk. Seçim sizin.",
+        ["LicenseMonthly"] = "Aylık",
+        ["LicenseLifetime"] = "Ömür boyu",
+        ["PerMonth"] = "/ ay",
+        ["OneTime"] = "tek seferlik",
+        ["MonthlyAccess"] = "Aylık Premium erişim",
+        ["LifetimeAccess"] = "Ömür boyu Premium erişim. Tek ödeme.",
+        ["BuyMonthly"] = "Aylık satın al",
+        ["BuyLifetime"] = "Ömür boyu satın al",
+        ["BuyLicense"] = "Lisans satın al",
+        ["PurchaseCopyHint"] = "İki düğme de mağaza bağlantısını kopyalar. Lisansınızı mağazada seçin.",
+        ["CommunityTitle"] = "Burası sizin yeriniz",
+        ["CommunityBody"] = "Görüş paylaşın, destek alın ve PLAK yeniliklerini izleyin. Katılım isteğe bağlı.",
+        ["JoinDiscord"] = "Discord'a katıl",
+        ["CommunityCopyHint"] = "Davet bağlantısını kopyalar",
+        ["PlakPremium"] = "PLAK Premium",
+        ["PlakCommunity"] = "PLAK Topluluğu",
+        ["LicensePrices"] = "5 $ / ay  ·  12 $ ömür boyu",
+        ["PremiumActive"] = "Premium etkin",
+        ["CopyLinkFailed"] = "Kopyalanamadı",
+        ["PremiumRequired"] = "Premium gerekli",
+        ["BuyPremium"] = "Premium satın al",
+        ["UnlockPremiumFeature"] = "Premium ile %s kilidini açın.",
+        ["PurchaseNotConfigured"] = "Premium satın alma yapılandırılmadı.",
+        ["Premium"] = "Premium",
+        ["PremiumBody"] = "Durum, doğrulama hizmetinizden alınır.",
+        ["PremiumStatus"] = "Durum",
+        ["PremiumExpiry"] = "Bitiş (UTC)",
+        ["PremiumPlan"] = "Plan",
+        ["NotVerified"] = "Doğrulanmadı",
+        ["Inactive"] = "Etkin değil",
+        ["Expired"] = "Süresi doldu",
+        ["NotProvided"] = "Belirtilmedi",
+        ["Tooltips"] = "Araç ipuçları",
+        ["Resizable"] = "Pencere boyutlandırmaya izin ver",
+        ["RememberSize"] = "Pencere boyutunu hatırla",
+        ["RememberPosition"] = "Pencere konumunu hatırla",
+        ["DragToResize"] = "Boyutlandırmak için sürükleyin.",
+        ["Close"] = "Kapat",
+        ["Create"] = "Oluştur",
+        ["Save"] = "Kaydet",
+        ["Load"] = "Yükle",
+        ["Rename"] = "Yeniden adlandır",
+        ["Duplicate"] = "Çoğalt",
+        ["Delete"] = "Sil",
+        ["Refresh"] = "Yenile",
+        ["Import"] = "İçe aktar",
+        ["Export"] = "Dışa aktar",
+        ["Confirm"] = "Onayla",
+        ["Cancel"] = "İptal",
+        ["Autoload"] = "Otomatik yükleme",
+        ["Enable"] = "Etkinleştir",
+        ["Disable"] = "Devre dışı bırak",
+        ["Search"] = "Ayar ara",
+        ["NoMatches"] = "Eşleşen ayar yok",
+        ["NoOptions"] = "Seçenek yok",
+        ["None"] = "Yok",
+        ["Select"] = "Seç",
+        ["NoProfiles"] = "Henüz profil yok",
+        ["ProfileName"] = "Profil adı",
+        ["Saved"] = "Profil kaydedildi",
+        ["Loaded"] = "Profil yüklendi",
+        ["Deleted"] = "Profil silindi",
+        ["Renamed"] = "Profil yeniden adlandırıldı",
+        ["Duplicated"] = "Profil çoğaltıldı",
+        ["Imported"] = "Profil içe aktarıldı",
+        ["AutoloadEnabled"] = "Otomatik yükleme etkin",
+        ["AutoloadDisabled"] = "Otomatik yükleme kapalı",
+        ["ThemeChanged"] = "Tema değiştirildi",
+        ["ThemeImported"] = "Tema içe aktarıldı",
+        ["InvalidJSON"] = "Geçersiz JSON",
+        ["InvalidProfile"] = "Geçersiz profil",
+        ["FilesystemUnavailable"] = "Dosya sistemi kullanılamıyor",
+        ["SaveFailure"] = "Kaydedilemedi",
+        ["Failed"] = "İşlem başarısız",
+        ["DeleteQuestion"] = "Bu profil silinsin mi? Bu işlem geri alınamaz.",
+        ["ProfileBody"] = "Bu oyun için adlandırılmış ayarlar kaydedin. Yalnızca flag atanmış kontroller dahil edilir.",
+        ["ThemeBody"] = "Görünüm anında değişir; kontrolleriniz ve değerleriniz korunur.",
+        ["LanguageBody"] = "Arayüzü yerel olarak çevirin. Özel etiketler sözlüğünüzü kullanır; değerler değişmez.",
+        ["GeneralBody"] = "Pencere tercihleri ve kalıcı kayıt özellikleri.",
+        ["Accent"] = "Özel vurgu rengi",
+        ["ResetAccent"] = "Vurgu rengini sıfırla",
+        ["ThemeJSON"] = "Tema JSON'u",
+        ["ProfileJSON"] = "Profil JSON'u",
+        ["Copy"] = "Kopyala",
+        ["ClipboardUnavailable"] = "Pano kullanılamıyor; metni seçip kopyalayın.",
+        ["Copied"] = "Kopyalandı",
+        ["SilentLoad"] = "Profili sessizce yükle",
+        ["SilentBody"] = "Geliştirici geri çağırımlarını çalıştırmadan kontrolleri güncelleyin.",
+        ["SearchEnabled"] = "Aramayı etkinleştir",
+        ["Notifications"] = "Sistem bildirimlerini göster",
+        ["PersistenceReady"] = "Kalıcı kayıt hazır",
+        ["ProfileExists"] = "Bu adda bir profil zaten var",
+        ["MissingProfile"] = "Profil bulunamadı",
+        ["InvalidName"] = "Geçerli bir profil adı girin",
+        ["SetAutoload"] = "Seçili profili kullan",
+        ["Active"] = "Etkin",
+        ["ResolvingGame"] = "Oyun adı çözümleniyor…",
+        ["WindowDestroyed"] = "Pencere yok edildi",
+        ["Ready"] = "Hazır",
+        ["Saving"] = "Kaydediliyor…",
+        ["Loading"] = "Yükleniyor…",
+        ["Modified"] = "Değiştirildi",
+        ["Selected"] = "Seçili",
+        ["LoadedWithWarnings"] = "Uyarılarla yüklendi",
+        ["RestoreFailure"] = "Profil tamamen geri yüklenemedi",
+        ["WaitingForControls"] = "Kontroller bekleniyor",
+        ["RestoreSummary"] = "%d geri yüklendi · %d kullanılamıyor · %d başarısız",
+        ["Basic Settings"] = "Temel Ayarlar",
+        ["Here are the main configuration parameters for the application or system."] = "Uygulamanın veya sistemin temel ayarları.",
+        ["Additional"] = "Ek",
+        ["Misc"] = "Çeşitli",
+        ["Enable autostart on system boot"] = "Sistem açılışında otomatik başlat",
+        ["Show popup notifications"] = "Açılır bildirimleri göster",
+        ["Interface Language"] = "Arayüz Dili",
+        ["Theme"] = "Tema",
+        ["English"] = "İngilizce",
+        ["Russian"] = "Rusça",
+        ["Deutsch"] = "Almanca",
+        ["Dark"] = "Koyu",
+        ["Light"] = "Açık",
+        ["System"] = "Sistem",
+        ["Username"] = "Kullanıcı adı",
+        ["Maximum concurrent downloads"] = "En fazla eşzamanlı indirme",
+        ["Log detail level"] = "Günlük ayrıntı düzeyi",
+        ["Controls how much information is written to the log file. Higher values mean more details."] = "Günlüğe yazılan bilgi miktarı. Yüksek değerler daha çok ayrıntı ekler.",
+        ["Allowed port range"] = "İzin verilen bağlantı noktası aralığı",
+        ["Preferred server regions"] = "Tercih edilen sunucu bölgeleri",
+        ["Select regions for potentially faster connection speeds."] = "Daha hızlı bağlantı sağlayabilecek bölgeleri seçin.",
+        ["America (North)"] = "Kuzey Amerika",
+        ["America (South)"] = "Güney Amerika",
+        ["Europe (Frankfurt)"] = "Avrupa (Frankfurt)",
+        ["Europe (London)"] = "Avrupa (Londra)",
+        ["Asia (Tokyo)"] = "Asya (Tokyo)",
+        ["Asia (Singapore)"] = "Asya (Singapur)",
+        ["Active element color"] = "Etkin öğe rengi",
+        ["Use custom background color"] = "Özel arka plan rengi kullan",
+        ["Overrides the theme's default background color when checked."] = "İşaretlendiğinde temanın varsayılan arka plan rengini değiştirir.",
+        ["Custom background color"] = "Özel arka plan rengi",
+        ["Reset all settings to default"] = "Tüm ayarları varsayılana döndür",
+        ["Response timeout range"] = "Yanıt zaman aşımı aralığı",
+        ["Enable update checks"] = "Güncellemeleri denetle",
+        ["Check for updates when the application starts."] = "Uygulama başlatıldığında güncellemeleri denetler.",
+        ["Updates"] = "Güncellemeler",
+        ["Additional settings use their own page and scroll position."] = "Ek ayarların kendi sayfası ve kaydırma konumu vardır.",
+        ["INFORMATION"] = "BİLGİ",
+        ["Local UI only"] = "Yalnızca yerel arayüz",
+        ["The showcase does not alter gameplay."] = "Tanıtım, oynanışı değiştirmez.",
+        ["Accessibility"] = "Erişilebilirlik",
+        ["Input and presentation preferences."] = "Giriş ve görünüm tercihleri.",
+        ["Enable keyboard navigation"] = "Klavye gezintisini etkinleştir",
+        ["Display Settings"] = "Görüntü Ayarları",
+        ["VISUALIZATION"] = "GÖRSELLEŞTİRME",
+        ["Parameters affecting the visual representation of data and the interface."] = "Verilerin ve arayüzün görünümünü etkileyen ayarlar.",
+        ["Enable secondary display"] = "İkincil ekranı etkinleştir",
+        ["Display information"] = "Ekran bilgisi",
+        ["Color and layout controls follow the same design tokens."] = "Renk ve yerleşim kontrolleri aynı tasarım değerlerini kullanır.",
+        ["Display grid on charts"] = "Grafiklerde ızgarayı göster",
+        ["Automatically starts the application when your computer boots up."] = "Bilgisayar açıldığında uygulamayı otomatik başlatır.",
+        ["Use font anti-aliasing"] = "Yazı tipi yumuşatma kullan",
+        ["Makes text appear smoother on screen; may slightly impact performance."] = "Metni daha pürüzsüz gösterir; performansı biraz etkileyebilir.",
+        ["Default chart type"] = "Varsayılan grafik türü",
+        ["Line"] = "Çizgi",
+        ["Bar"] = "Çubuk",
+        ["Pie"] = "Pasta",
+        ["Scatter"] = "Dağılım",
+        ["Chart line thickness"] = "Grafik çizgi kalınlığı",
+        ["Inactive element opacity"] = "Etkin olmayan öğelerin opaklığı",
+        ["Adjusts transparency of UI elements that are not currently active or hovered over."] = "Etkin olmayan veya üzerine gelinmeyen öğelerin saydamlığını ayarlar.",
+        ["Interface color scheme"] = "Arayüz renk şeması",
+        ["Contrast"] = "Kontrast",
+        ["Soft"] = "Yumuşak",
+        ["Controls the visual effects when switching between views"] = "Görünümler arası geçiş efektleri",
+        ["Fast"] = "Hızlı",
+        ["Smooth"] = "Akıcı",
+        ["Chart background color"] = "Grafik arka plan rengi",
+        ["Data highlight color"] = "Veri vurgu rengi",
+        ["Font size range"] = "Yazı tipi boyut aralığı",
+        ["Table columns to display"] = "Gösterilecek tablo sütunları",
+        ["Name"] = "Ad",
+        ["Status"] = "Durum",
+        ["Date"] = "Tarih",
+        ["Type"] = "Tür",
+        ["Watermark text"] = "Filigran metni",
+        ["Apply visual settings"] = "Görsel ayarları uygula",
+        ["Contrast range"] = "Kontrast aralığı",
+        ["Adjusts the difference between light and dark areas for better visibility."] = "Daha iyi görünürlük için açık ve koyu alanlar arasındaki farkı ayarlar.",
+        ["Profile Management"] = "Profil Yönetimi",
+        ["Advanced Parameters"] = "Gelişmiş Parametreler",
+        ["MISCELLANEOUS"] = "ÇEŞİTLİ",
+        ["Various settings not included in the main categories."] = "Ana kategorilerde yer almayan diğer ayarlar.",
+        ["Interface scale"] = "Arayüz ölçeği",
+        ["Enable debug mode"] = "Hata ayıklamayı etkinleştir",
+        ["Provides more detailed error messages and logging for troubleshooting."] = "Sorun giderme için ayrıntılı hata mesajları ve günlükler sunar.",
+        ["Send anonymous usage statistics"] = "Anonim kullanım istatistiklerini gönder",
+        ["Help improve the application by sending non-personal data about how features are used."] = "Özellik kullanımıyla ilgili kişisel olmayan verilerle uygulamanın gelişimine yardımcı olun.",
+        ["Temporary files path"] = "Geçici dosya yolu",
+        ["Autosave interval"] = "Otomatik kaydetme aralığı",
+        ["Data Sync & Backup"] = "Veri Eşitleme ve Yedekleme",
+        ["Back up settings"] = "Ayarları yedekle",
+        ["Sword"] = "Kılıç",
+        ["Melee"] = "Yakın dövüş",
+        ["Fruit"] = "Meyve",
+        ["Auto Farm"] = "Otomatik kasılma",
+        ["Combat"] = "Savaş",
+        ["Distance"] = "Mesafe",
+        ["Speed"] = "Hız",
+        ["Player"] = "Oyuncu",
+        ["Players"] = "Oyuncular",
+        ["Interface"] = "Arayüz",
+        ["Behavior"] = "Davranış",
+        ["SectionItem"] = "%d ayar",
+        ["SectionItems"] = "%d ayar",
+        ["SettingsIntro"] = "Arayüzünüz, tercihleriniz.",
+        ["ProfilesHint"] = "Kaydet ve geri yükle",
+        ["ThemesHint"] = "Renkler ve kontrast",
+        ["LanguageHint"] = "Görüntüleme dili",
+        ["GeneralHint"] = "Arayüz davranışı",
+        ["MembershipHint"] = "Plan ve erişim",
+        ["ThemeSelected"] = "Seçili",
+        ["AbyssDescription"] = "Mürekkep mavisi ve buzul vurguları",
+        ["EmberDescription"] = "Sıcak antrasit ve bakır",
+        ["ThemePreview"] = "Önizleme",
+        ["LanguageSelected"] = "Geçerli dil",
+    },
+    Indonesian = {
+        ["SpatialInspectorHint"] = "Pengaturan wilayah ini",
+        ["SpatialCharacter"] = "Karakter",
+        ["SpatialMap"] = "Peta",
+        ["SpatialEquipment"] = "Perlengkapan",
+        ["SpatialEnabled"] = "Aktif",
+        ["SpatialPriority"] = "Prioritas",
+        ["SpatialRadius"] = "Radius",
+        ["SpatialColor"] = "Warna",
+        ["SpatialOpacity"] = "Opasitas",
+        ["SpatialApplyAll"] = "Terapkan ke semua wilayah",
+        ["SpatialLocalHint"] = "Perubahan hanya berlaku pada wilayah terpilih.",
+        ["SpatialTap"] = "Ketuk wilayah untuk mengubah pengaturannya.",
+        ["SpatialReset"] = "Atur ulang pilihan",
+        ["SpatialNoSelection"] = "Belum ada pilihan",
+        ["SpatialHead"] = "Kepala",
+        ["SpatialTorso"] = "Torso",
+        ["SpatialHip"] = "Pinggul",
+        ["SpatialLeftUpperArm"] = "Lengan atas kiri",
+        ["SpatialLeftForearm"] = "Lengan bawah kiri",
+        ["SpatialLeftHand"] = "Tangan kiri",
+        ["SpatialRightUpperArm"] = "Lengan atas kanan",
+        ["SpatialRightForearm"] = "Lengan bawah kanan",
+        ["SpatialRightHand"] = "Tangan kanan",
+        ["SpatialLeftThigh"] = "Paha kiri",
+        ["SpatialLeftShin"] = "Tulang kering kiri",
+        ["SpatialLeftFoot"] = "Kaki kiri",
+        ["SpatialRightThigh"] = "Paha kanan",
+        ["SpatialRightShin"] = "Tulang kering kanan",
+        ["SpatialRightFoot"] = "Kaki kanan",
+        ["SpatialNorth"] = "Utara",
+        ["SpatialCourtyard"] = "Halaman",
+        ["SpatialWest"] = "Barat",
+        ["SpatialEast"] = "Timur",
+        ["SpatialChest"] = "Dada",
+        ["SpatialLegs"] = "Tungkai",
+        ["SpatialFeet"] = "Kaki",
+        ["SpatialAccessory"] = "Aksesori",
+        ["SpatialWeapon"] = "Senjata",
+        ["RadialOpen"] = "Buka menu radial",
+        ["RadialCancel"] = "Batal",
+        ["RadialHint"] = "Tahan · Seret · Lepaskan",
+        ["WebhookSampleFields"] = "Status: Selesai   •   Durasi: 02:34",
+        ["WebhookURL"] = "URL webhook",
+        ["WebhookURLPlaceholder"] = "Tempel URL webhook Discord",
+        ["WebhookEvents"] = "Kirim notifikasi saat",
+        ["WebhookEventsBody"] = "Pilih peristiwa yang ingin dikirim.",
+        ["WebhookMentions"] = "Sebutan",
+        ["WebhookMentionsBody"] = "Hindari sebutan yang tidak diinginkan.",
+        ["WebhookInterval"] = "Interval minimum",
+        ["WebhookIntervalBody"] = "Cegah notifikasi ganda atau terlalu sering.",
+        ["WebhookMessageTitle"] = "Judul pesan",
+        ["WebhookMessageBody"] = "Isi pesan",
+        ["WebhookPreview"] = "PRATINJAU",
+        ["WebhookPreviewOnly"] = "Hanya pratinjau · Belum dikirim",
+        ["WebhookPrivate"] = "URL pribadi · Tidak disimpan ke profil",
+        ["WebhookPlaintext"] = "URL disimpan sebagai teks biasa",
+        ["WebhookSendTest"] = "Kirim uji coba",
+        ["WebhookEditMessage"] = "Edit pesan",
+        ["WebhookSending"] = "Mengirim…",
+        ["WebhookNotTested"] = "URL valid · Belum diuji",
+        ["WebhookMissingURL"] = "Tambahkan URL webhook",
+        ["WebhookInvalidURL"] = "URL webhook Discord tidak valid",
+        ["WebhookUnsupported"] = "Permintaan HTTP tidak tersedia",
+        ["WebhookSent"] = "Berhasil dikirim",
+        ["WebhookFailed"] = "Gagal mengirim",
+        ["WebhookUnavailable"] = "Webhook tidak tersedia",
+        ["WebhookRejected"] = "Permintaan ditolak",
+        ["WebhookRateLimited"] = "Batas permintaan · Harap tunggu",
+        ["WebhookRetryReady"] = "Siap mencoba lagi",
+        ["WebhookCancelled"] = "Pengiriman dibatalkan",
+        ["WebhookTimeout"] = "Waktu permintaan habis",
+        ["WebhookTestTitle"] = "Uji coba webhook",
+        ["WebhookTestBody"] = "Pesan uji coba dari Neron.",
+        ["DynamicIdle"] = "Belum dimuat",
+        ["DynamicIdleBody"] = "Muat konten saat Anda siap.",
+        ["DynamicLoading"] = "Memuat",
+        ["DynamicLoadingBody"] = "Mengambil konten…",
+        ["DynamicReady"] = "Siap",
+        ["DynamicReadyBody"] = "Konten sudah siap.",
+        ["DynamicEmpty"] = "Tidak ada hasil",
+        ["DynamicEmptyBody"] = "Belum ada yang ditampilkan. Silakan coba lagi.",
+        ["DynamicError"] = "Tidak dapat memuat",
+        ["DynamicErrorBody"] = "Coba lagi. Detail tersedia di log skrip.",
+        ["DynamicLoad"] = "Muat",
+        ["DynamicRetry"] = "Coba lagi",
+        ["DynamicTimeout"] = "Permintaan terlalu lama. Coba lagi.",
+        ["Settings"] = "Pengaturan",
+        ["Profiles"] = "Profil",
+        ["Themes"] = "Tema",
+        ["Language"] = "Bahasa",
+        ["General"] = "Umum",
+        ["Membership"] = "Keanggotaan",
+        ["MembershipBody"] = "Akses Premium atau komunitas. Pilihan Anda.",
+        ["LicenseMonthly"] = "Bulanan",
+        ["LicenseLifetime"] = "Seumur hidup",
+        ["PerMonth"] = "/ bulan",
+        ["OneTime"] = "sekali bayar",
+        ["MonthlyAccess"] = "Akses Premium bulanan",
+        ["LifetimeAccess"] = "Akses Premium seumur hidup. Sekali bayar.",
+        ["BuyMonthly"] = "Beli bulanan",
+        ["BuyLifetime"] = "Beli seumur hidup",
+        ["BuyLicense"] = "Beli lisensi",
+        ["PurchaseCopyHint"] = "Kedua tombol menyalin tautan toko. Pilih lisensi Anda di toko.",
+        ["CommunityTitle"] = "Di sinilah tempat Anda",
+        ["CommunityBody"] = "Bagikan masukan, dapatkan bantuan, dan ikuti kabar PLAK. Bergabung bersifat opsional.",
+        ["JoinDiscord"] = "Gabung Discord",
+        ["CommunityCopyHint"] = "Menyalin tautan undangan",
+        ["PlakPremium"] = "PLAK Premium",
+        ["PlakCommunity"] = "Komunitas PLAK",
+        ["LicensePrices"] = "$5 / bulan  ·  $12 seumur hidup",
+        ["PremiumActive"] = "Premium aktif",
+        ["CopyLinkFailed"] = "Gagal menyalin",
+        ["PremiumRequired"] = "Memerlukan Premium",
+        ["BuyPremium"] = "Beli Premium",
+        ["UnlockPremiumFeature"] = "Buka %s dengan Premium.",
+        ["PurchaseNotConfigured"] = "Pembelian Premium belum dikonfigurasi.",
+        ["Premium"] = "Premium",
+        ["PremiumBody"] = "Status dari layanan validasi Anda.",
+        ["PremiumStatus"] = "Status",
+        ["PremiumExpiry"] = "Kedaluwarsa (UTC)",
+        ["PremiumPlan"] = "Paket",
+        ["NotVerified"] = "Belum diverifikasi",
+        ["Inactive"] = "Tidak aktif",
+        ["Expired"] = "Kedaluwarsa",
+        ["NotProvided"] = "Tidak diberikan",
+        ["Tooltips"] = "Petunjuk",
+        ["Resizable"] = "Izinkan perubahan ukuran jendela",
+        ["RememberSize"] = "Ingat ukuran jendela",
+        ["RememberPosition"] = "Ingat posisi jendela",
+        ["DragToResize"] = "Seret untuk mengubah ukuran jendela.",
+        ["Close"] = "Tutup",
+        ["Create"] = "Buat",
+        ["Save"] = "Simpan",
+        ["Load"] = "Muat",
+        ["Rename"] = "Ubah nama",
+        ["Duplicate"] = "Duplikat",
+        ["Delete"] = "Hapus",
+        ["Refresh"] = "Segarkan",
+        ["Import"] = "Impor",
+        ["Export"] = "Ekspor",
+        ["Confirm"] = "Konfirmasi",
+        ["Cancel"] = "Batal",
+        ["Autoload"] = "Muat otomatis",
+        ["Enable"] = "Aktifkan",
+        ["Disable"] = "Nonaktifkan",
+        ["Search"] = "Cari pengaturan",
+        ["NoMatches"] = "Tidak ada pengaturan yang cocok",
+        ["NoOptions"] = "Tidak ada opsi",
+        ["None"] = "Tidak ada",
+        ["Select"] = "Pilih",
+        ["NoProfiles"] = "Belum ada profil",
+        ["ProfileName"] = "Nama profil",
+        ["Saved"] = "Profil disimpan",
+        ["Loaded"] = "Profil dimuat",
+        ["Deleted"] = "Profil dihapus",
+        ["Renamed"] = "Nama profil diubah",
+        ["Duplicated"] = "Profil diduplikasi",
+        ["Imported"] = "Profil diimpor",
+        ["AutoloadEnabled"] = "Muat otomatis aktif",
+        ["AutoloadDisabled"] = "Muat otomatis nonaktif",
+        ["ThemeChanged"] = "Tema diubah",
+        ["ThemeImported"] = "Tema diimpor",
+        ["InvalidJSON"] = "JSON tidak valid",
+        ["InvalidProfile"] = "Profil tidak valid",
+        ["FilesystemUnavailable"] = "Sistem berkas tidak tersedia",
+        ["SaveFailure"] = "Tidak dapat menyimpan",
+        ["Failed"] = "Operasi gagal",
+        ["DeleteQuestion"] = "Hapus profil ini? Tindakan ini tidak dapat dibatalkan.",
+        ["ProfileBody"] = "Simpan konfigurasi bernama untuk game ini. Hanya kontrol yang memiliki flag yang disertakan.",
+        ["ThemeBody"] = "Tampilan langsung berubah; kontrol dan nilai Anda tetap sama.",
+        ["LanguageBody"] = "Terjemahkan antarmuka secara lokal. Label khusus memakai kamus Anda; nilai tidak berubah.",
+        ["GeneralBody"] = "Preferensi jendela dan kemampuan penyimpanan.",
+        ["Accent"] = "Warna aksen khusus",
+        ["ResetAccent"] = "Atur ulang aksen",
+        ["ThemeJSON"] = "JSON tema",
+        ["ProfileJSON"] = "JSON profil",
+        ["Copy"] = "Salin",
+        ["ClipboardUnavailable"] = "Papan klip tidak tersedia; pilih dan salin teks.",
+        ["Copied"] = "Disalin",
+        ["SilentLoad"] = "Muat profil tanpa callback",
+        ["SilentBody"] = "Perbarui kontrol tanpa memicu callback pengembang.",
+        ["SearchEnabled"] = "Aktifkan pencarian",
+        ["Notifications"] = "Tampilkan pemberitahuan sistem",
+        ["PersistenceReady"] = "Penyimpanan siap",
+        ["ProfileExists"] = "Profil dengan nama ini sudah ada",
+        ["MissingProfile"] = "Profil tidak ditemukan",
+        ["InvalidName"] = "Masukkan nama profil yang valid",
+        ["SetAutoload"] = "Gunakan profil terpilih",
+        ["Active"] = "Aktif",
+        ["ResolvingGame"] = "Mencari nama game…",
+        ["WindowDestroyed"] = "Jendela sudah dihapus",
+        ["Ready"] = "Siap",
+        ["Saving"] = "Menyimpan…",
+        ["Loading"] = "Memuat…",
+        ["Modified"] = "Diubah",
+        ["Selected"] = "Terpilih",
+        ["LoadedWithWarnings"] = "Dimuat dengan peringatan",
+        ["RestoreFailure"] = "Profil tidak sepenuhnya dipulihkan",
+        ["WaitingForControls"] = "Menunggu kontrol",
+        ["RestoreSummary"] = "%d dipulihkan · %d tidak tersedia · %d gagal",
+        ["Basic Settings"] = "Pengaturan Dasar",
+        ["Here are the main configuration parameters for the application or system."] = "Parameter konfigurasi utama untuk aplikasi atau sistem.",
+        ["Additional"] = "Tambahan",
+        ["Misc"] = "Lainnya",
+        ["Enable autostart on system boot"] = "Jalankan otomatis saat sistem menyala",
+        ["Show popup notifications"] = "Tampilkan notifikasi pop-up",
+        ["Interface Language"] = "Bahasa Antarmuka",
+        ["Theme"] = "Tema",
+        ["English"] = "Inggris",
+        ["Russian"] = "Rusia",
+        ["Deutsch"] = "Jerman",
+        ["Dark"] = "Gelap",
+        ["Light"] = "Terang",
+        ["System"] = "Sistem",
+        ["Username"] = "Nama pengguna",
+        ["Maximum concurrent downloads"] = "Unduhan bersamaan maksimum",
+        ["Log detail level"] = "Tingkat detail log",
+        ["Controls how much information is written to the log file. Higher values mean more details."] = "Mengatur informasi dalam log. Nilai lebih tinggi menambah detail.",
+        ["Allowed port range"] = "Rentang port yang diizinkan",
+        ["Preferred server regions"] = "Wilayah server pilihan",
+        ["Select regions for potentially faster connection speeds."] = "Pilih wilayah yang berpotensi memberi koneksi lebih cepat.",
+        ["America (North)"] = "Amerika Utara",
+        ["America (South)"] = "Amerika Selatan",
+        ["Europe (Frankfurt)"] = "Eropa (Frankfurt)",
+        ["Europe (London)"] = "Eropa (London)",
+        ["Asia (Tokyo)"] = "Asia (Tokyo)",
+        ["Asia (Singapore)"] = "Asia (Singapura)",
+        ["Active element color"] = "Warna elemen aktif",
+        ["Use custom background color"] = "Gunakan warna latar khusus",
+        ["Overrides the theme's default background color when checked."] = "Mengganti warna latar bawaan tema saat dicentang.",
+        ["Custom background color"] = "Warna latar khusus",
+        ["Reset all settings to default"] = "Kembalikan semua pengaturan bawaan",
+        ["Response timeout range"] = "Rentang batas waktu respons",
+        ["Enable update checks"] = "Aktifkan pemeriksaan pembaruan",
+        ["Check for updates when the application starts."] = "Periksa pembaruan saat aplikasi dimulai.",
+        ["Updates"] = "Pembaruan",
+        ["Additional settings use their own page and scroll position."] = "Pengaturan tambahan memiliki halaman dan posisi gulir sendiri.",
+        ["INFORMATION"] = "INFORMASI",
+        ["Local UI only"] = "Hanya antarmuka lokal",
+        ["The showcase does not alter gameplay."] = "Demo ini tidak mengubah permainan.",
+        ["Accessibility"] = "Aksesibilitas",
+        ["Input and presentation preferences."] = "Preferensi input dan tampilan.",
+        ["Enable keyboard navigation"] = "Aktifkan navigasi keyboard",
+        ["Display Settings"] = "Pengaturan Tampilan",
+        ["VISUALIZATION"] = "VISUALISASI",
+        ["Parameters affecting the visual representation of data and the interface."] = "Parameter tampilan data dan antarmuka.",
+        ["Enable secondary display"] = "Aktifkan layar sekunder",
+        ["Display information"] = "Informasi tampilan",
+        ["Color and layout controls follow the same design tokens."] = "Kontrol warna dan tata letak memakai token desain yang sama.",
+        ["Display grid on charts"] = "Tampilkan kisi pada grafik",
+        ["Automatically starts the application when your computer boots up."] = "Menjalankan aplikasi otomatis saat komputer menyala.",
+        ["Use font anti-aliasing"] = "Gunakan penghalusan font",
+        ["Makes text appear smoother on screen; may slightly impact performance."] = "Memperhalus teks di layar; kinerja mungkin sedikit terpengaruh.",
+        ["Default chart type"] = "Jenis grafik bawaan",
+        ["Line"] = "Garis",
+        ["Bar"] = "Batang",
+        ["Pie"] = "Lingkaran",
+        ["Scatter"] = "Sebar",
+        ["Chart line thickness"] = "Ketebalan garis grafik",
+        ["Inactive element opacity"] = "Opasitas elemen tidak aktif",
+        ["Adjusts transparency of UI elements that are not currently active or hovered over."] = "Mengatur transparansi elemen yang tidak aktif atau tidak disorot kursor.",
+        ["Interface color scheme"] = "Skema warna antarmuka",
+        ["Contrast"] = "Kontras",
+        ["Soft"] = "Lembut",
+        ["Controls the visual effects when switching between views"] = "Efek visual saat berganti tampilan",
+        ["Fast"] = "Cepat",
+        ["Smooth"] = "Halus",
+        ["Chart background color"] = "Warna latar grafik",
+        ["Data highlight color"] = "Warna sorotan data",
+        ["Font size range"] = "Rentang ukuran font",
+        ["Table columns to display"] = "Kolom tabel yang ditampilkan",
+        ["Name"] = "Nama",
+        ["Status"] = "Status",
+        ["Date"] = "Tanggal",
+        ["Type"] = "Jenis",
+        ["Watermark text"] = "Teks tanda air",
+        ["Apply visual settings"] = "Terapkan pengaturan visual",
+        ["Contrast range"] = "Rentang kontras",
+        ["Adjusts the difference between light and dark areas for better visibility."] = "Mengatur perbedaan area terang dan gelap agar lebih jelas.",
+        ["Profile Management"] = "Pengelolaan Profil",
+        ["Advanced Parameters"] = "Parameter Lanjutan",
+        ["MISCELLANEOUS"] = "LAINNYA",
+        ["Various settings not included in the main categories."] = "Pengaturan lain di luar kategori utama.",
+        ["Interface scale"] = "Skala antarmuka",
+        ["Enable debug mode"] = "Aktifkan mode debug",
+        ["Provides more detailed error messages and logging for troubleshooting."] = "Menambah detail pesan kesalahan dan log untuk pemecahan masalah.",
+        ["Send anonymous usage statistics"] = "Kirim statistik penggunaan anonim",
+        ["Help improve the application by sending non-personal data about how features are used."] = "Bantu tingkatkan aplikasi dengan data nonpribadi tentang penggunaan fitur.",
+        ["Temporary files path"] = "Lokasi berkas sementara",
+        ["Autosave interval"] = "Interval simpan otomatis",
+        ["Data Sync & Backup"] = "Sinkronisasi dan Pencadangan Data",
+        ["Back up settings"] = "Cadangkan pengaturan",
+        ["Sword"] = "Pedang",
+        ["Melee"] = "Jarak dekat",
+        ["Fruit"] = "Buah",
+        ["Auto Farm"] = "Farming otomatis",
+        ["Combat"] = "Pertarungan",
+        ["Distance"] = "Jarak",
+        ["Speed"] = "Kecepatan",
+        ["Player"] = "Pemain",
+        ["Players"] = "Pemain",
+        ["Interface"] = "Antarmuka",
+        ["Behavior"] = "Perilaku",
+        ["SectionItem"] = "%d pengaturan",
+        ["SectionItems"] = "%d pengaturan",
+        ["SettingsIntro"] = "Antarmuka Anda, preferensi Anda.",
+        ["ProfilesHint"] = "Simpan dan pulihkan",
+        ["ThemesHint"] = "Warna dan kontras",
+        ["LanguageHint"] = "Bahasa tampilan",
+        ["GeneralHint"] = "Perilaku antarmuka",
+        ["MembershipHint"] = "Paket dan akses",
+        ["ThemeSelected"] = "Terpilih",
+        ["AbyssDescription"] = "Biru tinta dan aksen gletser",
+        ["EmberDescription"] = "Abu arang hangat dan tembaga",
+        ["ThemePreview"] = "Pratinjau",
+        ["LanguageSelected"] = "Bahasa saat ini",
+    },
+}
+
+for language, dictionary in pairs(Locale.extra) do
+    Locale.dictionaries[language] = dictionary
+end
+Locale.extra = nil
 -- Source strings are retained on their owners; only display fields/GUI properties change.
 -- This registry is separate from state ownership and never calls Set/SetValue/_commit.
 Locale.aliases = {}
@@ -13198,7 +14932,8 @@ function SettingsUI.choice(w, entry, bag, selected)
         end
         local on, state = self.selected(), self.choiceState
         w.motion:To(self.row, T.Motion.Micro, {
-            BackgroundTransparency = self.transparent and ((on or state.Hovered or state.Pressed) and 0 or 1) or 0,
+            BackgroundTransparency = self.navigation and 1
+                or (self.transparent and ((on or state.Hovered or state.Pressed) and 0 or 1) or 0),
             BackgroundColor3 = state.Pressed and w.theme.RowPressed
                 or (on and w.theme.SurfaceSelected or (state.Hovered and w.theme.RowHover or w.theme.RowBackground)),
         })
@@ -13208,6 +14943,14 @@ function SettingsUI.choice(w, entry, bag, selected)
                 T.Motion.Micro,
                 { TextColor3 = (on or state.Hovered) and w.theme.TextPrimary or w.theme.SystemText }
             )
+        end
+        if self.note then
+            self.note.TextColor3 = w.theme.SystemText
+            self.note.TextTransparency = on and 0 or 0.28
+        end
+        if self.selectedLabel then
+            self.selectedLabel.Visible = on
+            self.selectedLabel.TextColor3 = w.theme.SystemText
         end
         if self.icon then
             Icons.color(
@@ -13265,7 +15008,7 @@ function SettingsUI.choice(w, entry, bag, selected)
     entry:_render()
     return entry
 end
-function SettingsUI.button(w, parent, key, props, bag, callback, primary)
+function SettingsUI.button(w, parent, key, props, bag, callback, primary, ghost)
     local button = U.button(parent, props)
     U.corner(button, T.Radius.Button)
     local label = SettingsUI.text(
@@ -13283,10 +15026,11 @@ function SettingsUI.button(w, parent, key, props, bag, callback, primary)
         local disabled = button:GetAttribute("NeronPromotionDisabled") == true
         w.motion:To(stroke, T.Motion.Micro, {
             Color = w.theme.SurfaceEdge,
-            Transparency = primary and not disabled and 1 or (state.Hovered and not disabled and 0.2 or 0.55),
+            Transparency = ghost and 1
+                or (primary and not disabled and 1 or (state.Hovered and not disabled and 0.2 or 0.55)),
         })
         w.motion:To(button, T.Motion.Micro, {
-            BackgroundTransparency = 0,
+            BackgroundTransparency = ghost and (state.Hovered and 0.5 or 1) or 0,
             BackgroundColor3 = disabled and w.theme.SurfaceSecondary
                 or state.Pressed and (primary and w.theme.AccentPressed or w.theme.RowPressed)
                 or (
@@ -13468,20 +15212,20 @@ function SettingsUI.confirm(w, title, message, detail, callback)
         { Position = UDim2.fromOffset(16, 12), Size = UDim2.new(1, -32, 0, 24), Font = Enum.Font.GothamBold },
         "TextPrimary"
     )
-    SettingsUI.text(w, panel, message, {
+    local copy = SettingsUI.text(w, panel, message, {
         Position = UDim2.fromOffset(16, 44),
         Size = UDim2.new(1, -32, 0, 44),
         TextWrapped = true,
         TextTruncate = Enum.TextTruncate.None,
     })
-    U.label(
+    local detailLabel = U.label(
         panel,
         detail or "",
         T.Type.Description,
         w.theme.TextSecondary,
         { Position = UDim2.fromOffset(16, 91), Size = UDim2.new(1, -32, 0, 18) }
     )
-    SettingsUI.button(
+    local cancelButton = SettingsUI.button(
         w,
         panel,
         "Cancel",
@@ -13491,7 +15235,7 @@ function SettingsUI.confirm(w, title, message, detail, callback)
             SettingsUI.dismissConfirmation(w)
         end
     )
-    SettingsUI.button(
+    local confirmButton = SettingsUI.button(
         w,
         panel,
         "Confirm",
@@ -13506,7 +15250,9 @@ function SettingsUI.confirm(w, title, message, detail, callback)
     U.connect(bag, shade.Activated, function()
         SettingsUI.dismissConfirmation(w)
     end)
-    w.confirmation = { bag = bag, panel = panel }
+    w.confirmation =
+        { bag = bag, panel = panel, copy = copy, detail = detailLabel, buttons = { cancelButton, confirmButton } }
+    SettingsUI.transientLayout(w)
     w.motion:To(panel, T.Motion.Normal, { GroupTransparency = 0 })
 end
 function SettingsUI.dismissTransfer(w)
@@ -13593,7 +15339,7 @@ function SettingsUI.transfer(w, kind, json, import)
     end
     U.connect(bag, box:GetPropertyChangedSignal("Text"), resize)
     U.connect(bag, box:GetPropertyChangedSignal("AbsoluteSize"), resize)
-    SettingsUI.button(
+    local closeButton = SettingsUI.button(
         w,
         panel,
         "Close",
@@ -13603,7 +15349,7 @@ function SettingsUI.transfer(w, kind, json, import)
             SettingsUI.dismissTransfer(w)
         end
     )
-    SettingsUI.button(
+    local actionButton = SettingsUI.button(
         w,
         panel,
         import and "Import" or "Copy",
@@ -13637,7 +15383,8 @@ function SettingsUI.transfer(w, kind, json, import)
     U.connect(bag, shade.Activated, function()
         SettingsUI.dismissTransfer(w)
     end)
-    w.transfer = { bag = bag, panel = panel, box = box }
+    w.transfer = { bag = bag, panel = panel, box = box, host = host, buttons = { closeButton, actionButton } }
+    SettingsUI.transientLayout(w)
     resize()
     w.motion:To(panel, T.Motion.Normal, { GroupTransparency = 0 })
 end
@@ -13681,12 +15428,61 @@ function SettingsUI.control(w, page, method, key, config, description)
 end
 function SettingsUI.heading(w, page, key, body)
     local control = SettingsUI.control(w, page, "AddParagraph", key, {}, body)
-    U.bind(w, control.label, "TextColor3", "TextPrimary")
     control.systemHeading = true
+    control.row.BackgroundTransparency = 1
+    U.bind(w, control.label, "TextColor3", "TextPrimary")
+    U.bind(w, control.desc, "TextColor3", "SystemText")
+    function control:layoutVisual()
+        local width = math.max(1, self.row.AbsoluteSize.X / w.scale - 32)
+        local description = Locale.text(w, body)
+        local height =
+            math.max(18, math.ceil(S.Text:GetTextSize(description, 12, Enum.Font.Gotham, Vector2.new(width, 2000)).Y))
+        self.row.Size = UDim2.new(1, 0, 0, 36 + height)
+        self.label.Position, self.label.Size = UDim2.fromOffset(16, 0), UDim2.new(1, -32, 0, 26)
+        self.label.TextSize, self.label.Font = 20, Enum.Font.GothamBold
+        self.desc.Visible = true
+        self.desc.Position, self.desc.Size = UDim2.fromOffset(16, 30), UDim2.new(1, -32, 0, height)
+        self.desc.TextSize = 12
+        self.separator.Visible = false
+    end
+    local render = control._render
+    function control:_render()
+        render(self)
+        w.motion:To(self.desc, T.Motion.Micro, { TextColor3 = w.theme.SystemText })
+    end
+    control:_layout()
     control:_render()
-    control.label.Font = Enum.Font.GothamBold
-    control.label.TextSize = T.Type.PageTitle
     return control
+end
+function SettingsUI.gallery(w, page, name)
+    local frame = U.frame(
+        page.scroll.frame,
+        { Name = name, Size = UDim2.new(1, 0, 0, 1), LayoutOrder = 4, ZIndex = page.scroll.frame.ZIndex + 1 },
+        w
+    )
+    page.bag:Add(frame)
+    return frame
+end
+function SettingsUI.galleryLayout(w, page, frame, entries, order, height)
+    if not frame then
+        return
+    end
+    local width = math.max(1, page.scroll.frame.AbsoluteSize.X / w.scale)
+    local columns = width >= 500 and 2 or 1
+    local gap = T.Settings.Gap
+    local cell = math.max(1, (width - gap * (columns - 1)) / columns)
+    frame.Size = UDim2.new(1, 0, 0, math.ceil(#order / columns) * (height + gap) - gap)
+    for i, name in ipairs(order) do
+        local entry = entries[name]
+        entry.row.Position =
+            UDim2.fromOffset(((i - 1) % columns) * (cell + gap), math.floor((i - 1) / columns) * (height + gap))
+        entry.row.Size = UDim2.fromOffset(cell, height)
+        if entry.preview then
+            local previewWidth = math.min(190, math.max(80, cell - 28))
+            entry.preview.Size = UDim2.fromOffset(previewWidth, 82)
+            entry.preview.Position = UDim2.new(0.5, -previewWidth / 2, 0, 12)
+        end
+    end
 end
 function SettingsUI.context(w, row, name)
     local owner = { state = {}, page = w.settingsPages.Profiles, profileContext = true }
@@ -13799,6 +15595,30 @@ function SettingsUI.updateProfileStates(w)
         end
     end
 end
+function SettingsUI.profileLayout(w)
+    if not w.profileList or not w.profileRows then
+        return
+    end
+    local height = math.max(56, math.ceil(44 / w.scale))
+    local count = 0
+    for _, entry in pairs(w.profileRows) do
+        local row = entry.row
+        count += 1
+        row.Size = UDim2.new(1, 0, 0, height)
+        row.Position = UDim2.fromOffset(0, (row.LayoutOrder - 1) * (height + 4))
+        entry.name.Position, entry.name.Size = UDim2.fromOffset(42, height / 2 - 21), UDim2.new(1, -height - 54, 0, 22)
+        entry.state.Position = UDim2.fromOffset(42, height / 2 + 1)
+        entry.autoload.Size = UDim2.new(0.45, -height - 8, 0, 16)
+        entry.autoload.Position = UDim2.new(0.55, 0, 0, height / 2 + 1)
+        entry.edge.Position = UDim2.fromOffset(0, (height - 28) / 2)
+        entry.icon.Position = UDim2.fromOffset(16, (height - 14) / 2)
+        local menu = row:FindFirstChild("ProfileActions")
+        menu.Position, menu.Size = UDim2.new(1, -height, 0, 0), UDim2.fromOffset(height, height)
+    end
+    if count > 0 then
+        w.profileList.Size = UDim2.new(1, 0, 0, count * (height + 4) - 4)
+    end
+end
 function SettingsUI.refreshProfiles(w)
     if w.overlay.active and w.overlay.active.owner.profileContext then
         w.overlay:Close(true)
@@ -13817,19 +15637,21 @@ function SettingsUI.refreshProfiles(w)
     w.profileListBag = bag
     w.profileRows = {}
     local page = w.settingsPages.Profiles
+    local list = w.profileList
     local profiles, err = w:RefreshProfiles()
     w.persistence:Feedback()
     if w.pathLabel then
         w.pathLabel:Set(w.persistence.folder, true)
     end
     if not profiles or #profiles == 0 then
-        local empty = U.frame(page.scroll.frame, {
+        local empty = U.frame(list, {
             Name = "ProfileEmpty",
             Size = UDim2.new(1, 0, 0, 64),
             LayoutOrder = 5,
             ZIndex = page.scroll.frame.ZIndex + 1,
         }, w, "RowBackground")
         bag:Add(empty)
+        list.Size = UDim2.new(1, 0, 0, 64)
         U.corner(empty, T.Radius.Row)
         SettingsUI.text(
             w,
@@ -13838,12 +15660,14 @@ function SettingsUI.refreshProfiles(w)
             { Position = UDim2.fromOffset(16, 0), Size = UDim2.new(1, -32, 1, 0) }
         )
     else
-        local autoload = w:GetAutoload()
+        local rowHeight = math.max(56, math.ceil(44 / w.scale))
+        list.Size = UDim2.new(1, 0, 0, #profiles * (rowHeight + 4) - 4)
         for i, name in ipairs(profiles) do
-            local row = U.button(page.scroll.frame, {
+            local row = U.button(list, {
                 Name = "Profile",
-                Size = UDim2.new(1, 0, 0, 48),
-                LayoutOrder = 5 + i,
+                Size = UDim2.new(1, 0, 0, rowHeight),
+                Position = UDim2.fromOffset(0, (i - 1) * (rowHeight + 4)),
+                LayoutOrder = i,
                 BackgroundTransparency = 0,
                 ZIndex = page.scroll.frame.ZIndex + 1,
             })
@@ -13856,27 +15680,27 @@ function SettingsUI.refreshProfiles(w)
                 w.persistence.activeProfile == name and "SurfaceSelected" or "RowBackground"
             )
             local glyph = Icons.make(row, "folder", 14, w.theme.TextSecondary, w)
-            glyph.Position = UDim2.fromOffset(14, 17)
+            glyph.Position = UDim2.fromOffset(16, 21)
             local title = U.label(row, name, T.Type.Value, w.theme.TextPrimary, {
-                Position = UDim2.fromOffset(38, 3),
+                Position = UDim2.fromOffset(42, 7),
                 Size = UDim2.new(1, -92, 0, 21),
             })
             local state = U.label(row, "", 10, w.theme.TextSecondary, {
-                Position = UDim2.fromOffset(38, 25),
+                Position = UDim2.fromOffset(42, 29),
                 Size = UDim2.new(0.55, -40, 0, 16),
             })
             local badge = U.label(row, "", 10, w.theme.Accent, {
-                Position = UDim2.new(0.55, 0, 0, 25),
+                Position = UDim2.new(0.55, 0, 0, 29),
                 Size = UDim2.new(0.45, -50, 0, 16),
                 TextXAlignment = Enum.TextXAlignment.Right,
             })
             local edge = U.frame(row, {
-                Position = UDim2.fromOffset(0, 10),
+                Position = UDim2.fromOffset(0, 14),
                 Size = UDim2.fromOffset(2, 28),
                 BackgroundTransparency = 0,
                 ZIndex = row.ZIndex + 1,
             }, w, "Accent")
-            local widgets = { row = row, name = title, state = state, autoload = badge, edge = edge }
+            local widgets = { row = row, name = title, state = state, autoload = badge, edge = edge, icon = glyph }
             -- Keep the public/internal status label separate from interaction state.
             SettingsUI.choice(w, widgets, bag, function()
                 return w.persistence.activeProfile == name or w.selectedProfile == name
@@ -13884,12 +15708,13 @@ function SettingsUI.refreshProfiles(w)
             w.profileRows[name] = widgets
             local menu = U.button(row, {
                 Name = "ProfileActions",
-                Position = UDim2.new(1, -44, 0, 2),
-                Size = UDim2.fromOffset(40, 44),
+                Position = UDim2.new(1, -rowHeight, 0, 0),
+                Size = UDim2.fromOffset(rowHeight, rowHeight),
                 ZIndex = row.ZIndex + 2,
             })
             local icon = Icons.make(menu, "chevron", 8, w.theme.SystemText, w)
-            icon.Position = UDim2.fromOffset(16, 18)
+            icon.Position = UDim2.fromScale(0.5, 0.5)
+            icon.AnchorPoint = Vector2.new(0.5, 0.5)
             U.connect(bag, row.Activated, function()
                 if not SettingsUI.interactive(w, row) then
                     return
@@ -13909,6 +15734,7 @@ function SettingsUI.refreshProfiles(w)
             end)
         end
     end
+    SettingsUI.profileLayout(w)
     SettingsUI.updateProfileStates(w)
     page.scroll:Update()
 end
@@ -13916,22 +15742,54 @@ function SettingsUI.profiles(w, page)
     SettingsUI.heading(w, page, "Profiles", "ProfileBody")
     w.persistenceLabel = SettingsUI.control(w, page, "AddLabel", w.persistence:Status())
     w.pathLabel = page:AddLabel(w.persistence.folder)
+    local composer = U.frame(page.scroll.frame, {
+        Name = "ProfileComposer",
+        Size = UDim2.new(1, 0, 0, 88),
+        LayoutOrder = 8,
+        ZIndex = page.scroll.frame.ZIndex + 1,
+    }, w)
+    page.bag:Add(composer)
+    w.profileComposer = composer
     w.profileName = SettingsUI.control(w, page, "AddTextbox", "ProfileName", { Default = "Default", MaxLength = 80 })
-    SettingsUI.control(w, page, "AddButton", "Create", {
-        Primary = true,
-        Callback = function()
+    w.profileName.row.Parent = composer
+    function w.profileName:layoutVisual()
+        local width = math.max(1, composer.AbsoluteSize.X / w.scale - w.profileCreateWidth - 12)
+        local hit = math.max(44, math.ceil(44 / w.scale))
+        self.row.Size = UDim2.fromOffset(width, hit + 32)
+        self.label.Position, self.label.Size = UDim2.fromOffset(0, 0), UDim2.new(1, 0, 0, 24)
+        self.lane.Position, self.lane.Size = UDim2.new(1, 0, 0, 30), UDim2.new(1, 0, 0, hit)
+        self.box.Size = UDim2.new(1, 0, 0, math.max(40, hit))
+        self.separator.Visible = false
+    end
+    w.profileCreateWidth = 120
+    w.profileCreate = SettingsUI.button(
+        w,
+        composer,
+        "Create",
+        { Name = "CreateProfile", ZIndex = composer.ZIndex + 2 },
+        page.bag,
+        function()
             local ok, err = w:CreateProfile(w.profileName:Get())
             SettingsUI.result(w, ok, err, "Saved")
             SettingsUI.refreshProfiles(w)
         end,
-    })
+        true
+    )
+    w.profileList = U.frame(page.scroll.frame, {
+        Name = "ProfileList",
+        Size = UDim2.new(1, 0, 0, 1),
+        LayoutOrder = 10,
+        ZIndex = page.scroll.frame.ZIndex + 1,
+    }, w)
+    page.bag:Add(w.profileList)
     local toolbar = U.frame(page.scroll.frame, {
         Name = "ProfileToolbar",
         Size = UDim2.new(1, 0, 0, 176),
-        LayoutOrder = 10000,
+        LayoutOrder = 12,
         ZIndex = page.scroll.frame.ZIndex + 1,
     }, w)
     page.bag:Add(toolbar)
+    w.profileToolbar = toolbar
     local actions = {
         {
             key = "Save",
@@ -14008,16 +15866,21 @@ function SettingsUI.profiles(w, page)
     end
     w.profileToolbarLayout = function()
         local width = toolbar.AbsoluteSize.X / w.scale
+        w.profileCreateWidth = math.min(width * 0.42, math.max(88, U.width(Locale.text(w, "Create"), 12) + 32))
+        local hit = math.max(T.Geometry.SettingsHit, math.ceil(44 / w.scale))
+        composer.Size = UDim2.new(1, 0, 0, hit + 44)
+        w.profileCreate.Position, w.profileCreate.Size =
+            UDim2.new(1, -w.profileCreateWidth, 0, 30), UDim2.fromOffset(w.profileCreateWidth, hit)
         local columns = width >= 540 and 4 or 2
         local rows = math.ceil(#buttons / columns)
-        local height = rows * T.Geometry.SettingsHit + (rows - 1) * 8
+        local height = rows * hit + (rows - 1) * 8
         if toolbar.Size.Y.Offset ~= height then
             toolbar.Size = UDim2.new(1, 0, 0, height)
         end
         for i, button in ipairs(buttons) do
             local col, row = (i - 1) % columns, math.floor((i - 1) / columns)
-            button.Size = UDim2.new(1 / columns, -6, 0, T.Geometry.SettingsHit)
-            button.Position = UDim2.new(col / columns, col > 0 and 2 or 0, 0, row * (T.Geometry.SettingsHit + 8))
+            button.Size = UDim2.new(1 / columns, -6, 0, hit)
+            button.Position = UDim2.new(col / columns, col > 0 and 2 or 0, 0, row * (hit + 8))
         end
         page.scroll:Update()
     end
@@ -14033,100 +15896,143 @@ function SettingsUI.profiles(w, page)
     end
     compactInfo(w.persistenceLabel)
     compactInfo(w.pathLabel)
+    w.pathLabel.label.TextSize = 10
     w.profileToolbarLayout()
+    w.profileName:_layout()
     SettingsUI.refreshProfiles(w)
 end
 function SettingsUI.preview(w, page, name, order)
-    local card = U.button(page.scroll.frame, {
+    local card = U.button(w.themeGrid, {
         Name = name,
-        Size = UDim2.new(1, 0, 0, 92),
-        LayoutOrder = order,
+        Size = UDim2.fromOffset(200, T.Settings.Card),
         BackgroundTransparency = 0,
-        ZIndex = page.scroll.frame.ZIndex + 1,
+        ZIndex = w.themeGrid.ZIndex + 1,
     })
-    page.bag:Add(card)
-    U.corner(card, T.Radius.Row)
+    U.corner(card, T.Radius.Window)
     local colors = Presentation.colors(name)
     local preview = U.new("CanvasGroup", {
         Name = "ThemePreview",
-        Position = UDim2.fromOffset(14, 14),
-        Size = UDim2.fromOffset(110, 64),
+        Size = UDim2.fromOffset(190, 82),
         BackgroundTransparency = 0,
-        BackgroundColor3 = colors.ContentBackground,
+        BackgroundColor3 = colors.WindowBackground,
         GroupTransparency = 0,
         ZIndex = card.ZIndex + 1,
     }, card)
     U.corner(preview, T.Radius.Popover)
-    U.frame(preview, {
-        Size = UDim2.new(0, 28, 1, 0),
+    local side = U.frame(preview, {
+        Size = UDim2.new(0.24, 0, 1, 0),
         BackgroundTransparency = 0,
         BackgroundColor3 = colors.SidebarBackground,
         ZIndex = preview.ZIndex,
     }, w)
+    U.frame(side, {
+        Position = UDim2.fromOffset(6, 11),
+        Size = UDim2.new(1, -12, 0, 3),
+        BackgroundTransparency = 0,
+        BackgroundColor3 = colors.TextPrimary,
+        ZIndex = side.ZIndex + 1,
+    }, w)
     for i = 1, 3 do
-        U.frame(preview, {
-            Position = UDim2.fromOffset(34, 10 + (i - 1) * 16),
-            Size = UDim2.fromOffset(68, 12),
+        local line = U.frame(side, {
+            Position = UDim2.fromOffset(6, 29 + (i - 1) * 12),
+            Size = UDim2.new(1, -12, 0, 6),
+            BackgroundTransparency = 0,
+            BackgroundColor3 = i == 1 and colors.SurfaceSelected or colors.SurfaceSecondary,
+            ZIndex = side.ZIndex + 1,
+        }, w)
+        U.corner(line, 1)
+    end
+    U.frame(preview, {
+        Position = UDim2.new(0.24, 8, 0, 10),
+        Size = UDim2.new(0.6, -8, 0, 4),
+        BackgroundTransparency = 0,
+        BackgroundColor3 = colors.TextPrimary,
+        ZIndex = preview.ZIndex + 1,
+    }, w)
+    for i = 1, 3 do
+        local row = U.frame(preview, {
+            Position = UDim2.new(0.24, 7, 0, 24 + (i - 1) * 17),
+            Size = UDim2.new(0.76, -14, 0, 13),
             BackgroundTransparency = 0,
             BackgroundColor3 = colors.RowBackground,
             ZIndex = preview.ZIndex + 1,
         }, w)
+        U.corner(row, 1)
+        U.frame(row, {
+            Position = UDim2.fromOffset(5, 5),
+            Size = UDim2.new(0.43, 0, 0, 2),
+            BackgroundTransparency = 0,
+            BackgroundColor3 = colors.SystemText,
+            ZIndex = row.ZIndex + 1,
+        }, w)
+        local lane = U.frame(row, {
+            Position = UDim2.new(1, -27, 0, 5),
+            Size = UDim2.fromOffset(21, 3),
+            BackgroundTransparency = 0,
+            BackgroundColor3 = colors.SliderTrack,
+            ZIndex = row.ZIndex + 1,
+        }, w)
+        U.corner(lane, 2)
+        U.frame(lane, {
+            Size = UDim2.new(0.65, 0, 1, 0),
+            BackgroundTransparency = 0,
+            BackgroundColor3 = colors.Accent,
+            ZIndex = lane.ZIndex + 1,
+        }, w)
     end
-    U.frame(preview, {
-        Position = UDim2.fromOffset(39, 14),
-        Size = UDim2.fromOffset(22, 2),
-        BackgroundTransparency = 0,
-        BackgroundColor3 = colors.TextPrimary,
-        ZIndex = preview.ZIndex + 2,
-    }, w)
-    local control = U.frame(preview, {
-        Position = UDim2.fromOffset(87, 13),
-        Size = UDim2.fromOffset(10, 4),
-        BackgroundTransparency = 0,
-        BackgroundColor3 = colors.Accent,
-        ZIndex = preview.ZIndex + 2,
-    }, w)
-    U.corner(control, 2)
-    local rail = U.frame(preview, {
-        Position = UDim2.fromOffset(76, 30),
-        Size = UDim2.fromOffset(20, 3),
-        BackgroundTransparency = 0,
-        BackgroundColor3 = colors.Accent,
-        ZIndex = preview.ZIndex + 2,
-    }, w)
-    U.corner(rail, 1)
-    -- Preview palettes belong to their represented theme, not the currently selected one.
     w.bindings[preview] = nil
-    for _, obj in ipairs(preview:GetDescendants()) do
-        w.bindings[obj] = nil
+    for _, object in ipairs(preview:GetDescendants()) do
+        w.bindings[object] = nil
     end
     local label = U.label(
         card,
         name,
-        T.Type.Tab,
+        13,
         w.theme.TextPrimary,
-        { Position = UDim2.fromOffset(140, 22), Size = UDim2.new(1, -180, 0, 22), Font = Enum.Font.GothamMedium }
+        { Position = UDim2.fromOffset(14, 103), Size = UDim2.new(1, -96, 0, 22), Font = Enum.Font.GothamMedium }
     )
-    local selected = Components.circle(card, 5, w.theme.Accent)
-    selected.Position = UDim2.new(1, -18, 0.5, 0)
+    local selectedLabel = SettingsUI.text(w, card, "ThemeSelected", {
+        Position = UDim2.new(1, -86, 0, 103),
+        Size = UDim2.fromOffset(72, 22),
+        TextXAlignment = Enum.TextXAlignment.Right,
+        TextSize = 11,
+    })
+    local dot = Components.circle(card, 5, w.theme.Accent)
+    dot.Position = UDim2.new(1, -17, 0, 136)
+    local caption = (name == "Abyss" and "AbyssDescription") or (name == "Ember" and "EmberDescription")
+    if caption then
+        SettingsUI.text(
+            w,
+            card,
+            caption,
+            { Position = UDim2.fromOffset(14, 126), Size = UDim2.new(1, -40, 0, 16), TextSize = 10 }
+        )
+    end
     w.themeCards[name] = SettingsUI.choice(
         w,
-        { row = card, dot = selected, label = label, stroke = U.stroke(card, w.theme.SurfaceEdge) },
+        {
+            row = card,
+            dot = dot,
+            label = label,
+            selectedLabel = selectedLabel,
+            preview = preview,
+            stroke = U.stroke(card, w.theme.SurfaceEdge),
+        },
         page.bag,
         function()
             return name == w.themeName
         end
     )
     U.connect(page.bag, card.Activated, function()
-        if not SettingsUI.interactive(w, card) then
-            return
+        if SettingsUI.interactive(w, card) then
+            w:SetTheme(name)
+            w:Notify("ThemeChanged")
         end
-        w:SetTheme(name)
-        w:Notify("ThemeChanged")
     end)
 end
 function SettingsUI.themes(w, page)
     SettingsUI.heading(w, page, "Themes", "ThemeBody")
+    w.themeGrid = SettingsUI.gallery(w, page, "ThemeGallery")
     for i, name in ipairs(Presentation.order) do
         SettingsUI.preview(w, page, name, i + 1)
     end
@@ -14204,6 +16110,37 @@ function SettingsUI.flag(w, parent, language)
         globe.Position = UDim2.fromScale(0.5, 0.5)
         globe.ZIndex = flag.ZIndex + 3
         Icons.line(globe, 0.13, 0.42, 0.87, 0.60, Color3.fromRGB(226, 229, 221), 1)
+    elseif language == "French" or language == "Italian" then
+        local colors = language == "French"
+                and { Color3.fromRGB(36, 70, 145), Color3.fromRGB(247, 246, 240), Color3.fromRGB(199, 54, 65) }
+            or { Color3.fromRGB(44, 133, 82), Color3.fromRGB(247, 246, 240), Color3.fromRGB(194, 49, 57) }
+        for i, color in ipairs(colors) do
+            U.frame(flag, {
+                Position = UDim2.fromScale((i - 1) / 3, 0),
+                Size = UDim2.fromScale(1 / 3, 1),
+                BackgroundTransparency = 0,
+                BackgroundColor3 = color,
+                ZIndex = flag.ZIndex + 1,
+            }, w)
+        end
+    elseif language == "German" then
+        stripe(0, 1 / 3, Color3.fromRGB(29, 29, 33))
+        stripe(1 / 3, 1 / 3, Color3.fromRGB(183, 42, 54))
+        stripe(2 / 3, 1 / 3, Color3.fromRGB(231, 181, 59))
+    elseif language == "Indonesian" then
+        stripe(0, 0.5, Color3.fromRGB(192, 43, 55))
+        stripe(0.5, 0.5, Color3.fromRGB(247, 246, 240))
+    elseif language == "Turkish" then
+        local red, white = Color3.fromRGB(192, 42, 54), Color3.fromRGB(248, 246, 240)
+        stripe(0, 1, red)
+        local moon = Components.circle(flag, 17, white)
+        moon.Position = UDim2.fromOffset(12, 14)
+        moon.ZIndex = flag.ZIndex + 2
+        local cut = Components.circle(flag, 14, red)
+        cut.Position = UDim2.fromOffset(15, 12)
+        cut.ZIndex = flag.ZIndex + 3
+        local star = Icons.make(flag, "star", 8, white, w)
+        star.Position = UDim2.fromOffset(18, 9)
     else
         for i = 0, 12 do
             stripe(i / 13, 1 / 13, i % 2 == 0 and Color3.fromRGB(177, 63, 74) or Color3.fromRGB(241, 235, 231))
@@ -14227,40 +16164,59 @@ function SettingsUI.flag(w, parent, language)
         w.bindings[object] = nil
     end
 end
+SettingsUI.languageInfo = {
+    English = { "English", "US" },
+    Spanish = { "Español", "ES" },
+    Russian = { "Русский", "RU" },
+    Portuguese = { "Português", "BR" },
+    French = { "Français", "FR" },
+    German = { "Deutsch", "DE" },
+    Italian = { "Italiano", "IT" },
+    Turkish = { "Türkçe", "TR" },
+    Indonesian = { "Bahasa Indonesia", "ID" },
+}
 function SettingsUI.languages(w, page)
     SettingsUI.heading(w, page, "Language", "LanguageBody")
-    local names = { English = "English", Spanish = "Español", Russian = "Русский", Portuguese = "Português" }
-    local regions = { English = "US", Spanish = "ES", Russian = "RU", Portuguese = "BR" }
-    for i, language in ipairs(Locale.order) do
-        local card = U.button(page.scroll.frame, {
+    w.languageGrid = SettingsUI.gallery(w, page, "LanguageGallery")
+    for _, language in ipairs(Locale.order) do
+        local info = SettingsUI.languageInfo[language]
+        local card = U.button(w.languageGrid, {
             Name = language,
-            Size = UDim2.new(1, 0, 0, 68),
-            LayoutOrder = i + 1,
+            Size = UDim2.fromOffset(200, T.Settings.Language),
             BackgroundTransparency = 0,
-            ZIndex = page.scroll.frame.ZIndex + 1,
+            ZIndex = w.languageGrid.ZIndex + 1,
         })
-        page.bag:Add(card)
-        U.corner(card, T.Radius.Row)
+        U.corner(card, T.Radius.Section)
         SettingsUI.flag(w, card, language)
+        local flag = card:FindFirstChild("Flag")
+        flag.Position = UDim2.fromOffset(14, 22)
         local label = U.label(
             card,
-            names[language],
-            T.Type.Tab,
+            info[1],
+            13,
             w.theme.TextPrimary,
-            { Position = UDim2.fromOffset(58, 12), Size = UDim2.new(1, -90, 0, 24), Font = Enum.Font.GothamMedium }
+            { Position = UDim2.fromOffset(54, 12), Size = UDim2.new(1, -80, 0, 24), Font = Enum.Font.GothamMedium }
         )
         U.label(
             card,
-            regions[language],
-            T.Type.PageSubtitle,
-            w.theme.TextSecondary,
-            { Position = UDim2.fromOffset(58, 36), Size = UDim2.new(1, -90, 0, 18) }
+            info[2],
+            11,
+            w.theme.SystemText,
+            { Position = UDim2.fromOffset(54, 38), Size = UDim2.new(1, -80, 0, 18) }
         )
         local dot = Components.circle(card, 5, w.theme.Accent)
         dot.Position = UDim2.new(1, -18, 0.5, 0)
         w.languageCards[language] = SettingsUI.choice(
             w,
-            { row = card, dot = dot, label = label, stroke = U.stroke(card, w.theme.SurfaceEdge) },
+            {
+                row = card,
+                dot = dot,
+                label = label,
+                flag = flag,
+                nativeName = info[1],
+                region = info[2],
+                stroke = U.stroke(card, w.theme.SurfaceEdge),
+            },
             page.bag,
             function()
                 return language == w.language
@@ -14275,7 +16231,7 @@ function SettingsUI.languages(w, page)
 end
 function SettingsUI.general(w, page)
     SettingsUI.heading(w, page, "General", "GeneralBody")
-    SettingsUI.control(w, page, "AddSection", "Interface")
+    SettingsUI.control(w, page, "AddSectionHeader", "Interface")
     w.tooltipPreference = SettingsUI.control(w, page, "AddToggle", "Tooltips", {
         Default = w.tooltipsEnabled,
         Callback = function(value)
@@ -14300,7 +16256,7 @@ function SettingsUI.general(w, page)
             w:SetRememberPosition(value)
         end,
     })
-    SettingsUI.control(w, page, "AddSection", "Behavior")
+    SettingsUI.control(w, page, "AddSectionHeader", "Behavior")
     SettingsUI.control(w, page, "AddToggle", "SilentLoad", {
         Default = w.persistence.silentLoad,
         Callback = function(value)
@@ -14319,6 +16275,37 @@ function SettingsUI.general(w, page)
             w.systemNotifications = value
         end,
     })
+    for _, control in ipairs(page.controls) do
+        if control.kind == "Toggle" then
+            function control:layoutVisual()
+                local width = self.row.AbsoluteSize.X / w.scale
+                local copyWidth = math.max(32, width - 112)
+                local text = self.displayDescription or self.description
+                local descHeight = text ~= ""
+                        and math.ceil(
+                            S.Text:GetTextSize(text, self.desc.TextSize, self.desc.Font, Vector2.new(copyWidth, 1000)).Y
+                        )
+                    or 0
+                local height = math.max(52, math.ceil(44 / w.scale), descHeight > 0 and descHeight + 42 or 0)
+                self.row.Size = UDim2.new(1, 0, 0, height)
+                self.label.Position, self.label.Size =
+                    UDim2.fromOffset(16, descHeight > 0 and 9 or (height - 20) / 2), UDim2.fromOffset(copyWidth, 20)
+                self.desc.Position, self.desc.Size = UDim2.fromOffset(16, 32), UDim2.fromOffset(copyWidth, descHeight)
+                self.lane.Position, self.lane.Size = UDim2.new(1, -16, 0, 0), UDim2.fromOffset(72, height)
+                self.hitbox.Size = UDim2.fromOffset(52, math.max(44, math.ceil(44 / w.scale)))
+            end
+            local render = control._render
+            function control:_render()
+                render(self)
+                w.motion:To(
+                    self.desc,
+                    T.Motion.Micro,
+                    { TextColor3 = self.state.Disabled and w.theme.TextDisabled or w.theme.SystemText }
+                )
+            end
+            control:_layout()
+        end
+    end
     Premium.build(w, page)
 end
 function SettingsUI.refreshStyle(w)
@@ -14328,7 +16315,7 @@ function SettingsUI.refreshStyle(w)
         end
     end
     if w.settingsContext then
-        Locale.bind(w, w.settingsContext, "Text", w.settingsCategory or "Profiles")
+        Locale.bind(w, w.settingsContext, "Text", "SettingsIntro")
     end
     if w.settingsFooter then
         w.settingsFooter:_render()
@@ -14336,6 +16323,7 @@ function SettingsUI.refreshStyle(w)
         Icons.color(w.settingsIcon, w.settingsOpen and w.theme.Accent or w.theme.TextSecondary)
     end
     SettingsUI.updateProfileStates(w)
+    SettingsUI.navInk(w, false)
 end
 function SettingsUI.refreshLanguage(w)
     Premium.refresh(w)
@@ -14356,68 +16344,170 @@ function SettingsUI.refreshLanguage(w)
     end
 end
 function SettingsUI.transientLayout(w)
+    local hit = math.max(44, math.ceil(44 / w.scale))
     if w.confirmation then
-        w.confirmation.panel.Size = UDim2.fromOffset(math.min(360, w.root.Size.X.Offset - 32), 178)
+        local c = w.confirmation
+        local width = math.min(420, w.root.Size.X.Offset - 32)
+        local copyHeight = math.max(
+            36,
+            math.ceil(S.Text:GetTextSize(c.copy.Text, c.copy.TextSize, c.copy.Font, Vector2.new(width - 32, 2000)).Y)
+        )
+        c.copy.Size = UDim2.new(1, -32, 0, copyHeight)
+        c.detail.Position = UDim2.fromOffset(16, 52 + copyHeight)
+        c.panel.Size = UDim2.fromOffset(width, 102 + copyHeight + hit)
+        for i, button in ipairs(c.buttons) do
+            button.Position = UDim2.new((i - 1) / 2, i == 1 and 16 or 8, 1, -hit - 16)
+            button.Size = UDim2.new(0.5, -24, 0, hit)
+        end
+    end
+    if w.transfer then
+        local t = w.transfer
+        t.panel.Size = UDim2.fromOffset(math.min(720, w.root.Size.X.Offset - 32), w.root.Size.Y.Offset - 48)
+        t.host.Size = UDim2.new(1, -32, 1, -hit - 80)
+        for i, button in ipairs(t.buttons) do
+            button.Position = UDim2.new((i - 1) / 2, i == 1 and 16 or 8, 1, -hit - 16)
+            button.Size = UDim2.new(0.5, -24, 0, hit)
+        end
     end
     if w.toastGroup then
         w.toastGroup.Size = UDim2.fromOffset(math.min(320, w.root.Size.X.Offset - 36), 54)
     end
 end
+function SettingsUI.revealNav(w)
+    if w.settingsNavCancel then
+        w.bag:Remove(w.settingsNavCancel, true)
+    end
+    w.settingsNavCancel = w.bag:After(0, function()
+        w.settingsNavCancel = nil
+        local entry = w.settingsNav[w.settingsCategory]
+        if w.destroyed or not w.settingsOpen or not entry then
+            return
+        end
+        local host, row = w.settingsNavHost, entry.row
+        local offset = (row.AbsolutePosition - host.AbsolutePosition) / w.scale
+        local viewport, extent = host.AbsoluteSize / w.scale, row.AbsoluteSize / w.scale
+        local horizontal = w.settingsCompact
+        local start, size, view =
+            horizontal and offset.X or offset.Y,
+            horizontal and extent.X or extent.Y,
+            horizontal and viewport.X or viewport.Y
+        local delta = start < 0 and start or (start + size > view and start + size - view or 0)
+        if delta ~= 0 then
+            local canvas = host.CanvasPosition
+            host.CanvasPosition = horizontal and Vector2.new(math.max(0, canvas.X + delta), 0)
+                or Vector2.new(0, math.max(0, canvas.Y + delta))
+            SettingsUI.navInk(w, true)
+        end
+    end, true)
+end
+function SettingsUI.navInk(w, immediate)
+    if not w.settingsSelection or not w.settingsNav[w.settingsCategory] then
+        return
+    end
+    local row = w.settingsNav[w.settingsCategory].row
+    local localPosition = (row.AbsolutePosition - w.settingsNavClip.AbsolutePosition) / w.scale
+    local size = row.AbsoluteSize / w.scale
+    local position = UDim2.fromOffset(localPosition.X, localPosition.Y)
+    local extent = UDim2.fromOffset(size.X, size.Y)
+    local duration = immediate and 0 or T.Motion.SettingsIndicator
+    w.motion:To(w.settingsSelection, duration, { Position = position, Size = extent })
+    local horizontal = w.settingsCompact
+    w.motion:To(w.settingsIndicator, duration, {
+        Position = UDim2.fromOffset(
+            localPosition.X + (horizontal and 12 or 2),
+            localPosition.Y + (horizontal and size.Y - 2 or 17)
+        ),
+        Size = UDim2.fromOffset(horizontal and math.max(8, size.X - 24) or 2, horizontal and 2 or 20),
+    })
+end
 function SettingsUI.layout(w)
     if not w.settingsPanel then
         return
     end
-    local compact = w.compact or w.root.Size.X.Offset < 640
-    local x, y = compact and 8 or 18, compact and 12 or 28
-    local rest = UDim2.fromOffset(x, y)
-    if not U.equal(w.settingsRestPosition, rest) then
-        w.settingsRestPosition = rest
-        w.motion:To(w.settingsPanel, w.settingsPanel.Visible and T.Motion.Fast or 0, {
-            Position = UDim2.fromOffset(x, y + (w.settingsOpen and 0 or T.Geometry.SettingsReveal)),
-        })
+    local rw, rh = w.root.Size.X.Offset, w.root.Size.Y.Offset
+    local compact = w.compact or rw * w.scale < 700
+    local inset, vertical = compact and 8 or 12, compact and 8 or 16
+    local width, height = math.max(120, rw - inset * 2), math.max(96, rh - vertical * 2)
+    local hit = math.max(44, math.ceil(44 / w.scale))
+    local header = math.max(hit + 8, math.min(T.Settings.Header, math.max(52, height * 0.20)))
+    local rest = UDim2.fromOffset(inset, vertical)
+    local changed = w.settingsGeometryWidth ~= width
+        or w.settingsGeometryHeight ~= height
+        or w.settingsCompact ~= compact
+    w.settingsGeometryWidth, w.settingsGeometryHeight, w.settingsCompact = width, height, compact
+    w.settingsRestPosition = rest
+    if changed then
+        w.motion:To(
+            w.settingsPanel,
+            0,
+            { Position = UDim2.fromOffset(inset, vertical + (w.settingsOpen and 0 or T.Geometry.SettingsReveal)) }
+        )
     end
-    w.settingsPanel.Size = UDim2.new(1, -(compact and 16 or 36), 1, -(compact and 24 or 56))
-    w.settingsNavHost.Position = UDim2.fromOffset(12, T.Geometry.SettingsHeader + 8)
-    w.settingsNavHost.Size = compact and UDim2.new(1, -24, 0, 48) or UDim2.new(0, T.Geometry.SettingsNav, 1, -88)
+    w.settingsPanel.Size = UDim2.fromOffset(width, height)
+    w.settingsHeader.Size = UDim2.fromOffset(width, header)
+    w.settingsHeaderLine.Position = UDim2.fromOffset(0, header - 1)
+    local closeWidth = math.min(144, math.max(44, U.width(Locale.text(w, "Close"), 12) + 44))
+    closeWidth = math.max(hit, closeWidth)
+    w.settingsCloseButton.Position = UDim2.fromOffset(width - closeWidth - 12, math.max(4, (header - hit) / 2))
+    w.settingsCloseButton.Size = UDim2.fromOffset(closeWidth, hit)
+    w.settingsHeaderGlyph.Position = UDim2.fromOffset(20, (header - 18) / 2)
+    w.settingsTitle.Position, w.settingsTitle.Size =
+        UDim2.fromOffset(48, header >= 70 and 14 or (header - 24) / 2),
+        UDim2.fromOffset(math.max(1, width - closeWidth - 80), 26)
+    w.settingsContext.Visible = header >= 70
+    w.settingsContext.Position, w.settingsContext.Size =
+        UDim2.fromOffset(48, 43), UDim2.fromOffset(math.max(1, width - closeWidth - 80), 18)
+    w.settingsRailSurface.Visible, w.settingsDivider.Visible = not compact, not compact
+    w.settingsRailSurface.Position, w.settingsRailSurface.Size =
+        UDim2.fromOffset(0, header), UDim2.fromOffset(T.Settings.Rail + 20, height - header)
+    w.settingsNavClip.Position = UDim2.fromOffset(12, header + 10)
+    w.settingsNavClip.Size = compact and UDim2.new(1, -24, 0, hit + 4)
+        or UDim2.fromOffset(T.Settings.Rail, height - header - 24)
+    w.settingsNavHost.Position, w.settingsNavHost.Size = UDim2.fromOffset(0, 0), UDim2.fromScale(1, 1)
     w.settingsNavLayout.FillDirection = compact and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical
     w.settingsNavHost.ScrollingDirection = compact and Enum.ScrollingDirection.X or Enum.ScrollingDirection.Y
     w.settingsNavHost.AutomaticCanvasSize = compact and Enum.AutomaticSize.X or Enum.AutomaticSize.Y
     for key, entry in pairs(w.settingsNav) do
         entry.row.Size = UDim2.fromOffset(
-            compact and math.max(104, U.width(Locale.text(w, key), T.Type.Value) + 56) or T.Geometry.SettingsNav,
-            T.Geometry.SettingsHit
+            compact and math.max(112, U.width(Locale.text(w, key), 13) + 50) or T.Settings.Rail,
+            compact and hit or math.max(T.Settings.NavRow, hit)
         )
-        entry.indicator.Size = compact and UDim2.new(1, -20, 0, 1) or UDim2.new(0, 2, 1, -20)
-        entry.indicator.Position = compact and UDim2.new(0, 10, 1, -1) or UDim2.fromOffset(0, 10)
+        entry.note.Visible = not compact
+        entry.label.Position = UDim2.fromOffset(38, compact and 0 or 5)
+        entry.label.Size = UDim2.new(1, -46, 0, compact and hit or 22)
+        entry.icon.Position = UDim2.fromOffset(14, compact and (hit - 14) / 2 or 18)
     end
-    w.settingsDivider.Visible = not compact
-    w.settingsDivider.Position = UDim2.fromOffset(T.Geometry.SettingsNav + 24, T.Geometry.SettingsHeader + 12)
-    w.settingsDivider.Size = UDim2.new(0, 1, 1, -96)
-    w.settingsBody.Position = UDim2.fromOffset(
-        compact and 12 or T.Geometry.SettingsNav + 36,
-        compact and 132 or T.Geometry.SettingsHeader + 8
-    )
-    w.settingsBody.Size = UDim2.new(1, -(compact and 24 or T.Geometry.SettingsNav + 52), 1, -(compact and 148 or 88))
-    local panelWidth = w.root.Size.X.Offset - (compact and 16 or 36)
-    local panelHeight = w.root.Size.Y.Offset - (compact and 24 or 56)
-    local reserve = Premium.layoutDock(
-        w,
-        w.settingsBody.Position.X.Offset,
-        w.settingsBody.Position.Y.Offset,
-        panelWidth - (compact and 24 or T.Geometry.SettingsNav + 52),
-        panelHeight - (compact and 148 or 88)
-    )
-    w.settingsBody.Size =
-        UDim2.new(1, -(compact and 24 or T.Geometry.SettingsNav + 52), 1, -(compact and 148 or 88) - reserve)
+    w.settingsDivider.Position, w.settingsDivider.Size =
+        UDim2.fromOffset(T.Settings.Rail + 20, header + 12), UDim2.fromOffset(1, height - header - 24)
+    local x, y = compact and 12 or T.Settings.Rail + 36, compact and header + hit + 26 or header + 12
+    local bodyWidth, bodyHeight = math.max(1, width - x - 16), math.max(44, height - y - 12)
+    w.settingsBody.Position = UDim2.fromOffset(x, y)
+    local reserve = Premium.layoutDock(w, x, y, bodyWidth, bodyHeight)
+    w.settingsBody.Size = UDim2.fromOffset(bodyWidth, math.max(44, bodyHeight - reserve))
     Premium.refresh(w)
     if w.profileToolbarLayout then
         w.profileToolbarLayout()
     end
+    SettingsUI.profileLayout(w)
+    SettingsUI.transientLayout(w)
+    SettingsUI.galleryLayout(w, w.settingsPages.Themes, w.themeGrid, w.themeCards, Presentation.order, T.Settings.Card)
+    SettingsUI.galleryLayout(
+        w,
+        w.settingsPages.Language,
+        w.languageGrid,
+        w.languageCards,
+        Locale.order,
+        T.Settings.Language
+    )
     for _, page in pairs(w.settingsPages) do
         for _, control in ipairs(page.controls) do
             control:_layout()
         end
         page.scroll:Update()
+    end
+    SettingsUI.navInk(w, changed)
+    if changed then
+        SettingsUI.revealNav(w)
     end
 end
 function Window:SetSettingsCategory(key)
@@ -14430,6 +16520,19 @@ function Window:SetSettingsCategory(key)
     SettingsUI.dismissConfirmation(self)
     SettingsUI.dismissTransfer(self)
     self.settingsCategory = key
+    for object, owner in pairs(self.systemRenders or {}) do
+        for name, page in pairs(self.settingsPages) do
+            if name ~= key and object:IsDescendantOf(page.host) then
+                local state = owner.choiceState or owner.state
+                if state then
+                    state.Hovered, state.Pressed = false, false
+                    self.pressed[owner.pressOwner or owner] = nil
+                    owner:_render()
+                end
+                break
+            end
+        end
+    end
     for name, page in pairs(self.settingsPages) do
         if name == key then
             local entering = not page.host.Visible
@@ -14441,7 +16544,11 @@ function Window:SetSettingsCategory(key)
                     { GroupTransparency = 0.35, Position = UDim2.fromOffset(T.Geometry.SettingsReveal, 0) }
                 )
             end
-            self.motion:To(page.host, T.Motion.Normal, { GroupTransparency = 0, Position = UDim2.fromOffset(0, 0) })
+            self.motion:To(
+                page.host,
+                T.Motion.SettingsPage,
+                { GroupTransparency = 0, Position = UDim2.fromOffset(0, 0) }
+            )
         else
             self.motion:Cancel(page.host)
             page.host.Visible = false
@@ -14450,7 +16557,9 @@ function Window:SetSettingsCategory(key)
     if key == "Profiles" then
         SettingsUI.refreshProfiles(self)
     end
+    SettingsUI.layout(self)
     SettingsUI.refreshStyle(self)
+    SettingsUI.revealNav(self)
     return true
 end
 function SettingsUI.build(w)
@@ -14468,69 +16577,74 @@ function SettingsUI.build(w)
     w.settingsPanel = panel
     U.corner(panel, T.Radius.Window)
     U.bind(w, panel, "BackgroundColor3", "WindowBackground")
-    local stroke = U.stroke(panel, w.theme.SurfaceEdge, 1)
-    stroke.Transparency = 0.25
-    U.bind(w, stroke, "Color", "SurfaceEdge")
-    local glyph = Icons.make(panel, "settings", 16, w.theme.Accent, w)
-    glyph.Position = UDim2.fromOffset(16, 18)
-    SettingsUI.text(w, panel, "Settings", {
-        Position = UDim2.fromOffset(40, 10),
-        Size = UDim2.new(1, -152, 0, 22),
-        Font = Enum.Font.GothamBold,
-        TextSize = T.Type.PageTitle,
-    }, "TextPrimary")
-    w.settingsContext = SettingsUI.text(
+    local edge = U.stroke(panel, w.theme.SurfaceEdge)
+    edge.Transparency = 0.35
+    U.bind(w, edge, "Color", "SurfaceEdge")
+    w.settingsHeader = U.frame(panel, { Name = "SettingsHeader", ZIndex = panel.ZIndex + 1 }, w, "HeaderBackground")
+    w.settingsHeaderLine = U.frame(
+        w.settingsHeader,
+        { Name = "Divider", Size = UDim2.new(1, 0, 0, 1), ZIndex = panel.ZIndex + 2 },
         w,
-        panel,
-        "Profiles",
-        { Position = UDim2.fromOffset(40, 34), Size = UDim2.new(1, -152, 0, 16), TextSize = T.Type.PageSubtitle },
-        "TextSecondary"
+        "Separator"
     )
-    SettingsUI.button(
+    local glyph = Icons.make(w.settingsHeader, "settings", 18, w.theme.Accent, w)
+    glyph.Position = UDim2.fromOffset(20, 20)
+    w.settingsHeaderGlyph = glyph
+    w.settingsTitle =
+        SettingsUI.text(w, w.settingsHeader, "Settings", { Font = Enum.Font.GothamBold, TextSize = 20 }, "TextPrimary")
+    w.settingsContext = SettingsUI.text(w, w.settingsHeader, "SettingsIntro", { TextSize = 12 }, "SystemText")
+    w.settingsCloseButton = SettingsUI.button(
         w,
-        panel,
+        w.settingsHeader,
         "Close",
-        {
-            Position = UDim2.new(1, -100, 0, 10),
-            Size = UDim2.fromOffset(88, T.Geometry.SettingsHit),
-            ZIndex = panel.ZIndex + 3,
-        },
+        { Name = "CloseSettings", ZIndex = panel.ZIndex + 3 },
         w.bag,
         function()
             w:CloseSettings()
-        end
+        end,
+        false,
+        true
     )
-    U.frame(panel, {
-        Position = UDim2.fromOffset(0, T.Geometry.SettingsHeader),
-        Size = UDim2.new(1, 0, 0, 1),
-        ZIndex = panel.ZIndex + 1,
-    }, w, "Separator")
-    w.settingsNavHost = U.new(
-        "ScrollingFrame",
-        { Name = "SettingsCategories", ScrollBarThickness = 0, CanvasSize = UDim2.new(), ZIndex = panel.ZIndex + 1 },
-        panel
-    )
+    w.settingsRailSurface =
+        U.frame(panel, { Name = "NavigationSurface", ZIndex = panel.ZIndex + 1 }, w, "SidebarBackground")
+    w.settingsNavClip =
+        U.frame(panel, { Name = "NavigationViewport", ClipsDescendants = true, ZIndex = panel.ZIndex + 2 }, w)
+    w.settingsSelection =
+        U.frame(w.settingsNavClip, { Name = "CategorySelection", ZIndex = panel.ZIndex + 2 }, w, "SurfaceSelected")
+    U.corner(w.settingsSelection, T.Radius.Section)
+    w.settingsIndicator =
+        U.frame(w.settingsNavClip, { Name = "CategoryIndicator", ZIndex = panel.ZIndex + 4 }, w, "Accent")
+    U.corner(w.settingsIndicator, 1)
+    w.settingsNavHost = U.new("ScrollingFrame", {
+        Name = "SettingsCategories",
+        CanvasPosition = Vector2.new(),
+        ScrollBarThickness = 0,
+        CanvasSize = UDim2.new(),
+        ZIndex = panel.ZIndex + 3,
+    }, w.settingsNavClip)
     w.settingsNavLayout =
         U.new("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }, w.settingsNavHost)
-    local icons = { Profiles = "folder", Themes = "sun", Language = "flag", General = "settings", Membership = "key" }
+    local icons =
+        { Profiles = "folder", Themes = "palette", Language = "globe", General = "settings", Membership = "key" }
     for i, key in ipairs({ "Profiles", "Themes", "Language", "General", "Membership" }) do
-        local row = U.button(
-            w.settingsNavHost,
-            { Name = key, LayoutOrder = i, BackgroundTransparency = 0, ZIndex = panel.ZIndex + 2 }
-        )
-        U.corner(row, T.Radius.Row)
-        local label = SettingsUI.text(
+        local row = U.button(w.settingsNavHost, { Name = key, LayoutOrder = i, ZIndex = panel.ZIndex + 3 })
+        local label = SettingsUI.text(w, row, key, {
+            Position = UDim2.fromOffset(38, 5),
+            Size = UDim2.new(1, -46, 0, 22),
+            Font = Enum.Font.GothamMedium,
+            TextSize = 13,
+        })
+        local note = SettingsUI.text(
             w,
             row,
-            key,
-            { Position = UDim2.fromOffset(38, 0), Size = UDim2.new(1, -46, 1, 0), Font = Enum.Font.GothamMedium }
+            key .. "Hint",
+            { Position = UDim2.fromOffset(38, 29), Size = UDim2.new(1, -46, 0, 18), TextSize = 10 },
+            "TextMuted"
         )
-        local indicator = U.frame(row, { ZIndex = row.ZIndex + 2 }, w, "Accent")
         local icon = Icons.make(row, icons[key], 14, w.theme.SystemText, w)
-        icon.Position = UDim2.fromOffset(14, 15)
         w.settingsNav[key] = SettingsUI.choice(
             w,
-            { row = row, label = label, icon = icon, indicator = indicator },
+            { row = row, label = label, note = note, icon = icon, navigation = true },
             w.bag,
             function()
                 return w.settingsCategory == key
@@ -14541,8 +16655,16 @@ function SettingsUI.build(w)
                 w:SetSettingsCategory(key)
             end
         end)
+        U.connect(w.bag, row:GetPropertyChangedSignal("AbsolutePosition"), function()
+            if w.settingsCategory == key then
+                SettingsUI.navInk(w, true)
+            end
+        end)
     end
-    w.settingsDivider = U.frame(panel, { ZIndex = panel.ZIndex + 1 }, w, "Separator")
+    U.connect(w.bag, w.settingsNavHost:GetPropertyChangedSignal("CanvasPosition"), function()
+        SettingsUI.navInk(w, true)
+    end)
+    w.settingsDivider = U.frame(panel, { ZIndex = panel.ZIndex + 2 }, w, "Separator")
     w.settingsBody = U.frame(
         panel,
         { Name = "SettingsBody", ClipsDescendants = true, ZIndex = panel.ZIndex + 1 },
