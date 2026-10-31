@@ -190,15 +190,7 @@ local T = {
         Value = 12,
         PopoverOption = 12,
     },
-    Settings = { Header = 76, Rail = 176, NavRow = 54, Inset = 16, Gap = 12, Card = 150, Language = 74 },
-    Motion = {
-        Micro = 0.10,
-        Fast = 0.16,
-        Normal = 0.18,
-        Structural = 0.24,
-        SettingsPage = 0.18,
-        SettingsIndicator = 0.18,
-    },
+    Motion = { Micro = 0.10, Fast = 0.16, Normal = 0.18, Structural = 0.24 },
     Z = {
         Shell = 1,
         Content = 3,
@@ -9785,8 +9777,8 @@ function Premium.layoutDock(w, bodyX, bodyY, width, height)
         return 0
     end
     local hit = math.max(44, math.ceil(44 / math.max(0.1, w.scale)))
-    local full = false
-    local dh = hit
+    local full = width >= 540 and height >= 400
+    local dh = full and 96 + hit or hit
     dock.Root.Visible = w.settingsCategory ~= "Membership" and height >= dh + 92
     if dock.Root.Visible then
         dock.Root.Position, dock.Root.Size = UDim2.fromOffset(bodyX, bodyY + height - dh), UDim2.fromOffset(width, dh)
@@ -14932,8 +14924,7 @@ function SettingsUI.choice(w, entry, bag, selected)
         end
         local on, state = self.selected(), self.choiceState
         w.motion:To(self.row, T.Motion.Micro, {
-            BackgroundTransparency = self.navigation and 1
-                or (self.transparent and ((on or state.Hovered or state.Pressed) and 0 or 1) or 0),
+            BackgroundTransparency = self.transparent and ((on or state.Hovered or state.Pressed) and 0 or 1) or 0,
             BackgroundColor3 = state.Pressed and w.theme.RowPressed
                 or (on and w.theme.SurfaceSelected or (state.Hovered and w.theme.RowHover or w.theme.RowBackground)),
         })
@@ -14943,14 +14934,6 @@ function SettingsUI.choice(w, entry, bag, selected)
                 T.Motion.Micro,
                 { TextColor3 = (on or state.Hovered) and w.theme.TextPrimary or w.theme.SystemText }
             )
-        end
-        if self.note then
-            self.note.TextColor3 = w.theme.SystemText
-            self.note.TextTransparency = on and 0 or 0.28
-        end
-        if self.selectedLabel then
-            self.selectedLabel.Visible = on
-            self.selectedLabel.TextColor3 = w.theme.SystemText
         end
         if self.icon then
             Icons.color(
@@ -15008,7 +14991,7 @@ function SettingsUI.choice(w, entry, bag, selected)
     entry:_render()
     return entry
 end
-function SettingsUI.button(w, parent, key, props, bag, callback, primary, ghost)
+function SettingsUI.button(w, parent, key, props, bag, callback, primary)
     local button = U.button(parent, props)
     U.corner(button, T.Radius.Button)
     local label = SettingsUI.text(
@@ -15026,11 +15009,10 @@ function SettingsUI.button(w, parent, key, props, bag, callback, primary, ghost)
         local disabled = button:GetAttribute("NeronPromotionDisabled") == true
         w.motion:To(stroke, T.Motion.Micro, {
             Color = w.theme.SurfaceEdge,
-            Transparency = ghost and 1
-                or (primary and not disabled and 1 or (state.Hovered and not disabled and 0.2 or 0.55)),
+            Transparency = primary and not disabled and 1 or (state.Hovered and not disabled and 0.2 or 0.55),
         })
         w.motion:To(button, T.Motion.Micro, {
-            BackgroundTransparency = ghost and (state.Hovered and 0.5 or 1) or 0,
+            BackgroundTransparency = 0,
             BackgroundColor3 = disabled and w.theme.SurfaceSecondary
                 or state.Pressed and (primary and w.theme.AccentPressed or w.theme.RowPressed)
                 or (
@@ -15212,20 +15194,20 @@ function SettingsUI.confirm(w, title, message, detail, callback)
         { Position = UDim2.fromOffset(16, 12), Size = UDim2.new(1, -32, 0, 24), Font = Enum.Font.GothamBold },
         "TextPrimary"
     )
-    local copy = SettingsUI.text(w, panel, message, {
+    SettingsUI.text(w, panel, message, {
         Position = UDim2.fromOffset(16, 44),
         Size = UDim2.new(1, -32, 0, 44),
         TextWrapped = true,
         TextTruncate = Enum.TextTruncate.None,
     })
-    local detailLabel = U.label(
+    U.label(
         panel,
         detail or "",
         T.Type.Description,
         w.theme.TextSecondary,
         { Position = UDim2.fromOffset(16, 91), Size = UDim2.new(1, -32, 0, 18) }
     )
-    local cancelButton = SettingsUI.button(
+    SettingsUI.button(
         w,
         panel,
         "Cancel",
@@ -15235,7 +15217,7 @@ function SettingsUI.confirm(w, title, message, detail, callback)
             SettingsUI.dismissConfirmation(w)
         end
     )
-    local confirmButton = SettingsUI.button(
+    SettingsUI.button(
         w,
         panel,
         "Confirm",
@@ -15250,9 +15232,7 @@ function SettingsUI.confirm(w, title, message, detail, callback)
     U.connect(bag, shade.Activated, function()
         SettingsUI.dismissConfirmation(w)
     end)
-    w.confirmation =
-        { bag = bag, panel = panel, copy = copy, detail = detailLabel, buttons = { cancelButton, confirmButton } }
-    SettingsUI.transientLayout(w)
+    w.confirmation = { bag = bag, panel = panel }
     w.motion:To(panel, T.Motion.Normal, { GroupTransparency = 0 })
 end
 function SettingsUI.dismissTransfer(w)
@@ -15339,7 +15319,7 @@ function SettingsUI.transfer(w, kind, json, import)
     end
     U.connect(bag, box:GetPropertyChangedSignal("Text"), resize)
     U.connect(bag, box:GetPropertyChangedSignal("AbsoluteSize"), resize)
-    local closeButton = SettingsUI.button(
+    SettingsUI.button(
         w,
         panel,
         "Close",
@@ -15349,7 +15329,7 @@ function SettingsUI.transfer(w, kind, json, import)
             SettingsUI.dismissTransfer(w)
         end
     )
-    local actionButton = SettingsUI.button(
+    SettingsUI.button(
         w,
         panel,
         import and "Import" or "Copy",
@@ -15383,8 +15363,7 @@ function SettingsUI.transfer(w, kind, json, import)
     U.connect(bag, shade.Activated, function()
         SettingsUI.dismissTransfer(w)
     end)
-    w.transfer = { bag = bag, panel = panel, box = box, host = host, buttons = { closeButton, actionButton } }
-    SettingsUI.transientLayout(w)
+    w.transfer = { bag = bag, panel = panel, box = box }
     resize()
     w.motion:To(panel, T.Motion.Normal, { GroupTransparency = 0 })
 end
@@ -15428,61 +15407,12 @@ function SettingsUI.control(w, page, method, key, config, description)
 end
 function SettingsUI.heading(w, page, key, body)
     local control = SettingsUI.control(w, page, "AddParagraph", key, {}, body)
-    control.systemHeading = true
-    control.row.BackgroundTransparency = 1
     U.bind(w, control.label, "TextColor3", "TextPrimary")
-    U.bind(w, control.desc, "TextColor3", "SystemText")
-    function control:layoutVisual()
-        local width = math.max(1, self.row.AbsoluteSize.X / w.scale - 32)
-        local description = Locale.text(w, body)
-        local height =
-            math.max(18, math.ceil(S.Text:GetTextSize(description, 12, Enum.Font.Gotham, Vector2.new(width, 2000)).Y))
-        self.row.Size = UDim2.new(1, 0, 0, 36 + height)
-        self.label.Position, self.label.Size = UDim2.fromOffset(16, 0), UDim2.new(1, -32, 0, 26)
-        self.label.TextSize, self.label.Font = 20, Enum.Font.GothamBold
-        self.desc.Visible = true
-        self.desc.Position, self.desc.Size = UDim2.fromOffset(16, 30), UDim2.new(1, -32, 0, height)
-        self.desc.TextSize = 12
-        self.separator.Visible = false
-    end
-    local render = control._render
-    function control:_render()
-        render(self)
-        w.motion:To(self.desc, T.Motion.Micro, { TextColor3 = w.theme.SystemText })
-    end
-    control:_layout()
+    control.systemHeading = true
     control:_render()
+    control.label.Font = Enum.Font.GothamBold
+    control.label.TextSize = T.Type.PageTitle
     return control
-end
-function SettingsUI.gallery(w, page, name)
-    local frame = U.frame(
-        page.scroll.frame,
-        { Name = name, Size = UDim2.new(1, 0, 0, 1), LayoutOrder = 4, ZIndex = page.scroll.frame.ZIndex + 1 },
-        w
-    )
-    page.bag:Add(frame)
-    return frame
-end
-function SettingsUI.galleryLayout(w, page, frame, entries, order, height)
-    if not frame then
-        return
-    end
-    local width = math.max(1, page.scroll.frame.AbsoluteSize.X / w.scale)
-    local columns = width >= 500 and 2 or 1
-    local gap = T.Settings.Gap
-    local cell = math.max(1, (width - gap * (columns - 1)) / columns)
-    frame.Size = UDim2.new(1, 0, 0, math.ceil(#order / columns) * (height + gap) - gap)
-    for i, name in ipairs(order) do
-        local entry = entries[name]
-        entry.row.Position =
-            UDim2.fromOffset(((i - 1) % columns) * (cell + gap), math.floor((i - 1) / columns) * (height + gap))
-        entry.row.Size = UDim2.fromOffset(cell, height)
-        if entry.preview then
-            local previewWidth = math.min(190, math.max(80, cell - 28))
-            entry.preview.Size = UDim2.fromOffset(previewWidth, 82)
-            entry.preview.Position = UDim2.new(0.5, -previewWidth / 2, 0, 12)
-        end
-    end
 end
 function SettingsUI.context(w, row, name)
     local owner = { state = {}, page = w.settingsPages.Profiles, profileContext = true }
@@ -15595,30 +15525,6 @@ function SettingsUI.updateProfileStates(w)
         end
     end
 end
-function SettingsUI.profileLayout(w)
-    if not w.profileList or not w.profileRows then
-        return
-    end
-    local height = math.max(56, math.ceil(44 / w.scale))
-    local count = 0
-    for _, entry in pairs(w.profileRows) do
-        local row = entry.row
-        count += 1
-        row.Size = UDim2.new(1, 0, 0, height)
-        row.Position = UDim2.fromOffset(0, (row.LayoutOrder - 1) * (height + 4))
-        entry.name.Position, entry.name.Size = UDim2.fromOffset(42, height / 2 - 21), UDim2.new(1, -height - 54, 0, 22)
-        entry.state.Position = UDim2.fromOffset(42, height / 2 + 1)
-        entry.autoload.Size = UDim2.new(0.45, -height - 8, 0, 16)
-        entry.autoload.Position = UDim2.new(0.55, 0, 0, height / 2 + 1)
-        entry.edge.Position = UDim2.fromOffset(0, (height - 28) / 2)
-        entry.icon.Position = UDim2.fromOffset(16, (height - 14) / 2)
-        local menu = row:FindFirstChild("ProfileActions")
-        menu.Position, menu.Size = UDim2.new(1, -height, 0, 0), UDim2.fromOffset(height, height)
-    end
-    if count > 0 then
-        w.profileList.Size = UDim2.new(1, 0, 0, count * (height + 4) - 4)
-    end
-end
 function SettingsUI.refreshProfiles(w)
     if w.overlay.active and w.overlay.active.owner.profileContext then
         w.overlay:Close(true)
@@ -15637,21 +15543,19 @@ function SettingsUI.refreshProfiles(w)
     w.profileListBag = bag
     w.profileRows = {}
     local page = w.settingsPages.Profiles
-    local list = w.profileList
     local profiles, err = w:RefreshProfiles()
     w.persistence:Feedback()
     if w.pathLabel then
         w.pathLabel:Set(w.persistence.folder, true)
     end
     if not profiles or #profiles == 0 then
-        local empty = U.frame(list, {
+        local empty = U.frame(page.scroll.frame, {
             Name = "ProfileEmpty",
             Size = UDim2.new(1, 0, 0, 64),
             LayoutOrder = 5,
             ZIndex = page.scroll.frame.ZIndex + 1,
         }, w, "RowBackground")
         bag:Add(empty)
-        list.Size = UDim2.new(1, 0, 0, 64)
         U.corner(empty, T.Radius.Row)
         SettingsUI.text(
             w,
@@ -15660,14 +15564,12 @@ function SettingsUI.refreshProfiles(w)
             { Position = UDim2.fromOffset(16, 0), Size = UDim2.new(1, -32, 1, 0) }
         )
     else
-        local rowHeight = math.max(56, math.ceil(44 / w.scale))
-        list.Size = UDim2.new(1, 0, 0, #profiles * (rowHeight + 4) - 4)
+        local autoload = w:GetAutoload()
         for i, name in ipairs(profiles) do
-            local row = U.button(list, {
+            local row = U.button(page.scroll.frame, {
                 Name = "Profile",
-                Size = UDim2.new(1, 0, 0, rowHeight),
-                Position = UDim2.fromOffset(0, (i - 1) * (rowHeight + 4)),
-                LayoutOrder = i,
+                Size = UDim2.new(1, 0, 0, 48),
+                LayoutOrder = 5 + i,
                 BackgroundTransparency = 0,
                 ZIndex = page.scroll.frame.ZIndex + 1,
             })
@@ -15680,27 +15582,27 @@ function SettingsUI.refreshProfiles(w)
                 w.persistence.activeProfile == name and "SurfaceSelected" or "RowBackground"
             )
             local glyph = Icons.make(row, "folder", 14, w.theme.TextSecondary, w)
-            glyph.Position = UDim2.fromOffset(16, 21)
+            glyph.Position = UDim2.fromOffset(14, 17)
             local title = U.label(row, name, T.Type.Value, w.theme.TextPrimary, {
-                Position = UDim2.fromOffset(42, 7),
+                Position = UDim2.fromOffset(38, 3),
                 Size = UDim2.new(1, -92, 0, 21),
             })
             local state = U.label(row, "", 10, w.theme.TextSecondary, {
-                Position = UDim2.fromOffset(42, 29),
+                Position = UDim2.fromOffset(38, 25),
                 Size = UDim2.new(0.55, -40, 0, 16),
             })
             local badge = U.label(row, "", 10, w.theme.Accent, {
-                Position = UDim2.new(0.55, 0, 0, 29),
+                Position = UDim2.new(0.55, 0, 0, 25),
                 Size = UDim2.new(0.45, -50, 0, 16),
                 TextXAlignment = Enum.TextXAlignment.Right,
             })
             local edge = U.frame(row, {
-                Position = UDim2.fromOffset(0, 14),
+                Position = UDim2.fromOffset(0, 10),
                 Size = UDim2.fromOffset(2, 28),
                 BackgroundTransparency = 0,
                 ZIndex = row.ZIndex + 1,
             }, w, "Accent")
-            local widgets = { row = row, name = title, state = state, autoload = badge, edge = edge, icon = glyph }
+            local widgets = { row = row, name = title, state = state, autoload = badge, edge = edge }
             -- Keep the public/internal status label separate from interaction state.
             SettingsUI.choice(w, widgets, bag, function()
                 return w.persistence.activeProfile == name or w.selectedProfile == name
@@ -15708,13 +15610,12 @@ function SettingsUI.refreshProfiles(w)
             w.profileRows[name] = widgets
             local menu = U.button(row, {
                 Name = "ProfileActions",
-                Position = UDim2.new(1, -rowHeight, 0, 0),
-                Size = UDim2.fromOffset(rowHeight, rowHeight),
+                Position = UDim2.new(1, -44, 0, 2),
+                Size = UDim2.fromOffset(40, 44),
                 ZIndex = row.ZIndex + 2,
             })
             local icon = Icons.make(menu, "chevron", 8, w.theme.SystemText, w)
-            icon.Position = UDim2.fromScale(0.5, 0.5)
-            icon.AnchorPoint = Vector2.new(0.5, 0.5)
+            icon.Position = UDim2.fromOffset(16, 18)
             U.connect(bag, row.Activated, function()
                 if not SettingsUI.interactive(w, row) then
                     return
@@ -15734,7 +15635,6 @@ function SettingsUI.refreshProfiles(w)
             end)
         end
     end
-    SettingsUI.profileLayout(w)
     SettingsUI.updateProfileStates(w)
     page.scroll:Update()
 end
@@ -15742,54 +15642,22 @@ function SettingsUI.profiles(w, page)
     SettingsUI.heading(w, page, "Profiles", "ProfileBody")
     w.persistenceLabel = SettingsUI.control(w, page, "AddLabel", w.persistence:Status())
     w.pathLabel = page:AddLabel(w.persistence.folder)
-    local composer = U.frame(page.scroll.frame, {
-        Name = "ProfileComposer",
-        Size = UDim2.new(1, 0, 0, 88),
-        LayoutOrder = 8,
-        ZIndex = page.scroll.frame.ZIndex + 1,
-    }, w)
-    page.bag:Add(composer)
-    w.profileComposer = composer
     w.profileName = SettingsUI.control(w, page, "AddTextbox", "ProfileName", { Default = "Default", MaxLength = 80 })
-    w.profileName.row.Parent = composer
-    function w.profileName:layoutVisual()
-        local width = math.max(1, composer.AbsoluteSize.X / w.scale - w.profileCreateWidth - 12)
-        local hit = math.max(44, math.ceil(44 / w.scale))
-        self.row.Size = UDim2.fromOffset(width, hit + 32)
-        self.label.Position, self.label.Size = UDim2.fromOffset(0, 0), UDim2.new(1, 0, 0, 24)
-        self.lane.Position, self.lane.Size = UDim2.new(1, 0, 0, 30), UDim2.new(1, 0, 0, hit)
-        self.box.Size = UDim2.new(1, 0, 0, math.max(40, hit))
-        self.separator.Visible = false
-    end
-    w.profileCreateWidth = 120
-    w.profileCreate = SettingsUI.button(
-        w,
-        composer,
-        "Create",
-        { Name = "CreateProfile", ZIndex = composer.ZIndex + 2 },
-        page.bag,
-        function()
+    SettingsUI.control(w, page, "AddButton", "Create", {
+        Primary = true,
+        Callback = function()
             local ok, err = w:CreateProfile(w.profileName:Get())
             SettingsUI.result(w, ok, err, "Saved")
             SettingsUI.refreshProfiles(w)
         end,
-        true
-    )
-    w.profileList = U.frame(page.scroll.frame, {
-        Name = "ProfileList",
-        Size = UDim2.new(1, 0, 0, 1),
-        LayoutOrder = 10,
-        ZIndex = page.scroll.frame.ZIndex + 1,
-    }, w)
-    page.bag:Add(w.profileList)
+    })
     local toolbar = U.frame(page.scroll.frame, {
         Name = "ProfileToolbar",
         Size = UDim2.new(1, 0, 0, 176),
-        LayoutOrder = 12,
+        LayoutOrder = 10000,
         ZIndex = page.scroll.frame.ZIndex + 1,
     }, w)
     page.bag:Add(toolbar)
-    w.profileToolbar = toolbar
     local actions = {
         {
             key = "Save",
@@ -15866,21 +15734,16 @@ function SettingsUI.profiles(w, page)
     end
     w.profileToolbarLayout = function()
         local width = toolbar.AbsoluteSize.X / w.scale
-        w.profileCreateWidth = math.min(width * 0.42, math.max(88, U.width(Locale.text(w, "Create"), 12) + 32))
-        local hit = math.max(T.Geometry.SettingsHit, math.ceil(44 / w.scale))
-        composer.Size = UDim2.new(1, 0, 0, hit + 44)
-        w.profileCreate.Position, w.profileCreate.Size =
-            UDim2.new(1, -w.profileCreateWidth, 0, 30), UDim2.fromOffset(w.profileCreateWidth, hit)
         local columns = width >= 540 and 4 or 2
         local rows = math.ceil(#buttons / columns)
-        local height = rows * hit + (rows - 1) * 8
+        local height = rows * T.Geometry.SettingsHit + (rows - 1) * 8
         if toolbar.Size.Y.Offset ~= height then
             toolbar.Size = UDim2.new(1, 0, 0, height)
         end
         for i, button in ipairs(buttons) do
             local col, row = (i - 1) % columns, math.floor((i - 1) / columns)
-            button.Size = UDim2.new(1 / columns, -6, 0, hit)
-            button.Position = UDim2.new(col / columns, col > 0 and 2 or 0, 0, row * (hit + 8))
+            button.Size = UDim2.new(1 / columns, -6, 0, T.Geometry.SettingsHit)
+            button.Position = UDim2.new(col / columns, col > 0 and 2 or 0, 0, row * (T.Geometry.SettingsHit + 8))
         end
         page.scroll:Update()
     end
@@ -15896,143 +15759,100 @@ function SettingsUI.profiles(w, page)
     end
     compactInfo(w.persistenceLabel)
     compactInfo(w.pathLabel)
-    w.pathLabel.label.TextSize = 10
     w.profileToolbarLayout()
-    w.profileName:_layout()
     SettingsUI.refreshProfiles(w)
 end
 function SettingsUI.preview(w, page, name, order)
-    local card = U.button(w.themeGrid, {
+    local card = U.button(page.scroll.frame, {
         Name = name,
-        Size = UDim2.fromOffset(200, T.Settings.Card),
+        Size = UDim2.new(1, 0, 0, 92),
+        LayoutOrder = order,
         BackgroundTransparency = 0,
-        ZIndex = w.themeGrid.ZIndex + 1,
+        ZIndex = page.scroll.frame.ZIndex + 1,
     })
-    U.corner(card, T.Radius.Window)
+    page.bag:Add(card)
+    U.corner(card, T.Radius.Row)
     local colors = Presentation.colors(name)
     local preview = U.new("CanvasGroup", {
         Name = "ThemePreview",
-        Size = UDim2.fromOffset(190, 82),
+        Position = UDim2.fromOffset(14, 14),
+        Size = UDim2.fromOffset(110, 64),
         BackgroundTransparency = 0,
-        BackgroundColor3 = colors.WindowBackground,
+        BackgroundColor3 = colors.ContentBackground,
         GroupTransparency = 0,
         ZIndex = card.ZIndex + 1,
     }, card)
     U.corner(preview, T.Radius.Popover)
-    local side = U.frame(preview, {
-        Size = UDim2.new(0.24, 0, 1, 0),
+    U.frame(preview, {
+        Size = UDim2.new(0, 28, 1, 0),
         BackgroundTransparency = 0,
         BackgroundColor3 = colors.SidebarBackground,
         ZIndex = preview.ZIndex,
     }, w)
-    U.frame(side, {
-        Position = UDim2.fromOffset(6, 11),
-        Size = UDim2.new(1, -12, 0, 3),
-        BackgroundTransparency = 0,
-        BackgroundColor3 = colors.TextPrimary,
-        ZIndex = side.ZIndex + 1,
-    }, w)
     for i = 1, 3 do
-        local line = U.frame(side, {
-            Position = UDim2.fromOffset(6, 29 + (i - 1) * 12),
-            Size = UDim2.new(1, -12, 0, 6),
-            BackgroundTransparency = 0,
-            BackgroundColor3 = i == 1 and colors.SurfaceSelected or colors.SurfaceSecondary,
-            ZIndex = side.ZIndex + 1,
-        }, w)
-        U.corner(line, 1)
-    end
-    U.frame(preview, {
-        Position = UDim2.new(0.24, 8, 0, 10),
-        Size = UDim2.new(0.6, -8, 0, 4),
-        BackgroundTransparency = 0,
-        BackgroundColor3 = colors.TextPrimary,
-        ZIndex = preview.ZIndex + 1,
-    }, w)
-    for i = 1, 3 do
-        local row = U.frame(preview, {
-            Position = UDim2.new(0.24, 7, 0, 24 + (i - 1) * 17),
-            Size = UDim2.new(0.76, -14, 0, 13),
+        U.frame(preview, {
+            Position = UDim2.fromOffset(34, 10 + (i - 1) * 16),
+            Size = UDim2.fromOffset(68, 12),
             BackgroundTransparency = 0,
             BackgroundColor3 = colors.RowBackground,
             ZIndex = preview.ZIndex + 1,
         }, w)
-        U.corner(row, 1)
-        U.frame(row, {
-            Position = UDim2.fromOffset(5, 5),
-            Size = UDim2.new(0.43, 0, 0, 2),
-            BackgroundTransparency = 0,
-            BackgroundColor3 = colors.SystemText,
-            ZIndex = row.ZIndex + 1,
-        }, w)
-        local lane = U.frame(row, {
-            Position = UDim2.new(1, -27, 0, 5),
-            Size = UDim2.fromOffset(21, 3),
-            BackgroundTransparency = 0,
-            BackgroundColor3 = colors.SliderTrack,
-            ZIndex = row.ZIndex + 1,
-        }, w)
-        U.corner(lane, 2)
-        U.frame(lane, {
-            Size = UDim2.new(0.65, 0, 1, 0),
-            BackgroundTransparency = 0,
-            BackgroundColor3 = colors.Accent,
-            ZIndex = lane.ZIndex + 1,
-        }, w)
     end
+    U.frame(preview, {
+        Position = UDim2.fromOffset(39, 14),
+        Size = UDim2.fromOffset(22, 2),
+        BackgroundTransparency = 0,
+        BackgroundColor3 = colors.TextPrimary,
+        ZIndex = preview.ZIndex + 2,
+    }, w)
+    local control = U.frame(preview, {
+        Position = UDim2.fromOffset(87, 13),
+        Size = UDim2.fromOffset(10, 4),
+        BackgroundTransparency = 0,
+        BackgroundColor3 = colors.Accent,
+        ZIndex = preview.ZIndex + 2,
+    }, w)
+    U.corner(control, 2)
+    local rail = U.frame(preview, {
+        Position = UDim2.fromOffset(76, 30),
+        Size = UDim2.fromOffset(20, 3),
+        BackgroundTransparency = 0,
+        BackgroundColor3 = colors.Accent,
+        ZIndex = preview.ZIndex + 2,
+    }, w)
+    U.corner(rail, 1)
+    -- Preview palettes belong to their represented theme, not the currently selected one.
     w.bindings[preview] = nil
-    for _, object in ipairs(preview:GetDescendants()) do
-        w.bindings[object] = nil
+    for _, obj in ipairs(preview:GetDescendants()) do
+        w.bindings[obj] = nil
     end
     local label = U.label(
         card,
         name,
-        13,
+        T.Type.Tab,
         w.theme.TextPrimary,
-        { Position = UDim2.fromOffset(14, 103), Size = UDim2.new(1, -96, 0, 22), Font = Enum.Font.GothamMedium }
+        { Position = UDim2.fromOffset(140, 22), Size = UDim2.new(1, -180, 0, 22), Font = Enum.Font.GothamMedium }
     )
-    local selectedLabel = SettingsUI.text(w, card, "ThemeSelected", {
-        Position = UDim2.new(1, -86, 0, 103),
-        Size = UDim2.fromOffset(72, 22),
-        TextXAlignment = Enum.TextXAlignment.Right,
-        TextSize = 11,
-    })
-    local dot = Components.circle(card, 5, w.theme.Accent)
-    dot.Position = UDim2.new(1, -17, 0, 136)
-    local caption = (name == "Abyss" and "AbyssDescription") or (name == "Ember" and "EmberDescription")
-    if caption then
-        SettingsUI.text(
-            w,
-            card,
-            caption,
-            { Position = UDim2.fromOffset(14, 126), Size = UDim2.new(1, -40, 0, 16), TextSize = 10 }
-        )
-    end
+    local selected = Components.circle(card, 5, w.theme.Accent)
+    selected.Position = UDim2.new(1, -18, 0.5, 0)
     w.themeCards[name] = SettingsUI.choice(
         w,
-        {
-            row = card,
-            dot = dot,
-            label = label,
-            selectedLabel = selectedLabel,
-            preview = preview,
-            stroke = U.stroke(card, w.theme.SurfaceEdge),
-        },
+        { row = card, dot = selected, label = label, stroke = U.stroke(card, w.theme.SurfaceEdge) },
         page.bag,
         function()
             return name == w.themeName
         end
     )
     U.connect(page.bag, card.Activated, function()
-        if SettingsUI.interactive(w, card) then
-            w:SetTheme(name)
-            w:Notify("ThemeChanged")
+        if not SettingsUI.interactive(w, card) then
+            return
         end
+        w:SetTheme(name)
+        w:Notify("ThemeChanged")
     end)
 end
 function SettingsUI.themes(w, page)
     SettingsUI.heading(w, page, "Themes", "ThemeBody")
-    w.themeGrid = SettingsUI.gallery(w, page, "ThemeGallery")
     for i, name in ipairs(Presentation.order) do
         SettingsUI.preview(w, page, name, i + 1)
     end
@@ -16164,59 +15984,60 @@ function SettingsUI.flag(w, parent, language)
         w.bindings[object] = nil
     end
 end
-SettingsUI.languageInfo = {
-    English = { "English", "US" },
-    Spanish = { "Español", "ES" },
-    Russian = { "Русский", "RU" },
-    Portuguese = { "Português", "BR" },
-    French = { "Français", "FR" },
-    German = { "Deutsch", "DE" },
-    Italian = { "Italiano", "IT" },
-    Turkish = { "Türkçe", "TR" },
-    Indonesian = { "Bahasa Indonesia", "ID" },
-}
 function SettingsUI.languages(w, page)
     SettingsUI.heading(w, page, "Language", "LanguageBody")
-    w.languageGrid = SettingsUI.gallery(w, page, "LanguageGallery")
-    for _, language in ipairs(Locale.order) do
-        local info = SettingsUI.languageInfo[language]
-        local card = U.button(w.languageGrid, {
+    local names = {
+        English = "English",
+        Spanish = "Español",
+        Russian = "Русский",
+        Portuguese = "Português",
+        French = "Français",
+        German = "Deutsch",
+        Italian = "Italiano",
+        Turkish = "Türkçe",
+        Indonesian = "Bahasa Indonesia",
+    }
+    local regions = {
+        English = "US",
+        Spanish = "ES",
+        Russian = "RU",
+        Portuguese = "BR",
+        French = "FR",
+        German = "DE",
+        Italian = "IT",
+        Turkish = "TR",
+        Indonesian = "ID",
+    }
+    for i, language in ipairs(Locale.order) do
+        local card = U.button(page.scroll.frame, {
             Name = language,
-            Size = UDim2.fromOffset(200, T.Settings.Language),
+            Size = UDim2.new(1, 0, 0, 68),
+            LayoutOrder = i + 1,
             BackgroundTransparency = 0,
-            ZIndex = w.languageGrid.ZIndex + 1,
+            ZIndex = page.scroll.frame.ZIndex + 1,
         })
-        U.corner(card, T.Radius.Section)
+        page.bag:Add(card)
+        U.corner(card, T.Radius.Row)
         SettingsUI.flag(w, card, language)
-        local flag = card:FindFirstChild("Flag")
-        flag.Position = UDim2.fromOffset(14, 22)
         local label = U.label(
             card,
-            info[1],
-            13,
+            names[language],
+            T.Type.Tab,
             w.theme.TextPrimary,
-            { Position = UDim2.fromOffset(54, 12), Size = UDim2.new(1, -80, 0, 24), Font = Enum.Font.GothamMedium }
+            { Position = UDim2.fromOffset(58, 12), Size = UDim2.new(1, -90, 0, 24), Font = Enum.Font.GothamMedium }
         )
         U.label(
             card,
-            info[2],
-            11,
-            w.theme.SystemText,
-            { Position = UDim2.fromOffset(54, 38), Size = UDim2.new(1, -80, 0, 18) }
+            regions[language],
+            T.Type.PageSubtitle,
+            w.theme.TextSecondary,
+            { Position = UDim2.fromOffset(58, 36), Size = UDim2.new(1, -90, 0, 18) }
         )
         local dot = Components.circle(card, 5, w.theme.Accent)
         dot.Position = UDim2.new(1, -18, 0.5, 0)
         w.languageCards[language] = SettingsUI.choice(
             w,
-            {
-                row = card,
-                dot = dot,
-                label = label,
-                flag = flag,
-                nativeName = info[1],
-                region = info[2],
-                stroke = U.stroke(card, w.theme.SurfaceEdge),
-            },
+            { row = card, dot = dot, label = label, stroke = U.stroke(card, w.theme.SurfaceEdge) },
             page.bag,
             function()
                 return language == w.language
@@ -16231,7 +16052,7 @@ function SettingsUI.languages(w, page)
 end
 function SettingsUI.general(w, page)
     SettingsUI.heading(w, page, "General", "GeneralBody")
-    SettingsUI.control(w, page, "AddSectionHeader", "Interface")
+    SettingsUI.control(w, page, "AddSection", "Interface")
     w.tooltipPreference = SettingsUI.control(w, page, "AddToggle", "Tooltips", {
         Default = w.tooltipsEnabled,
         Callback = function(value)
@@ -16256,7 +16077,7 @@ function SettingsUI.general(w, page)
             w:SetRememberPosition(value)
         end,
     })
-    SettingsUI.control(w, page, "AddSectionHeader", "Behavior")
+    SettingsUI.control(w, page, "AddSection", "Behavior")
     SettingsUI.control(w, page, "AddToggle", "SilentLoad", {
         Default = w.persistence.silentLoad,
         Callback = function(value)
@@ -16275,37 +16096,6 @@ function SettingsUI.general(w, page)
             w.systemNotifications = value
         end,
     })
-    for _, control in ipairs(page.controls) do
-        if control.kind == "Toggle" then
-            function control:layoutVisual()
-                local width = self.row.AbsoluteSize.X / w.scale
-                local copyWidth = math.max(32, width - 112)
-                local text = self.displayDescription or self.description
-                local descHeight = text ~= ""
-                        and math.ceil(
-                            S.Text:GetTextSize(text, self.desc.TextSize, self.desc.Font, Vector2.new(copyWidth, 1000)).Y
-                        )
-                    or 0
-                local height = math.max(52, math.ceil(44 / w.scale), descHeight > 0 and descHeight + 42 or 0)
-                self.row.Size = UDim2.new(1, 0, 0, height)
-                self.label.Position, self.label.Size =
-                    UDim2.fromOffset(16, descHeight > 0 and 9 or (height - 20) / 2), UDim2.fromOffset(copyWidth, 20)
-                self.desc.Position, self.desc.Size = UDim2.fromOffset(16, 32), UDim2.fromOffset(copyWidth, descHeight)
-                self.lane.Position, self.lane.Size = UDim2.new(1, -16, 0, 0), UDim2.fromOffset(72, height)
-                self.hitbox.Size = UDim2.fromOffset(52, math.max(44, math.ceil(44 / w.scale)))
-            end
-            local render = control._render
-            function control:_render()
-                render(self)
-                w.motion:To(
-                    self.desc,
-                    T.Motion.Micro,
-                    { TextColor3 = self.state.Disabled and w.theme.TextDisabled or w.theme.SystemText }
-                )
-            end
-            control:_layout()
-        end
-    end
     Premium.build(w, page)
 end
 function SettingsUI.refreshStyle(w)
@@ -16315,7 +16105,7 @@ function SettingsUI.refreshStyle(w)
         end
     end
     if w.settingsContext then
-        Locale.bind(w, w.settingsContext, "Text", "SettingsIntro")
+        Locale.bind(w, w.settingsContext, "Text", w.settingsCategory or "Profiles")
     end
     if w.settingsFooter then
         w.settingsFooter:_render()
@@ -16323,7 +16113,6 @@ function SettingsUI.refreshStyle(w)
         Icons.color(w.settingsIcon, w.settingsOpen and w.theme.Accent or w.theme.TextSecondary)
     end
     SettingsUI.updateProfileStates(w)
-    SettingsUI.navInk(w, false)
 end
 function SettingsUI.refreshLanguage(w)
     Premium.refresh(w)
@@ -16344,170 +16133,68 @@ function SettingsUI.refreshLanguage(w)
     end
 end
 function SettingsUI.transientLayout(w)
-    local hit = math.max(44, math.ceil(44 / w.scale))
     if w.confirmation then
-        local c = w.confirmation
-        local width = math.min(420, w.root.Size.X.Offset - 32)
-        local copyHeight = math.max(
-            36,
-            math.ceil(S.Text:GetTextSize(c.copy.Text, c.copy.TextSize, c.copy.Font, Vector2.new(width - 32, 2000)).Y)
-        )
-        c.copy.Size = UDim2.new(1, -32, 0, copyHeight)
-        c.detail.Position = UDim2.fromOffset(16, 52 + copyHeight)
-        c.panel.Size = UDim2.fromOffset(width, 102 + copyHeight + hit)
-        for i, button in ipairs(c.buttons) do
-            button.Position = UDim2.new((i - 1) / 2, i == 1 and 16 or 8, 1, -hit - 16)
-            button.Size = UDim2.new(0.5, -24, 0, hit)
-        end
-    end
-    if w.transfer then
-        local t = w.transfer
-        t.panel.Size = UDim2.fromOffset(math.min(720, w.root.Size.X.Offset - 32), w.root.Size.Y.Offset - 48)
-        t.host.Size = UDim2.new(1, -32, 1, -hit - 80)
-        for i, button in ipairs(t.buttons) do
-            button.Position = UDim2.new((i - 1) / 2, i == 1 and 16 or 8, 1, -hit - 16)
-            button.Size = UDim2.new(0.5, -24, 0, hit)
-        end
+        w.confirmation.panel.Size = UDim2.fromOffset(math.min(360, w.root.Size.X.Offset - 32), 178)
     end
     if w.toastGroup then
         w.toastGroup.Size = UDim2.fromOffset(math.min(320, w.root.Size.X.Offset - 36), 54)
     end
 end
-function SettingsUI.revealNav(w)
-    if w.settingsNavCancel then
-        w.bag:Remove(w.settingsNavCancel, true)
-    end
-    w.settingsNavCancel = w.bag:After(0, function()
-        w.settingsNavCancel = nil
-        local entry = w.settingsNav[w.settingsCategory]
-        if w.destroyed or not w.settingsOpen or not entry then
-            return
-        end
-        local host, row = w.settingsNavHost, entry.row
-        local offset = (row.AbsolutePosition - host.AbsolutePosition) / w.scale
-        local viewport, extent = host.AbsoluteSize / w.scale, row.AbsoluteSize / w.scale
-        local horizontal = w.settingsCompact
-        local start, size, view =
-            horizontal and offset.X or offset.Y,
-            horizontal and extent.X or extent.Y,
-            horizontal and viewport.X or viewport.Y
-        local delta = start < 0 and start or (start + size > view and start + size - view or 0)
-        if delta ~= 0 then
-            local canvas = host.CanvasPosition
-            host.CanvasPosition = horizontal and Vector2.new(math.max(0, canvas.X + delta), 0)
-                or Vector2.new(0, math.max(0, canvas.Y + delta))
-            SettingsUI.navInk(w, true)
-        end
-    end, true)
-end
-function SettingsUI.navInk(w, immediate)
-    if not w.settingsSelection or not w.settingsNav[w.settingsCategory] then
-        return
-    end
-    local row = w.settingsNav[w.settingsCategory].row
-    local localPosition = (row.AbsolutePosition - w.settingsNavClip.AbsolutePosition) / w.scale
-    local size = row.AbsoluteSize / w.scale
-    local position = UDim2.fromOffset(localPosition.X, localPosition.Y)
-    local extent = UDim2.fromOffset(size.X, size.Y)
-    local duration = immediate and 0 or T.Motion.SettingsIndicator
-    w.motion:To(w.settingsSelection, duration, { Position = position, Size = extent })
-    local horizontal = w.settingsCompact
-    w.motion:To(w.settingsIndicator, duration, {
-        Position = UDim2.fromOffset(
-            localPosition.X + (horizontal and 12 or 2),
-            localPosition.Y + (horizontal and size.Y - 2 or 17)
-        ),
-        Size = UDim2.fromOffset(horizontal and math.max(8, size.X - 24) or 2, horizontal and 2 or 20),
-    })
-end
 function SettingsUI.layout(w)
     if not w.settingsPanel then
         return
     end
-    local rw, rh = w.root.Size.X.Offset, w.root.Size.Y.Offset
-    local compact = w.compact or rw * w.scale < 700
-    local inset, vertical = compact and 8 or 12, compact and 8 or 16
-    local width, height = math.max(120, rw - inset * 2), math.max(96, rh - vertical * 2)
-    local hit = math.max(44, math.ceil(44 / w.scale))
-    local header = math.max(hit + 8, math.min(T.Settings.Header, math.max(52, height * 0.20)))
-    local rest = UDim2.fromOffset(inset, vertical)
-    local changed = w.settingsGeometryWidth ~= width
-        or w.settingsGeometryHeight ~= height
-        or w.settingsCompact ~= compact
-    w.settingsGeometryWidth, w.settingsGeometryHeight, w.settingsCompact = width, height, compact
-    w.settingsRestPosition = rest
-    if changed then
-        w.motion:To(
-            w.settingsPanel,
-            0,
-            { Position = UDim2.fromOffset(inset, vertical + (w.settingsOpen and 0 or T.Geometry.SettingsReveal)) }
-        )
+    local compact = w.compact or w.root.Size.X.Offset < 640
+    local x, y = compact and 8 or 18, compact and 12 or 28
+    local rest = UDim2.fromOffset(x, y)
+    if not U.equal(w.settingsRestPosition, rest) then
+        w.settingsRestPosition = rest
+        w.motion:To(w.settingsPanel, w.settingsPanel.Visible and T.Motion.Fast or 0, {
+            Position = UDim2.fromOffset(x, y + (w.settingsOpen and 0 or T.Geometry.SettingsReveal)),
+        })
     end
-    w.settingsPanel.Size = UDim2.fromOffset(width, height)
-    w.settingsHeader.Size = UDim2.fromOffset(width, header)
-    w.settingsHeaderLine.Position = UDim2.fromOffset(0, header - 1)
-    local closeWidth = math.min(144, math.max(44, U.width(Locale.text(w, "Close"), 12) + 44))
-    closeWidth = math.max(hit, closeWidth)
-    w.settingsCloseButton.Position = UDim2.fromOffset(width - closeWidth - 12, math.max(4, (header - hit) / 2))
-    w.settingsCloseButton.Size = UDim2.fromOffset(closeWidth, hit)
-    w.settingsHeaderGlyph.Position = UDim2.fromOffset(20, (header - 18) / 2)
-    w.settingsTitle.Position, w.settingsTitle.Size =
-        UDim2.fromOffset(48, header >= 70 and 14 or (header - 24) / 2),
-        UDim2.fromOffset(math.max(1, width - closeWidth - 80), 26)
-    w.settingsContext.Visible = header >= 70
-    w.settingsContext.Position, w.settingsContext.Size =
-        UDim2.fromOffset(48, 43), UDim2.fromOffset(math.max(1, width - closeWidth - 80), 18)
-    w.settingsRailSurface.Visible, w.settingsDivider.Visible = not compact, not compact
-    w.settingsRailSurface.Position, w.settingsRailSurface.Size =
-        UDim2.fromOffset(0, header), UDim2.fromOffset(T.Settings.Rail + 20, height - header)
-    w.settingsNavClip.Position = UDim2.fromOffset(12, header + 10)
-    w.settingsNavClip.Size = compact and UDim2.new(1, -24, 0, hit + 4)
-        or UDim2.fromOffset(T.Settings.Rail, height - header - 24)
-    w.settingsNavHost.Position, w.settingsNavHost.Size = UDim2.fromOffset(0, 0), UDim2.fromScale(1, 1)
+    w.settingsPanel.Size = UDim2.new(1, -(compact and 16 or 36), 1, -(compact and 24 or 56))
+    w.settingsNavHost.Position = UDim2.fromOffset(12, T.Geometry.SettingsHeader + 8)
+    w.settingsNavHost.Size = compact and UDim2.new(1, -24, 0, 48) or UDim2.new(0, T.Geometry.SettingsNav, 1, -88)
     w.settingsNavLayout.FillDirection = compact and Enum.FillDirection.Horizontal or Enum.FillDirection.Vertical
     w.settingsNavHost.ScrollingDirection = compact and Enum.ScrollingDirection.X or Enum.ScrollingDirection.Y
     w.settingsNavHost.AutomaticCanvasSize = compact and Enum.AutomaticSize.X or Enum.AutomaticSize.Y
     for key, entry in pairs(w.settingsNav) do
         entry.row.Size = UDim2.fromOffset(
-            compact and math.max(112, U.width(Locale.text(w, key), 13) + 50) or T.Settings.Rail,
-            compact and hit or math.max(T.Settings.NavRow, hit)
+            compact and math.max(104, U.width(Locale.text(w, key), T.Type.Value) + 56) or T.Geometry.SettingsNav,
+            T.Geometry.SettingsHit
         )
-        entry.note.Visible = not compact
-        entry.label.Position = UDim2.fromOffset(38, compact and 0 or 5)
-        entry.label.Size = UDim2.new(1, -46, 0, compact and hit or 22)
-        entry.icon.Position = UDim2.fromOffset(14, compact and (hit - 14) / 2 or 18)
+        entry.indicator.Size = compact and UDim2.new(1, -20, 0, 1) or UDim2.new(0, 2, 1, -20)
+        entry.indicator.Position = compact and UDim2.new(0, 10, 1, -1) or UDim2.fromOffset(0, 10)
     end
-    w.settingsDivider.Position, w.settingsDivider.Size =
-        UDim2.fromOffset(T.Settings.Rail + 20, header + 12), UDim2.fromOffset(1, height - header - 24)
-    local x, y = compact and 12 or T.Settings.Rail + 36, compact and header + hit + 26 or header + 12
-    local bodyWidth, bodyHeight = math.max(1, width - x - 16), math.max(44, height - y - 12)
-    w.settingsBody.Position = UDim2.fromOffset(x, y)
-    local reserve = Premium.layoutDock(w, x, y, bodyWidth, bodyHeight)
-    w.settingsBody.Size = UDim2.fromOffset(bodyWidth, math.max(44, bodyHeight - reserve))
+    w.settingsDivider.Visible = not compact
+    w.settingsDivider.Position = UDim2.fromOffset(T.Geometry.SettingsNav + 24, T.Geometry.SettingsHeader + 12)
+    w.settingsDivider.Size = UDim2.new(0, 1, 1, -96)
+    w.settingsBody.Position = UDim2.fromOffset(
+        compact and 12 or T.Geometry.SettingsNav + 36,
+        compact and 132 or T.Geometry.SettingsHeader + 8
+    )
+    w.settingsBody.Size = UDim2.new(1, -(compact and 24 or T.Geometry.SettingsNav + 52), 1, -(compact and 148 or 88))
+    local panelWidth = w.root.Size.X.Offset - (compact and 16 or 36)
+    local panelHeight = w.root.Size.Y.Offset - (compact and 24 or 56)
+    local reserve = Premium.layoutDock(
+        w,
+        w.settingsBody.Position.X.Offset,
+        w.settingsBody.Position.Y.Offset,
+        panelWidth - (compact and 24 or T.Geometry.SettingsNav + 52),
+        panelHeight - (compact and 148 or 88)
+    )
+    w.settingsBody.Size =
+        UDim2.new(1, -(compact and 24 or T.Geometry.SettingsNav + 52), 1, -(compact and 148 or 88) - reserve)
     Premium.refresh(w)
     if w.profileToolbarLayout then
         w.profileToolbarLayout()
     end
-    SettingsUI.profileLayout(w)
-    SettingsUI.transientLayout(w)
-    SettingsUI.galleryLayout(w, w.settingsPages.Themes, w.themeGrid, w.themeCards, Presentation.order, T.Settings.Card)
-    SettingsUI.galleryLayout(
-        w,
-        w.settingsPages.Language,
-        w.languageGrid,
-        w.languageCards,
-        Locale.order,
-        T.Settings.Language
-    )
     for _, page in pairs(w.settingsPages) do
         for _, control in ipairs(page.controls) do
             control:_layout()
         end
         page.scroll:Update()
-    end
-    SettingsUI.navInk(w, changed)
-    if changed then
-        SettingsUI.revealNav(w)
     end
 end
 function Window:SetSettingsCategory(key)
@@ -16544,11 +16231,7 @@ function Window:SetSettingsCategory(key)
                     { GroupTransparency = 0.35, Position = UDim2.fromOffset(T.Geometry.SettingsReveal, 0) }
                 )
             end
-            self.motion:To(
-                page.host,
-                T.Motion.SettingsPage,
-                { GroupTransparency = 0, Position = UDim2.fromOffset(0, 0) }
-            )
+            self.motion:To(page.host, T.Motion.Normal, { GroupTransparency = 0, Position = UDim2.fromOffset(0, 0) })
         else
             self.motion:Cancel(page.host)
             page.host.Visible = false
@@ -16559,7 +16242,6 @@ function Window:SetSettingsCategory(key)
     end
     SettingsUI.layout(self)
     SettingsUI.refreshStyle(self)
-    SettingsUI.revealNav(self)
     return true
 end
 function SettingsUI.build(w)
@@ -16577,74 +16259,69 @@ function SettingsUI.build(w)
     w.settingsPanel = panel
     U.corner(panel, T.Radius.Window)
     U.bind(w, panel, "BackgroundColor3", "WindowBackground")
-    local edge = U.stroke(panel, w.theme.SurfaceEdge)
-    edge.Transparency = 0.35
-    U.bind(w, edge, "Color", "SurfaceEdge")
-    w.settingsHeader = U.frame(panel, { Name = "SettingsHeader", ZIndex = panel.ZIndex + 1 }, w, "HeaderBackground")
-    w.settingsHeaderLine = U.frame(
-        w.settingsHeader,
-        { Name = "Divider", Size = UDim2.new(1, 0, 0, 1), ZIndex = panel.ZIndex + 2 },
+    local stroke = U.stroke(panel, w.theme.SurfaceEdge, 1)
+    stroke.Transparency = 0.25
+    U.bind(w, stroke, "Color", "SurfaceEdge")
+    local glyph = Icons.make(panel, "settings", 16, w.theme.Accent, w)
+    glyph.Position = UDim2.fromOffset(16, 18)
+    SettingsUI.text(w, panel, "Settings", {
+        Position = UDim2.fromOffset(40, 10),
+        Size = UDim2.new(1, -152, 0, 22),
+        Font = Enum.Font.GothamBold,
+        TextSize = T.Type.PageTitle,
+    }, "TextPrimary")
+    w.settingsContext = SettingsUI.text(
         w,
-        "Separator"
+        panel,
+        "Profiles",
+        { Position = UDim2.fromOffset(40, 34), Size = UDim2.new(1, -152, 0, 16), TextSize = T.Type.PageSubtitle },
+        "TextSecondary"
     )
-    local glyph = Icons.make(w.settingsHeader, "settings", 18, w.theme.Accent, w)
-    glyph.Position = UDim2.fromOffset(20, 20)
-    w.settingsHeaderGlyph = glyph
-    w.settingsTitle =
-        SettingsUI.text(w, w.settingsHeader, "Settings", { Font = Enum.Font.GothamBold, TextSize = 20 }, "TextPrimary")
-    w.settingsContext = SettingsUI.text(w, w.settingsHeader, "SettingsIntro", { TextSize = 12 }, "SystemText")
-    w.settingsCloseButton = SettingsUI.button(
+    SettingsUI.button(
         w,
-        w.settingsHeader,
+        panel,
         "Close",
-        { Name = "CloseSettings", ZIndex = panel.ZIndex + 3 },
+        {
+            Position = UDim2.new(1, -100, 0, 10),
+            Size = UDim2.fromOffset(88, T.Geometry.SettingsHit),
+            ZIndex = panel.ZIndex + 3,
+        },
         w.bag,
         function()
             w:CloseSettings()
-        end,
-        false,
-        true
+        end
     )
-    w.settingsRailSurface =
-        U.frame(panel, { Name = "NavigationSurface", ZIndex = panel.ZIndex + 1 }, w, "SidebarBackground")
-    w.settingsNavClip =
-        U.frame(panel, { Name = "NavigationViewport", ClipsDescendants = true, ZIndex = panel.ZIndex + 2 }, w)
-    w.settingsSelection =
-        U.frame(w.settingsNavClip, { Name = "CategorySelection", ZIndex = panel.ZIndex + 2 }, w, "SurfaceSelected")
-    U.corner(w.settingsSelection, T.Radius.Section)
-    w.settingsIndicator =
-        U.frame(w.settingsNavClip, { Name = "CategoryIndicator", ZIndex = panel.ZIndex + 4 }, w, "Accent")
-    U.corner(w.settingsIndicator, 1)
-    w.settingsNavHost = U.new("ScrollingFrame", {
-        Name = "SettingsCategories",
-        CanvasPosition = Vector2.new(),
-        ScrollBarThickness = 0,
-        CanvasSize = UDim2.new(),
-        ZIndex = panel.ZIndex + 3,
-    }, w.settingsNavClip)
+    U.frame(panel, {
+        Position = UDim2.fromOffset(0, T.Geometry.SettingsHeader),
+        Size = UDim2.new(1, 0, 0, 1),
+        ZIndex = panel.ZIndex + 1,
+    }, w, "Separator")
+    w.settingsNavHost = U.new(
+        "ScrollingFrame",
+        { Name = "SettingsCategories", ScrollBarThickness = 0, CanvasSize = UDim2.new(), ZIndex = panel.ZIndex + 1 },
+        panel
+    )
     w.settingsNavLayout =
         U.new("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }, w.settingsNavHost)
-    local icons =
-        { Profiles = "folder", Themes = "palette", Language = "globe", General = "settings", Membership = "key" }
+    local icons = { Profiles = "folder", Themes = "sun", Language = "flag", General = "settings", Membership = "key" }
     for i, key in ipairs({ "Profiles", "Themes", "Language", "General", "Membership" }) do
-        local row = U.button(w.settingsNavHost, { Name = key, LayoutOrder = i, ZIndex = panel.ZIndex + 3 })
-        local label = SettingsUI.text(w, row, key, {
-            Position = UDim2.fromOffset(38, 5),
-            Size = UDim2.new(1, -46, 0, 22),
-            Font = Enum.Font.GothamMedium,
-            TextSize = 13,
-        })
-        local note = SettingsUI.text(
+        local row = U.button(
+            w.settingsNavHost,
+            { Name = key, LayoutOrder = i, BackgroundTransparency = 0, ZIndex = panel.ZIndex + 2 }
+        )
+        U.corner(row, T.Radius.Row)
+        local label = SettingsUI.text(
             w,
             row,
-            key .. "Hint",
-            { Position = UDim2.fromOffset(38, 29), Size = UDim2.new(1, -46, 0, 18), TextSize = 10 },
-            "TextMuted"
+            key,
+            { Position = UDim2.fromOffset(38, 0), Size = UDim2.new(1, -46, 1, 0), Font = Enum.Font.GothamMedium }
         )
+        local indicator = U.frame(row, { ZIndex = row.ZIndex + 2 }, w, "Accent")
         local icon = Icons.make(row, icons[key], 14, w.theme.SystemText, w)
+        icon.Position = UDim2.fromOffset(14, 15)
         w.settingsNav[key] = SettingsUI.choice(
             w,
-            { row = row, label = label, note = note, icon = icon, navigation = true },
+            { row = row, label = label, icon = icon, indicator = indicator },
             w.bag,
             function()
                 return w.settingsCategory == key
@@ -16655,16 +16332,8 @@ function SettingsUI.build(w)
                 w:SetSettingsCategory(key)
             end
         end)
-        U.connect(w.bag, row:GetPropertyChangedSignal("AbsolutePosition"), function()
-            if w.settingsCategory == key then
-                SettingsUI.navInk(w, true)
-            end
-        end)
     end
-    U.connect(w.bag, w.settingsNavHost:GetPropertyChangedSignal("CanvasPosition"), function()
-        SettingsUI.navInk(w, true)
-    end)
-    w.settingsDivider = U.frame(panel, { ZIndex = panel.ZIndex + 2 }, w, "Separator")
+    w.settingsDivider = U.frame(panel, { ZIndex = panel.ZIndex + 1 }, w, "Separator")
     w.settingsBody = U.frame(
         panel,
         { Name = "SettingsBody", ClipsDescendants = true, ZIndex = panel.ZIndex + 1 },
