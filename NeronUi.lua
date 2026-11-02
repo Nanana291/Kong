@@ -1029,6 +1029,34 @@ function Icons.color(root, color)
 end
 
 -- Exactly one drag capture and three global input connections per window. Touch identity is retained.
+function Input:ReleasePressed(event)
+    local pressed = self.w.pressed
+    local released
+    -- Retire the entire matching cohort before rendering. Render/lifecycle hooks
+    -- can clear or repopulate this weak registry and must never run inside pairs.
+    for control, input in pairs(pressed) do
+        if
+            not event
+            or input == event
+            or (
+                input.UserInputType == Enum.UserInputType.MouseButton1
+                and event.UserInputType == Enum.UserInputType.MouseButton1
+            )
+        then
+            released = released or {}
+            released[#released + 1] = control
+            pressed[control] = nil
+            control.state.Pressed = false
+        end
+    end
+    if released then
+        for _, control in ipairs(released) do
+            if not control.destroyed then
+                control:_render()
+            end
+        end
+    end
+end
 function Input.new(w)
     local self = setmetatable({ w = w }, { __index = Input })
     U.connect(w.bag, S.Input.InputChanged, function(event)
@@ -1050,19 +1078,7 @@ function Input.new(w)
         if w.tooltip then
             w.tooltip:Ended(event)
         end
-        for control, input in pairs(w.pressed) do
-            if
-                input == event
-                or (
-                    input.UserInputType == Enum.UserInputType.MouseButton1
-                    and event.UserInputType == Enum.UserInputType.MouseButton1
-                )
-            then
-                w.pressed[control] = nil
-                control.state.Pressed = false
-                control:_render()
-            end
-        end
+        self:ReleasePressed(event)
         local cap = self.capture
         if
             cap
@@ -1079,11 +1095,7 @@ function Input.new(w)
             w.tooltip:Cancel()
         end
         self:Cancel()
-        for control in pairs(w.pressed) do
-            control.state.Pressed = false
-            control:_render()
-            w.pressed[control] = nil
-        end
+        self:ReleasePressed()
     end)
     return self
 end
