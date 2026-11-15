@@ -8067,7 +8067,7 @@ local function buildAuth()
     end, Runtime, AuthField.Interactive)
     UI.Validate.Icon = Icon.new(UI.Validate.Root, "chevron-right", Theme.ButtonText, 18)
     Localization:Bind(UI.Validate.Label, "journeyKey")
-    UI.GetKey = Button.new(UI.AuthBody, "GetKey", "", false, "support", function()
+    UI.GetKey = Button.new(UI.AuthBody, "GetKey", "", true, "support", function()
         requestKeyLink()
     end, Runtime, AuthField.Interactive)
     UI.GetKey.Ghost = false
@@ -9476,7 +9476,7 @@ function Responsive:Auth(width, height, narrow)
     place(UI.Validate.Icon.Root, verifyWidth - 32, hit / 2, 18, 18)
     local getKeyY = topGetKey and 0 or buttonY + hit + 4
     place(UI.GetKey.Root, topGetKey and left - secondaryWidth or 0, getKeyY, topGetKey and secondaryWidth or left, hit)
-    UI.GetKey.TextColor = Theme.AccentText
+    UI.GetKey.TextColor = Theme.ButtonText
     UI.GetKey:Apply()
     -- FitButton owns the final font size; do not force 13 then reset to 12.
     UI.GetKey.Label.TextWrapped = true
