@@ -1120,7 +1120,7 @@ local Translations = {
         keyHintCompact = "License key",
         keyHintTiny = "Key",
         signIn = "SIGN IN",
-        getKey = "GET A KEY",
+        getKey = "Get Key",
         validating = "VALIDATING",
         waiting = "Waiting for authorization",
         rights = "All rights reserved",
@@ -2140,7 +2140,7 @@ do
             pageGames = "Browse supported experiences.",
             pageLicenses = "Choose the access that fits you.",
             signIn = "Verify key",
-            getKey = "Get a free key",
+            getKey = "Get Key",
             fieldLabel = "License key",
             keyHint = "Paste your key",
             closeLoader = "Close loader",
@@ -2163,7 +2163,7 @@ do
             pageGames = "Explora las experiencias compatibles.",
             pageLicenses = "Elige el acceso que va contigo.",
             signIn = "Verificar key",
-            getKey = "Obtener key gratis",
+            getKey = "Obtener key",
             fieldLabel = "Key de licencia",
             keyHint = "Pega tu key",
             closeLoader = "Cerrar loader",
@@ -2186,7 +2186,7 @@ do
             pageGames = "Explore as experiências compatíveis.",
             pageLicenses = "Escolha o acesso ideal para você.",
             signIn = "Verificar key",
-            getKey = "Obter key grátis",
+            getKey = "Obter key",
             fieldLabel = "Key de licença",
             keyHint = "Cole sua key",
             closeLoader = "Fechar loader",
@@ -2209,7 +2209,7 @@ do
             pageGames = "Посмотрите поддерживаемые игры.",
             pageLicenses = "Выберите подходящий вариант доступа.",
             signIn = "Проверить ключ",
-            getKey = "Получить бесплатный ключ",
+            getKey = "Получить ключ",
             fieldLabel = "Лицензионный ключ",
             keyHint = "Вставьте ключ",
             closeLoader = "Закрыть загрузчик",
@@ -8070,7 +8070,7 @@ local function buildAuth()
     UI.GetKey = Button.new(UI.AuthBody, "GetKey", "", false, "support", function()
         requestKeyLink()
     end, Runtime, AuthField.Interactive)
-    UI.GetKey.Ghost = true
+    UI.GetKey.Ghost = false
     Localization:Bind(UI.GetKey.Label, "getKey")
     UI.AuthBusyTrack = frame(UI.Validate.Root, "WaitingTrack", Theme.AccentDark)
     UI.AuthBusyTrack.Position = UDim2.new(0, 14, 1, -8)
