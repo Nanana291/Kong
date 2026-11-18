@@ -250,7 +250,7 @@ type Payload = { [any]: any }
 local U = {}
 local P: Payload = {}
 local Build: Payload = {}
-local Library: any = { Version = "1.4.2" }
+local Library: any = { Version = "1.4.3" }
 
 local V = Vector2.new
 local O = UDim2.fromOffset
@@ -5054,7 +5054,7 @@ function U.row(owner: any, kind: string, c: Payload, variant: string): any
     end
     function n:_headingLayout()
         local g = w._layout
-        local dependencyInset = if self._settings then 20 else 0
+        local dependencyInset = if self._settings then 24 else 0
         local x, reserve = self._titleLeft + dependencyInset, self._reserve
         local width = root.AbsoluteSize.X / w._scale
         if self._settings and self._settings._layoutChevron then
@@ -5107,7 +5107,7 @@ function U.row(owner: any, kind: string, c: Payload, variant: string): any
         if extra > 0 then
             local desc = self:_descriptionWidget()
             desc.Text = self._description
-            local descriptionLeft = self._titleLeft + (if self._settings then 20 else 0)
+            local descriptionLeft = self._titleLeft + (if self._settings then 24 else 0)
             desc.Position = O(descriptionLeft, h - 2)
             desc.Size = UDim2.new(1, -(descriptionLeft + 8), 0, 18)
             desc.Visible = true
