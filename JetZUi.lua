@@ -11,6 +11,7 @@
 -- Size is logical Vector2; position is in safe-area pixels. GetLayout reports effective layout.
 -- CreateReferenceDemo is optional and contains presentation/state only.
 -- Controls support live dependencies: DependsOn/SetDependency and Toggle:AddSettings with Reveal/Disable/Dim modes.
+-- Settings > Configs owns persistent profiles, clipboard transfer, dirty state and per-game autoload.
 local Players = game:GetService("Players")
 local Input = game:GetService("UserInputService")
 local Tweens = game:GetService("TweenService")
@@ -9075,6 +9076,9 @@ function P.ProfileManager:Delete(name: string): (boolean, any)
     local clean = U.profileName(name)
     if not clean then return false, "InvalidName" end
     if type(self.api.delfile) ~= "function" then return false, "FilesystemUnavailable" end
+    local checked, exists = self:Call("isfile", self:Path(clean))
+    if not checked then return false, exists end
+    if not exists then return false, "MissingProfile" end
     local auto = self:GetAutoload()
     if auto.enabled and auto.profile == clean then self:SetAutoload(nil, false) end
     local ok, why = self:Call("delfile", self:Path(clean))
@@ -9108,7 +9112,13 @@ function P.ProfileManager:Rename(name: string, newName: string): (boolean, any)
     local ok, why = self:Duplicate(old, new)
     if not ok then return false, why end
     local deleted, deleteWhy = self:Delete(old)
-    if not deleted then return false, deleteWhy end
+    if not deleted then
+        if type(self.api.delfile) == "function" then
+            self:Call("delfile", self:Path(new))
+            self:Index(new, false)
+        end
+        return false, deleteWhy
+    end
     if auto.enabled and auto.profile == old then self:SetAutoload(new, true) end
     if self.activeProfile == old then self.activeProfile = new end
     self:RefreshUI()
@@ -9172,10 +9182,18 @@ function P.ProfileManager:RefreshUI()
         ui.Profile:SetValues(#names > 0 and names or { "No profiles" }, true)
         if self.activeProfile and table.find(names, self.activeProfile) then ui.Profile:SetValue(self.activeProfile, true) end
     end
-    if ui.Status then ui.Status:SetText("Active: " .. (self.activeProfile or "None") .. (self.dirty and "  •  Unsaved changes" or "")) end
+    if ui.Status then
+        ui.Status:SetText("Active: " .. (self.activeProfile or "None") .. (self.dirty and "  •  Unsaved changes" or ""))
+        if ui.Status.SetSeverity then
+            ui.Status:SetSeverity(if not self.available then "Warning" elseif self.dirty then "Warning" else "Success")
+        end
+    end
     if ui.AutoloadStatus then
         local auto = self:GetAutoload()
         ui.AutoloadStatus:SetText(if auto.enabled then "Autoload: " .. tostring(auto.profile) else "Autoload: Off")
+        if ui.AutoloadStatus.SetSeverity then
+            ui.AutoloadStatus:SetSeverity(if auto.enabled then "Success" else "Info")
+        end
     end
 end
 
@@ -9456,6 +9474,9 @@ function P.Window:AddSettings(options: any)
                 self._settings[key] = nil
             end
         end)
+        -- AddSettings is constructed before consumer tabs. If autoload hydrated this
+        -- control during U.ready(), replay the internal effect once now that it exists.
+        apply(n:GetValue())
         return n
     end
     local function section(page: any, name: string, description: string?)
