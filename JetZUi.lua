@@ -345,12 +345,18 @@ local D = {
     Island = {
         Width = 286,
         Height = 58,
+        RestScale = 0.75,
         ReferenceShortSide = 390,
         MinimumScale = 0.76,
         TopClearance = 4,
         SideClearance = 8,
         TopbarClearance = 4,
-        MotionOffset = 3,
+        Presence = {
+            HiddenScale = 0.64,
+            RevealTime = 0.27,
+            RevealFadeTime = 0.19,
+            DismissTime = 0.20,
+        },
         SurfaceTop = C(30, 29, 34),
         SurfaceMid = C(22, 22, 24),
         SurfaceBottom = C(14, 14, 16),
@@ -706,6 +712,8 @@ local ExecutorAliases: Payload = {
     writefile = { "writefile", "write_file" },
     delfile = { "delfile", "deletefile", "delete_file" },
     listfiles = { "listfiles", "list_files" },
+    request = { "request", "http_request", "httpRequest", "httprequest" },
+    httpget = { "HttpGet", "httpget", "HttpGetAsync", "http_get" },
 }
 local ExecutorNamespaces = { "syn", "filesystem", "fs", "clipboard" }
 
@@ -830,6 +838,12 @@ end
 function U.global(name: string): any
     local value = U.resolveExecutor(name)
     return value
+end
+
+local BootedAt = os.time()
+
+function U.bootedAt(): number
+    return BootedAt
 end
 
 function U.copyText(value: string): boolean
@@ -4071,6 +4085,9 @@ function P.Window:SetAnimationSpeed(v: number)
     self._speed = speed
     self:_syncAnimations()
     if self._island then
+        if speed == 0 then
+            self._island:_settlePresence()
+        end
         self._island:_refreshMotion()
     end
     self:_reflect("speed", speed)
@@ -4383,7 +4400,8 @@ function P.Island:_layout(): boolean
     end
 
     local shortSide = math.min(area.X, area.Y)
-    local preferred = math.clamp(shortSide / spec.ReferenceShortSide, spec.MinimumScale, 1)
+    local minimum = spec.MinimumScale * spec.RestScale
+    local preferred = math.clamp(shortSide / spec.ReferenceShortSide, spec.MinimumScale, 1) * spec.RestScale
     local scale = math.min(
         preferred,
         math.max(1, area.X - 2 * spec.SideClearance) / spec.Width,
@@ -4404,7 +4422,7 @@ function P.Island:_layout(): boolean
     if ok and bottom > top and topY < bottom and topY + spec.Height * scale > top then
         local centeredRoom = 2 * (math.min(centerX - left, right - centerX) - spec.TopbarClearance)
         local centeredScale = centeredRoom / spec.Width
-        if centeredScale >= math.min(scale, spec.MinimumScale) then
+        if centeredScale >= math.min(scale, minimum) then
             scale = math.min(scale, centeredScale)
         else
             -- Narrow or asymmetric native controls: prefer a centered pill below them.
@@ -4470,46 +4488,74 @@ function P.Island:_refreshMotion()
     end
 end
 
+function P.Island:_settlePresence()
+    self._life:Remove("presence")
+    self._presenceScale.Scale = if self._shown then 1 else D.Island.Presence.HiddenScale
+    self._capsule.GroupTransparency = if self._shown then 0 else 1
+    if not self._shown then
+        self._anchor.Visible = false
+        self._screen.Enabled = false
+    end
+end
+
+function P.Island:_animatePresence(instant: boolean?)
+    local speed = self._w._speed
+    if instant or speed <= 0 or Gui.ReducedMotionEnabled then
+        self:_settlePresence()
+        return
+    end
+
+    local shown, spec = self._shown, D.Island.Presence
+    local duration = (if shown then spec.RevealTime else spec.DismissTime) / speed
+    local fadeDuration = if shown then spec.RevealFadeTime / speed else duration
+    local direction = if shown then Enum.EasingDirection.Out else Enum.EasingDirection.In
+    local scope = U.scope()
+    -- Reversals cancel the old pair without resetting their current properties.
+    self._life:Give(scope, "presence")
+    local scaleTween = Tweens:Create(
+        self._presenceScale,
+        TweenInfo.new(duration, if shown then Enum.EasingStyle.Quint else Enum.EasingStyle.Cubic, direction),
+        { Scale = if shown then 1 else spec.HiddenScale }
+    )
+    local fadeTween = Tweens:Create(
+        self._capsule,
+        TweenInfo.new(fadeDuration, if shown then Enum.EasingStyle.Sine else Enum.EasingStyle.Quad, direction),
+        { GroupTransparency = if shown then 0 else 1 }
+    )
+    scope:Give(function()
+        scaleTween:Cancel()
+        fadeTween:Cancel()
+        scaleTween:Destroy()
+        fadeTween:Destroy()
+    end)
+    scope:Give(scaleTween.Completed:Connect(function(state: Enum.PlaybackState)
+        if not scope._dead and state == Enum.PlaybackState.Completed then
+            self:_settlePresence()
+        end
+    end))
+    fadeTween:Play()
+    scaleTween:Play()
+end
+
 function P.Island:_present(shown: boolean, instant: boolean?)
     if self._shown == shown then
         return
     end
     self._shown = shown
-    local w, life = self._w, self._life
-    local snap = instant or w._speed <= 0 or Gui.ReducedMotionEnabled
-    life:Remove("hide")
     self._button.Interactable = shown
     self._button.Selectable = shown
     if shown then
         self._screen.Enabled = true
         self._anchor.Visible = self:_layout()
         self:_updateCount()
-        U.tween(w, life, self._capsule, "presence", "fast", {
-            GroupTransparency = 0,
-            Position = O(0, 0),
-        }, snap)
     else
-        life:Remove("count")
-        life:Remove("layout")
+        self._life:Remove("count")
+        self._life:Remove("layout")
         if Gui.SelectedObject == self._button then
             Gui.SelectedObject = nil
         end
-        U.tween(w, life, self._capsule, "presence", "fast", {
-            GroupTransparency = 1,
-            Position = O(0, D.Island.MotionOffset),
-        }, snap)
-        local function finish()
-            if not self._shown then
-                self._anchor.Visible = false
-                self._screen.Enabled = false
-            end
-        end
-        if snap then
-            finish()
-        else
-            U.later(w, life, "hide", D.Animation.fast / w._speed, finish)
-        end
     end
+    self:_animatePresence(instant)
     self:_refreshMotion()
 end
 
@@ -4538,10 +4584,13 @@ function P.Island._mount(w: any): any
     local scale = U.make("UIScale", anchor, { Scale = 1 })
     local capsule = U.make("CanvasGroup", anchor, {
         Name = "JetZDynamicIsland",
+        AnchorPoint = V(0.5, 0),
+        Position = S(0.5, 0),
         Size = S(1, 1),
-        Position = O(0, spec.MotionOffset),
         GroupTransparency = 1,
     })
+    -- Only the visual scales; the sibling restore button keeps its full touch target.
+    local presenceScale = U.make("UIScale", capsule, { Name = "PresenceScale", Scale = spec.Presence.HiddenScale })
 
     -- Gradient colors modulate the underlying surface; the white base preserves the sampled tones.
     local surface = U.frame(capsule, {
@@ -4645,6 +4694,7 @@ function P.Island._mount(w: any): any
         _anchor = anchor,
         _capsule = capsule,
         _scale = scale,
+        _presenceScale = presenceScale,
         _button = button,
         _title = title,
         _count = count,
@@ -4666,6 +4716,9 @@ function P.Island._mount(w: any): any
     life:Give(viewport:GetPropertyChangedSignal("AbsolutePosition"):Connect(layoutChanged))
     life:Give(Gui:GetPropertyChangedSignal("TopbarInset"):Connect(layoutChanged))
     life:Give(Gui:GetPropertyChangedSignal("ReducedMotionEnabled"):Connect(function()
+        if Gui.ReducedMotionEnabled then
+            island:_settlePresence()
+        end
         island:_refreshMotion()
     end))
     life:Give(Players.PlayerAdded:Connect(function()
@@ -12623,14 +12676,575 @@ do
 end
 
 -- Utilities is lazy per page. All state belongs to this window.
--- Privileged operations are opt-in integration points for experiences you administer:
--- Utilities.CanSpectate(Player) -> boolean (check the experience's spectator policy)
--- Utilities.Movement(Action, value) -> true | false, EnglishReason
+-- These controllers run on this client, so no host handlers are required.
 -- Utilities.MovementCapabilities = { [Action] = true }, optional allowlist.
--- Utilities.ListServers(PlaceId) -> array of public {JobId, Players, MaxPlayers, Ping?}
--- Utilities.JoinServer(PlaceId, JobId?) -> true | false, EnglishReason
--- Set AllowWorldChanges = true only in an experience where you control presentation.
--- Server-side handlers must independently validate permissions, targets and bounds.
+-- Set AllowWorldChanges = false to make the world page read-only.
+do
+    local function clampNumber(value: any, min: number, max: number, fallback: number): number
+        local n = tonumber(value)
+        if not n or n ~= n then
+            return fallback
+        end
+        return math.clamp(n, min, max)
+    end
+
+    local function humanoidOf(p: any): Humanoid?
+        local c = p and p.Character
+        return c and c:FindFirstChildOfClass("Humanoid") or nil
+    end
+
+    local function rootOf(p: any): BasePart?
+        local c = p and p.Character
+        local local_root = c and c:FindFirstChild("HumanoidRootPart")
+        return if local_root and local_root:IsA("BasePart") then local_root else nil
+    end
+
+    local local_jump_connection: RBXScriptConnection? = nil
+
+    local local_noclip_connection: RBXScriptConnection? = nil
+    local local_void_connection: RBXScriptConnection? = nil
+    local local_click_connection: RBXScriptConnection? = nil
+    local local_state = {
+        Fly = false,
+        FlySpeed = 50,
+        VerticalSpeed = 40,
+        FlyMode = "Smooth",
+        Noclip = false,
+        AntiVoid = false,
+        InfiniteJump = false,
+        TeleportOffset = 3,
+        GroundCheck = true,
+        ClickTeleport = false,
+        TeleportTool = false,
+        Original = nil,
+    }
+
+    local function captureOriginal()
+        local humanoid = humanoidOf(Players.LocalPlayer)
+        if not humanoid then
+            return
+        end
+        local state = local_state.Original
+        if state and state.Humanoid == humanoid then
+            return
+        end
+        local_state.Original = {
+            Humanoid = humanoid,
+            WalkSpeed = humanoid.WalkSpeed,
+            JumpPower = humanoid.JumpPower,
+            JumpHeight = humanoid.JumpHeight,
+            UseJumpPower = humanoid.UseJumpPower,
+        }
+    end
+
+    local function restoreOriginal()
+        local state = local_state.Original
+        local humanoid = humanoidOf(Players.LocalPlayer)
+        if not state then
+            return
+        end
+        if humanoid == state.Humanoid then
+            pcall(function()
+                humanoid.WalkSpeed = state.WalkSpeed
+                humanoid.JumpPower = state.JumpPower
+                humanoid.JumpHeight = state.JumpHeight
+                humanoid.UseJumpPower = state.UseJumpPower
+            end)
+        end
+        local_state.Original = nil
+    end
+
+    local flyObjects: { Instance } = {}
+    local flyThread: thread? = nil
+
+    local function destroyFlyObjects()
+        for _, object in flyObjects do
+            pcall(function()
+                object:Destroy()
+            end)
+        end
+        table.clear(flyObjects)
+    end
+
+    local function stopLoop()
+        destroyFlyObjects()
+        if flyThread then
+            pcall(task.cancel, flyThread)
+            flyThread = nil
+        end
+    end
+
+    local noclipOriginal: { [BasePart]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+
+    local function stopNoclip()
+        if local_noclip_connection then
+            pcall(function()
+                local_noclip_connection:Disconnect()
+            end)
+            local_noclip_connection = nil
+        end
+        for part, state in noclipOriginal do
+            if part.Parent and part.CanCollide ~= state then
+                pcall(function()
+                    part.CanCollide = state
+                end)
+            end
+        end
+        table.clear(noclipOriginal)
+    end
+
+    local function stopVoid()
+        if local_void_connection then
+            pcall(function()
+                local_void_connection:Disconnect()
+            end)
+            local_void_connection = nil
+        end
+    end
+
+    local function stopJump()
+        if local_jump_connection then
+            pcall(function()
+                local_jump_connection:Disconnect()
+            end)
+            local_jump_connection = nil
+        end
+    end
+
+    local function stopClick()
+        if local_click_connection then
+            pcall(function()
+                local_click_connection:Disconnect()
+            end)
+            local_click_connection = nil
+        end
+    end
+
+    function U.httpGet(url: string): string?
+        local request = U.resolveExecutor("request")
+        if type(request) == "function" then
+            local ok, response = pcall(request, {
+                Url = url,
+                Method = "GET",
+                Headers = { Accept = "application/json" },
+            })
+            if ok and type(response) == "table" and response.StatusCode == 200 and type(response.Body) == "string" then
+                return response.Body
+            end
+            return nil
+        end
+        local ok, body = pcall(function()
+            return game:HttpGet(url)
+        end)
+        return if ok and type(body) == "string" then body else nil
+    end
+
+    function U.localListServers(placeId: number): { any }?
+        local cursor: string? = nil
+        local rows, seen = {}, {}
+        for _ = 1, 3 do
+            local url = "https://games.roblox.com/v1/games/"
+                .. tostring(placeId)
+                .. "/servers/Public?limit=100"
+                .. (if cursor then "&cursor=" .. cursor else "")
+            local body = U.httpGet(url)
+            if not body then
+                return if #rows > 0 then rows else nil
+            end
+            local ok, decoded = pcall(function()
+                return game:GetService("HttpService"):JSONDecode(body)
+            end)
+            if not ok or type(decoded) ~= "table" or type(decoded.data) ~= "table" then
+                return if #rows > 0 then rows else nil
+            end
+            for _, item in decoded.data do
+                if type(item) == "table" and type(item.id) == "string" and not seen[item.id] then
+                    seen[item.id] = true
+                    table.insert(rows, {
+                        JobId = item.id,
+                        Players = tonumber(item.playing) or 0,
+                        MaxPlayers = tonumber(item.maxPlayers) or 0,
+                        Ping = tonumber(item.ping) or nil,
+                    })
+                end
+            end
+            cursor = if type(decoded.nextPageCursor) == "string" then decoded.nextPageCursor else nil
+            if not cursor then
+                break
+            end
+        end
+        return if #rows > 0 then rows else nil
+    end
+
+    function U.localJoinServer(placeId: number, job: string?): (boolean, string?)
+        local player = Players.LocalPlayer
+        if not player then
+            return false, "No local player is available."
+        end
+        if job == nil or job == "" then
+            local ok = pcall(function()
+                game:GetService("TeleportService"):Teleport(placeId, player)
+            end)
+            return ok, if ok then nil else "Roblox rejected the teleport request."
+        end
+        local ok, err = pcall(function()
+            game:GetService("TeleportService"):TeleportToPlaceInstance(placeId, job, player)
+        end)
+        return ok, if ok then nil else tostring(err)
+    end
+
+    function U.stopLocalControllers()
+        stopLoop()
+        stopNoclip()
+        stopVoid()
+        stopJump()
+        stopClick()
+    end
+
+    local function respawned()
+        if local_state.Fly then
+            startFly()
+        end
+        if local_state.Noclip then
+            startNoclip()
+        end
+        if local_state.AntiVoid then
+            startVoid()
+        end
+        if local_state.InfiniteJump then
+            startJump()
+        end
+        if local_state.ClickTeleport then
+            startClick()
+        end
+    end
+
+    local function hookRespawn(player: Player)
+        player.CharacterAdded:Connect(function()
+            task.wait(0.35)
+            respawned()
+        end)
+    end
+
+    if Players.LocalPlayer then
+        hookRespawn(Players.LocalPlayer)
+    else
+        Players.PlayerAdded:Connect(function(player: Player)
+            if player == Players.LocalPlayer then
+                hookRespawn(player)
+            end
+        end)
+    end
+
+    local function startFly()
+        stopLoop()
+        local character = Players.LocalPlayer and Players.LocalPlayer.Character
+        local root = rootOf(Players.LocalPlayer)
+        if not character or not root then
+            return
+        end
+        local velocity = U.make("BodyVelocity", root, {
+            Name = "JetZFly",
+            MaxForce = Vector3.new(math.huge, math.huge, math.huge),
+            Velocity = Vector3.zero,
+        })
+        local gyro = U.make("BodyGyro", root, {
+            Name = "JetZFlyGyro",
+            MaxTorque = Vector3.new(math.huge, math.huge, math.huge),
+            P = 9000,
+            CFrame = root.CFrame,
+        })
+        table.insert(flyObjects, velocity)
+        table.insert(flyObjects, gyro)
+        flyThread = task.spawn(function()
+            while local_state.Fly and root.Parent and velocity.Parent do
+                if flyThread ~= coroutine.running() then
+                    return
+                end
+                local camera = workspace.CurrentCamera
+                local move = Vector3.zero
+                if camera then
+                    local look = camera.CFrame.LookVector
+                    if Input:IsKeyDown(Enum.KeyCode.W) then
+                        move += look
+                    end
+                    if Input:IsKeyDown(Enum.KeyCode.S) then
+                        move -= look
+                    end
+                    if Input:IsKeyDown(Enum.KeyCode.D) then
+                        move += camera.CFrame.RightVector
+                    end
+                    if Input:IsKeyDown(Enum.KeyCode.A) then
+                        move -= camera.CFrame.RightVector
+                    end
+                    gyro.CFrame = CFrame.new(root.Position, root.Position + look)
+                end
+                local vertical = 0
+                if Input:IsKeyDown(Enum.KeyCode.Space) then
+                    vertical += 1
+                end
+                if Input:IsKeyDown(Enum.KeyCode.LeftControl) then
+                    vertical -= 1
+                end
+                local speed = local_state.FlySpeed
+                local velocityValue =
+                    move.Magnitude > 0
+                        and (if local_state.FlyMode == "Precise"
+                            then move.Unit * speed
+                            else move * speed)
+                        or Vector3.zero
+                velocity.Velocity = velocityValue + Vector3.new(0, vertical * local_state.VerticalSpeed, 0)
+                task.wait(0.05)
+            end
+            destroyFlyObjects()
+        end)
+    end
+
+    local function startNoclip()
+        stopNoclip()
+        local_noclip_connection = Run.Stepped:Connect(function()
+            local character = Players.LocalPlayer and Players.LocalPlayer.Character
+            if not character then
+                return
+            end
+            for _, part in character:GetDescendants() do
+                if part:IsA("BasePart") then
+                    if noclipOriginal[part] == nil then
+                        noclipOriginal[part] = part.CanCollide
+                    end
+                    if part.CanCollide then
+                        part.CanCollide = false
+                    end
+                end
+            end
+        end)
+    end
+
+    local function startVoid()
+        stopVoid()
+        local grounded = nil
+        local_void_connection = Run.Stepped:Connect(function()
+            local root = rootOf(Players.LocalPlayer)
+            if not root then
+                return
+            end
+            if root.Position.Y > -20 then
+                local ray = RaycastParams.new()
+                ray.FilterType = Enum.RaycastFilterType.Exclude
+                ray.FilterDescendantsInstances = { Players.LocalPlayer.Character }
+                local hit = workspace:Raycast(root.Position, Vector3.new(0, -40, 0), ray)
+                if hit then
+                    grounded = hit.Position + Vector3.new(0, 3, 0)
+                end
+                return
+            end
+            local target = if grounded then grounded else Vector3.new(root.Position.X, 50, root.Position.Z)
+            root.CFrame = CFrame.new(target)
+        end)
+    end
+
+    local function startJump()
+        stopJump()
+        local_jump_connection = Input.JumpRequest:Connect(function()
+            local humanoid = humanoidOf(Players.LocalPlayer)
+            if humanoid and local_state.InfiniteJump then
+                humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+        end)
+    end
+
+    local function startClick()
+        stopClick()
+        local_click_connection = Input.InputBegan:Connect(function(input: InputObject)
+            if
+                not local_state.ClickTeleport
+                or input.UserInputType ~= Enum.UserInputType.MouseButton1
+                and input.UserInputType ~= Enum.UserInputType.Touch
+            then
+                return
+            end
+            local root = rootOf(Players.LocalPlayer)
+            if not root then
+                return
+            end
+            local camera = workspace.CurrentCamera
+            if not camera then
+                return
+            end
+            local offset = local_state.TeleportOffset
+            local params = RaycastParams.new()
+            params.FilterType = Enum.RaycastFilterType.Exclude
+            params.FilterDescendantsInstances = { Players.LocalPlayer.Character }
+            local result = workspace:Raycast(input.Position, camera.CFrame.LookVector * 500, params)
+            if result then
+                local dest = result.Position + result.Normal * offset
+                if local_state.GroundCheck then
+                    local ground = workspace:Raycast(dest + Vector3.new(0, 5, 0), Vector3.new(0, -60, 0), params)
+                    if ground then
+                        dest = ground.Position
+                    end
+                end
+                root.CFrame = CFrame.new(dest)
+            end
+        end)
+    end
+
+    function U.localMovement(action: string, value: any): (boolean, string?)
+        local me = Players.LocalPlayer
+        local humanoid = humanoidOf(me)
+        if action == "WalkSpeed" then
+            if not humanoid then
+                return false, "Wait for your character to spawn."
+            end
+            captureOriginal()
+            humanoid.WalkSpeed = clampNumber(value, 0, 500, 16)
+            return true
+        elseif action == "JumpPower" then
+            if not humanoid then
+                return false, "Wait for your character to spawn."
+            end
+            captureOriginal()
+            humanoid.UseJumpPower = true
+            humanoid.JumpPower = clampNumber(value, 0, 1000, 50)
+            return true
+        elseif action == "JumpHeight" then
+            if not humanoid then
+                return false, "Wait for your character to spawn."
+            end
+            captureOriginal()
+            humanoid.UseJumpPower = false
+            humanoid.JumpHeight = clampNumber(value, 0, 1000, 7)
+            return true
+        elseif action == "InfiniteJump" then
+            local_state.InfiniteJump = value == true
+            if local_state.InfiniteJump then
+                startJump()
+            else
+                stopJump()
+            end
+            return true
+        elseif action == "AntiVoid" then
+            local_state.AntiVoid = value == true
+            if local_state.AntiVoid then
+                startVoid()
+            else
+                stopVoid()
+            end
+            return true
+        elseif action == "Fly" then
+            local_state.Fly = value == true
+            if local_state.Fly then
+                if not rootOf(me) then
+                    local_state.Fly = false
+                    return false, "Wait for your character to spawn."
+                end
+                startFly()
+            else
+                stopLoop()
+            end
+            return true
+        elseif action == "FlySpeed" then
+            local_state.FlySpeed = clampNumber(value, 5, 400, 50)
+            return true
+        elseif action == "VerticalSpeed" then
+            local_state.VerticalSpeed = clampNumber(value, 5, 400, 40)
+            return true
+        elseif action == "FlyMode" then
+            local_state.FlyMode = if value == "Precise" then "Precise" else "Smooth"
+            return true
+        elseif action == "Noclip" then
+            local_state.Noclip = value == true
+            if local_state.Noclip then
+                startNoclip()
+            else
+                stopNoclip()
+            end
+            return true
+        elseif action == "ClickTeleport" then
+            local_state.ClickTeleport = value == true
+            if local_state.ClickTeleport then
+                startClick()
+            else
+                stopClick()
+            end
+            return true
+        elseif action == "TeleportOffset" then
+            local_state.TeleportOffset = clampNumber(value, 0, 20, 3)
+            return true
+        elseif action == "GroundCheck" then
+            local_state.GroundCheck = value == true
+            return true
+        elseif action == "TeleportTool" then
+            if value ~= true then
+                return true
+            end
+            local root = rootOf(me)
+            local camera = workspace.CurrentCamera
+            if not root or not camera then
+                return false, "Wait for your character to spawn."
+            end
+            local params = RaycastParams.new()
+            params.FilterType = Enum.RaycastFilterType.Exclude
+            params.FilterDescendantsInstances = { me.Character }
+            local origin = camera.CFrame.Position
+            local result = workspace:Raycast(origin, camera.CFrame.LookVector * 2000, params)
+            if not result then
+                return false, "Nothing to teleport onto."
+            end
+            root.CFrame = CFrame.new(result.Position + Vector3.new(0, 3, 0))
+            return true
+        elseif action == "ResetPosition" then
+            local root = rootOf(me)
+            if not root then
+                return false, "Wait for your character to spawn."
+            end
+            local spawn = workspace:FindFirstChildWhichIsA("SpawnLocation", true)
+            local dest = if spawn then spawn.Position + Vector3.new(0, spawn.Size.Y / 2 + 3, 0) else nil
+            if not dest then
+                return false, "This place has no spawn point to reset to."
+            end
+            root.CFrame = CFrame.new(dest)
+            return true
+        elseif action == "TeleportPlayer" then
+            local userId = type(value) == "table" and value.UserId or nil
+            local target = nil
+            if type(userId) == "number" then
+                for _, p in Players:GetPlayers() do
+                    if p.UserId == userId then
+                        target = p
+                        break
+                    end
+                end
+            end
+            local dest = rootOf(target)
+            local root = rootOf(me)
+            if not dest or not root then
+                return false, "That player does not have a spawned character."
+            end
+            root.CFrame = dest.CFrame + Vector3.new(0, 3, 0)
+            return true
+        elseif action == "Restore" then
+            restoreOriginal()
+            return true
+        elseif action == "TeleportWaypoint" then
+            local frame = type(value) == "table" and value.Components
+            local root = rootOf(me)
+            if type(frame) ~= "table" or not root then
+                return false, "Wait for your character to spawn."
+            end
+            local ok, cframe = pcall(function()
+                return CFrame.new(frame[1], frame[2], frame[3], frame[4], frame[5], frame[6], frame[7], frame[8], frame[9], frame[10], frame[11], frame[12])
+            end)
+            if not ok or not cframe then
+                return false, "That waypoint is not valid."
+            end
+            root.CFrame = cframe
+            return true
+        end
+        return false, "Unknown action."
+    end
+end
+
 do
     P.Utilities = U.class(nil)
     P.UtilityCard = U.class(P.Collection)
@@ -13214,10 +13828,10 @@ do
             return false
         end
         if type(self._options.CanSpectate) ~= "function" then
-            return false
+            return true
         end
         local ok, permitted = U.call(self._w, "Spectate permission", self._options.CanSpectate, target)
-        return ok and permitted == true
+        return ok and permitted ~= false
     end
 
     function P.Utilities:_restoreSubject(clear: boolean)
@@ -13372,15 +13986,14 @@ do
 
     function P.Utilities:Spectate(target: any)
         if typeof(target) ~= "Instance" or not target:IsA("Player") or not self:_canSpectate(target) then
-            self:_toast(
-                "Spectate unavailable",
-                "This experience has not authorized that player as a camera target.",
-                true
-            )
+            self:_toast("Spectate unavailable", "That player cannot be a camera target right now.", true)
             return false
         end
         if self._freecamOn then
-            local ok, stopped = U.call(self._w, "Release freecam", self._options.Freecam, false)
+            local hostFreecam = self._options.Freecam
+            local ok, stopped = if type(hostFreecam) == "function"
+                then U.call(self._w, "Release freecam", hostFreecam, false)
+                else true, U.localFreecam(false)
             if not ok or stopped ~= true then
                 self:_toast("Camera in use", "Disable freecam before spectating.", true)
                 return false
@@ -13659,6 +14272,8 @@ do
             if n._releaseMove then
                 n:_releaseMove()
             end
+            U.stopLocalControllers()
+            U.localFreecam(false)
         end)
         for order, item in
             {
@@ -13901,7 +14516,7 @@ do
             applyBones(showBones)
             highlight(showBones)
         end)
-        cards[2] = option("Focus Camera", "Authorized subject", "crosshair", function()
+        cards[2] = option("Focus Camera", "Follow this player", "crosshair", function()
             if self:Spectate(p) then
                 dialog:Close()
             end
@@ -14058,8 +14673,9 @@ do
         if not a then
             return
         end
-        local start = self._options.ServerStartedAt
-        local value = if U.finite(start) and start > 0 and start <= os.time() then os.time() - start else nil
+        local hostStart = self._options.ServerStartedAt
+        local start = if U.finite(hostStart) and hostStart > 0 and hostStart <= os.time() then hostStart else U.bootedAt()
+        local value = if start and start <= os.time() then os.time() - start else nil
         a.Uptime:SetText(
             if value
                 then string.format(
@@ -14077,12 +14693,8 @@ do
         if self._serverLoading then
             return
         end
-        local provider = self._options.ListServers
-        if type(provider) ~= "function" then
-            self._servers = {}
-            tbl:SetState("Error", "Public server listing is not available in this experience.")
-            return
-        end
+        local hostProvider = self._options.ListServers
+        local provider = if type(hostProvider) == "function" then hostProvider else U.localListServers
         self._serverLoading = true
         tbl:SetState("Loading", "Loading public servers…")
         self._life:Give(
@@ -14120,9 +14732,7 @@ do
                             Players = math.floor(item.Players),
                             Maximum = math.floor(item.MaxPlayers),
                             Ping = if U.finite(item.Ping) and item.Ping >= 0 then item.Ping else false,
-                            ActionDisabled = type(self._options.JoinServer) ~= "function"
-                                or item.JobId == game.JobId
-                                or item.Players >= item.MaxPlayers,
+                            ActionDisabled = item.JobId == game.JobId or item.Players >= item.MaxPlayers,
                         })
                     end
                 end
@@ -14143,11 +14753,8 @@ do
             self:_toast("Invalid JobId", "Enter a valid public server JobId.", true)
             return
         end
-        local handler = self._options.JoinServer
-        if type(handler) ~= "function" then
-            self:_toast("Join unavailable", "This experience has no authorized teleport handler.", true)
-            return
-        end
+        local hostHandler = self._options.JoinServer
+        local handler = if type(hostHandler) == "function" then hostHandler else U.localJoinServer
         self._joinFlight = true
         self._life:Give(
             task.defer(function()
@@ -14160,7 +14767,7 @@ do
                     self._joinFlight = false
                     self:_toast(
                         "Could not join server",
-                        if ok and type(reason) == "string" then reason else "The host did not accept the teleport.",
+                        if ok and type(reason) == "string" then reason else "Roblox did not accept the teleport.",
                         true
                     )
                     return
@@ -14236,8 +14843,8 @@ do
         end)
         self._serverInfo = { Uptime = U.utilityMetric(current, "Uptime", "activity", "—") }
         local actions = U.utilityCard(right, "Server Actions", "Transfer this session to another server", "refresh-cw")
-        local enabled = type(self._options.JoinServer) == "function"
-        local canList = type(self._options.ListServers) == "function"
+        local enabled = true
+        local canList = true
         local grid = actions:AddInlineGroup({ Columns = 2, MinimumWidth = 110, Gap = 6 })
         grid:AddButton({
             Name = "Rejoin",
@@ -14284,9 +14891,6 @@ do
                 self:_join(input:GetValue())
             end,
         })
-        if not enabled then
-            actions:AddLabel({ Text = "No authorized server transfer provider." })
-        end
         local browser =
             U.utilityCard(section, "Server Browser", "Public server populations and available latency", "globe")
         local toolbar = browser:AddInlineGroup({ Columns = 2, MinimumWidth = 155, Gap = 8 })
@@ -14363,12 +14967,12 @@ end
 do
     function P.Utilities:_movementAllowed(action: string)
         local caps = self._options.MovementCapabilities
-        return type(self._options.Movement) == "function" and (type(caps) ~= "table" or caps[action] == true)
+        return type(caps) ~= "table" or caps[action] == true
     end
 
     function P.Utilities:_authorizeMove(action: string, data: any, control: any?)
         if not self:_movementAllowed(action) then
-            self:_toast("Action unavailable", "This experience has no authorized handler for " .. action .. ".", true)
+            self:_toast("Action unavailable", action .. " is disabled by your allowlist.", true)
             return
         end
         self._movePending = self._movePending or {}
@@ -14397,7 +15001,9 @@ do
         end
 
         local flight = { started = false }
-        local generation, handler = self._moveGeneration, self._options.Movement
+        local hostHandler = self._options.Movement
+        local handler = if type(hostHandler) == "function" then hostHandler else U.localMovement
+        local generation = self._moveGeneration
         self._moveFlight = flight
         self._moveAccepted = self._moveAccepted or {}
         local thread = task.defer(function()
@@ -14425,7 +15031,7 @@ do
                         "Action declined",
                         if ok and type(reason) == "string"
                             then reason
-                            else "The experience did not accept " .. action .. ".",
+                            else action .. " could not be applied.",
                         true
                     )
                 end
@@ -14446,7 +15052,8 @@ do
         local flight = self._moveFlight
         if self._dead then
             if self._moveActive and not (flight and flight.started) then
-                local handler = self._options.Movement
+                local hostHandler = self._options.Movement
+                local handler = if type(hostHandler) == "function" then hostHandler else U.localMovement
                 task.defer(function()
                     pcall(handler, "Restore", nil)
                 end)
@@ -14477,6 +15084,59 @@ do
         return control
     end
 
+    local freecamConnection: RBXScriptConnection? = nil
+    local freecamPreviousType: Enum.CameraType? = nil
+
+    local function stopLocalFreecam()
+        if freecamConnection then
+            pcall(function()
+                freecamConnection:Disconnect()
+            end)
+            freecamConnection = nil
+        end
+        local camera = workspace.CurrentCamera
+        if camera and freecamPreviousType then
+            camera.CameraType = freecamPreviousType
+        end
+        freecamPreviousType = nil
+    end
+
+    function U.localFreecam(enabled: boolean): boolean
+        if not enabled then
+            stopLocalFreecam()
+            return true
+        end
+        stopLocalFreecam()
+        local camera = workspace.CurrentCamera
+        local origin = rootOf(Players.LocalPlayer)
+        if not camera or not origin then
+            return false
+        end
+        freecamPreviousType = camera.CameraType
+        camera.CameraType = Enum.CameraType.Scriptable
+        local angle = Vector2.zero
+        local distance = 18
+        freecamConnection = Run.RenderStepped:Connect(function()
+            local live = workspace.CurrentCamera
+            local root = rootOf(Players.LocalPlayer)
+            if not live or not root then
+                return
+            end
+            local delta = Input:GetMouseDelta()
+            if Input:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
+                and (math.abs(delta.X) > 0 or math.abs(delta.Y) > 0)
+            then
+                angle += Vector2.new(-delta.Y * 0.35, -delta.X * 0.35)
+            end
+            angle = Vector2.new(math.clamp(angle.X, -85, 85), angle.Y)
+            distance = math.clamp(distance, 2, 400)
+            live.CFrame =
+                CFrame.new(root.Position) * CFrame.Angles(0, math.rad(angle.Y), 0) * CFrame.Angles(math.rad(angle.X), 0, 0)
+                    * CFrame.new(0, 0, distance)
+        end)
+        return true
+    end
+
     function P.Utilities:_confirm(title: string, description: string, accept: () -> ())
         return self._w:CreateDialog({
             Title = title,
@@ -14486,10 +15146,7 @@ do
     end
 
     function P.Utilities:_buildMovement(page: any)
-        local section = U.utilityTitle(page, "move", "Character settings and host-authorized traversal.")
-        if type(self._options.Movement) ~= "function" then
-            section:AddLabel({ Text = "Movement requires authorization from this experience." })
-        end
+        local section = U.utilityTitle(page, "move", "Locomotion, flight, and traversal controls.")
         local left, right = U.utilityLanes(section, 2)
         local motion = U.utilityCard(left, "Character Movement", "Adjust locomotion parameters", "move")
         local character = Players.LocalPlayer and Players.LocalPlayer.Character
@@ -14518,7 +15175,7 @@ do
             Icon = "refresh-cw",
             Disabled = not self:_movementAllowed("ResetPosition"),
             Callback = function()
-                self:_confirm("Reset position?", "Your character may respawn.", function()
+                self:_confirm("Reset position?", "Teleports your character to this place's spawn.", function()
                     self:_authorizeMove("ResetPosition", true)
                 end)
             end,
@@ -14551,9 +15208,13 @@ do
         self._life:Remove("fov")
         if self._freecamOn and not keepFreecam then
             self._freecamOn = false
-            local callback = self._options.Freecam
+            local hostFreecam = self._options.Freecam
             task.defer(function()
-                pcall(callback, false)
+                if type(hostFreecam) == "function" then
+                    pcall(hostFreecam, false)
+                else
+                    U.localFreecam(false)
+                end
             end)
             if self._freecamControl and not self._dead then
                 self._freecamControl:SetValue(false, true)
@@ -14600,9 +15261,9 @@ do
     end
 
     function P.Utilities:_buildCamera(page: any)
-        local section = U.utilityTitle(page, "camera", "Personal framing, zoom limits, and authorized subjects.")
+        local section = U.utilityTitle(page, "camera", "Framing, zoom limits, and camera subjects.")
         local left, right = U.utilityLanes(section, 2)
-        local look = U.utilityCard(left, "Framing", "Does not increase the experience's zoom limit", "camera")
+        local look = U.utilityCard(left, "Framing", "Local zoom limits for this session", "camera")
         local subject = U.utilityCard(right, "Camera Subject", "Shares the spectate controller", "eye")
         local player, current = Players.LocalPlayer, workspace.CurrentCamera
         local defaultFov = current and current.FieldOfView or 70
@@ -14676,7 +15337,6 @@ do
         subject:AddButton({
             Name = "Spectate Selected Player",
             Icon = "eye",
-            Disabled = type(self._options.CanSpectate) ~= "function",
             Callback = function()
                 local row = self._playerTable and self._playerTable:GetSelectedRow()
                 local record = row and self._people[row.Key]
@@ -14691,21 +15351,19 @@ do
         freecam = subject:AddToggle({
             Name = "Freecam",
             Style = "Switch",
-            Disabled = type(self._options.Freecam) ~= "function",
             Callback = function(value: boolean)
-                if type(self._options.Freecam) ~= "function" then
-                    freecam:SetValue(false, true)
-                    return
-                end
                 if value then
                     self:StopSpectating()
                 end
-                local ok, accepted = U.call(self._w, "Freecam", self._options.Freecam, value)
+                local hostFreecam = self._options.Freecam
+                local ok, accepted = if type(hostFreecam) == "function"
+                    then U.call(self._w, "Freecam", hostFreecam, value)
+                    else true, U.localFreecam(value)
                 if ok and accepted == true then
                     self._freecamOn = value
                 else
                     freecam:SetValue(self._freecamOn == true, true)
-                    self:_toast("Freecam unavailable", "The experience did not accept the camera change.", true)
+                    self:_toast("Freecam unavailable", "The camera could not be released.", true)
                 end
             end,
         })
@@ -14829,7 +15487,7 @@ do
     end
 
     function P.Utilities:_applyWorld()
-        if self._options.AllowWorldChanges ~= true then
+        if self._options.AllowWorldChanges == false then
             return
         end
         local v = self._worldValues
@@ -14901,7 +15559,7 @@ do
     end
 
     function P.Utilities:_worldSet(key: string, value: any)
-        if self._options.AllowWorldChanges ~= true then
+        if self._options.AllowWorldChanges == false then
             return
         end
         self._worldValues[key] = value
@@ -14920,7 +15578,7 @@ do
         options.Callback = function(value: any)
             self:_worldSet(key, value)
         end
-        options.Disabled = options.Disabled or self._options.AllowWorldChanges ~= true
+        options.Disabled = options.Disabled or self._options.AllowWorldChanges == false
         local control = card["Add" .. kind](card, options)
         table.insert(self._worldControls[key], control)
         if self._worldValues[key] ~= nil then
@@ -14931,15 +15589,12 @@ do
 
     function P.Utilities:_buildWorld(page: any)
         local section = U.utilityTitle(page, "globe", "Reversible lighting and presentation controls.")
-        if self._options.AllowWorldChanges ~= true then
-            section:AddLabel({ Text = "World changes are disabled by the experience." })
-        end
         local left, right = U.utilityLanes(section, 2, 0.42)
         local effects = U.utilityCard(left, "Visual Effects", nil, "layers")
         for _, item in displayOptions do
             self:_worldControl(effects, "Toggle", item[1], { Name = item[2], Style = "Switch" })
         end
-        local env = U.utilityCard(right, "Environment", "Adjust local lighting in this experience", "sun")
+        local env = U.utilityCard(right, "Environment", "Reversible local lighting changes", "sun")
         self:_worldControl(
             env,
             "Slider",
@@ -14986,7 +15641,7 @@ do
             timeButtons:AddButton({
                 Name = entry[1],
                 Icon = entry[2],
-                Disabled = self._options.AllowWorldChanges ~= true,
+                Disabled = self._options.AllowWorldChanges == false,
                 Callback = function()
                     self:_worldSet("Time", times[entry[1]])
                 end,
@@ -14997,7 +15652,7 @@ do
         for _, preset in { "Default", "Bright", "Clean", "Performance" } do
             buttons:AddButton({
                 Name = preset,
-                Disabled = self._options.AllowWorldChanges ~= true,
+                Disabled = self._options.AllowWorldChanges == false,
                 Callback = function()
                     self:_restoreWorld()
                     if preset == "Bright" then
@@ -15014,7 +15669,7 @@ do
         presets:AddButton({
             Name = "Restore",
             Icon = "refresh-cw",
-            Disabled = self._options.AllowWorldChanges ~= true,
+            Disabled = self._options.AllowWorldChanges == false,
             Callback = function()
                 self:_restoreWorld()
             end,
@@ -15209,14 +15864,7 @@ do
                 },
             },
             OnAction = function(row: Payload)
-                if self:_movementAllowed("TeleportWaypoint") then
-                    self:_authorizeMove(
-                        "TeleportWaypoint",
-                        { Name = row.Name, Components = row.Frame, PlaceId = game.PlaceId }
-                    )
-                else
-                    self:_toast(row.Name, "Teleport requires authorization from this experience.")
-                end
+                self:_authorizeMove("TeleportWaypoint", { Name = row.Name, Components = row.Frame, PlaceId = game.PlaceId })
             end,
             GetActions = function(row: Payload)
                 return {
