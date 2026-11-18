@@ -256,7 +256,7 @@ type Payload = { [any]: any }
 local U = {}
 local P: Payload = {}
 local Build: Payload = {}
-local Library: any = { Version = "1.6.2" }
+local Library: any = { Version = "1.6.3" }
 
 local V = Vector2.new
 local O = UDim2.fromOffset
@@ -3430,15 +3430,29 @@ function P.Window:_placeWindow(p: Vector2?)
     local g = self._layout
     local area = self:_area()
     local avail = V(g.Width * self._scale, g.Height * self._scale)
-    local target = p or (area - avail) / 2
-    local minimum = V(
-        math.min(g.Margin, math.max(0, (area.X - avail.X) / 2)),
-        math.min(g.Margin, math.max(0, (area.Y - avail.Y) / 2))
-    )
-    self._position = V(
-        math.round(math.clamp(target.X, minimum.X, math.max(minimum.X, area.X - avail.X - minimum.X))),
-        math.round(math.clamp(target.Y, minimum.Y, math.max(minimum.Y, area.Y - avail.Y - minimum.Y)))
-    )
+
+    if p then
+        -- Manual positioning keeps only a small recovery strip reachable. This applies
+        -- on both axes, so users can intentionally move the window above Roblox's safe area.
+        local minX = 48 - avail.X
+        local maxX = math.max(minX, area.X - 48)
+        local minY = 48 - avail.Y
+        local maxY = math.max(minY, area.Y - 32)
+        self._position = V(
+            math.round(math.clamp(p.X, minX, maxX)),
+            math.round(math.clamp(p.Y, minY, maxY))
+        )
+    else
+        local target = (area - avail) / 2
+        local minimum = V(
+            math.min(g.Margin, math.max(0, (area.X - avail.X) / 2)),
+            math.min(g.Margin, math.max(0, (area.Y - avail.Y) / 2))
+        )
+        self._position = V(
+            math.round(math.clamp(target.X, minimum.X, math.max(minimum.X, area.X - avail.X - minimum.X))),
+            math.round(math.clamp(target.Y, minimum.Y, math.max(minimum.Y, area.Y - avail.Y - minimum.Y)))
+        )
+    end
     self._shell.Position = O(self._position.X, self._position.Y)
 end
 
@@ -4359,10 +4373,10 @@ function P.Window:_chrome()
     local island = U.make("CanvasGroup", safe, {
         Name = "JetZDynamicIsland",
         AnchorPoint = V(0.5, 0),
-        Position = UDim2.new(0.5, 0, 0, 4),
-        Size = O(282, 50),
-        BackgroundColor3 = C(7, 7, 9),
-        BackgroundTransparency = 0.02,
+        Position = UDim2.new(0.5, 0, 0, 2),
+        Size = O(292, 46),
+        BackgroundColor3 = C(6, 6, 8),
+        BackgroundTransparency = 0,
         GroupTransparency = 1,
         Visible = false,
         Active = true,
@@ -4370,11 +4384,20 @@ function P.Window:_chrome()
     })
     self._dynamicIsland = island
     life:Give(island)
-    U.corner(island, 25)
-    local islandStroke = U.make("UIStroke", island, { Thickness = 0.8, Transparency = 0.48 })
+    U.corner(island, 23)
+    local islandStroke = U.make("UIStroke", island, { Thickness = 0.7, Transparency = 0.78 })
     life:Give(islandStroke)
     U.paint(w, life, islandStroke, "Color", "Accent")
-    local islandScale = U.make("UIScale", island, { Scale = 0.90 })
+    local islandGradient = U.make("UIGradient", island, {
+        Rotation = 90,
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, C(17, 17, 20)),
+            ColorSequenceKeypoint.new(0.55, C(8, 8, 10)),
+            ColorSequenceKeypoint.new(1, C(4, 4, 5)),
+        }),
+    })
+    life:Give(islandGradient)
+    local islandScale = U.make("UIScale", island, { Scale = 0.94 })
     life:Give(islandScale)
     self._islandScale = islandScale
 
@@ -4391,33 +4414,33 @@ function P.Window:_chrome()
     self._islandButton = islandButton
 
     local logoBubble = U.frame(island, {
-        Position = O(6, 6),
-        Size = O(38, 38),
+        Position = O(5, 5),
+        Size = O(36, 36),
         BackgroundTransparency = 0,
         ZIndex = island.ZIndex + 2,
         Name = "LogoBubble",
     })
     life:Give(logoBubble)
-    U.corner(logoBubble, 19)
+    U.corner(logoBubble, 18)
     U.fill(w, life, logoBubble, "AccentMuted")
-    local islandLogo, setIslandLogo = U.icon(w, life, logoBubble, self._logo, 18, "Accent", {
+    local islandLogo, setIslandLogo = U.icon(w, life, logoBubble, self._logo, 17, "Accent", {
         AnchorPoint = V(0.5, 0.5),
         Position = S(0.5, 0.5),
-        Size = O(22, 22),
+        Size = O(20, 20),
         ZIndex = logoBubble.ZIndex + 1,
     })
     self._setIslandLogo = setIslandLogo
 
     local separatorA = U.line(w, life, island, "Stroke", {
-        Position = O(51, 10),
-        Size = O(1, 30),
+        Position = O(49, 10),
+        Size = O(1, 26),
         ZIndex = island.ZIndex + 2,
     })
     separatorA.BackgroundTransparency = 0.25
 
-    local islandTitle = U.text(w, life, island, "Control", self._gameName, "Text", {
-        Position = O(62, 0),
-        Size = UDim2.new(1, -154, 1, 0),
+    local islandTitle = U.text(w, life, island, "Sidebar", self._gameName, "Text", {
+        Position = O(59, 0),
+        Size = UDim2.new(1, -150, 1, 0),
         TextTruncate = Enum.TextTruncate.AtEnd,
         ZIndex = island.ZIndex + 2,
     })
@@ -4426,16 +4449,16 @@ function P.Window:_chrome()
 
     local separatorB = U.line(w, life, island, "Stroke", {
         AnchorPoint = V(1, 0),
-        Position = UDim2.new(1, -57, 0, 10),
-        Size = O(1, 30),
+        Position = UDim2.new(1, -43, 0, 10),
+        Size = O(1, 26),
         ZIndex = island.ZIndex + 2,
     })
     separatorB.BackgroundTransparency = 0.25
 
     local barsHost = U.frame(island, {
         AnchorPoint = V(1, 0.5),
-        Position = UDim2.new(1, -64, 0.5, 0),
-        Size = O(38, 28),
+        Position = UDim2.new(1, -52, 0.5, 0),
+        Size = O(32, 24),
         ZIndex = island.ZIndex + 3,
         Name = "Activity",
     })
@@ -4444,8 +4467,8 @@ function P.Window:_chrome()
     for i = 1, 4 do
         local bar = U.line(w, life, barsHost, "Accent", {
             AnchorPoint = V(0.5, 0.5),
-            Position = UDim2.new(0, 4 + (i - 1) * 8, 0.5, 0),
-            Size = O(3, 8 + ((i * 5) % 12)),
+            Position = UDim2.new(0, 3 + (i - 1) * 7, 0.5, 0),
+            Size = O(3, 7 + ((i * 5) % 11)),
             ZIndex = barsHost.ZIndex + 1,
         })
         U.corner(bar, 2)
@@ -4453,23 +4476,31 @@ function P.Window:_chrome()
     end
     self._islandBars = bars
 
-    local islandPulse = U.make("Frame", island, {
-        AnchorPoint = V(0.5, 0.5),
-        Position = UDim2.new(1, -13, 0.5, 0),
-        Size = O(5, 5),
-        BackgroundTransparency = 0,
+    local islandCount = U.text(w, life, island, "Sidebar", tostring(#Players:GetPlayers()), "Text", {
+        AnchorPoint = V(1, 0),
+        Position = UDim2.new(1, -10, 0, 0),
+        Size = O(28, 46),
+        TextXAlignment = Enum.TextXAlignment.Right,
         ZIndex = island.ZIndex + 3,
     })
-    life:Give(islandPulse)
-    U.corner(islandPulse, 2.5)
-    U.fill(w, life, islandPulse, "Accent")
+    islandCount.FontFace = BOLD
+    self._islandCount = islandCount
+    local function refreshIslandCount()
+        if islandCount.Parent then
+            islandCount.Text = tostring(#Players:GetPlayers())
+        end
+    end
+    life:Give(Players.PlayerAdded:Connect(refreshIslandCount))
+    life:Give(Players.PlayerRemoving:Connect(function()
+        task.defer(refreshIslandCount)
+    end))
 
     self._islandAnimating = false
     function self:_setIslandActivity(active: boolean)
         self._islandAnimating = active
         if not active then
             for i, bar in bars do
-                U.tween(self, life, bar, "islandBar" .. tostring(i), "fast", { Size = O(3, 8 + i * 2) })
+                U.tween(self, life, bar, "islandBar" .. tostring(i), "fast", { Size = O(3, 7 + i * 2) })
             end
             return
         end
@@ -4478,7 +4509,7 @@ function P.Window:_chrome()
             while not self._dead and self._islandAnimating and island.Visible do
                 phase += 1
                 for i, bar in bars do
-                    local height = 7 + ((phase * 7 + i * 11) % 20)
+                    local height = 6 + ((phase * 7 + i * 11) % 18)
                     U.tween(self, life, bar, "islandBar" .. tostring(i), "micro", { Size = O(3, height) })
                 end
                 task.wait(math.max(0.10, 0.15 / math.max(self._speed, 0.2)))
@@ -4492,8 +4523,8 @@ function P.Window:_chrome()
         end
         local touch = self._useTouch
         local area = self._safe.AbsoluteSize
-        local islandWidth = math.clamp(area.X * 0.46, 236, 286)
-        island.Size = O(islandWidth, 50)
+        local islandWidth = math.clamp(area.X * 0.48, 248, 300)
+        island.Size = O(islandWidth, 46)
         local insetTop = 0
         local okInset, topLeft = pcall(function()
             local top, _ = Gui:GetGuiInset()
@@ -4502,7 +4533,7 @@ function P.Window:_chrome()
         if okInset and typeof(topLeft) == "Vector2" then
             insetTop = topLeft.Y
         end
-        island.Position = UDim2.new(0.5, 0, 0, -insetTop + 5)
+        island.Position = UDim2.new(0.5, 0, 0, -insetTop + 2)
         floating.Position = UDim2.new(0, if touch then 12 else 14, 0.5, 0)
         local showFloating = self._floatingToggleEnabled and (self._visible or not touch)
         local showIsland = self._dynamicIslandEnabled and touch and not self._visible
@@ -4521,7 +4552,7 @@ function P.Window:_chrome()
         if showIsland then
             island.Visible = true
             island.GroupTransparency = if instant then 0 else 1
-            islandScale.Scale = if instant then 1 else 0.90
+            islandScale.Scale = if instant then 1 else 0.94
             U.tween(self, life, island, "islandFade", "fast", { GroupTransparency = 0 }, instant)
             U.tween(self, life, islandScale, "islandScale", "fast", { Scale = 1 }, instant)
             self:_setIslandActivity(true)
@@ -4530,11 +4561,11 @@ function P.Window:_chrome()
             if island.Visible then
                 if instant or self._speed <= 0 then
                     island.GroupTransparency = 1
-                    islandScale.Scale = 0.90
+                    islandScale.Scale = 0.94
                     island.Visible = false
                 else
                     U.tween(self, life, island, "islandFade", "fast", { GroupTransparency = 1 })
-                    U.tween(self, life, islandScale, "islandScale", "fast", { Scale = 0.90 })
+                    U.tween(self, life, islandScale, "islandScale", "fast", { Scale = 0.94 })
                     U.later(self, life, "islandHide", D.Animation.fast / math.max(self._speed, 0.2) + 0.03, function()
                         if self._visible and island.Parent then
                             island.Visible = false
@@ -4579,7 +4610,7 @@ function P.Window:_chrome()
                 local target = start + p - from
                 local minX = 48 - scaled.X
                 local maxX = math.max(minX, area.X - 48)
-                local minY = 16
+                local minY = 48 - scaled.Y
                 local maxY = math.max(minY, area.Y - 32)
 
                 self._manual = true
