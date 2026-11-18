@@ -12,6 +12,7 @@
 -- CreateReferenceDemo is optional and contains presentation/state only.
 -- Controls support live dependencies: DependsOn/SetDependency and Toggle:AddSettings with Reveal/Disable/Dim modes.
 -- Any row supports Locked=true / SetLocked(), with JetZ-native PREMIUM chrome and anchored purchase callout.
+-- Locked purchase CTA is fixed: Buy Premium always copies the window Shop URL; per-control callbacks/URLs cannot override it.
 -- Settings > Configs owns persistent profiles, clipboard transfer, dirty state and per-game autoload.
 local Players = game:GetService("Players")
 local Input = game:GetService("UserInputService")
@@ -251,7 +252,7 @@ type Payload = { [any]: any }
 local U = {}
 local P: Payload = {}
 local Build: Payload = {}
-local Library: any = { Version = "1.5.0" }
+local Library: any = { Version = "1.5.1" }
 
 local V = Vector2.new
 local O = UDim2.fromOffset
@@ -3782,6 +3783,14 @@ function P.Window:GetPremiumURL(): string
     return self._premiumURL
 end
 
+function P.Window:SetShopURL(url: string)
+    return self:SetPremiumURL(url)
+end
+
+function P.Window:GetShopURL(): string
+    return self:GetPremiumURL()
+end
+
 function P.Window:SetThemePreset(name: string)
     local preset = ThemePresets[name]
     if not preset then
@@ -5751,26 +5760,24 @@ function P.Row:OpenLocked(): boolean
         BackgroundTransparency = 0,
         Name = "PremiumAction",
     }, function()
-        if not self._locked then return end
-        local callback = options.Callback
-        local ok = true
-        if type(callback) == "function" then
-            ok = select(1, U.call(self, "LockedAction", callback, self))
-        else
-            local url = U.str(options.URL, w._premiumURL)
-            ok = url ~= "" and U.copyText(url)
-            w:Notify({
-                Title = if ok then "Purchase link copied" else "Clipboard unavailable",
-                Description = if ok then url else "Unable to copy the premium purchase link.",
-                Severity = if ok then "Success" else "Warning",
-                Duration = 3,
-            })
+        if not self._locked then
+            return
         end
-        if ok and not p.dead then w:_closeFrom(p) end
+        local url = w._premiumURL
+        local ok = type(url) == "string" and url ~= "" and U.copyText(url)
+        w:Notify({
+            Title = if ok then "Shop link copied" else "Clipboard unavailable",
+            Description = if ok then url else "Unable to copy the Shop URL.",
+            Severity = if ok then "Success" else "Warning",
+            Duration = 3,
+        })
+        if ok and not p.dead then
+            w:_closeFrom(p)
+        end
     end)
     U.corner(action, 6)
     U.fill(w, life, action, "Accent")
-    local actionText = U.text(w, life, action, "Control", U.str(options.ActionText, "Buy Premium"), "AccentInk", {
+    local actionText = U.text(w, life, action, "Control", "Buy Premium", "AccentInk", {
         Position = O(12, 0),
         Size = UDim2.new(1, -42, 1, 0),
         TextXAlignment = Enum.TextXAlignment.Center,
