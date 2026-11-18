@@ -5313,10 +5313,14 @@ function P.Check:SetKeybind(key: any)
         self._keyRestore = nil
         self:SetValue(held, true)
     end
+    local changedKey = self._key ~= k
     self._key = k
     self._bindSlot = self._bindSlot or k ~= nil
     self._w._keys[self] = if k then true else nil
     self:_bindRender()
+    if changedKey and self._w and self._w._profileManager and self._flag then
+        self._w._profileManager:ControlChanged(self)
+    end
     self:_measure()
     self:_stateRender()
     return true
@@ -5336,7 +5340,11 @@ function P.Check:SetKeybindMode(mode: string)
         self._keyRestore = nil
         self:SetValue(before, true)
     end
+    local changedMode = self._keyMode ~= mode
     self._keyMode = mode
+    if changedMode and self._w and self._w._profileManager and self._flag then
+        self._w._profileManager:ControlChanged(self)
+    end
     return true
 end
 function P.Check:BeginCapture()
@@ -5507,6 +5515,9 @@ function P.Keybind:SetMode(v: string)
         self._mode = v
         self:_activeSet(v == "Always" and self._enabled and not self:_isDisabled())
         self:_bindRender()
+        if self._w and self._w._profileManager and self._flag then
+            self._w._profileManager:ControlChanged(self)
+        end
     end
     return true
 end
@@ -7477,6 +7488,9 @@ function P.Color:SetAlpha(alpha: number, silent: boolean?)
     end
     self._alpha = alpha
     self:_valueRender(true)
+    if self._w and self._w._profileManager and self._flag then
+        self._w._profileManager:ControlChanged(self)
+    end
     if not silent then
         self:_emitChange(self._value, self._value, previous)
     end
