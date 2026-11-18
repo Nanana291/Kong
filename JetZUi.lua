@@ -250,7 +250,7 @@ type Payload = { [any]: any }
 local U = {}
 local P: Payload = {}
 local Build: Payload = {}
-local Library: any = { Version = "1.4.3" }
+local Library: any = { Version = "1.4.4" }
 
 local V = Vector2.new
 local O = UDim2.fromOffset
@@ -636,28 +636,156 @@ function U.cfg(c: any): Payload
     return {}
 end
 
-function U.global(name: string): any
-    local env = getfenv()
-    local value = rawget(env, name)
-    if value ~= nil then return value end
-    local getGlobal = rawget(env, "getgenv")
-    if type(getGlobal) == "function" then
-        local ok, globals = pcall(getGlobal)
-        if ok and type(globals) == "table" then return rawget(globals, name) end
+local ExecutorAliases: Payload = {
+    setclipboard = { "setclipboard", "toclipboard", "writeclipboard" },
+    getclipboard = { "getclipboard", "readclipboard" },
+    isfolder = { "isfolder", "is_folder" },
+    makefolder = { "makefolder", "make_folder" },
+    isfile = { "isfile", "is_file" },
+    readfile = { "readfile", "read_file" },
+    writefile = { "writefile", "write_file" },
+    delfile = { "delfile", "deletefile", "delete_file" },
+    listfiles = { "listfiles", "list_files" },
+}
+local ExecutorNamespaces = { "syn", "filesystem", "fs", "clipboard" }
+
+function U.executorEnvironments(): { any }
+    local out, seen = {}, {}
+    local function add(env: any)
+        if type(env) == "table" and not seen[env] then
+            seen[env] = true
+            table.insert(out, env)
+        end
     end
-    return nil
+
+    add(_G)
+
+    local base = nil
+    local okBase, baseEnv = pcall(getfenv, 0)
+    if okBase then
+        base = baseEnv
+        add(baseEnv)
+    end
+
+    local getGlobal = (type(base) == "table" and rawget(base, "getgenv")) or nil
+    if type(getGlobal) ~= "function" then
+        local ok, candidate = pcall(function()
+            return getgenv
+        end)
+        if ok and type(candidate) == "function" then
+            getGlobal = candidate
+        end
+    end
+    if type(getGlobal) == "function" then
+        local ok, env = pcall(getGlobal)
+        if ok then add(env) end
+    end
+
+    local getRuntime = (type(base) == "table" and rawget(base, "getrenv")) or nil
+    if type(getRuntime) ~= "function" then
+        local ok, candidate = pcall(function()
+            return getrenv
+        end)
+        if ok and type(candidate) == "function" then
+            getRuntime = candidate
+        end
+    end
+    if type(getRuntime) == "function" then
+        local ok, env = pcall(getRuntime)
+        if ok then add(env) end
+    end
+
+    local okLocal, localEnv = pcall(getfenv)
+    if okLocal then add(localEnv) end
+    return out
+end
+
+function U.resolveExecutor(name: string): (any, string?)
+    local aliases = ExecutorAliases[name] or { name }
+    local environments = U.executorEnvironments()
+
+    for _, env in environments do
+        for _, alias in aliases do
+            local ok, value = pcall(function()
+                return env[alias]
+            end)
+            if ok and type(value) == "function" then
+                return value, "global:" .. alias
+            end
+        end
+        for _, namespaceName in ExecutorNamespaces do
+            local okNamespace, namespace = pcall(function()
+                return env[namespaceName]
+            end)
+            if okNamespace and type(namespace) == "table" then
+                for _, alias in aliases do
+                    local ok, value = pcall(function()
+                        return namespace[alias]
+                    end)
+                    if ok and type(value) == "function" then
+                        return value, namespaceName .. "." .. alias
+                    end
+                end
+            end
+        end
+    end
+
+    -- Some executors expose injected globals to normal global lookup but not through
+    -- _G/getgenv/getfenv tables. Resolve those names through the executor compiler.
+    local loader = nil
+    for _, env in environments do
+        local ok, candidate = pcall(function()
+            return env.loadstring
+        end)
+        if ok and type(candidate) == "function" then
+            loader = candidate
+            break
+        end
+    end
+    if not loader then
+        local ok, candidate = pcall(function()
+            return loadstring
+        end)
+        if ok and type(candidate) == "function" then
+            loader = candidate
+        end
+    end
+    if type(loader) == "function" then
+        for _, alias in aliases do
+            if alias:match("^[%a_][%w_]*$") then
+                local compiledOK, chunk = pcall(loader, "return " .. alias)
+                if compiledOK and type(chunk) == "function" then
+                    local runOK, value = pcall(chunk)
+                    if runOK and type(value) == "function" then
+                        return value, "loadstring:" .. alias
+                    end
+                end
+            end
+        end
+    end
+
+    return nil, nil
+end
+
+function U.global(name: string): any
+    local value = U.resolveExecutor(name)
+    return value
 end
 
 function U.copyText(value: string): boolean
-    local fn = U.global("setclipboard") or U.global("toclipboard")
-    if type(fn) ~= "function" then return false end
+    local fn = U.resolveExecutor("setclipboard")
+    if type(fn) ~= "function" then
+        return false
+    end
     local ok = pcall(fn, value)
     return ok
 end
 
 function U.readClipboard(): string?
-    local fn = U.global("getclipboard")
-    if type(fn) ~= "function" then return nil end
+    local fn = U.resolveExecutor("getclipboard")
+    if type(fn) ~= "function" then
+        return nil
+    end
     local ok, value = pcall(fn)
     return if ok and type(value) == "string" then value else nil
 end
@@ -9103,14 +9231,19 @@ end
 function P.ProfileManager.new(w: any, options: any): any
     local c = U.cfg(options)
     local self = setmetatable({}, P.ProfileManager)
-    self.window, self.api = w, {}
+    self.window, self.api, self.sources = w, {}, {}
     for _, key in { "isfolder", "makefolder", "isfile", "readfile", "writefile", "delfile", "listfiles" } do
-        self.api[key] = U.global(key)
+        local fn, source = U.resolveExecutor(key)
+        self.api[key], self.sources[key] = fn, source
     end
-    self.available = true
-    for _, key in { "isfolder", "makefolder", "isfile", "readfile", "writefile" } do
-        if type(self.api[key]) ~= "function" then self.available = false end
+    self.required = { "isfolder", "makefolder", "isfile", "readfile", "writefile" }
+    self.missing = {}
+    for _, key in self.required do
+        if type(self.api[key]) ~= "function" then
+            table.insert(self.missing, key)
+        end
     end
+    self.available = #self.missing == 0
     self.gameName = U.profileName(c.GameName) or U.profileName(w._name) or ("Place_" .. tostring(game.PlaceId))
     self.placeId = game.PlaceId
     self.root = U.str(c.ConfigRoot, "JetZ/Configs")
@@ -9126,10 +9259,26 @@ function P.ProfileManager.new(w: any, options: any): any
     return self
 end
 
-function P.ProfileManager:Call(key: string, ...: any): (boolean, any)
+function P.ProfileManager:Resolve(key: string): any
     local fn = self.api[key]
+    if type(fn) == "function" then
+        return fn
+    end
+    local resolved, source = U.resolveExecutor(key)
+    if type(resolved) == "function" then
+        self.api[key], self.sources[key] = resolved, source
+        local at = table.find(self.missing, key)
+        if at then table.remove(self.missing, at) end
+        self.available = #self.missing == 0
+        return resolved
+    end
+    return nil
+end
+
+function P.ProfileManager:Call(key: string, ...: any): (boolean, any)
+    local fn = self:Resolve(key)
     if type(fn) ~= "function" then
-        return false, "Filesystem unavailable"
+        return false, "Executor function unavailable: " .. key
     end
     local ok, result = pcall(fn, ...)
     if ok then
@@ -9139,7 +9288,12 @@ function P.ProfileManager:Call(key: string, ...: any): (boolean, any)
 end
 
 function P.ProfileManager:EnsureFolder(path: string): (boolean, any)
-    if not self.available then return false, "Filesystem unavailable" end
+    for _, key in self.required do
+        self:Resolve(key)
+    end
+    if not self.available then
+        return false, "Filesystem unavailable (missing: " .. table.concat(self.missing, ", ") .. ")"
+    end
     local current = ""
     for part in path:gmatch("[^/]+") do
         current = if current == "" then part else current .. "/" .. part
@@ -9154,7 +9308,9 @@ function P.ProfileManager:EnsureFolder(path: string): (boolean, any)
 end
 
 function P.ProfileManager:Read(path: string): (any, any)
-    if not self.available then return nil, "Filesystem unavailable" end
+    if not self:Resolve("isfile") or not self:Resolve("readfile") then
+        return nil, "Filesystem read functions unavailable"
+    end
     local ok, exists = self:Call("isfile", path)
     if not ok or not exists then return nil, ok and "File not found" or exists end
     local readOK, raw = self:Call("readfile", path)
@@ -9320,7 +9476,7 @@ end
 function P.ProfileManager:Delete(name: string): (boolean, any)
     local clean = U.profileName(name)
     if not clean then return false, "Invalid profile name" end
-    if type(self.api.delfile) ~= "function" then return false, "Filesystem unavailable" end
+    if type(self:Resolve("delfile")) ~= "function" then return false, "Executor function unavailable: delfile" end
     local checked, exists = self:Call("isfile", self:Path(clean))
     if not checked then return false, exists end
     if not exists then return false, "Profile not found" end
@@ -9381,7 +9537,10 @@ function P.ProfileManager:GetAutoload(): any
 end
 
 function P.ProfileManager:SetAutoload(name: string?, enabled: boolean): (boolean, any)
-    if not self.available then return false, "Filesystem unavailable" end
+    for _, key in self.required do self:Resolve(key) end
+    if not self.available then
+        return false, "Filesystem unavailable (missing: " .. table.concat(self.missing, ", ") .. ")"
+    end
     local data, key = self:AutoloadData(), tostring(self.placeId)
     if enabled then
         local clean = U.profileName(name)
@@ -9453,7 +9612,19 @@ function P.Window:RefreshProfiles(): { string } return self._profileManager:Name
 function P.Window:GetActiveProfile(): string? return self._profileManager.activeProfile end
 function P.Window:GetPersistenceStatus(): any
     local m = self._profileManager
-    return { available=m.available, game=m.gameName, placeId=m.placeId, folder=m.folder, canDelete=type(m.api.delfile)=="function", canList=type(m.api.listfiles)=="function", autoloadState=m.autoloadState, dirty=m.dirty }
+    for _, key in m.required do m:Resolve(key) end
+    return {
+        available = m.available,
+        game = m.gameName,
+        placeId = m.placeId,
+        folder = m.folder,
+        canDelete = type(m:Resolve("delfile")) == "function",
+        canList = type(m:Resolve("listfiles")) == "function",
+        autoloadState = m.autoloadState,
+        dirty = m.dirty,
+        missing = table.clone(m.missing),
+        sources = table.clone(m.sources),
+    }
 end
 function P.Window:ExportProfile(name: string?): (string?, any)
     local data, why
@@ -9494,7 +9665,19 @@ function P.Window:GetAutoload() return self._profileManager:GetAutoload() end
 function P.Window:ApplyAutoload() return self._profileManager:ApplyAutoload() end
 function P.Window:GetConfigDiagnostics(): any
     local m = self._profileManager
-    return { available=m.available, activeProfile=m.activeProfile, dirty=m.dirty, autoloadState=m.autoloadState, pending=m.pending~=nil, folder=m.folder, lastResult=m.lastResult }
+    for _, key in m.required do m:Resolve(key) end
+    return {
+        available = m.available,
+        activeProfile = m.activeProfile,
+        dirty = m.dirty,
+        autoloadState = m.autoloadState,
+        pending = m.pending ~= nil,
+        folder = m.folder,
+        lastResult = m.lastResult,
+        missing = table.clone(m.missing),
+        sources = table.clone(m.sources),
+        clipboard = select(2, U.resolveExecutor("setclipboard")),
+    }
 end
 
 function P.Window:ExportConfig(json: boolean?)
@@ -10271,9 +10454,8 @@ function P.Window:AddSettings(options: any)
             ctx.Cleanup(life)
             local lifetime, monthly
             local function copyStore()
-                local ok = pcall(function()
-                    setclipboard(storeURL)
-                end)
+                local clipboard = U.resolveExecutor("setclipboard")
+                local ok = type(clipboard) == "function" and pcall(clipboard, storeURL)
                 self:Notify({
                     Title = ok and "Purchase link copied" or "Clipboard unavailable",
                     Description = ok and storeURL or "Copy the store URL manually: " .. storeURL,
@@ -10364,9 +10546,8 @@ function P.Window:AddSettings(options: any)
                 join.Text = self:Translate("Join Community")
             end)
             life:Give(join.Activated:Connect(function()
-                local ok = pcall(function()
-                    setclipboard(discordURL)
-                end)
+                local clipboard = U.resolveExecutor("setclipboard")
+                local ok = type(clipboard) == "function" and pcall(clipboard, discordURL)
                 self:Notify({
                     Title = ok and "Discord link copied" or "Clipboard unavailable",
                     Description = ok and discordURL or "Join manually at " .. discordURL,
