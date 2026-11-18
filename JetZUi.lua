@@ -10,6 +10,7 @@
 -- ScreenGui defaults to PlayerGui with ResetOnSpawn=false; supply Parent for another owned host.
 -- Size is logical Vector2; position is in safe-area pixels. GetLayout reports effective layout.
 -- CreateReferenceDemo is optional and contains presentation/state only.
+-- Controls support live dependencies: DependsOn/SetDependency and Toggle:AddSettings with Reveal/Disable/Dim modes.
 local Players = game:GetService("Players")
 local Input = game:GetService("UserInputService")
 local Tweens = game:GetService("TweenService")
@@ -1385,6 +1386,7 @@ P.Window = U.class(P.Base)
 P.Tab = U.class(P.Base)
 P.SubTab = U.class(P.Base)
 P.Collection = U.class(P.Base)
+P.Dependency = U.class(P.Collection)
 P.Section = U.class(P.Collection)
 P.Group = U.class(P.Collection)
 P.Watermark = U.class(P.Base)
@@ -1470,7 +1472,18 @@ end
 function P.Base:_isDisabled(): boolean
     local n = self
     while n do
-        if n._disabled or n._dead then
+        if n._disabled or n._dependencyDisabled or n._dead then
+            return true
+        end
+        n = n._owner
+    end
+    return false
+end
+
+function P.Base:_isDependencyBlocked(): boolean
+    local n = self
+    while n do
+        if n._dependencyBlocked then
             return true
         end
         n = n._owner
@@ -1482,6 +1495,7 @@ function P.Base:_canInteract(): boolean
     local w = self._w
     return self._visible
         and not self:_isDisabled()
+        and not self:_isDependencyBlocked()
         and (not self._root or U.guiVisible(self._root))
         and (not w._dialog or U.owns(w._dialog, self))
         and (not w._drawerOpen or self._kind == "Tab" or self._kind == "Window")
@@ -1505,7 +1519,7 @@ function P.Base:SetVisible(v: boolean)
     end
     self._visible = v
     if self._root then
-        self._root.Visible = v
+        self._root.Visible = v and not self._dependencyHidden
     end
     if not v then
         self._w:_quiet(self)
@@ -1517,6 +1531,9 @@ function P.Base:SetVisible(v: boolean)
         self._w:_syncAnimations()
     end
     U.parentChanged(self, "visible")
+    if self._w and self._w._syncDependencies then
+        self._w:_syncDependencies(self)
+    end
     return true
 end
 function P.Base:IsVisible(): boolean
@@ -1534,6 +1551,9 @@ function P.Base:SetDisabled(v: boolean)
         end
         self:_refreshState()
         U.parentChanged(self, "disabled")
+        if self._w and self._w._syncDependencies then
+            self._w:_syncDependencies(self)
+        end
     end
     return true
 end
@@ -1636,6 +1656,9 @@ function P.Base:Destroy()
     end
     self._owner = nil
     table.clear(self._events)
+    if w and w._syncDependencies and not w._dead then
+        w:_syncDependencies(self)
+    end
 end
 
 function P.Value:GetValue(): any
@@ -1697,6 +1720,9 @@ function P.Value:_commit(v: any, silent: boolean?, instant: boolean?): (boolean,
     if self._valueRender then
         self:_valueRender(instant == true)
     end
+    if self._w and self._w._syncDependencies then
+        self._w:_syncDependencies(self)
+    end
     if equivalent then
         return true, false
     end
@@ -1746,6 +1772,9 @@ function U.value(n: any, c: Payload, fallback: any)
     end
     if n._valueRender then
         n:_valueRender(true)
+    end
+    if n._w and n._w._syncDependencies then
+        n._w:_syncDependencies(n)
     end
 end
 
@@ -2933,6 +2962,24 @@ function P.Window:SelectTab(key: any): boolean
     return true
 end
 
+function P.Window:_syncDependencies(source: any?)
+    if self._dead or self._syncingDependencies or not self._dependencies then
+        return
+    end
+    self._syncingDependencies = true
+    for item in self._dependencies do
+        if item._dead then
+            self._dependencies[item] = nil
+        elseif item._dependencySync then
+            local ok, why = pcall(item._dependencySync, item, source)
+            if not ok then
+                U.issue(item, "dependency sync", why)
+            end
+        end
+    end
+    self._syncingDependencies = false
+end
+
 function P.Window:_area(): Vector2
     local area = self._safe.AbsoluteSize
     if area.X <= 2 or area.Y <= 2 then
@@ -3813,6 +3860,7 @@ function Library:CreateWindow(options: WindowOptions?): (WindowHandle | false, s
     w._w, w._seq, w._gui, w._safe, w._shell, w._development = w, 0, gui, safe, shell, c.Development ~= false
     w._theme = U.theme(c.Theme, c.Accent)
     w._flags, w._keys, w._down, w._tabs, w._popups, w._settings, w._toasts = {}, {}, {}, {}, {}, {}, {}
+    w._dependencies = {}
     w._responsive, w._animated, w._focusables, w._particles = {}, {}, {}, {}
     w._suppressed = setmetatable({}, { __mode = "k" })
     w._size, w._position = V(D.Width, D.Height), Vector2.zero
@@ -3910,6 +3958,457 @@ end
 function P.Collection:Clear()
     U.clear(self)
 end
+
+-- Dependency engine -----------------------------------------------------------
+-- Conditions are evaluated only on state changes; there is no polling/render-step work.
+-- Supported condition shapes:
+--   controller | "flag.name" | function(window, dependent) -> boolean
+--   { Control=controller, Equals=value }
+--   { Flag="flag.name", NotEquals=value }
+--   { Truthy=true, Flag="flag.name" }
+--   { In={...}, Flag="flag.name" }
+--   { Predicate=function(value, source, window, dependent) return boolean end, ... }
+--   { All={...} } | { Any={...} } | { Not=condition }
+local dependencyModes: Payload = { Reveal = true, Disable = true, Dim = true }
+
+function U.dependencyValue(w: any, source: any): (any, any)
+    if type(source) == "string" then
+        source = w._flags[source]
+    end
+    if type(source) == "table" and source._w == w and not source._dead then
+        if source.GetValue then
+            local ok, value = pcall(source.GetValue, source)
+            if ok then
+                return value, source
+            end
+        end
+        return source._value, source
+    end
+    return nil, nil
+end
+
+function U.dependencyEval(w: any, dependent: any, spec: any): boolean
+    local kind = type(spec)
+    if spec == nil then
+        return true
+    elseif kind == "boolean" then
+        return spec
+    elseif kind == "string" then
+        local value = U.dependencyValue(w, spec)
+        return value ~= nil and value ~= false
+    elseif kind == "function" then
+        local ok, result = U.call(dependent, "dependency predicate", spec, w, dependent)
+        return ok and result == true
+    elseif kind ~= "table" then
+        return false
+    end
+
+    if spec._w == w and spec.GetValue then
+        local value = U.dependencyValue(w, spec)
+        return value ~= nil and value ~= false
+    end
+    if spec.Not ~= nil then
+        return not U.dependencyEval(w, dependent, spec.Not)
+    end
+    if type(spec.All) == "table" then
+        for _, condition in spec.All do
+            if not U.dependencyEval(w, dependent, condition) then
+                return false
+            end
+        end
+        return true
+    end
+    if type(spec.Any) == "table" then
+        for _, condition in spec.Any do
+            if U.dependencyEval(w, dependent, condition) then
+                return true
+            end
+        end
+        return false
+    end
+    if spec[1] ~= nil and spec.Control == nil and spec.Flag == nil then
+        for _, condition in spec do
+            if not U.dependencyEval(w, dependent, condition) then
+                return false
+            end
+        end
+        return true
+    end
+
+    local source = spec.Control
+    if source == nil then
+        source = spec.Flag
+    end
+    local value, controller = U.dependencyValue(w, source)
+    if spec.Exists ~= nil then
+        return (controller ~= nil) == (spec.Exists == true)
+    end
+    if controller == nil then
+        return false
+    end
+    if spec.Predicate ~= nil then
+        if type(spec.Predicate) ~= "function" then
+            U.issue(dependent, "dependency", "Predicate must be a function")
+            return false
+        end
+        local ok, result = U.call(dependent, "dependency predicate", spec.Predicate, U.copy(value), controller, w, dependent)
+        if not ok or result ~= true then
+            return false
+        end
+    end
+    if spec.Equals ~= nil and not U.same(value, spec.Equals) then
+        return false
+    end
+    if spec.NotEquals ~= nil and U.same(value, spec.NotEquals) then
+        return false
+    end
+    if spec.Truthy ~= nil and ((value ~= nil and value ~= false) ~= (spec.Truthy == true)) then
+        return false
+    end
+    if type(spec.In) == "table" then
+        local found = false
+        for _, candidate in spec.In do
+            if U.same(value, candidate) then
+                found = true
+                break
+            end
+        end
+        if not found then
+            return false
+        end
+    end
+    if spec.Equals == nil and spec.NotEquals == nil and spec.Truthy == nil and spec.In == nil and spec.Predicate == nil then
+        return value ~= nil and value ~= false
+    end
+    return true
+end
+
+function P.Row:_dependencySync()
+    local state = self._dependency
+    if not state then
+        return
+    end
+    local active = U.dependencyEval(self._w, self, state.Spec)
+    local changed = state.Active ~= active
+    state.Active = active
+    self._dependencyHidden = not active and state.Mode == "Reveal"
+    self._dependencyDisabled = not active and state.Mode == "Disable"
+    self._dependencyBlocked = not active and state.Mode == "Dim"
+    self._dependencyDim = not active and state.Mode == "Dim"
+    if self._root then
+        self._root.Visible = self._visible and not self._dependencyHidden
+    end
+    if not active then
+        self._w:_quiet(self)
+    end
+    self:_refreshState()
+    U.parentChanged(self, "dependency")
+    if changed then
+        U.emit(self, "DependencyChanged", active, self)
+    end
+end
+
+function P.Row:SetDependency(spec: any, mode: string?)
+    if self._dead then
+        return false, "destroyed controller"
+    end
+    local resolvedMode = mode or (type(spec) == "table" and spec.Mode) or "Reveal"
+    if type(resolvedMode) ~= "string" or not dependencyModes[resolvedMode] then
+        return U.issue(self, "SetDependency", "mode must be Reveal, Disable or Dim")
+    end
+    if spec == nil then
+        return self:ClearDependency()
+    end
+    self._dependency = { Spec = spec, Mode = resolvedMode, Active = nil }
+    self._w._dependencies[self] = true
+    self._life:Give(function()
+        if self._w and self._w._dependencies then
+            self._w._dependencies[self] = nil
+        end
+    end, "dependencyRegistration")
+    self:_dependencySync()
+    return true
+end
+
+function P.Row:GetDependency(): any
+    if not self._dependency then
+        return nil
+    end
+    return {
+        Spec = self._dependency.Spec,
+        Mode = self._dependency.Mode,
+        Active = self._dependency.Active == true,
+    }
+end
+
+function P.Row:IsDependencyActive(): boolean
+    return not self._dependency or self._dependency.Active == true
+end
+
+function P.Row:OnDependencyChanged(fn: any): Connection
+    return U.event(self, "DependencyChanged"):Connect(fn)
+end
+
+function P.Row:ClearDependency()
+    self._life:Remove("dependencyRegistration")
+    self._dependency = nil
+    self._dependencyHidden = false
+    self._dependencyDisabled = false
+    self._dependencyBlocked = false
+    self._dependencyDim = false
+    if self._root then
+        self._root.Visible = self._visible
+    end
+    self:_refreshState()
+    U.parentChanged(self, "dependency")
+    return true
+end
+
+function P.Row:GetSettings(): any
+    return self._settings
+end
+
+function P.Row:AddSettings(options: any)
+    if self._dead then
+        return U.issue(self, "AddSettings", "destroyed controller")
+    end
+    if self._settings and not self._settings._dead then
+        return self._settings
+    end
+    if type(self._value) ~= "boolean" then
+        return U.issue(self, "AddSettings", "requires a boolean Toggle or Checkbox")
+    end
+    if self._owner and self._owner._kind == "InlineGroup" then
+        return U.issue(self, "AddSettings", "nested settings are not supported inside InlineGroup; place the master control directly in a Section")
+    end
+    local c = U.cfg(options)
+    local mode = U.str(c.Mode, "Reveal")
+    if not dependencyModes[mode] then
+        return U.issue(self, "AddSettings", "Mode must be Reveal, Disable or Dim")
+    end
+
+    local parent = self._root and self._root.Parent
+    if not parent then
+        return U.issue(self, "AddSettings", "master control is not mounted")
+    end
+    local root = U.make("CanvasGroup", parent, {
+        Size = UDim2.new(1, 0, 0, 0),
+        ClipsDescendants = true,
+        GroupTransparency = 1,
+        Visible = false,
+        BackgroundTransparency = 1,
+        Name = "DependentSettings",
+    })
+    local group = U.node(self._w, P.Dependency, "Dependency", {
+        Name = U.str(c.Name, self._name .. " Settings"),
+        Visible = c.Visible,
+    }, self, root)
+    group._small = self._small
+    group._mode = mode
+    group._expanded = c.Expanded ~= false
+    group._groupVisible = c.Visible ~= false
+    group._condition = c.When
+    group._lastActive = nil
+    group._host = U.frame(root, {
+        Position = O(28, 0),
+        Size = UDim2.new(1, -28, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+        Name = "DependentContent",
+    })
+    group._list = U.layout(group._host, 0)
+    group._rail = U.line(self._w, group._life, root, function(t: Payload)
+        return if group:IsActive() then t.Accent else t.Divider
+    end, {
+        Position = O(12, 2),
+        Size = UDim2.new(0, 2, 1, -8),
+        Name = "DependencyRail",
+    })
+    U.corner(group._rail, 2)
+    group._refreshRail = U.paint(self._w, group._life, group._rail, "BackgroundColor3", function(t: Payload)
+        return if group:IsActive() then t.Accent else t.Divider
+    end)
+
+    group._chevronButton = U.button(self, group._life, self._heading, {
+        Name = "SettingsChevron",
+        ZIndex = 8,
+        Size = O(20, 20),
+    }, function()
+        if group:IsActive() or group._mode ~= "Reveal" then
+            group:SetExpanded(not group._expanded)
+        end
+    end)
+    group._chevron = U.icon(self._w, group._life, group._chevronButton, "right", 9, function(t: Payload)
+        return if group:IsActive() then t.Accent else t.TextMuted
+    end, {
+        Size = S(1, 1),
+    })
+    self._interactive[group._chevronButton] = function()
+        return group:IsActive() or group._mode ~= "Reveal"
+    end
+    U.focusable(self, group._life, group._chevronButton, function()
+        if group:IsActive() or group._mode ~= "Reveal" then
+            group:SetExpanded(not group._expanded)
+        end
+    end)
+
+    self._settings = group
+    self._w._dependencies[group] = true
+    group._life:Give(function()
+        if group._w and group._w._dependencies then
+            group._w._dependencies[group] = nil
+        end
+    end, "dependencyRegistration")
+    group._life:Give(group._list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        group:_dependencySync()
+    end))
+    U.adopt(self, group)
+    self:_measure()
+    group:_dependencySync(true)
+    return group
+end
+
+function P.Dependency:_layoutChevron()
+    if self._dead or not self._chevronButton or not self._owner then
+        return
+    end
+    local h = math.max(20, self._owner._heading.AbsoluteSize.Y / self._w._scale)
+    self._chevronButton.Position = O(self._owner._titleLeft, math.max(0, (h - 20) / 2))
+end
+
+function P.Dependency:IsActive(): boolean
+    if self._dead or not self._owner or self._owner._dead then
+        return false
+    end
+    if self._condition ~= nil then
+        return U.dependencyEval(self._w, self, self._condition)
+    end
+    return self._owner._value == true
+        and self._owner._visible
+        and not self._owner:_isDisabled()
+        and not self._owner:_isDependencyBlocked()
+        and (not self._owner._root or U.guiVisible(self._owner._root))
+end
+
+function P.Dependency:_dependencySync(_: any?, immediate: boolean?)
+    if self._dead or not self._root then
+        return
+    end
+    local active = self:IsActive()
+    if active and self._lastActive == false and self._mode == "Reveal" then
+        self._expanded = true
+    end
+    local shown = self._groupVisible
+        and self._owner._visible
+        and self._expanded
+        and (self._mode ~= "Reveal" or active)
+    local target = if shown then self._list.AbsoluteContentSize.Y else 0
+    self._dependencyDisabled = not active and self._mode == "Disable"
+    self._dependencyBlocked = not active and self._mode == "Dim"
+
+    if shown then
+        self._root.Visible = true
+    end
+    local transparency = if not shown then 1 elseif active then 0 elseif self._mode == "Dim" then 0.46 else 0.62
+    U.tween(self._w, self._life, self._root, "dependencyFrame", "nav", {
+        Size = UDim2.new(1, 0, 0, target),
+        GroupTransparency = transparency,
+    }, immediate == true)
+    if not shown then
+        local delay = if immediate or self._w._speed <= 0 then nil else D.Animation.nav / self._w._speed
+        if delay then
+            U.later(self, self._life, "dependencyHide", delay, function()
+                if not self._dead and (not self._groupVisible or not self._expanded or (self._mode == "Reveal" and not self:IsActive())) then
+                    self._root.Visible = false
+                end
+            end)
+        else
+            self._root.Visible = false
+        end
+    else
+        self._life:Remove("dependencyHide")
+    end
+
+    if self._chevron then
+        U.tween(self._w, self._life, self._chevron, "dependencyChevron", "state", {
+            Rotation = if self._expanded and shown then 90 else 0,
+        }, immediate == true)
+    end
+    if self._refreshRail then
+        self._refreshRail()
+    end
+    self:_refreshState()
+    local changed = self._lastActive ~= active
+    self._lastActive = active
+    if changed then
+        U.emit(self, "DependencyChanged", active, self)
+    end
+    U.parentChanged(self, "height")
+end
+
+function P.Dependency:_childChanged()
+    U.later(self, self._life, "dependencyLayout", nil, function()
+        self:_dependencySync()
+    end)
+end
+
+function P.Dependency:SetMode(mode: string)
+    if not dependencyModes[mode] then
+        return U.issue(self, "SetMode", "expected Reveal, Disable or Dim")
+    end
+    self._mode = mode
+    self:_dependencySync()
+    return true
+end
+
+function P.Dependency:GetMode(): string
+    return self._mode
+end
+
+function P.Dependency:SetExpanded(value: boolean)
+    if type(value) ~= "boolean" then
+        return U.issue(self, "SetExpanded", "expected boolean")
+    end
+    self._expanded = value
+    self:_dependencySync()
+    return true
+end
+
+function P.Dependency:IsExpanded(): boolean
+    return self._expanded
+end
+
+function P.Dependency:SetVisible(value: boolean)
+    if type(value) ~= "boolean" then
+        return U.issue(self, "SetVisible", "expected boolean")
+    end
+    self._groupVisible = value
+    self:_dependencySync()
+    return true
+end
+
+function P.Dependency:IsVisible(): boolean
+    return self._groupVisible
+end
+
+function P.Dependency:OnDependencyChanged(fn: any): Connection
+    return U.event(self, "DependencyChanged"):Connect(fn)
+end
+
+function P.Dependency:Destroy()
+    if self._dead then
+        return
+    end
+    local owner = self._owner
+    if owner and owner._settings == self then
+        owner._settings = nil
+    end
+    P.Base.Destroy(self)
+    if owner and not owner._dead then
+        owner:_measure()
+        owner:_stateRender()
+    end
+end
+
 
 function U.section(owner: any, host: Instance, options: any, compact: boolean?): any
     local c = U.cfg(options)
@@ -4100,6 +4599,7 @@ function U.row(owner: any, kind: string, c: Payload, variant: string): any
     local root = U.frame(owner._host, { Size = UDim2.new(1, 0, 0, 0), Name = kind })
     local n = U.node(w, P.Row, kind, c, owner, root)
     n._variant, n._interactive, n._small = variant, {}, owner._small == true
+    n._pendingDependency, n._pendingDependencyMode = c.DependsOn, c.DependencyMode
     n._heightBase = if owner._small
         then (if variant == "numeric" then 52 else 33)
         elseif variant == "numeric" then D.NumericRow
@@ -4111,7 +4611,7 @@ function U.row(owner: any, kind: string, c: Payload, variant: string): any
     n._titleLeft, n._reserve = 0, 0
     n._heading = U.frame(root, { Name = "Heading", Size = UDim2.new(1, 0, 0, 0) })
     n._title, n._refreshTitle = U.text(w, n._life, n._heading, "Control", n._name, function(t: Payload)
-        return if n:_isDisabled() then t.TextDisabled elseif n._dim then t.Subdued else t.Text
+        return if n:_isDisabled() then t.TextDisabled elseif n._dim or n._dependencyDim then t.Subdued else t.Text
     end, { Size = S(1, 1) })
     function n:_descriptionWidget()
         if self._desc then
@@ -4124,7 +4624,7 @@ function U.row(owner: any, kind: string, c: Payload, variant: string): any
             "Muted",
             self._description,
             function(t: Payload)
-                return if self:_isDisabled() then t.TextDisabled else t.TextSecondary
+                return if self:_isDisabled() then t.TextDisabled elseif self._dependencyDim then t.Subdued else t.TextSecondary
             end,
             { Visible = false }
         )
@@ -4141,8 +4641,12 @@ function U.row(owner: any, kind: string, c: Payload, variant: string): any
     end
     function n:_headingLayout()
         local g = w._layout
-        local x, reserve = self._titleLeft, self._reserve
+        local dependencyInset = if self._settings then 20 else 0
+        local x, reserve = self._titleLeft + dependencyInset, self._reserve
         local width = root.AbsoluteSize.X / w._scale
+        if self._settings and self._settings._layoutChevron then
+            self._settings:_layoutChevron()
+        end
         if self._reserveWidth then
             reserve = self:_reserveWidth(width)
         end
@@ -4190,8 +4694,9 @@ function U.row(owner: any, kind: string, c: Payload, variant: string): any
         if extra > 0 then
             local desc = self:_descriptionWidget()
             desc.Text = self._description
-            desc.Position = O(self._titleLeft, h - 2)
-            desc.Size = UDim2.new(1, -(self._titleLeft + 8), 0, 18)
+            local descriptionLeft = self._titleLeft + (if self._settings then 20 else 0)
+            desc.Position = O(descriptionLeft, h - 2)
+            desc.Size = UDim2.new(1, -(descriptionLeft + 8), 0, 18)
             desc.Visible = true
         elseif self._desc then
             self._desc.Visible = false
@@ -4276,7 +4781,12 @@ function U.ready(owner: any, n: any): any
     end
     n:_measure()
     n:_stateRender()
-    return U.adopt(owner, n)
+    U.adopt(owner, n)
+    if n._pendingDependency ~= nil then
+        n:SetDependency(n._pendingDependency, n._pendingDependencyMode)
+        n._pendingDependency, n._pendingDependencyMode = nil, nil
+    end
+    return n
 end
 
 function U.rowButton(n: any, parent: any, props: Payload, fire: any, visual: any?): any
