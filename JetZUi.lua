@@ -9620,7 +9620,7 @@ function P.Window:AddSettings(options: any)
 
     local primary = profiles:AddInlineGroup({ Columns = 3, Gap = 8, MinimumWidth = 106 })
     primary:AddButton({
-        Name = "Create config", Text = "Create", Icon = "file-plus",
+        Name = "Create config", Text = "Create", Icon = "folder-plus",
         Callback = function()
             local name = U.profileName(profileName:GetValue())
             if not name then result("Config not created", false, "Enter a valid config name") return end
@@ -9640,7 +9640,7 @@ function P.Window:AddSettings(options: any)
         end,
     })
     primary:AddButton({
-        Name = "Load config", Text = "Load", Icon = "download",
+        Name = "Load config", Text = "Load", Icon = "download-cloud",
         Callback = function()
             local name = selectedProfile()
             if not name then result("Nothing to load", false, "Select a saved config") return end
@@ -9736,7 +9736,7 @@ function P.Window:AddSettings(options: any)
         end,
     })
     transferActions:AddButton({
-        Name = "Import config", Text = "Import Clipboard", Icon = "download",
+        Name = "Import config", Text = "Import Clipboard", Icon = "download-cloud",
         Callback = function()
             local name, json = U.profileName(profileName:GetValue()), U.readClipboard()
             if not name then result("Import failed", false, "Enter the destination config name first") return end
