@@ -256,7 +256,7 @@ type Payload = { [any]: any }
 local U = {}
 local P: Payload = {}
 local Build: Payload = {}
-local Library: any = { Version = "1.6.1" }
+local Library: any = { Version = "1.6.2" }
 
 local V = Vector2.new
 local O = UDim2.fromOffset
@@ -4359,10 +4359,10 @@ function P.Window:_chrome()
     local island = U.make("CanvasGroup", safe, {
         Name = "JetZDynamicIsland",
         AnchorPoint = V(0.5, 0),
-        Position = UDim2.new(0.5, 0, 0, 12),
-        Size = O(330, 62),
-        BackgroundColor3 = C(8, 8, 11),
-        BackgroundTransparency = 0.04,
+        Position = UDim2.new(0.5, 0, 0, 4),
+        Size = O(282, 50),
+        BackgroundColor3 = C(7, 7, 9),
+        BackgroundTransparency = 0.02,
         GroupTransparency = 1,
         Visible = false,
         Active = true,
@@ -4370,11 +4370,11 @@ function P.Window:_chrome()
     })
     self._dynamicIsland = island
     life:Give(island)
-    U.corner(island, 31)
-    local islandStroke = U.make("UIStroke", island, { Thickness = 1.2, Transparency = 0.24 })
+    U.corner(island, 25)
+    local islandStroke = U.make("UIStroke", island, { Thickness = 0.8, Transparency = 0.48 })
     life:Give(islandStroke)
     U.paint(w, life, islandStroke, "Color", "Accent")
-    local islandScale = U.make("UIScale", island, { Scale = 0.82 })
+    local islandScale = U.make("UIScale", island, { Scale = 0.90 })
     life:Give(islandScale)
     self._islandScale = islandScale
 
@@ -4391,33 +4391,33 @@ function P.Window:_chrome()
     self._islandButton = islandButton
 
     local logoBubble = U.frame(island, {
-        Position = O(9, 9),
-        Size = O(44, 44),
+        Position = O(6, 6),
+        Size = O(38, 38),
         BackgroundTransparency = 0,
         ZIndex = island.ZIndex + 2,
         Name = "LogoBubble",
     })
     life:Give(logoBubble)
-    U.corner(logoBubble, 22)
+    U.corner(logoBubble, 19)
     U.fill(w, life, logoBubble, "AccentMuted")
-    local islandLogo, setIslandLogo = U.icon(w, life, logoBubble, self._logo, 21, "Accent", {
+    local islandLogo, setIslandLogo = U.icon(w, life, logoBubble, self._logo, 18, "Accent", {
         AnchorPoint = V(0.5, 0.5),
         Position = S(0.5, 0.5),
-        Size = O(25, 25),
+        Size = O(22, 22),
         ZIndex = logoBubble.ZIndex + 1,
     })
     self._setIslandLogo = setIslandLogo
 
     local separatorA = U.line(w, life, island, "Stroke", {
-        Position = O(61, 13),
-        Size = O(1, 36),
+        Position = O(51, 10),
+        Size = O(1, 30),
         ZIndex = island.ZIndex + 2,
     })
     separatorA.BackgroundTransparency = 0.25
 
     local islandTitle = U.text(w, life, island, "Control", self._gameName, "Text", {
-        Position = O(76, 0),
-        Size = UDim2.new(1, -188, 1, 0),
+        Position = O(62, 0),
+        Size = UDim2.new(1, -154, 1, 0),
         TextTruncate = Enum.TextTruncate.AtEnd,
         ZIndex = island.ZIndex + 2,
     })
@@ -4426,16 +4426,16 @@ function P.Window:_chrome()
 
     local separatorB = U.line(w, life, island, "Stroke", {
         AnchorPoint = V(1, 0),
-        Position = UDim2.new(1, -68, 0, 13),
-        Size = O(1, 36),
+        Position = UDim2.new(1, -57, 0, 10),
+        Size = O(1, 30),
         ZIndex = island.ZIndex + 2,
     })
     separatorB.BackgroundTransparency = 0.25
 
     local barsHost = U.frame(island, {
         AnchorPoint = V(1, 0.5),
-        Position = UDim2.new(1, -78, 0.5, 0),
-        Size = O(48, 34),
+        Position = UDim2.new(1, -64, 0.5, 0),
+        Size = O(38, 28),
         ZIndex = island.ZIndex + 3,
         Name = "Activity",
     })
@@ -4444,24 +4444,24 @@ function P.Window:_chrome()
     for i = 1, 4 do
         local bar = U.line(w, life, barsHost, "Accent", {
             AnchorPoint = V(0.5, 0.5),
-            Position = UDim2.new(0, 6 + (i - 1) * 11, 0.5, 0),
-            Size = O(4, 10 + ((i * 7) % 14)),
+            Position = UDim2.new(0, 4 + (i - 1) * 8, 0.5, 0),
+            Size = O(3, 8 + ((i * 5) % 12)),
             ZIndex = barsHost.ZIndex + 1,
         })
-        U.corner(bar, 3)
+        U.corner(bar, 2)
         bars[i] = bar
     end
     self._islandBars = bars
 
     local islandPulse = U.make("Frame", island, {
         AnchorPoint = V(0.5, 0.5),
-        Position = UDim2.new(1, -17, 0.5, 0),
-        Size = O(6, 6),
+        Position = UDim2.new(1, -13, 0.5, 0),
+        Size = O(5, 5),
         BackgroundTransparency = 0,
         ZIndex = island.ZIndex + 3,
     })
     life:Give(islandPulse)
-    U.corner(islandPulse, 3)
+    U.corner(islandPulse, 2.5)
     U.fill(w, life, islandPulse, "Accent")
 
     self._islandAnimating = false
@@ -4469,7 +4469,7 @@ function P.Window:_chrome()
         self._islandAnimating = active
         if not active then
             for i, bar in bars do
-                U.tween(self, life, bar, "islandBar" .. tostring(i), "fast", { Size = O(4, 10 + i * 2) })
+                U.tween(self, life, bar, "islandBar" .. tostring(i), "fast", { Size = O(3, 8 + i * 2) })
             end
             return
         end
@@ -4478,10 +4478,10 @@ function P.Window:_chrome()
             while not self._dead and self._islandAnimating and island.Visible do
                 phase += 1
                 for i, bar in bars do
-                    local height = 8 + ((phase * 11 + i * 17) % 25)
-                    U.tween(self, life, bar, "islandBar" .. tostring(i), "micro", { Size = O(4, height) })
+                    local height = 7 + ((phase * 7 + i * 11) % 20)
+                    U.tween(self, life, bar, "islandBar" .. tostring(i), "micro", { Size = O(3, height) })
                 end
-                task.wait(math.max(0.11, 0.18 / math.max(self._speed, 0.2)))
+                task.wait(math.max(0.10, 0.15 / math.max(self._speed, 0.2)))
             end
         end)
     end
@@ -4492,9 +4492,17 @@ function P.Window:_chrome()
         end
         local touch = self._useTouch
         local area = self._safe.AbsoluteSize
-        local islandWidth = math.clamp(area.X - 28, 238, 330)
-        island.Size = O(islandWidth, 62)
-        island.Position = UDim2.new(0.5, 0, 0, if touch then 10 else 12)
+        local islandWidth = math.clamp(area.X * 0.46, 236, 286)
+        island.Size = O(islandWidth, 50)
+        local insetTop = 0
+        local okInset, topLeft = pcall(function()
+            local top, _ = Gui:GetGuiInset()
+            return top
+        end)
+        if okInset and typeof(topLeft) == "Vector2" then
+            insetTop = topLeft.Y
+        end
+        island.Position = UDim2.new(0.5, 0, 0, -insetTop + 5)
         floating.Position = UDim2.new(0, if touch then 12 else 14, 0.5, 0)
         local showFloating = self._floatingToggleEnabled and (self._visible or not touch)
         local showIsland = self._dynamicIslandEnabled and touch and not self._visible
@@ -4513,7 +4521,7 @@ function P.Window:_chrome()
         if showIsland then
             island.Visible = true
             island.GroupTransparency = if instant then 0 else 1
-            islandScale.Scale = if instant then 1 else 0.82
+            islandScale.Scale = if instant then 1 else 0.90
             U.tween(self, life, island, "islandFade", "fast", { GroupTransparency = 0 }, instant)
             U.tween(self, life, islandScale, "islandScale", "fast", { Scale = 1 }, instant)
             self:_setIslandActivity(true)
@@ -4522,11 +4530,11 @@ function P.Window:_chrome()
             if island.Visible then
                 if instant or self._speed <= 0 then
                     island.GroupTransparency = 1
-                    islandScale.Scale = 0.82
+                    islandScale.Scale = 0.90
                     island.Visible = false
                 else
                     U.tween(self, life, island, "islandFade", "fast", { GroupTransparency = 1 })
-                    U.tween(self, life, islandScale, "islandScale", "fast", { Scale = 0.82 })
+                    U.tween(self, life, islandScale, "islandScale", "fast", { Scale = 0.90 })
                     U.later(self, life, "islandHide", D.Animation.fast / math.max(self._speed, 0.2) + 0.03, function()
                         if self._visible and island.Parent then
                             island.Visible = false
