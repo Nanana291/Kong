@@ -487,7 +487,8 @@ function U.copyText(value: string): boolean
     if type(fn) ~= "function" then
         return false
     end
-    return pcall(fn, value)
+    local ok = pcall(fn, value)
+    return ok
 end
 
 function U.copy(v: any): any
