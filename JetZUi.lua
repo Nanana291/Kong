@@ -249,7 +249,7 @@ type Payload = { [any]: any }
 local U = {}
 local P: Payload = {}
 local Build: Payload = {}
-local Library: any = {}
+local Library: any = { Version = "1.3.0" }
 
 local V = Vector2.new
 local O = UDim2.fromOffset
@@ -369,6 +369,65 @@ local D = {
         Info = C(140, 163, 224),
     },
 }
+local ThemePresets: Payload = {
+    ["JetZ Dark"] = {
+        Background = C(13, 13, 15),
+        Sidebar = C(14, 13, 18),
+        SidebarSelected = C(19, 18, 24),
+        Surface = C(17, 16, 21),
+        SurfaceRaised = C(24, 22, 29),
+        Row = C(17, 16, 21),
+        Hover = C(24, 22, 28),
+        Pressed = C(32, 27, 34),
+        Stroke = C(42, 38, 47),
+        Divider = C(20, 20, 23),
+        Track = C(25, 23, 29),
+        Text = C(232, 229, 233),
+        TextSecondary = C(175, 170, 181),
+        TextMuted = C(98, 92, 107),
+        NavMuted = C(84, 78, 93),
+        Subdued = C(64, 59, 73),
+        TextDisabled = C(69, 64, 77),
+        Accent = C(202, 112, 113),
+        Thumb = C(248, 247, 246),
+        Danger = C(229, 113, 122),
+        Warning = C(222, 178, 108),
+        Success = C(128, 194, 155),
+        Info = C(140, 163, 224),
+    },
+    ["Graphite"] = {
+        Background = C(14, 14, 17), Sidebar = C(16, 16, 20), SidebarSelected = C(24, 24, 30),
+        Surface = C(20, 20, 25), SurfaceRaised = C(29, 29, 36), Row = C(20, 20, 25),
+        Hover = C(31, 31, 39), Pressed = C(38, 38, 47), Stroke = C(56, 55, 67),
+        Divider = C(28, 28, 34), Track = C(35, 34, 42), Text = C(237, 236, 240),
+        TextSecondary = C(181, 179, 188), TextMuted = C(105, 102, 116), NavMuted = C(91, 88, 102),
+        Subdued = C(70, 67, 80), TextDisabled = C(77, 74, 87), Accent = C(153, 146, 184),
+        Thumb = C(248, 247, 246), Danger = C(221, 111, 123), Warning = C(221, 181, 111),
+        Success = C(128, 190, 151), Info = C(142, 165, 221),
+    },
+    ["Crimson"] = {
+        Background = C(14, 10, 13), Sidebar = C(17, 11, 15), SidebarSelected = C(29, 15, 20),
+        Surface = C(22, 13, 18), SurfaceRaised = C(34, 18, 25), Row = C(22, 13, 18),
+        Hover = C(37, 20, 27), Pressed = C(48, 23, 31), Stroke = C(69, 35, 43),
+        Divider = C(31, 18, 22), Track = C(38, 22, 28), Text = C(242, 232, 235),
+        TextSecondary = C(190, 167, 174), TextMuted = C(119, 86, 96), NavMuted = C(101, 72, 82),
+        Subdued = C(78, 52, 61), TextDisabled = C(88, 60, 69), Accent = C(225, 84, 96),
+        Thumb = C(251, 246, 247), Danger = C(236, 84, 98), Warning = C(227, 174, 94),
+        Success = C(123, 194, 148), Info = C(142, 161, 224),
+    },
+    ["OLED"] = {
+        Background = C(4, 4, 5), Sidebar = C(6, 6, 8), SidebarSelected = C(13, 12, 16),
+        Surface = C(8, 8, 10), SurfaceRaised = C(15, 14, 18), Row = C(8, 8, 10),
+        Hover = C(17, 16, 21), Pressed = C(24, 21, 28), Stroke = C(37, 34, 42),
+        Divider = C(14, 14, 17), Track = C(19, 18, 22), Text = C(238, 236, 240),
+        TextSecondary = C(171, 167, 178), TextMuted = C(88, 84, 97), NavMuted = C(75, 71, 84),
+        Subdued = C(52, 49, 60), TextDisabled = C(60, 56, 67), Accent = C(202, 112, 113),
+        Thumb = C(250, 249, 248), Danger = C(229, 113, 122), Warning = C(222, 178, 108),
+        Success = C(128, 194, 155), Info = C(140, 163, 224),
+    },
+}
+local ThemePresetOrder = { "JetZ Dark", "Graphite", "Crimson", "OLED" }
+
 local FACE = Font.fromEnum(Enum.Font.RobotoMono)
 local MEDIUM = Font.new(FACE.Family, Enum.FontWeight.Medium)
 local BOLD = Font.new(FACE.Family, Enum.FontWeight.Bold)
@@ -411,6 +470,15 @@ function U.cfg(c: any): Payload
         return { Name = c }
     end
     return {}
+end
+
+function U.copyText(value: string): boolean
+    local fn = (getgenv and getgenv().setclipboard) or setclipboard or toclipboard
+    if type(fn) ~= "function" then
+        return false
+    end
+    local ok = pcall(fn, value)
+    return ok
 end
 
 function U.copy(v: any): any
@@ -2585,6 +2653,10 @@ function P.Window:_refreshNav(animate: boolean?)
     end
     local oldTab, oldSub = self._activeTab, self._activeSub
     local tabs = U.sort(self._tabs)
+    if self._settingsTab and not self._settingsTab._dead then
+        U.remove(tabs, self._settingsTab)
+        table.insert(tabs, self._settingsTab)
+    end
     local tab = self._wantedTab
     if not U.eligible(tab) then
         tab = nil
@@ -2781,7 +2853,20 @@ end
 
 function P.Window:AddTab(options: any)
     local c = U.cfg(options)
+    local systemSettings = c._SystemSettings == true
+    if systemSettings then
+        c = table.clone(c)
+        c.Order = 2147483647
+    end
+    local hadUserTab = false
+    for _, existing in self._tabs do
+        if not existing._systemSettings and not existing._dead then
+            hadUserTab = true
+            break
+        end
+    end
     local t = U.node(self, P.Tab, "Tab", c, self, nil)
+    t._systemSettings = systemSettings
     t._view = U.view(self, t)
     t._subs, t._icon = {}, U.copy(c.Icon)
     t._badgeText = if type(c.Badge) == "string" or U.finite(c.Badge) then tostring(c.Badge) else ""
@@ -2880,7 +2965,12 @@ function P.Window:AddTab(options: any)
         t:Select()
     end)
     table.insert(self._tabs, t)
-    return U.adopt(self, t)
+    U.adopt(self, t)
+    if not systemSettings and not hadUserTab and self._settingsTab and self._wantedTab == self._settingsTab then
+        self._wantedTab = t
+        self:_refreshNav(false)
+    end
+    return t
 end
 
 function P.Tab:AddSubTab(options: any)
@@ -2943,7 +3033,12 @@ function P.Tab:AddSubTab(options: any)
 end
 
 function P.Window:GetTabs(): { any }
-    return U.sort(self._tabs)
+    local sorted = U.sort(self._tabs)
+    if self._settingsTab and not self._settingsTab._dead then
+        U.remove(sorted, self._settingsTab)
+        table.insert(sorted, self._settingsTab)
+    end
+    return sorted
 end
 function P.Window:GetTab(key: any): any
     return U.find(self._tabs, key)
@@ -3288,11 +3383,26 @@ end
 function P.Window:Toggle()
     return self:SetVisible(not self._visible)
 end
+function P.Window:SetThemePreset(name: string)
+    local preset = ThemePresets[name]
+    if not preset then
+        return U.issue(self, "SetThemePreset", "unknown theme preset " .. tostring(name))
+    end
+    self._themePreset = name
+    return self:SetTheme(preset)
+end
+function P.Window:GetThemePreset(): string
+    return self._themePreset or "Custom"
+end
+function P.Window:GetThemePresets(): { string }
+    return table.clone(ThemePresetOrder)
+end
 function P.Window:SetAccent(v: Color3)
     if not U.color(v) then
         return U.issue(self, "SetAccent", "expected Color3 with channels in [0,1]")
     end
     if self._theme._base.Accent ~= v then
+        self._themePreset = "Custom"
         self._theme._base.Accent = v
         self._theme:_apply()
         self:_reflect("accent", v)
@@ -3861,6 +3971,8 @@ function Library:CreateWindow(options: WindowOptions?): (WindowHandle | false, s
     w._theme = U.theme(c.Theme, c.Accent)
     w._flags, w._keys, w._down, w._tabs, w._popups, w._settings, w._toasts = {}, {}, {}, {}, {}, {}, {}
     w._dependencies = {}
+    w._themePreset = "JetZ Dark"
+    w._settingsLanguage = "English"
     w._responsive, w._animated, w._focusables, w._particles = {}, {}, {}, {}
     w._suppressed = setmetatable({}, { __mode = "k" })
     w._size, w._position = V(D.Width, D.Height), Vector2.zero
@@ -3923,6 +4035,7 @@ function Library:CreateWindow(options: WindowOptions?): (WindowHandle | false, s
     if c.Position ~= nil then
         w:SetPosition(c.Position)
     end
+    w:AddSettings(type(c.Settings) == "table" and c.Settings or {})
     return w, nil
 end
 
@@ -4193,7 +4306,7 @@ function P.Row:AddSettings(options: any)
         return U.issue(self, "AddSettings", "nested settings are not supported inside InlineGroup; place the master control directly in a Section")
     end
     local c = U.cfg(options)
-    local mode = U.str(c.Mode, "Reveal")
+    local mode = U.str(c.Mode, "Disable")
     if not dependencyModes[mode] then
         return U.issue(self, "AddSettings", "Mode must be Reveal, Disable or Dim")
     end
@@ -8897,25 +9010,39 @@ function P.Window:ImportConfig(data: any, options: ConfigOptions?)
     return next(report.Errors) == nil, report
 end
 
--- Optional owned appearance surface. Effects run on silent imports; user listeners do not.
+-- Always-present JetZ system settings. It is intentionally a real final Tab so keyboard,
+-- gamepad, responsive layout and navigation all use the same paths as consumer content.
 function P.Window:AddSettings(options: any)
     local c = U.cfg(options)
     if self._settingsSurface and not self._settingsSurface._dead then
         return self._settingsSurface
     end
-    local tab = c.Tab
-    if not table.find(self._tabs, tab) then
-        tab = self:AddTab({ Name = U.str(c.Name, "Interface"), Icon = "gear" })
+
+    local tab = self._settingsTab
+    if not tab or tab._dead then
+        tab = self:AddTab({
+            Name = U.str(c.Name, "Settings"),
+            Icon = c.Icon or "settings",
+            Order = 2147483647,
+            _SystemSettings = true,
+        })
+        self._settingsTab = tab
     end
-    local nav = tab:AddSubTab({ Name = U.str(c.SubTab, "GUI") })
-    local section = nav:AddSection({ ShowHeading = false })
-    section._beforeDestroy = function()
-        if self._settingsSurface == section then
-            self._settingsSurface = nil
-        end
-    end
-    self._settingsSurface = section
+
+    local general = tab:AddSubTab({ Name = "General", Icon = "sliders-horizontal", Order = 1 })
+    local appearance = tab:AddSubTab({ Name = "Appearance", Icon = "palette", Order = 2 })
+    local community = tab:AddSubTab({ Name = "Community", Icon = "users", Order = 3 })
+    local about = tab:AddSubTab({ Name = "About", Icon = "info", Order = 4 })
+
     local prefix = U.str(c.FlagPrefix, "ui.")
+    local storeURL = U.str(c.StoreURL, "https://plak-hub.mysellauth.com/")
+    local discordURL = U.str(c.DiscordURL, "https://dsc.gg/plak")
+    local lifetimePrice = U.str(c.LifetimePrice, "$12")
+    local monthlyPrice = U.str(c.MonthlyPrice, "$5")
+
+    local function flag(k: string): string?
+        return if prefix ~= "" then prefix .. k else nil
+    end
     local function attach(key: string, n: any, apply: any)
         self._settings[key] = n
         n._effect = function(v: any)
@@ -8930,162 +9057,483 @@ function P.Window:AddSettings(options: any)
         end)
         return n
     end
-    local function flag(k: string): string?
-        return if prefix ~= "" then prefix .. k else nil
+    local function section(page: any, name: string, description: string?)
+        return page:AddSection({
+            Name = name,
+            Description = description,
+            Collapsible = false,
+            ShowHeading = true,
+        })
     end
-    attach(
-        "accent",
-        section:AddColorPicker({
-            Name = "Accent color",
-            Flag = flag("accent"),
-            Default = self:GetAccent(),
-            ShowAlpha = false,
-        }),
-        function(v: Color3)
-            self:SetAccent(v)
-        end
-    )
-    attach(
-        "watermark",
-        section:AddToggle({
-            Name = "Watermark",
-            Flag = flag("watermark"),
-            Default = self._watermark ~= nil and self._watermark._visible,
-            ShowKeybind = true,
-            ContextBuild = function(menu: any, toggle: any)
-                menu:AddKeybind({
-                    Name = "Key",
-                    Default = toggle:GetKeybind(),
-                    Callback = function(key: Key)
-                        toggle:SetKeybind(key)
-                    end,
-                })
-                menu:AddSegmentedControl({
-                    Name = "Mode",
-                    HideLabel = true,
-                    Values = { "Toggle", "Hold" },
-                    Default = toggle:GetKeybindMode(),
-                    Callback = function(mode: string)
-                        toggle:SetKeybindMode(mode)
-                    end,
-                })
-            end,
-        }),
-        function(v: boolean)
-            self:SetWatermark(v)
-        end
-    )
-    local group = section:AddInlineGroup({ Columns = 2, Gap = 11, MinimumWidth = 137 })
-    attach(
-        "particles",
-        group:AddToggle({
-            Name = "Particle",
-            Flag = flag("particles"),
-            Default = self._particleEnabled,
-        }),
-        function(v: boolean)
-            self:SetParticles(v)
-        end
-    )
-    attach(
-        "particleMode",
-        group:AddDropdown({
-            Name = "Particle mode",
-            Flag = flag("particleMode"),
-            HideLabel = true,
-            Values = { "Disabled", "Float", "Twinkle" },
-            Default = self:GetParticleMode(),
-            RequireSelection = true,
-        }),
-        function(v: string)
-            self:SetParticleMode(v)
-        end
-    )
-    attach(
-        "particleCount",
-        section:AddSlider({
-            Name = "Number of particles filling the menu",
-            Flag = flag("particleCount"),
-            Default = self._particleCount,
-            Min = 0,
-            Max = D.ParticleMax,
-            Tooltip = "Touch limit: 20 particles",
-        }),
-        function(v: number)
-            self:SetParticleCount(v)
-        end
-    )
-    attach(
-        "speed",
-        section:AddSlider({
-            Name = "Speed of all animations in the menu",
-            Flag = flag("speed"),
-            Default = self._speed,
-            Min = 0,
-            Max = 4,
-            Increment = 0.05,
-            Tooltip = "0 turns off transitions",
-        }),
-        function(v: number)
-            self:SetAnimationSpeed(v)
-        end
-    )
-    local visibility = section:AddInlineGroup({ Columns = 2, Gap = 11, MinimumWidth = 126 })
-    attach(
-        "hideEnabled",
-        visibility:AddToggle({
-            Name = "Hide interface",
-            Flag = flag("hideEnabled"),
-            Default = self._hideKeyEnabled,
-            Tooltip = "Window shortcut on or off",
-        }),
-        function(v: boolean)
-            self:SetHideKeyEnabled(v)
-        end
-    )
-    local keyControl = visibility:AddKeybind({
-        Name = "Shortcut",
-        HideLabel = true,
+
+    -- General -----------------------------------------------------------------
+    local interface = section(general, "Interface", "Window behavior and everyday controls.")
+
+    attach("sidebar", interface:AddToggle({
+        Name = "Show sidebar",
+        Flag = flag("sidebar"),
+        Default = self._sidebarVisible,
+        Tooltip = "Show or hide the persistent desktop navigation rail.",
+    }), function(v: boolean)
+        self:SetSidebarVisible(v)
+    end)
+
+    attach("scale", interface:AddSlider({
+        Name = "UI scale",
+        Flag = flag("scale"),
+        Default = self._scale,
+        Min = D.MinScale,
+        Max = D.MaxScale,
+        Increment = 0.01,
+        Format = function(v: number)
+            return tostring(math.round(v * 100)) .. "%"
+        end,
+    }), function(v: number)
+        self:SetScale(v)
+    end)
+
+    attach("speed", interface:AddSlider({
+        Name = "Animation speed",
+        Flag = flag("speed"),
+        Default = self._speed,
+        Min = 0,
+        Max = 4,
+        Increment = 0.05,
+        Tooltip = "0 disables transitions while preserving state changes.",
+    }), function(v: number)
+        self:SetAnimationSpeed(v)
+    end)
+
+    local behavior = section(general, "Behavior", "Shortcuts, visibility and optional visual effects.")
+    attach("hideEnabled", behavior:AddToggle({
+        Name = "Window shortcut",
+        Flag = flag("hideEnabled"),
+        Default = self._hideKeyEnabled,
+        Tooltip = "Allow the hide/show key to toggle this window.",
+    }), function(v: boolean)
+        self:SetHideKeyEnabled(v)
+    end)
+
+    local hideSettings = self._settings.hideEnabled:AddSettings({ Mode = "Disable" })
+    local keyControl = hideSettings:AddKeybind({
+        Name = "Shortcut key",
         Flag = flag("hideKey"),
         Default = self._hideKey,
     })
     local internalKeyEffect = keyControl._effect
     attach("hideKey", keyControl, function(v: any)
-        internalKeyEffect()
+        if internalKeyEffect then
+            internalKeyEffect(v)
+        end
         self:SetHideKey(v)
     end)
-    attach(
-        "contrast",
-        section:AddSlider({
-            Name = "Contrast of the entire interface",
-            Flag = flag("contrast"),
-            Default = self:GetContrast(),
-            Min = 0.45,
-            Max = 2,
-            Increment = 0.05,
-        }),
-        function(v: number)
-            self:SetContrast(v)
+
+    attach("watermark", behavior:AddToggle({
+        Name = "Watermark",
+        Flag = flag("watermark"),
+        Default = self._watermark ~= nil and self._watermark._visible,
+    }), function(v: boolean)
+        self:SetWatermark(v)
+    end)
+
+    local particles = attach("particles", behavior:AddToggle({
+        Name = "Ambient particles",
+        Flag = flag("particles"),
+        Default = self._particleEnabled,
+    }), function(v: boolean)
+        self:SetParticles(v)
+    end)
+    local particleSettings = particles:AddSettings({ Mode = "Disable" })
+    attach("particleMode", particleSettings:AddDropdown({
+        Name = "Particle style",
+        Flag = flag("particleMode"),
+        Values = { "Disabled", "Float", "Twinkle" },
+        Default = self:GetParticleMode(),
+        RequireSelection = true,
+    }), function(v: string)
+        self:SetParticleMode(v)
+    end)
+    attach("particleCount", particleSettings:AddSlider({
+        Name = "Particle count",
+        Flag = flag("particleCount"),
+        Default = self._particleCount,
+        Min = 0,
+        Max = D.ParticleMax,
+        Tooltip = "Touch devices automatically use a lower safe cap.",
+    }), function(v: number)
+        self:SetParticleCount(v)
+    end)
+
+    -- Appearance ---------------------------------------------------------------
+    local themes = section(appearance, "Theme", "Choose a preset, then fine-tune accent and contrast.")
+
+    local themeCards: any = nil
+    themeCards = themes:AddCustom({
+        Name = "Theme presets",
+        Height = 122,
+        Build = function(ctx: any)
+            local host = ctx.Container
+            local life = U.scope()
+            ctx.Cleanup(life)
+            local buttons = {}
+            local function makeCard(name: string, index: number)
+                local palette = ThemePresets[name]
+                local button = U.make("TextButton", host, {
+                    Name = name,
+                    Text = "",
+                    AutoButtonColor = false,
+                    BackgroundTransparency = 0,
+                    ZIndex = host.ZIndex + 1,
+                })
+                life:Give(button)
+                U.corner(button, 7)
+                local stroke = U.make("UIStroke", button, { Thickness = 1, Transparency = 0.08 })
+                life:Give(stroke)
+                local preview = U.make("Frame", button, {
+                    Position = O(10, 10),
+                    Size = UDim2.new(1, -20, 0, 55),
+                    BackgroundTransparency = 0,
+                    BackgroundColor3 = palette.Background,
+                    ZIndex = button.ZIndex + 1,
+                })
+                life:Give(preview)
+                U.corner(preview, 5)
+                local side = U.make("Frame", preview, {
+                    Size = UDim2.new(0, 22, 1, 0),
+                    BackgroundTransparency = 0,
+                    BackgroundColor3 = palette.Sidebar,
+                    ZIndex = preview.ZIndex + 1,
+                })
+                life:Give(side)
+                local row = U.make("Frame", preview, {
+                    Position = O(30, 12),
+                    Size = UDim2.new(1, -39, 0, 18),
+                    BackgroundTransparency = 0,
+                    BackgroundColor3 = palette.SurfaceRaised,
+                    ZIndex = preview.ZIndex + 1,
+                })
+                life:Give(row)
+                U.corner(row, 3)
+                local accent = U.make("Frame", row, {
+                    AnchorPoint = V(1, 0.5),
+                    Position = UDim2.new(1, -7, 0.5, 0),
+                    Size = O(27, 4),
+                    BackgroundTransparency = 0,
+                    BackgroundColor3 = palette.Accent,
+                    ZIndex = row.ZIndex + 1,
+                })
+                life:Give(accent)
+                U.corner(accent, 3)
+                local title = U.make("TextLabel", button, {
+                    Position = O(10, 72),
+                    Size = UDim2.new(1, -34, 0, 22),
+                    BackgroundTransparency = 1,
+                    Text = name,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    TextColor3 = ctx.Theme("Text"),
+                    TextSize = 12,
+                    FontFace = MEDIUM,
+                    ZIndex = button.ZIndex + 2,
+                })
+                life:Give(title)
+                local selected = U.make("TextLabel", button, {
+                    AnchorPoint = V(1, 0),
+                    Position = UDim2.new(1, -9, 0, 72),
+                    Size = O(18, 20),
+                    BackgroundTransparency = 1,
+                    Text = "✓",
+                    TextColor3 = ctx.Theme("Accent"),
+                    TextSize = 13,
+                    FontFace = BOLD,
+                    ZIndex = button.ZIndex + 2,
+                })
+                life:Give(selected)
+                local function render()
+                    local active = self:GetThemePreset() == name
+                    selected.Visible = active
+                    stroke.Color = if active then self._theme._colors.Accent else self._theme._colors.Stroke
+                    stroke.Thickness = if active then 2 else 1
+                    button.BackgroundColor3 = if active then self._theme._colors.AccentMuted else self._theme._colors.Surface
+                    title.TextColor3 = self._theme._colors.Text
+                end
+                buttons[name] = { Root = button, Render = render }
+                life:Give(button.Activated:Connect(function()
+                    if not ctx.CanInteract() then
+                        return
+                    end
+                    self:SetThemePreset(name)
+                    for _, entry in buttons do
+                        entry.Render()
+                    end
+                end))
+                render()
+                return button
+            end
+            for i, name in ThemePresetOrder do
+                makeCard(name, i)
+            end
+            local function layout()
+                local width = host.AbsoluteSize.X
+                local gap = 8
+                local cols = if width >= 520 then 4 elseif width >= 270 then 2 else 1
+                local rows = math.ceil(#ThemePresetOrder / cols)
+                local cardWidth = math.max(96, (width - gap * (cols - 1)) / cols)
+                local cardHeight = if cols == 1 then 100 else 102
+                for i, name in ThemePresetOrder do
+                    local entry = buttons[name]
+                    local col, rowIndex = (i - 1) % cols, math.floor((i - 1) / cols)
+                    entry.Root.Position = O(col * (cardWidth + gap), rowIndex * (cardHeight + gap))
+                    entry.Root.Size = O(cardWidth, cardHeight)
+                end
+                local height = rows * cardHeight + math.max(0, rows - 1) * gap
+                if themeCards and not themeCards._dead and math.abs(themeCards:GetHeight() - height) > 1 then
+                    themeCards:SetHeight(height)
+                end
+            end
+            life:Give(host:GetPropertyChangedSignal("AbsoluteSize"):Connect(layout))
+            layout()
+            return function()
+                life:Destroy()
+            end
+        end,
+    })
+
+    attach("accent", themes:AddColorPicker({
+        Name = "Accent color",
+        Flag = flag("accent"),
+        Default = self:GetAccent(),
+        ShowAlpha = false,
+    }), function(v: Color3)
+        self:SetAccent(v)
+    end)
+
+    attach("contrast", themes:AddSlider({
+        Name = "Contrast",
+        Flag = flag("contrast"),
+        Default = self:GetContrast(),
+        Min = 0.45,
+        Max = 2,
+        Increment = 0.05,
+    }), function(v: number)
+        self:SetContrast(v)
+    end)
+
+    local language = section(appearance, "Language", "Language preference for JetZ system surfaces.")
+    local languages = { "English", "Español", "Português" }
+    language:AddSegmentedControl({
+        Name = "Interface language",
+        Values = languages,
+        Default = self._settingsLanguage,
+        Callback = function(v: string)
+            self._settingsLanguage = v
+        end,
+    })
+    language:AddParagraph({
+        Name = "Localization",
+        Description = "This selector is reserved for JetZ system surfaces; labels supplied by scripts remain exactly as authored.",
+    })
+
+    -- Community ---------------------------------------------------------------
+    local premium = section(community, "JetZ Premium", "Premium access and the JetZ community.")
+
+    local function promotionCard(parent: Instance, life: any, x: number, width: number, height: number, titleText: string, price: string, caption: string, primary: boolean, callback: () -> ())
+        local card = U.make("Frame", parent, {
+            Position = O(x, 0),
+            Size = O(width, height),
+            BackgroundTransparency = 0,
+            ZIndex = parent.ZIndex + 1,
+        })
+        life:Give(card)
+        U.corner(card, 8)
+        local fill = U.paint(self, life, card, "BackgroundColor3", if primary then "SurfaceRaised" else "Surface")
+        local edge = U.make("UIStroke", card, { Thickness = if primary then 2 else 1, Transparency = 0.08 })
+        life:Give(edge)
+        U.paint(self, life, edge, "Color", if primary then "Accent" else "Stroke")
+        local crown = U.icon(self, life, card, if primary then "crown" else "calendar", 18, "Accent", {
+            Position = O(15, 14), Size = O(20, 20),
+        })
+        local title = U.text(self, life, card, "Control", titleText, "Text", {
+            Position = O(43, 10), Size = UDim2.new(1, -55, 0, 25),
+        })
+        title.FontFace = BOLD
+        local priceLabel = U.text(self, life, card, "Brand", price, "Text", {
+            Position = O(15, 42), Size = UDim2.new(1, -30, 0, 28),
+        })
+        priceLabel.FontFace = BOLD
+        local body = U.text(self, life, card, "Muted", caption, "TextSecondary", {
+            Position = O(15, 76), Size = UDim2.new(1, -30, 0, height - 132),
+            TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top,
+        })
+        local action = U.make("TextButton", card, {
+            AnchorPoint = V(0, 1),
+            Position = UDim2.new(0, 15, 1, -14),
+            Size = UDim2.new(1, -30, 0, 38),
+            Text = if primary then "Get Lifetime  →" else "Get Monthly  →",
+            TextSize = 12,
+            FontFace = MEDIUM,
+            AutoButtonColor = false,
+            BackgroundTransparency = 0,
+            ZIndex = card.ZIndex + 2,
+        })
+        life:Give(action)
+        U.corner(action, 5)
+        U.paint(self, life, action, "BackgroundColor3", if primary then "Accent" else "SurfaceRaised")
+        U.paint(self, life, action, "TextColor3", if primary then "Background" else "Text")
+        life:Give(action.Activated:Connect(callback))
+        return card
+    end
+
+    local premiumCards: any = nil
+    premiumCards = premium:AddCustom({
+        Name = "Plans",
+        Height = 222,
+        Build = function(ctx: any)
+            local host = ctx.Container
+            local life = U.scope()
+            ctx.Cleanup(life)
+            local lifetime, monthly
+            local function copyStore()
+                local ok = U.copyText(storeURL)
+                self:Notify({
+                    Title = ok and "Purchase link copied" or "Clipboard unavailable",
+                    Description = ok and storeURL or "Copy the store URL manually: " .. storeURL,
+                    Severity = ok and "Success" or "Warning",
+                    Duration = 3,
+                })
+            end
+            lifetime = promotionCard(host, life, 0, 100, 210, "Lifetime", lifetimePrice .. "  one-time",
+                "All premium features\nLifetime updates\nPriority support\nSupport future development", true, copyStore)
+            monthly = promotionCard(host, life, 0, 100, 210, "Monthly", monthlyPrice .. "  / month",
+                "All premium features\nContinuous updates\nPriority support", false, copyStore)
+            local function layout()
+                local width = host.AbsoluteSize.X
+                local gap = 10
+                local stacked = width < 430
+                local cardWidth = if stacked then width else (width - gap) / 2
+                lifetime.Position = O(0, 0)
+                lifetime.Size = O(cardWidth, 210)
+                monthly.Position = O(if stacked then 0 else cardWidth + gap, if stacked then 220 else 0)
+                monthly.Size = O(cardWidth, 210)
+                local height = if stacked then 430 else 210
+                if premiumCards and not premiumCards._dead and math.abs(premiumCards:GetHeight() - height) > 1 then
+                    premiumCards:SetHeight(height)
+                end
+            end
+            life:Give(host:GetPropertyChangedSignal("AbsoluteSize"):Connect(layout))
+            layout()
+            return function()
+                life:Destroy()
+            end
+        end,
+    })
+
+    local discord = section(community, "Community", "Updates, support and feedback.")
+    local discordCard: any = nil
+    discordCard = discord:AddCustom({
+        Name = "Discord",
+        Height = 150,
+        Build = function(ctx: any)
+            local host = ctx.Container
+            local life = U.scope()
+            ctx.Cleanup(life)
+            local card = U.make("Frame", host, {
+                Size = S(1, 1),
+                BackgroundTransparency = 0,
+                ZIndex = host.ZIndex + 1,
+            })
+            life:Give(card)
+            U.corner(card, 8)
+            U.paint(self, life, card, "BackgroundColor3", "Surface")
+            local stroke = U.make("UIStroke", card, { Thickness = 1, Transparency = 0.08 })
+            life:Give(stroke)
+            U.paint(self, life, stroke, "Color", "Stroke")
+            U.icon(self, life, card, "users", 24, "Accent", { Position = O(16, 16), Size = O(28, 28) })
+            local title = U.text(self, life, card, "Brand", "Join the JetZ Community", "Text", {
+                Position = O(54, 10), Size = UDim2.new(1, -70, 0, 28),
+            })
+            title.FontFace = BOLD
+            U.text(self, life, card, "Muted", "Share feedback, get support, see updates, and connect with other JetZ users.", "TextSecondary", {
+                Position = O(16, 50), Size = UDim2.new(1, -32, 0, 36),
+                TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top,
+            })
+            local join = U.make("TextButton", card, {
+                AnchorPoint = V(0, 1),
+                Position = UDim2.new(0, 16, 1, -14),
+                Size = UDim2.new(1, -32, 0, 38),
+                BackgroundTransparency = 0,
+                Text = "Join Community  ↗",
+                TextSize = 12,
+                FontFace = MEDIUM,
+                AutoButtonColor = false,
+                ZIndex = card.ZIndex + 2,
+            })
+            life:Give(join)
+            U.corner(join, 5)
+            U.paint(self, life, join, "BackgroundColor3", "AccentMuted")
+            U.paint(self, life, join, "TextColor3", "Text")
+            life:Give(join.Activated:Connect(function()
+                local ok = U.copyText(discordURL)
+                self:Notify({
+                    Title = ok and "Discord link copied" or "Clipboard unavailable",
+                    Description = ok and discordURL or "Join manually at " .. discordURL,
+                    Severity = ok and "Success" or "Warning",
+                    Duration = 3,
+                })
+            end))
+            return function()
+                life:Destroy()
+            end
+        end,
+    })
+
+    -- About -------------------------------------------------------------------
+    local info = section(about, "About JetZ", "Library information and safe recovery actions.")
+    info:AddParagraph({
+        Name = "JetZ UI",
+        Description = "A responsive Roblox UI framework with keyboard, touch, gamepad, theming, dependencies, configs and custom surfaces.",
+    })
+    info:AddLabel({ Name = "Version", Text = U.str(Library.Version, "Current") })
+    info:AddButton({
+        Name = "Center window",
+        Text = "Center",
+        Icon = "locate-fixed",
+        Callback = function()
+            self:Center()
+        end,
+    })
+    info:AddButton({
+        Name = "Reset appearance",
+        Text = "Reset",
+        Icon = "rotate-ccw",
+        Callback = function()
+            self:SetThemePreset("JetZ Dark")
+            self:SetContrast(1)
+            self:SetScale(1)
+            if self._settings.accent and not self._settings.accent._dead then
+                self._settings.accent:SetValue(self:GetAccent(), true)
+            end
+            if self._settings.contrast and not self._settings.contrast._dead then
+                self._settings.contrast:SetValue(1, true)
+            end
+            if self._settings.scale and not self._settings.scale._dead then
+                self._settings.scale:SetValue(1, true)
+            end
+        end,
+    })
+
+    self._settingsSurface = interface
+    interface._life:Give(function()
+        if self._settingsSurface == interface then
+            self._settingsSurface = nil
         end
-    )
-    attach(
-        "scale",
-        section:AddSlider({
-            Name = "Scale",
-            Flag = flag("scale"),
-            Default = self._scale,
-            Min = D.MinScale,
-            Max = D.MaxScale,
-            Increment = 0.01,
-            Format = function(v: number)
-                return tostring(math.round(v * 100)) .. "%"
-            end,
-        }),
-        function(v: number)
-            self:SetScale(v)
-        end
-    )
-    return section
+    end)
+
+    -- Settings is a system destination, never the initial destination when consumer tabs exist.
+    if self._wantedTab == nil then
+        self._wantedTab = tab
+    end
+    self:_refreshNav(false)
+    return interface
 end
 
 function Library:CreateSignal(): any
