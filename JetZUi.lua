@@ -11,6 +11,7 @@
 -- Size is logical Vector2; position is in safe-area pixels. GetLayout reports effective layout.
 -- CreateReferenceDemo is optional and contains presentation/state only.
 -- Controls support live dependencies: DependsOn/SetDependency and Toggle:AddSettings with Reveal/Disable/Dim modes.
+-- Any row supports Locked=true / SetLocked(), with JetZ-native PREMIUM chrome and anchored purchase callout.
 -- Settings > Configs owns persistent profiles, clipboard transfer, dirty state and per-game autoload.
 local Players = game:GetService("Players")
 local Input = game:GetService("UserInputService")
@@ -250,7 +251,7 @@ type Payload = { [any]: any }
 local U = {}
 local P: Payload = {}
 local Build: Payload = {}
-local Library: any = { Version = "1.4.6" }
+local Library: any = { Version = "1.5.0" }
 
 local V = Vector2.new
 local O = UDim2.fromOffset
@@ -1849,12 +1850,27 @@ end
 function P.Base:_isDisabled(): boolean
     local n = self
     while n do
-        if n._disabled or n._dependencyDisabled or n._dead then
+        if n._disabled or n._dependencyDisabled or n._locked or n._dead then
             return true
         end
         n = n._owner
     end
     return false
+end
+
+function P.Base:_canLockedAction(): boolean
+    local n = self
+    while n do
+        if n._disabled or n._dependencyDisabled or n._dependencyBlocked or n._dead then
+            return false
+        end
+        n = n._owner
+    end
+    local w = self._w
+    return self._visible
+        and (not self._root or U.guiVisible(self._root))
+        and (not w._dialog or U.owns(w._dialog, self))
+        and (not w._drawerOpen or self._kind == "Tab" or self._kind == "Window")
 end
 
 function P.Base:_isDependencyBlocked(): boolean
@@ -2690,10 +2706,10 @@ function U.scrollbar(w: any, owner: any, scope: any, view: any, parent: Instance
     return rail
 end
 
-function U.focusable(owner: any, life: any, object: GuiObject, fn: any)
+function U.focusable(owner: any, life: any, object: GuiObject, fn: any, allowLocked: boolean?)
     local w = owner._w
     object.SelectionImageObject = w._selectionVisual
-    w._focusables[object] = { owner = owner, activate = fn, order = owner._sequence }
+    w._focusables[object] = { owner = owner, activate = fn, order = owner._sequence, allowLocked = allowLocked == true }
     life:Give(function()
         w._focusables[object] = nil
         if Gui.SelectedObject == object then
@@ -2710,7 +2726,7 @@ function P.Window:_focusCycle(reverse: boolean): boolean
             (not top or object:IsDescendantOf(top.panel))
             and object.Selectable
             and object.Interactable
-            and entry.owner:_canInteract()
+            and (if entry.allowLocked then entry.owner:_canLockedAction() else entry.owner:_canInteract())
             and U.anchorVisible(object, self._safe)
         then
             table.insert(eligible, object)
@@ -3754,6 +3770,18 @@ function P.Window:SetLanguage(language: string)
     return true
 end
 
+function P.Window:SetPremiumURL(url: string)
+    if type(url) ~= "string" or utf8.len(url) == nil then
+        return U.issue(self, "SetPremiumURL", "expected UTF-8 URL text")
+    end
+    self._premiumURL = url
+    return true
+end
+
+function P.Window:GetPremiumURL(): string
+    return self._premiumURL
+end
+
 function P.Window:SetThemePreset(name: string)
     local preset = ThemePresets[name]
     if not preset then
@@ -4346,6 +4374,7 @@ function Library:CreateWindow(options: WindowOptions?): (WindowHandle | false, s
     w._themePreset = "JetZ Dark"
     w._settingsLanguage = if type(c.Language) == "string" and SystemLocales[c.Language] then c.Language else "English"
     w._localeBindings = {}
+    w._premiumURL = U.str(c.PremiumURL or c.StoreURL, "https://plak-hub.mysellauth.com/")
     w._responsive, w._animated, w._focusables, w._particles = {}, {}, {}, {}
     w._suppressed = setmetatable({}, { __mode = "k" })
     w._size, w._position = V(D.Width, D.Height), Vector2.zero
@@ -5140,6 +5169,10 @@ function U.row(owner: any, kind: string, c: Payload, variant: string): any
     local root = U.frame(owner._host, { Size = UDim2.new(1, 0, 0, 0), Name = kind })
     local n = U.node(w, P.Row, kind, c, owner, root)
     n._variant, n._interactive, n._small = variant, {}, owner._small == true
+    n._locked = c.Locked == true
+    n._lockOptions = if type(c.LockOptions) == "table" then table.clone(c.LockOptions)
+        elseif type(c.Premium) == "table" then table.clone(c.Premium)
+        else {}
     n._pendingDependency, n._pendingDependencyMode = c.DependsOn, c.DependencyMode
     n._heightBase = if owner._small
         then (if variant == "numeric" then 52 else 33)
@@ -5152,7 +5185,10 @@ function U.row(owner: any, kind: string, c: Payload, variant: string): any
     n._titleLeft, n._reserve = 0, 0
     n._heading = U.frame(root, { Name = "Heading", Size = UDim2.new(1, 0, 0, 0) })
     n._title, n._refreshTitle = U.text(w, n._life, n._heading, "Control", n._name, function(t: Payload)
-        return if n:_isDisabled() then t.TextDisabled elseif n._dim or n._dependencyDim then t.Subdued else t.Text
+        return if n._locked then t.TextSecondary
+            elseif n:_isDisabled() then t.TextDisabled
+            elseif n._dim or n._dependencyDim then t.Subdued
+            else t.Text
     end, { Size = S(1, 1) })
     function n:_descriptionWidget()
         if self._desc then
@@ -5180,6 +5216,64 @@ function U.row(owner: any, kind: string, c: Payload, variant: string): any
     if type(c.Context) == "table" or type(c.ContextBuild) == "function" then
         n._context = { Items = c.Context, Build = c.ContextBuild, Width = c.ContextWidth, Left = true }
     end
+
+    function n:_ensureLockChrome()
+        if self._lockChip then
+            return
+        end
+        local chip = U.make("TextButton", self._heading, {
+            Name = "PremiumLock",
+            Size = O(78, 22),
+            BackgroundTransparency = 0,
+            Text = "",
+            AutoButtonColor = false,
+            Active = true,
+            Selectable = true,
+            ZIndex = 12,
+            Visible = false,
+        })
+        self._life:Give(chip)
+        U.corner(chip, 6)
+        self._lockFill = U.fill(w, self._life, chip, "AccentMuted")
+        local stroke = U.make("UIStroke", chip, { Thickness = 1, Transparency = 0.42 })
+        self._life:Give(stroke)
+        self._lockStroke = U.paint(w, self._life, stroke, "Color", "Accent")
+        local icon = U.icon(w, self._life, chip, "lock", 11, "Accent", {
+            Position = O(7, 3),
+            Size = O(16, 16),
+            ZIndex = chip.ZIndex + 1,
+        })
+        local label = U.text(w, self._life, chip, "Footer", "PREMIUM", "Accent", {
+            Position = O(24, 0),
+            Size = UDim2.new(1, -28, 1, 0),
+            TextXAlignment = Enum.TextXAlignment.Left,
+            ZIndex = chip.ZIndex + 1,
+        })
+        label.FontFace = MEDIUM
+        self._lockChip, self._lockIcon, self._lockLabel = chip, icon, label
+        local function open()
+            if self._locked and self:_canLockedAction() then
+                self:OpenLocked()
+            end
+        end
+        self._life:Give(chip.Activated:Connect(open))
+        U.focusable(self, self._life, chip, open, true)
+    end
+
+    function n:_lockRender()
+        if not self._locked and not self._lockChip then
+            return
+        end
+        self:_ensureLockChrome()
+        self._lockChip.Visible = self._locked
+        self._lockChip.Interactable = self._locked and self:_canLockedAction()
+        self._lockChip.Selectable = self._lockChip.Interactable
+        local options = self._lockOptions or {}
+        self._lockLabel.Text = U.str(options.Badge, "PREMIUM")
+        if self._lockFill then self._lockFill() end
+        if self._lockStroke then self._lockStroke() end
+    end
+
     function n:_headingLayout()
         local g = w._layout
         local dependencyInset = if self._settings then 24 else 0
@@ -5203,7 +5297,19 @@ function U.row(owner: any, kind: string, c: Payload, variant: string): any
         end
         local right = if gear then math.max(reserve, width - self._gear.Position.X.Offset) else reserve
         self._title.Position = O(x, 0)
-        self._title.Size = UDim2.new(1, -(x + right), 1, 0)
+        local lockRight = right
+        if self._locked then
+            self:_ensureLockChrome()
+            local chipWidth = 78
+            local textWidth = U.measure(self._name, D.Typography.Control)
+            local chipX = math.min(x + textWidth + 9, math.max(x, width - right - chipWidth - 5))
+            self._lockChip.Position = O(chipX, math.max(0, (self._heading.AbsoluteSize.Y / w._scale - 22) / 2))
+            self._lockChip.Size = O(chipWidth, 22)
+            lockRight = math.max(right, width - chipX)
+        elseif self._lockChip then
+            self._lockChip.Visible = false
+        end
+        self._title.Size = UDim2.new(1, -(x + lockRight), 1, 0)
         local wrap = g.Touch
             and variant == "numeric"
             and width > x + right + 60
@@ -5269,6 +5375,9 @@ function U.row(owner: any, kind: string, c: Payload, variant: string): any
         if self._stateEffect then
             self:_stateEffect()
         end
+        if self._lockRender then
+            self:_lockRender()
+        end
     end
     function n:_makeOptionsGear()
         if self._gear or c.HideOptions then
@@ -5329,6 +5438,13 @@ function U.ready(owner: any, n: any): any
     end
     if n._w and n._w._profileManager and n._flag then
         n._w._profileManager:Hydrate(n)
+    end
+    if n._locked and (n._kind == "Toggle" or n._kind == "Checkbox") and n._value == true and n.SetValue then
+        n:SetValue(false, true)
+    end
+    if n._lockRender then
+        n:_lockRender()
+        n:_measure()
     end
     return n
 end
@@ -5509,6 +5625,164 @@ function P.Row:ToggleContext()
     else
         self:OpenContext()
     end
+end
+
+
+function P.Row:SetLockOptions(options: any)
+    if options ~= nil and type(options) ~= "table" then
+        return U.issue(self, "SetLockOptions", "expected options table or nil")
+    end
+    self._lockOptions = if type(options) == "table" then table.clone(options) else {}
+    if self._lockRender then
+        self:_lockRender()
+        self:_measure()
+    end
+    return true
+end
+
+function P.Row:GetLockOptions(): any
+    return table.clone(self._lockOptions or {})
+end
+
+function P.Row:SetLocked(value: boolean, silentOrOptions: any?, options: any?)
+    if type(value) ~= "boolean" then
+        return U.issue(self, "SetLocked", "expected boolean")
+    end
+    local silent = false
+    local lockOptions = options
+    if type(silentOrOptions) == "boolean" then
+        silent = silentOrOptions
+    elseif type(silentOrOptions) == "table" then
+        lockOptions = silentOrOptions
+    elseif silentOrOptions ~= nil then
+        return U.issue(self, "SetLocked", "second argument must be boolean or options table")
+    end
+    if lockOptions ~= nil then
+        local ok = self:SetLockOptions(lockOptions)
+        if ok ~= true then return ok end
+    end
+    if self._locked == value then
+        if self._lockRender then self:_lockRender() end
+        return true
+    end
+    self._locked = value
+    self._w:_quiet(self)
+    if self._popup and self._popup.kind == "premium" then
+        self._w:_closeFrom(self._popup, true)
+    end
+    if value and (self._kind == "Toggle" or self._kind == "Checkbox") and self._value == true and self.SetValue then
+        self:SetValue(false, silent)
+    end
+    self:_refreshState()
+    self:_measure()
+    U.parentChanged(self, "locked")
+    if self._w and self._w._syncDependencies then
+        self._w:_syncDependencies(self)
+    end
+    U.emit(self, "LockedChanged", value, self)
+    return true
+end
+
+function P.Row:IsLocked(): boolean
+    return self._locked == true
+end
+
+function P.Row:GetLocked(): boolean
+    return self:IsLocked()
+end
+
+function P.Row:OnLockedChanged(fn: any): Connection
+    return U.event(self, "LockedChanged"):Connect(fn)
+end
+
+function P.Row:OnLockedOpened(fn: any): Connection
+    return U.event(self, "LockedOpened"):Connect(fn)
+end
+
+function P.Row:OpenLocked(): boolean
+    if not self._locked or not self:_canLockedAction() then
+        return false
+    end
+    if self._popup and self._popup.kind == "premium" then
+        return true
+    end
+    local w = self._w
+    local options = self._lockOptions or {}
+    local width = math.clamp(U.number(options.Width, 304), 230, 390)
+    local height = math.clamp(U.number(options.Height, 174), 150, 240)
+    local anchor = self._lockChip or self._root
+    local p = U.popup(self, anchor, V(width, height), { Left = true })
+    if not p then return false end
+    p.kind = "premium"
+    local life, host = p.life, p.content
+    local accentRail = U.line(w, life, host, "Accent", {
+        Position = O(0, 0),
+        Size = UDim2.new(0, 2, 1, 0),
+        Name = "PremiumRail",
+    })
+    U.corner(accentRail, 2)
+    local iconHost = U.frame(host, {
+        Position = O(13, 13),
+        Size = O(30, 30),
+        BackgroundTransparency = 0,
+        Name = "PremiumIcon",
+    })
+    life:Give(iconHost)
+    U.corner(iconHost, 7)
+    U.fill(w, life, iconHost, "AccentMuted")
+    U.icon(w, life, iconHost, U.str(options.Icon, "lock"), 15, "Accent", { Size = S(1, 1) })
+    local title = U.text(w, life, host, "Popup", U.str(options.Title, "Premium Required"), "Text", {
+        Position = O(52, 10),
+        Size = UDim2.new(1, -66, 0, 24),
+    })
+    title.FontFace = BOLD
+    local feature = U.str(options.Feature, self._name)
+    local reason = U.str(options.Reason, "Unlock " .. feature .. " with Premium.")
+    U.text(w, life, host, "Muted", reason, "TextSecondary", {
+        Position = O(13, 48),
+        Size = UDim2.new(1, -26, 0, 54),
+        TextWrapped = true,
+        TextYAlignment = Enum.TextYAlignment.Top,
+    })
+    local action = U.button(w, life, host, {
+        AnchorPoint = V(0, 1),
+        Position = UDim2.new(0, 13, 1, -13),
+        Size = UDim2.new(1, -26, 0, math.max(36, w._layout.Hit)),
+        BackgroundTransparency = 0,
+        Name = "PremiumAction",
+    }, function()
+        if not self._locked then return end
+        local callback = options.Callback
+        local ok = true
+        if type(callback) == "function" then
+            ok = select(1, U.call(self, "LockedAction", callback, self))
+        else
+            local url = U.str(options.URL, w._premiumURL)
+            ok = url ~= "" and U.copyText(url)
+            w:Notify({
+                Title = if ok then "Purchase link copied" else "Clipboard unavailable",
+                Description = if ok then url else "Unable to copy the premium purchase link.",
+                Severity = if ok then "Success" else "Warning",
+                Duration = 3,
+            })
+        end
+        if ok and not p.dead then w:_closeFrom(p) end
+    end)
+    U.corner(action, 6)
+    U.fill(w, life, action, "Accent")
+    local actionText = U.text(w, life, action, "Control", U.str(options.ActionText, "Buy Premium"), "AccentInk", {
+        Position = O(12, 0),
+        Size = UDim2.new(1, -42, 1, 0),
+        TextXAlignment = Enum.TextXAlignment.Center,
+    })
+    actionText.FontFace = MEDIUM
+    U.icon(w, life, action, "crown", 13, "AccentInk", {
+        AnchorPoint = V(1, 0.5),
+        Position = UDim2.new(1, -12, 0.5, 0),
+        Size = O(17, 17),
+    })
+    U.emit(self, "LockedOpened", self)
+    return true
 end
 
 P.ValueRow = U.class(P.Row)
@@ -9897,7 +10171,8 @@ function P.Window:AddSettings(options: any)
     local about = tab:AddSubTab({ Name = "About", Icon = "info", Order = 5 })
 
     local prefix = U.str(c.FlagPrefix, "ui.")
-    local storeURL = U.str(c.StoreURL, "https://plak-hub.mysellauth.com/")
+    local storeURL = U.str(c.StoreURL, self._premiumURL)
+    self._premiumURL = storeURL
     local discordURL = U.str(c.DiscordURL, "https://dsc.gg/plak")
     local lifetimePrice = U.str(c.LifetimePrice, "$12")
     local monthlyPrice = U.str(c.MonthlyPrice, "$5")
