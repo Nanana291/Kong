@@ -3952,6 +3952,12 @@ function P.Collection:GetControl(name: string): any
                 return found
             end
         end
+        if c._settings and not c._settings._dead then
+            local found = c._settings:GetControl(name)
+            if found then
+                return found
+            end
+        end
     end
     return nil
 end
@@ -3960,6 +3966,11 @@ function P.Collection:Clear()
 end
 
 -- Dependency engine -----------------------------------------------------------
+-- Examples:
+--   local advanced = master:AddSettings({ Mode = "Reveal" })
+--   advanced:AddSlider({ Name = "Speed", Min = 1, Max = 100 })
+--   row:SetDependency({ Flag = "farm.enabled", Equals = true }, "Disable")
+--   row:SetDependency({ All = { "farm.enabled", { Flag = "zone", In = { 3, 4, 5 } } } }, "Reveal")
 -- Conditions are evaluated only on state changes; there is no polling/render-step work.
 -- Supported condition shapes:
 --   controller | "flag.name" | function(window, dependent) -> boolean
@@ -4388,6 +4399,26 @@ function P.Dependency:GetMode(): string
     return self._mode
 end
 
+function P.Dependency:SetCondition(spec: any)
+    self._condition = spec
+    self:_dependencySync()
+    return true
+end
+
+function P.Dependency:GetCondition(): any
+    return self._condition
+end
+
+function P.Dependency:AddSection(options: any)
+    if self._dead then
+        return U.issue(self, "AddSection", "destroyed dependency group")
+    end
+    local section = U.section(self, self._host, options, self._small)
+    U.adopt(self, section)
+    self:_dependencySync(true)
+    return section
+end
+
 function P.Dependency:SetExpanded(value: boolean)
     if type(value) ~= "boolean" then
         return U.issue(self, "SetExpanded", "expected boolean")
@@ -4564,7 +4595,7 @@ function P.Group:_measure()
     local children = U.sort(self._children)
     local heights, active = {}, {}
     for _, n in children do
-        if n._visible then
+        if n._visible and not n._dependencyHidden then
             table.insert(active, n)
             local group = math.ceil(#active / cols)
             heights[group] = math.max(heights[group] or 0, n._height or n._root.Size.Y.Offset)
