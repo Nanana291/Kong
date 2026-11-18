@@ -250,7 +250,7 @@ type Payload = { [any]: any }
 local U = {}
 local P: Payload = {}
 local Build: Payload = {}
-local Library: any = { Version = "1.4.4" }
+local Library: any = { Version = "1.4.5" }
 
 local V = Vector2.new
 local O = UDim2.fromOffset
@@ -7429,6 +7429,7 @@ function Build.Label(owner: any, c: Payload, kind: string)
     setmetatable(n, if kind == "Paragraph" then P.Paragraph elseif kind == "Status" then P.Status else P.Label)
     local w, life = n._w, n._life
     n._text, n._textColor = U.str(c.Text, n._name), if U.color(c.Color) then c.Color else nil
+    n._textToken = if type(c.ColorToken) == "string" then c.ColorToken else nil
     n._hideDescription = kind == "Paragraph"
     n._severity = U.str(c.Severity, "Default")
     n._heightBase = U.number(c.Height, if kind == "SectionLabel" then 33 else 35)
@@ -7444,6 +7445,7 @@ function Build.Label(owner: any, c: Payload, kind: string)
             return if n:_isDisabled()
                 then t.TextDisabled
                 elseif n._textColor then n._textColor
+                elseif n._textToken and t[n._textToken] then t[n._textToken]
                 elseif kind == "Paragraph" then t.TextSecondary
                 elseif kind == "Status" then t[U.severity(n._severity)]
                 elseif kind == "SectionLabel" then t.TextSecondary
@@ -10040,11 +10042,13 @@ function P.Window:AddSettings(options: any)
         Name = "Profile status",
         Text = "Active: " .. (manager.activeProfile or "None"),
         Severity = manager.available and "Success" or "Warning",
+        ColorToken = "TextSecondary",
     })
     local autoloadStatus = profiles:AddStatus({
         Name = "Startup",
         Text = "Autoload: Off",
         Severity = manager.available and "Info" or "Warning",
+        ColorToken = "TextSecondary",
     })
 
     local names = manager:Names()
