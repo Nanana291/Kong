@@ -3720,8 +3720,27 @@ function P.Window:_chrome()
                 if (p - from).Magnitude < 3 then
                     return
                 end
+
+                -- Match NeronUi's permissive drag bounds: the window may travel mostly
+                -- off-screen while a small recovery strip remains reachable.
+                local area = self._safe.AbsoluteSize
+                if area.X <= 2 or area.Y <= 2 then
+                    area = self:_area()
+                end
+                local layout = self._layout
+                local scaled = V(layout.Width * self._scale, layout.Height * self._scale)
+                local target = start + p - from
+                local minX = 48 - scaled.X
+                local maxX = math.max(minX, area.X - 48)
+                local minY = 16
+                local maxY = math.max(minY, area.Y - 32)
+
                 self._manual = true
-                self:_placeWindow(start + p - from)
+                self._position = V(
+                    math.round(math.clamp(target.X, minX, maxX)),
+                    math.round(math.clamp(target.Y, minY, maxY))
+                )
+                self._shell.Position = O(self._position.X, self._position.Y)
             end,
         })
     end
