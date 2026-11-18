@@ -250,7 +250,7 @@ type Payload = { [any]: any }
 local U = {}
 local P: Payload = {}
 local Build: Payload = {}
-local Library: any = { Version = "1.4.0" }
+local Library: any = { Version = "1.4.1" }
 
 local V = Vector2.new
 local O = UDim2.fromOffset
@@ -428,6 +428,169 @@ local ThemePresets: Payload = {
     },
 }
 local ThemePresetOrder = { "JetZ Dark", "Graphite", "Crimson", "OLED" }
+
+local SystemLocales: Payload = {
+    English = {},
+    ["Español"] = {
+        ["Configs"] = "Configuraciones",
+        ["Appearance"] = "Apariencia",
+        ["Community"] = "Comunidad",
+        ["About"] = "Acerca de",
+        ["Interface"] = "Interfaz",
+        ["Window behavior and everyday controls."] = "Comportamiento de la ventana y controles de uso diario.",
+        ["Show sidebar"] = "Mostrar barra lateral",
+        ["UI scale"] = "Escala de interfaz",
+        ["Animation speed"] = "Velocidad de animación",
+        ["Behavior"] = "Comportamiento",
+        ["Shortcuts, visibility and optional visual effects."] = "Atajos, visibilidad y efectos visuales opcionales.",
+        ["Window shortcut"] = "Atajo de ventana",
+        ["Shortcut key"] = "Tecla de atajo",
+        ["Watermark"] = "Marca de agua",
+        ["Ambient particles"] = "Partículas ambientales",
+        ["Particle style"] = "Estilo de partículas",
+        ["Particle count"] = "Cantidad de partículas",
+        ["Profiles"] = "Perfiles",
+        ["Save, load and organize complete JetZ configurations."] = "Guarda, carga y organiza configuraciones completas de JetZ.",
+        ["Profile status"] = "Estado del perfil",
+        ["Startup"] = "Inicio",
+        ["Saved config"] = "Configuración guardada",
+        ["Config name"] = "Nombre de configuración",
+        ["Create config"] = "Crear configuración",
+        ["Save config"] = "Guardar configuración",
+        ["Load config"] = "Cargar configuración",
+        ["Manage"] = "Administrar",
+        ["Rename, duplicate, delete or rescan configs."] = "Renombra, duplica, elimina o vuelve a escanear configuraciones.",
+        ["Rename config"] = "Renombrar configuración",
+        ["Duplicate config"] = "Duplicar configuración",
+        ["Delete config"] = "Eliminar configuración",
+        ["Refresh configs"] = "Actualizar configuraciones",
+        ["Autoload"] = "Carga automática",
+        ["Restore one saved config automatically for this game."] = "Restaura automáticamente una configuración guardada para este juego.",
+        ["Set autoload"] = "Activar carga automática",
+        ["Disable autoload"] = "Desactivar carga automática",
+        ["Import & Export"] = "Importar y exportar",
+        ["Transfer configs using the clipboard or the public profile API."] = "Transfiere configuraciones mediante el portapapeles o la API pública de perfiles.",
+        ["Export config"] = "Exportar configuración",
+        ["Import config"] = "Importar configuración",
+        ["Theme"] = "Tema",
+        ["Choose a preset, then fine-tune accent and contrast."] = "Elige un preset y después ajusta el acento y el contraste.",
+        ["Theme presets"] = "Presets de tema",
+        ["Accent color"] = "Color de acento",
+        ["Contrast"] = "Contraste",
+        ["Language"] = "Idioma",
+        ["Language preference for JetZ system surfaces."] = "Idioma de las superficies del sistema JetZ.",
+        ["Interface language"] = "Idioma de la interfaz",
+        ["Localization"] = "Localización",
+        ["This selector is reserved for JetZ system surfaces; labels supplied by scripts remain exactly as authored."] = "Este selector cambia los textos del sistema JetZ; los textos definidos por scripts permanecen sin cambios.",
+        ["JetZ Premium"] = "JetZ Premium",
+        ["Premium access and the JetZ community."] = "Acceso premium y comunidad de JetZ.",
+        ["Plans"] = "Planes",
+        ["Community"] = "Comunidad",
+        ["Updates, support and feedback."] = "Actualizaciones, soporte y comentarios.",
+        ["Discord"] = "Discord",
+        ["About JetZ"] = "Acerca de JetZ",
+        ["Library information and safe recovery actions."] = "Información de la librería y acciones seguras de recuperación.",
+        ["Version"] = "Versión",
+        ["Center window"] = "Centrar ventana",
+        ["Reset appearance"] = "Restablecer apariencia",
+        ["Active:"] = "Activo:",
+        ["Unsaved changes"] = "Cambios sin guardar",
+        ["Autoload:"] = "Carga automática:",
+        ["Off"] = "Desactivada",
+        ["Join the JetZ Community"] = "Únete a la comunidad JetZ",
+        ["Share feedback, get support, see updates, and connect with other JetZ users."] = "Comparte comentarios, recibe soporte, mira novedades y conecta con otros usuarios de JetZ.",
+        ["Join Community"] = "Unirse a la comunidad",
+        ["Get Lifetime"] = "Obtener Lifetime",
+        ["Get Monthly"] = "Obtener mensual",
+        ["Lifetime"] = "De por vida",
+        ["Monthly"] = "Mensual",
+        ["All premium features"] = "Todas las funciones premium",
+        ["Lifetime updates"] = "Actualizaciones de por vida",
+        ["Continuous updates"] = "Actualizaciones continuas",
+        ["Priority support"] = "Soporte prioritario",
+        ["Support future development"] = "Apoya el desarrollo futuro",
+    },
+    ["Português"] = {
+        ["Configs"] = "Configurações",
+        ["Appearance"] = "Aparência",
+        ["Community"] = "Comunidade",
+        ["About"] = "Sobre",
+        ["Interface"] = "Interface",
+        ["Window behavior and everyday controls."] = "Comportamento da janela e controles do dia a dia.",
+        ["Show sidebar"] = "Mostrar barra lateral",
+        ["UI scale"] = "Escala da interface",
+        ["Animation speed"] = "Velocidade da animação",
+        ["Behavior"] = "Comportamento",
+        ["Shortcuts, visibility and optional visual effects."] = "Atalhos, visibilidade e efeitos visuais opcionais.",
+        ["Window shortcut"] = "Atalho da janela",
+        ["Shortcut key"] = "Tecla de atalho",
+        ["Watermark"] = "Marca d'água",
+        ["Ambient particles"] = "Partículas ambientes",
+        ["Particle style"] = "Estilo das partículas",
+        ["Particle count"] = "Quantidade de partículas",
+        ["Profiles"] = "Perfis",
+        ["Save, load and organize complete JetZ configurations."] = "Salve, carregue e organize configurações completas do JetZ.",
+        ["Profile status"] = "Status do perfil",
+        ["Startup"] = "Inicialização",
+        ["Saved config"] = "Configuração salva",
+        ["Config name"] = "Nome da configuração",
+        ["Create config"] = "Criar configuração",
+        ["Save config"] = "Salvar configuração",
+        ["Load config"] = "Carregar configuração",
+        ["Manage"] = "Gerenciar",
+        ["Rename, duplicate, delete or rescan configs."] = "Renomeie, duplique, exclua ou reescaneie configurações.",
+        ["Rename config"] = "Renomear configuração",
+        ["Duplicate config"] = "Duplicar configuração",
+        ["Delete config"] = "Excluir configuração",
+        ["Refresh configs"] = "Atualizar configurações",
+        ["Autoload"] = "Carregamento automático",
+        ["Restore one saved config automatically for this game."] = "Restaure automaticamente uma configuração salva para este jogo.",
+        ["Set autoload"] = "Ativar carregamento automático",
+        ["Disable autoload"] = "Desativar carregamento automático",
+        ["Import & Export"] = "Importar e exportar",
+        ["Transfer configs using the clipboard or the public profile API."] = "Transfira configurações usando a área de transferência ou a API pública de perfis.",
+        ["Export config"] = "Exportar configuração",
+        ["Import config"] = "Importar configuração",
+        ["Theme"] = "Tema",
+        ["Choose a preset, then fine-tune accent and contrast."] = "Escolha um preset e ajuste o destaque e o contraste.",
+        ["Theme presets"] = "Presets de tema",
+        ["Accent color"] = "Cor de destaque",
+        ["Contrast"] = "Contraste",
+        ["Language"] = "Idioma",
+        ["Language preference for JetZ system surfaces."] = "Idioma das superfícies do sistema JetZ.",
+        ["Interface language"] = "Idioma da interface",
+        ["Localization"] = "Localização",
+        ["This selector is reserved for JetZ system surfaces; labels supplied by scripts remain exactly as authored."] = "Este seletor altera os textos do sistema JetZ; textos definidos por scripts permanecem inalterados.",
+        ["JetZ Premium"] = "JetZ Premium",
+        ["Premium access and the JetZ community."] = "Acesso premium e comunidade JetZ.",
+        ["Plans"] = "Planos",
+        ["Community"] = "Comunidade",
+        ["Updates, support and feedback."] = "Atualizações, suporte e feedback.",
+        ["Discord"] = "Discord",
+        ["About JetZ"] = "Sobre o JetZ",
+        ["Library information and safe recovery actions."] = "Informações da biblioteca e ações seguras de recuperação.",
+        ["Version"] = "Versão",
+        ["Center window"] = "Centralizar janela",
+        ["Reset appearance"] = "Redefinir aparência",
+        ["Active:"] = "Ativo:",
+        ["Unsaved changes"] = "Alterações não salvas",
+        ["Autoload:"] = "Carregamento automático:",
+        ["Off"] = "Desativado",
+        ["Join the JetZ Community"] = "Entre na comunidade JetZ",
+        ["Share feedback, get support, see updates, and connect with other JetZ users."] = "Compartilhe feedback, receba suporte, veja novidades e conecte-se com outros usuários do JetZ.",
+        ["Join Community"] = "Entrar na comunidade",
+        ["Get Lifetime"] = "Obter Lifetime",
+        ["Get Monthly"] = "Obter mensal",
+        ["Lifetime"] = "Vitalício",
+        ["Monthly"] = "Mensal",
+        ["All premium features"] = "Todos os recursos premium",
+        ["Lifetime updates"] = "Atualizações vitalícias",
+        ["Continuous updates"] = "Atualizações contínuas",
+        ["Priority support"] = "Suporte prioritário",
+        ["Support future development"] = "Apoie o desenvolvimento futuro",
+    },
+}
+local SystemLocaleOrder = { "English", "Español", "Português" }
 
 local FACE = Font.fromEnum(Enum.Font.RobotoMono)
 local MEDIUM = Font.new(FACE.Family, Enum.FontWeight.Medium)
@@ -3404,6 +3567,65 @@ end
 function P.Window:Toggle()
     return self:SetVisible(not self._visible)
 end
+function P.Window:Translate(text: string): string
+    local locale = SystemLocales[self._settingsLanguage] or SystemLocales.English
+    return locale[text] or text
+end
+
+function P.Window:GetLanguages(): { string }
+    return table.clone(SystemLocaleOrder)
+end
+
+function P.Window:GetLanguage(): string
+    return self._settingsLanguage or "English"
+end
+
+function P.Window:_refreshSystemLanguage()
+    local root = self._settingsTab
+    if root and not root._dead then
+        local function visit(node: any)
+            if node ~= root and not node._dead then
+                if node.GetName and node.SetName then
+                    node._localeSourceName = node._localeSourceName or node:GetName()
+                    node:SetName(self:Translate(node._localeSourceName))
+                end
+                if node.GetDescription and node.SetDescription then
+                    local current = node:GetDescription()
+                    if node._localeSourceDescription == nil then
+                        node._localeSourceDescription = current or false
+                    end
+                    if node._localeSourceDescription ~= false then
+                        node:SetDescription(self:Translate(node._localeSourceDescription))
+                    end
+                end
+                if node._box and node._box:IsA("TextBox") then
+                    node._localeSourcePlaceholder = node._localeSourcePlaceholder or node._box.PlaceholderText
+                    if node._localeSourcePlaceholder ~= "" then
+                        node._box.PlaceholderText = self:Translate(node._localeSourcePlaceholder)
+                    end
+                end
+            end
+            for _, child in node._children or {} do visit(child) end
+            if node._settings and not node._settings._dead then visit(node._settings) end
+        end
+        visit(root)
+    end
+    for _, callback in self._localeBindings or {} do
+        local ok, why = pcall(callback)
+        if not ok then U.issue(self, "localization", why) end
+    end
+    if self._profileManager then self._profileManager:RefreshUI() end
+end
+
+function P.Window:SetLanguage(language: string)
+    if type(language) ~= "string" or not SystemLocales[language] then
+        return U.issue(self, "SetLanguage", "unsupported language " .. tostring(language))
+    end
+    self._settingsLanguage = language
+    self:_refreshSystemLanguage()
+    return true
+end
+
 function P.Window:SetThemePreset(name: string)
     local preset = ThemePresets[name]
     if not preset then
@@ -3994,7 +4216,8 @@ function Library:CreateWindow(options: WindowOptions?): (WindowHandle | false, s
     w._dependencies = {}
     w._profileManager = P.ProfileManager.new(w, c.Persistence or c.Settings)
     w._themePreset = "JetZ Dark"
-    w._settingsLanguage = "English"
+    w._settingsLanguage = if type(c.Language) == "string" and SystemLocales[c.Language] then c.Language else "English"
+    w._localeBindings = {}
     w._responsive, w._animated, w._focusables, w._particles = {}, {}, {}, {}
     w._suppressed = setmetatable({}, { __mode = "k" })
     w._size, w._position = V(D.Width, D.Height), Vector2.zero
@@ -9197,14 +9420,18 @@ function P.ProfileManager:RefreshUI()
         if self.activeProfile and table.find(names, self.activeProfile) then ui.Profile:SetValue(self.activeProfile, true) end
     end
     if ui.Status then
-        ui.Status:SetText("Active: " .. (self.activeProfile or "None") .. (self.dirty and "  •  Unsaved changes" or ""))
+        local w = self.window
+        ui.Status:SetText(w:Translate("Active:") .. " " .. (self.activeProfile or "None") .. (self.dirty and ("  •  " .. w:Translate("Unsaved changes")) or ""))
         if ui.Status.SetSeverity then
             ui.Status:SetSeverity(if not self.available then "Warning" elseif self.dirty then "Warning" else "Success")
         end
     end
     if ui.AutoloadStatus then
         local auto = self:GetAutoload()
-        ui.AutoloadStatus:SetText(if auto.enabled then "Autoload: " .. tostring(auto.profile) else "Autoload: Off")
+        local w = self.window
+        ui.AutoloadStatus:SetText(if auto.enabled
+            then w:Translate("Autoload:") .. " " .. tostring(auto.profile)
+            else w:Translate("Autoload:") .. " " .. w:Translate("Off"))
         if ui.AutoloadStatus.SetSeverity then
             ui.AutoloadStatus:SetSeverity(if auto.enabled then "Success" else "Info")
         end
@@ -9492,6 +9719,10 @@ function P.Window:AddSettings(options: any)
         -- control during U.ready(), replay the internal effect once now that it exists.
         apply(n:GetValue())
         return n
+    end
+    local function bindLocale(callback: any)
+        table.insert(self._localeBindings, callback)
+        callback()
     end
     local function section(page: any, name: string, description: string?)
         return page:AddSection({
@@ -9940,13 +10171,12 @@ function P.Window:AddSettings(options: any)
     end)
 
     local language = section(appearance, "Language", "Language preference for JetZ system surfaces.")
-    local languages = { "English", "Español", "Português" }
     language:AddSegmentedControl({
         Name = "Interface language",
-        Values = languages,
-        Default = self._settingsLanguage,
+        Values = self:GetLanguages(),
+        Default = self:GetLanguage(),
         Callback = function(v: string)
-            self._settingsLanguage = v
+            self:SetLanguage(v)
         end,
     })
     language:AddParagraph({
@@ -9973,7 +10203,7 @@ function P.Window:AddSettings(options: any)
         local crown = U.icon(self, life, card, if primary then "crown" else "calendar", 18, "Accent", {
             Position = O(15, 14), Size = O(20, 20),
         })
-        local title = U.text(self, life, card, "Control", titleText, "Text", {
+        local title = U.text(self, life, card, "Control", self:Translate(titleText), "Text", {
             Position = O(43, 10), Size = UDim2.new(1, -55, 0, 25),
         })
         title.FontFace = BOLD
@@ -9989,7 +10219,7 @@ function P.Window:AddSettings(options: any)
             AnchorPoint = V(0, 1),
             Position = UDim2.new(0, 15, 1, -14),
             Size = UDim2.new(1, -30, 0, 38),
-            Text = if primary then "Get Lifetime  →" else "Get Monthly  →",
+            Text = self:Translate(if primary then "Get Lifetime" else "Get Monthly"),
             TextSize = 12,
             FontFace = MEDIUM,
             AutoButtonColor = false,
@@ -10000,6 +10230,16 @@ function P.Window:AddSettings(options: any)
         U.corner(action, 5)
         U.paint(self, life, action, "BackgroundColor3", if primary then "Accent" else "SurfaceRaised")
         U.paint(self, life, action, "TextColor3", if primary then "Background" else "Text")
+        bindLocale(function()
+            if not card.Parent then return end
+            title.Text = self:Translate(titleText)
+            action.Text = self:Translate(if primary then "Get Lifetime" else "Get Monthly")
+            local translated = {}
+            for line in caption:gmatch("[^\n]+") do
+                table.insert(translated, self:Translate(line))
+            end
+            body.Text = table.concat(translated, "\n")
+        end)
         life:Give(action.Activated:Connect(callback))
         return card
     end
@@ -10014,7 +10254,9 @@ function P.Window:AddSettings(options: any)
             ctx.Cleanup(life)
             local lifetime, monthly
             local function copyStore()
-                local ok = U.copyText(storeURL)
+                local ok = pcall(function()
+                    setclipboard(storeURL)
+                end)
                 self:Notify({
                     Title = ok and "Purchase link copied" or "Clipboard unavailable",
                     Description = ok and storeURL or "Copy the store URL manually: " .. storeURL,
@@ -10069,11 +10311,11 @@ function P.Window:AddSettings(options: any)
             life:Give(stroke)
             U.paint(self, life, stroke, "Color", "Stroke")
             U.icon(self, life, card, "users", 24, "Accent", { Position = O(16, 16), Size = O(28, 28) })
-            local title = U.text(self, life, card, "Brand", "Join the JetZ Community", "Text", {
+            local title = U.text(self, life, card, "Brand", self:Translate("Join the JetZ Community"), "Text", {
                 Position = O(54, 10), Size = UDim2.new(1, -70, 0, 28),
             })
             title.FontFace = BOLD
-            U.text(self, life, card, "Muted", "Share feedback, get support, see updates, and connect with other JetZ users.", "TextSecondary", {
+            local discordBody = U.text(self, life, card, "Muted", self:Translate("Share feedback, get support, see updates, and connect with other JetZ users."), "TextSecondary", {
                 Position = O(16, 50), Size = UDim2.new(1, -32, 0, 36),
                 TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top,
             })
@@ -10082,7 +10324,7 @@ function P.Window:AddSettings(options: any)
                 Position = UDim2.new(0, 16, 1, -14),
                 Size = UDim2.new(1, -32, 0, 38),
                 BackgroundTransparency = 0,
-                Text = "Join Community  ↗",
+                Text = self:Translate("Join Community"),
                 TextSize = 12,
                 FontFace = MEDIUM,
                 AutoButtonColor = false,
@@ -10092,8 +10334,22 @@ function P.Window:AddSettings(options: any)
             U.corner(join, 5)
             U.paint(self, life, join, "BackgroundColor3", "AccentMuted")
             U.paint(self, life, join, "TextColor3", "Text")
+            U.icon(self, life, join, "message-circle", 14, "Accent", {
+                AnchorPoint = V(1, 0.5),
+                Position = UDim2.new(1, -13, 0.5, 0),
+                Size = O(18, 18),
+                ZIndex = join.ZIndex + 1,
+            })
+            bindLocale(function()
+                if not join.Parent then return end
+                title.Text = self:Translate("Join the JetZ Community")
+                discordBody.Text = self:Translate("Share feedback, get support, see updates, and connect with other JetZ users.")
+                join.Text = self:Translate("Join Community")
+            end)
             life:Give(join.Activated:Connect(function()
-                local ok = U.copyText(discordURL)
+                local ok = pcall(function()
+                    setclipboard(discordURL)
+                end)
                 self:Notify({
                     Title = ok and "Discord link copied" or "Clipboard unavailable",
                     Description = ok and discordURL or "Join manually at " .. discordURL,
@@ -10154,6 +10410,7 @@ function P.Window:AddSettings(options: any)
         self._wantedTab = tab
     end
     self:_refreshNav(false)
+    self:_refreshSystemLanguage()
     return interface
 end
 
