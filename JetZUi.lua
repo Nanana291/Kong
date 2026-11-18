@@ -281,6 +281,19 @@ local D = {
     InlineMin = 194,
     InlineGap = 23,
     TouchHit = 44,
+    Resize = {
+        DesktopHit = 28,
+        Plate = 22,
+        Icon = 15,
+        Inset = 5,
+        ReadoutWidth = 105,
+        ReadoutHeight = 23,
+        Step = 16,
+        MinWidth = 320,
+        MinHeight = 225,
+        MaxWidth = 2400,
+        MaxHeight = 1600,
+    },
     Row = 60,
     CheckRow = 67,
     NumericRow = 80,
@@ -1000,6 +1013,11 @@ local Icons: Payload = {
     plus = { { 0.50, 0.18, 0.50, 0.82 }, { 0.18, 0.50, 0.82, 0.50 } },
     minus = { { 0.18, 0.50, 0.82, 0.50 } },
     resize = { { 0.22, 0.80, 0.80, 0.22 }, { 0.50, 0.80, 0.80, 0.50 } },
+    resizeGrip = {
+        { 0.15, 0.77, 0.77, 0.15, 1.45 },
+        { 0.42, 0.85, 0.85, 0.42, 1.45 },
+        { 0.69, 0.89, 0.89, 0.69, 1.45 },
+    },
     info = { { 0.50, 0.20, 0.50, 0.26, 1.5 }, { 0.50, 0.40, 0.50, 0.80, 1.5 } },
 }
 local imageIcons: Payload = {}
@@ -2259,11 +2277,14 @@ end
 
 function P.Window:_geometry(view: any)
     local g = self._layout
+    -- Keep the enlarged touch target out of the page and native scroll rail.
+    local clearance = if g.Touch and self._resizable then g.Hit else 0
     view.scroll.Position = O(g.Left, 0)
-    view.scroll.Size = UDim2.new(1, -(g.Left + g.Right), 1, 0)
+    view.scroll.Size = UDim2.new(1, -(g.Left + g.Right), 1, -clearance)
     view.rail.AnchorPoint = V(0.5, 0)
     view.rail.Position = UDim2.new(1, -g.ScrollRight, 0, 0)
-    view.rail.Size = UDim2.new(0, if g.Touch then 18 else 13, 1, -(if g.Compact then 17 else D.ScrollBottom))
+    local railInset = math.max(if g.Compact then 17 else D.ScrollBottom, clearance)
+    view.rail.Size = UDim2.new(0, if g.Touch then 18 else 13, 1, -railInset)
     view.tail.Size = UDim2.new(1, 0, 0, if g.Compact then 16 else 56)
 end
 
@@ -2740,8 +2761,6 @@ function P.Window:_reflow()
     self._mobile.Visible = drawer
     self._mobile.Size = UDim2.new(1, 0, 0, self._layout.Header)
     self._drawerButton.Size = O(self._layout.Header, self._layout.Header)
-    self._resizeHandle.Size = O(if touch then hit else 24, if touch then hit else 24)
-    self._resizeHandle.Visible = self._resizable and not drawer
     self._reopen.Visible = not self._visible and touch
     if old and old.Drawer and not drawer then
         self:SetDrawerOpen(false)
@@ -2806,6 +2825,7 @@ function P.Window:_drawerLayout(instant: boolean?)
     self._sidebar.ZIndex = if g.Drawer then 12 else 2
     self._drawerScrim.Visible = open
     self._body.Interactable = not open and not self._dialog and not self._disabled
+    self:_layoutResizeGrip()
     if open then
         U.tween(self, self._life, self._sidebar, "drawer", "drawer", { Position = O(0, 0) }, instant)
     else
@@ -2943,6 +2963,7 @@ function P.Window:SetVisible(v: boolean)
     self._visible, self._shell.Visible = v, v
     if not v then
         self:_quiet(self)
+        self._resetResizeFeedback()
         self:SetDrawerOpen(false)
         if self._dialog then
             self._dialog:Close()
@@ -3070,10 +3091,17 @@ function P.Window:SetResizable(v: boolean)
     if type(v) ~= "boolean" then
         return U.issue(self, "SetResizable", "expected boolean")
     end
+    if self._resizable == v then
+        return true
+    end
     self._resizable = v
-    self._resizeHandle.Visible = v and not self._layout.Drawer
     if not v and Pointer and Pointer.window == self and Pointer.spec.WindowAction == "resize" then
         self:_release(true)
+    end
+    self:_layoutResizeGrip()
+    local visiblePage = self._activeSub or self._activeTab
+    if visiblePage then
+        self:_geometry(visiblePage._view)
     end
     return true
 end
@@ -3089,7 +3117,9 @@ function P.Window:SetSize(v: any)
         return U.issue(self, "SetSize", "expected a positive Vector2 or UDim2")
     end
     self._userSize = true
-    self._size = V(math.clamp(v.X, 320, 2400), math.clamp(v.Y, 225, 1600))
+    local limits = D.Resize
+    self._size =
+        V(math.clamp(v.X, limits.MinWidth, limits.MaxWidth), math.clamp(v.Y, limits.MinHeight, limits.MaxHeight))
     self:_reflow()
     return true
 end
@@ -3144,6 +3174,191 @@ function P.Window:_reflect(k: string, value: any)
         controller:SetValue(value, true)
         self._reflecting = previous
     end
+end
+
+function P.Window:_layoutResizeGrip()
+    local g, limits = self._layout, D.Resize
+    local hit = if g.Touch then g.Hit else limits.DesktopHit
+    local handle = self._resizeHandle
+    handle.Size = O(hit, hit)
+    handle.Visible = self._resizable and not self._drawerOpen
+    local enabled = handle.Visible and not self._disabled and not self._dialog
+    handle.Interactable = enabled
+    handle.Selectable = enabled
+    self._resizeReadout.Position = UDim2.new(1, -limits.Inset, 1, -hit - limits.Inset)
+    if not enabled then
+        if Gui.SelectedObject == handle then
+            Gui.SelectedObject = nil
+        end
+        self._resetResizeFeedback()
+    elseif self._resizeReadout.Visible then
+        self._resizeReadoutText.Text = ("%d × %d"):format(g.Width, g.Height)
+    end
+end
+
+function P.Window:_canResize(): boolean
+    return self._resizeHandle.Visible
+        and self._resizeHandle.Interactable
+        and self:_canInteract()
+        and #self._popups == 0
+        and not Input:GetFocusedTextBox()
+end
+
+function P.Window:_resizeTo(target: Vector2): boolean
+    local g, limits = self._layout, D.Resize
+    -- Clamp growth at the current top-left so pulling against an edge never moves the window.
+    local available = (self:_area() - self._position - V(g.Margin, g.Margin)) / self._scale
+    local maxWidth = math.max(g.Width, math.min(limits.MaxWidth, math.floor(available.X)))
+    local maxHeight = math.max(g.Height, math.min(limits.MaxHeight, math.floor(available.Y)))
+    local width = math.clamp(math.round(target.X), math.min(g.Width, limits.MinWidth), maxWidth)
+    local height = math.clamp(math.round(target.Y), math.min(g.Height, limits.MinHeight), maxHeight)
+    if width == g.Width and height == g.Height then
+        return false
+    end
+    self._manual = true
+    return self:SetSize(V(width, height))
+end
+
+function P.Window:_keyboard(key: any, selected: GuiObject): boolean
+    if selected ~= self._resizeHandle or Pointer or not self:_canResize() then
+        return false
+    end
+    local x = if key == Enum.KeyCode.Left or key == Enum.KeyCode.DPadLeft
+        then -1
+        elseif key == Enum.KeyCode.Right or key == Enum.KeyCode.DPadRight then 1
+        else 0
+    local y = if key == Enum.KeyCode.Up or key == Enum.KeyCode.DPadUp
+        then -1
+        elseif key == Enum.KeyCode.Down or key == Enum.KeyCode.DPadDown then 1
+        else 0
+    if x == 0 and y == 0 then
+        return false
+    end
+    local g = self._layout
+    self:_resizeTo(V(g.Width + x * D.Resize.Step, g.Height + y * D.Resize.Step))
+    return true
+end
+
+function P.Window:_mountResizeGrip()
+    local life, limits = self._life, D.Resize
+    local handle = U.make("TextButton", self._shell, {
+        Name = "Resize",
+        Text = "",
+        AnchorPoint = V(1, 1),
+        Position = S(1, 1),
+        Active = true,
+        AutoButtonColor = false,
+        ZIndex = 14,
+    })
+    self._resizeHandle = handle
+    U.focusable(self, life, handle, nil)
+    local plate = U.frame(handle, {
+        Name = "ResizePlate",
+        AnchorPoint = V(1, 1),
+        Position = UDim2.new(1, -limits.Inset, 1, -limits.Inset),
+        Size = O(limits.Plate, limits.Plate),
+        BackgroundTransparency = 0.42,
+    })
+    U.corner(plate, 5)
+    local stroke = U.make("UIStroke", plate, { Thickness = 1, Transparency = 0.42 })
+    local idle = U.icon(self, life, plate, "resizeGrip", limits.Icon, "TextSecondary", { Size = S(1, 1) })
+    local active = U.icon(self, life, plate, "resizeGrip", limits.Icon, "Accent", { Size = S(1, 1), Visible = false })
+    local readout = U.frame(self._shell, {
+        Name = "ResizeReadout",
+        AnchorPoint = V(1, 1),
+        Size = O(limits.ReadoutWidth, limits.ReadoutHeight),
+        Visible = false,
+        ZIndex = 14,
+    })
+    U.corner(readout, D.PopupRadius)
+    U.fill(self, life, readout, "SurfaceRaised")
+    U.line(self, life, readout, "Accent", { Position = O(5, 6), Size = O(2, 11) })
+    local readoutText = U.text(self, life, readout, "Numeric", "", "Text", {
+        Position = O(8, 0),
+        Size = UDim2.new(1, -12, 1, 0),
+        TextXAlignment = Enum.TextXAlignment.Center,
+    })
+    self._resizeReadout, self._resizeReadoutText = readout, readoutText
+
+    local hover, focus, resizing = false, false, false
+    local plateColor = U.paint(self, life, plate, "BackgroundColor3", function(t: Payload)
+        return if resizing then t.AccentMuted elseif hover or focus then t.Hover else t.Surface
+    end)
+    local edgeColor = U.paint(self, life, stroke, "Color", function(t: Payload)
+        return if resizing or focus then t.Accent elseif hover then t.AccentMuted else t.Stroke
+    end)
+    local function paint(instant: boolean?)
+        local engaged = hover or focus or resizing
+        idle.Visible, active.Visible = not engaged, engaged
+        plateColor()
+        edgeColor()
+        U.tween(self, life, plate, "resizePlate", "hover", {
+            BackgroundTransparency = if resizing then 0.06 elseif engaged then 0.17 else 0.42,
+        }, instant)
+        readout.Visible = resizing
+        if resizing then
+            local g = self._layout
+            readoutText.Text = ("%d × %d"):format(g.Width, g.Height)
+        end
+    end
+    self._resetResizeFeedback = function()
+        if hover or focus or resizing then
+            hover, focus, resizing = false, false, false
+            paint(true)
+        end
+    end
+    life:Give(handle.MouseEnter:Connect(function()
+        if handle.Interactable then
+            hover = true
+            paint()
+        end
+    end))
+    life:Give(handle.MouseLeave:Connect(function()
+        if hover then
+            hover = false
+            paint()
+        end
+    end))
+    life:Give(handle.SelectionGained:Connect(function()
+        if handle.Interactable then
+            focus = true
+            paint()
+        end
+    end))
+    life:Give(handle.SelectionLost:Connect(function()
+        if focus then
+            focus = false
+            paint()
+        end
+    end))
+    life:Give(handle.InputBegan:Connect(function(input: InputObject)
+        if not self:_canResize() then
+            return
+        end
+        local g, scale = self._layout, self._scale
+        local initial = V(g.Width, g.Height)
+        local mouse = input.UserInputType == Enum.UserInputType.MouseButton1
+        self:_take(self, input, {
+            Axis = "any",
+            WindowAction = "resize",
+            Start = function()
+                resizing = true
+                paint()
+            end,
+            Move = function(point: Vector2, from: Vector2)
+                if self._scale ~= scale then
+                    self:_release(true)
+                    return
+                end
+                self:_resizeTo(initial + (point - from) / scale)
+            end,
+            End = function(cancelled: boolean, point: Vector2)
+                resizing = false
+                hover = mouse and not cancelled and U.inside(handle, point)
+                paint()
+            end,
+        })
+    end))
 end
 
 function P.Window:_chrome()
@@ -3216,20 +3431,7 @@ function P.Window:_chrome()
         Position = UDim2.new(0, 22, 1, -45),
         Size = UDim2.new(1, -36, 0, 33),
     })
-    self._resizeHandle =
-        U.frame(shell, { Name = "Resize", AnchorPoint = V(1, 1), Position = S(1, 1), Active = true, ZIndex = 14 })
-    local grip = U.icon(w, life, self._resizeHandle, "resize", 10, "TextMuted", {
-        AnchorPoint = V(1, 1),
-        Position = UDim2.new(1, -5, 1, -5),
-        Size = O(10, 10),
-        Visible = false,
-    })
-    life:Give(self._resizeHandle.MouseEnter:Connect(function()
-        grip.Visible = self._resizable
-    end))
-    life:Give(self._resizeHandle.MouseLeave:Connect(function()
-        grip.Visible = false
-    end))
+    self:_mountResizeGrip()
     self._reopen = U.button(
         self,
         life,
@@ -3273,27 +3475,6 @@ function P.Window:_chrome()
     life:Give(self._blank.InputBegan:Connect(moving))
     life:Give(self._brand.InputBegan:Connect(moving))
     life:Give(self._mobileTitle.InputBegan:Connect(moving))
-    life:Give(self._resizeHandle.InputBegan:Connect(function(input: InputObject)
-        if not self._resizable or self._drawerOpen or #self._popups > 0 or Input:GetFocusedTextBox() then
-            return
-        end
-        local g = self._layout
-        local initial = V(g.Width, g.Height)
-        self:_take(self, input, {
-            Axis = "any",
-            WindowAction = "resize",
-            Move = function(p: Vector2, from: Vector2)
-                self._manual = true
-                self:SetSize(initial + (p - from) / self._scale)
-            end,
-            Start = function()
-                grip.Visible = true
-            end,
-            End = function()
-                grip.Visible = false
-            end,
-        })
-    end))
     self._stateRender = function()
         self._shell.Interactable = not self._disabled and not self._dialog
         self:_drawerLayout(true)
