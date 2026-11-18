@@ -250,7 +250,7 @@ type Payload = { [any]: any }
 local U = {}
 local P: Payload = {}
 local Build: Payload = {}
-local Library: any = { Version = "1.4.1" }
+local Library: any = { Version = "1.4.2" }
 
 local V = Vector2.new
 local O = UDim2.fromOffset
@@ -9118,7 +9118,7 @@ function P.ProfileManager.new(w: any, options: any): any
     self.indexPath, self.autoloadPath = self.folder .. "/index.json", self.root .. "/autoload.json"
     self.activeProfile, self.dirty, self.pending, self.applying = nil, false, nil, false
     self.lastResult = nil
-    self.autoloadState = self.available and "Idle" or "FilesystemUnavailable"
+    self.autoloadState = self.available and "Idle" or "Filesystem unavailable"
     if self.available then
         self:EnsureFolder(self.folder)
         self:PrepareAutoload()
@@ -9128,13 +9128,18 @@ end
 
 function P.ProfileManager:Call(key: string, ...: any): (boolean, any)
     local fn = self.api[key]
-    if type(fn) ~= "function" then return false, "FilesystemUnavailable" end
+    if type(fn) ~= "function" then
+        return false, "Filesystem unavailable"
+    end
     local ok, result = pcall(fn, ...)
-    return if ok then true, result else false, tostring(result)
+    if ok then
+        return true, result
+    end
+    return false, tostring(result)
 end
 
 function P.ProfileManager:EnsureFolder(path: string): (boolean, any)
-    if not self.available then return false, "FilesystemUnavailable" end
+    if not self.available then return false, "Filesystem unavailable" end
     local current = ""
     for part in path:gmatch("[^/]+") do
         current = if current == "" then part else current .. "/" .. part
@@ -9149,13 +9154,13 @@ function P.ProfileManager:EnsureFolder(path: string): (boolean, any)
 end
 
 function P.ProfileManager:Read(path: string): (any, any)
-    if not self.available then return nil, "FilesystemUnavailable" end
+    if not self.available then return nil, "Filesystem unavailable" end
     local ok, exists = self:Call("isfile", path)
-    if not ok or not exists then return nil, ok and "MissingFile" or exists end
+    if not ok or not exists then return nil, ok and "File not found" or exists end
     local readOK, raw = self:Call("readfile", path)
-    if not readOK or type(raw) ~= "string" then return nil, readOK and "InvalidJSON" or raw end
+    if not readOK or type(raw) ~= "string" then return nil, readOK and "Invalid JSON" or raw end
     local decodedOK, data = pcall(Http.JSONDecode, Http, raw)
-    if not decodedOK or type(data) ~= "table" then return nil, "InvalidJSON" end
+    if not decodedOK or type(data) ~= "table" then return nil, "Invalid JSON" end
     return data, nil
 end
 
@@ -9166,13 +9171,16 @@ function P.ProfileManager:Write(path: string, data: any): (boolean, any)
         if not ready then return false, why end
     end
     local encodedOK, raw = pcall(Http.JSONEncode, Http, data)
-    if not encodedOK or type(raw) ~= "string" then return false, "InvalidJSON" end
+    if not encodedOK or type(raw) ~= "string" then return false, "Invalid JSON" end
     local wrote, why = self:Call("writefile", path, raw)
     if not wrote then return false, why end
     local verifyOK, verify = self:Call("readfile", path)
-    if not verifyOK or type(verify) ~= "string" then return false, "WriteVerificationFailed" end
+    if not verifyOK or type(verify) ~= "string" then return false, "Write verification failed" end
     local valid = pcall(Http.JSONDecode, Http, verify)
-    return if valid then true, nil else false, "WriteVerificationFailed"
+    if valid then
+        return true, nil
+    end
+    return false, "Write verification failed"
 end
 
 function P.ProfileManager:Path(name: string): string
@@ -9218,19 +9226,19 @@ end
 
 function P.ProfileManager:ReadProfile(name: string): (any, any)
     local clean = U.profileName(name)
-    if not clean then return nil, "InvalidName" end
+    if not clean then return nil, "Invalid profile name" end
     local data, why = self:Read(self:Path(clean))
     if not data then return nil, why end
-    if data.Version ~= 1 or type(data.Config) ~= "table" then return nil, "UnsupportedProfile" end
+    if data.Version ~= 1 or type(data.Config) ~= "table" then return nil, "Unsupported profile format" end
     return data, nil
 end
 
 function P.ProfileManager:Save(name: string, createOnly: boolean?): (boolean, any)
     local clean = U.profileName(name)
-    if not clean then return false, "InvalidName" end
+    if not clean then return false, "Invalid profile name" end
     local ok, exists = self:Call("isfile", self:Path(clean))
     if not ok then return false, exists end
-    if createOnly and exists then return false, "ProfileExists" end
+    if createOnly and exists then return false, "Profile already exists" end
     local wrote, why = self:Write(self:Path(clean), self:Snapshot())
     if wrote then
         self.activeProfile, self.dirty = clean, false
@@ -9280,7 +9288,7 @@ function P.ProfileManager:Hydrate(control: any)
 end
 
 function P.ProfileManager:Apply(data: any, silent: boolean?): (boolean, any)
-    if type(data) ~= "table" or type(data.Config) ~= "table" then return false, "UnsupportedProfile" end
+    if type(data) ~= "table" or type(data.Config) ~= "table" then return false, "Unsupported profile format" end
     self.applying = true
     local ok, report = self.window:ImportConfig(data.Config, { Silent = silent == true, Atomic = true, IgnoreUnknown = true })
     self.applying = false
@@ -9298,7 +9306,7 @@ end
 
 function P.ProfileManager:Load(name: string, silent: boolean?): (boolean, any)
     local clean = U.profileName(name)
-    if not clean then return false, "InvalidName" end
+    if not clean then return false, "Invalid profile name" end
     local data, why = self:ReadProfile(clean)
     if not data then return false, why end
     local ok, report = self:Apply(data, silent)
@@ -9311,11 +9319,11 @@ end
 
 function P.ProfileManager:Delete(name: string): (boolean, any)
     local clean = U.profileName(name)
-    if not clean then return false, "InvalidName" end
-    if type(self.api.delfile) ~= "function" then return false, "FilesystemUnavailable" end
+    if not clean then return false, "Invalid profile name" end
+    if type(self.api.delfile) ~= "function" then return false, "Filesystem unavailable" end
     local checked, exists = self:Call("isfile", self:Path(clean))
     if not checked then return false, exists end
-    if not exists then return false, "MissingProfile" end
+    if not exists then return false, "Profile not found" end
     local auto = self:GetAutoload()
     if auto.enabled and auto.profile == clean then self:SetAutoload(nil, false) end
     local ok, why = self:Call("delfile", self:Path(clean))
@@ -9331,10 +9339,10 @@ function P.ProfileManager:Duplicate(name: string, newName: string): (boolean, an
     local data, why = self:ReadProfile(name)
     local clean = U.profileName(newName)
     if not data then return false, why end
-    if not clean then return false, "InvalidName" end
+    if not clean then return false, "Invalid profile name" end
     local checked, exists = self:Call("isfile", self:Path(clean))
     if not checked then return false, exists end
-    if exists then return false, "ProfileExists" end
+    if exists then return false, "Profile already exists" end
     data.UpdatedAt = os.time()
     local ok, err = self:Write(self:Path(clean), data)
     if ok then self:Index(clean, true) end
@@ -9343,7 +9351,7 @@ end
 
 function P.ProfileManager:Rename(name: string, newName: string): (boolean, any)
     local old, new = U.profileName(name), U.profileName(newName)
-    if not old or not new then return false, "InvalidName" end
+    if not old or not new then return false, "Invalid profile name" end
     if old == new then return true end
     local auto = self:GetAutoload()
     local ok, why = self:Duplicate(old, new)
@@ -9373,13 +9381,13 @@ function P.ProfileManager:GetAutoload(): any
 end
 
 function P.ProfileManager:SetAutoload(name: string?, enabled: boolean): (boolean, any)
-    if not self.available then return false, "FilesystemUnavailable" end
+    if not self.available then return false, "Filesystem unavailable" end
     local data, key = self:AutoloadData(), tostring(self.placeId)
     if enabled then
         local clean = U.profileName(name)
-        if not clean then return false, "InvalidName" end
+        if not clean then return false, "Invalid profile name" end
         local checked, exists = self:Call("isfile", self:Path(clean))
-        if not checked or not exists then return false, checked and "MissingProfile" or exists end
+        if not checked or not exists then return false, checked and "Profile not found" or exists end
         data.Games[key] = { enabled = true, profile = clean, Game = self.gameName, PlaceId = self.placeId }
     else
         data.Games[key] = { enabled = false, Game = self.gameName, PlaceId = self.placeId }
@@ -9400,7 +9408,7 @@ end
 
 function P.ProfileManager:ApplyAutoload(): (boolean, any)
     local auto = self:GetAutoload()
-    if not auto.enabled or type(auto.profile) ~= "string" then return false, "AutoloadDisabled" end
+    if not auto.enabled or type(auto.profile) ~= "string" then return false, "Autoload is disabled" end
     return self:Load(auto.profile, false)
 end
 
@@ -9449,20 +9457,29 @@ function P.Window:GetPersistenceStatus(): any
 end
 function P.Window:ExportProfile(name: string?): (string?, any)
     local data, why
-    if name then data, why = self._profileManager:ReadProfile(name) else data = self._profileManager:Snapshot() end
-    if not data then return nil, why end
+    if name then
+        data, why = self._profileManager:ReadProfile(name)
+    else
+        data = self._profileManager:Snapshot()
+    end
+    if not data then
+        return nil, why
+    end
     local ok, json = pcall(Http.JSONEncode, Http, data)
-    return if ok then json else nil, if ok then nil else tostring(json)
+    if ok then
+        return json, nil
+    end
+    return nil, tostring(json)
 end
 function P.Window:ImportProfile(name: string, json: string, overwrite: boolean?): (boolean, any)
     local clean = U.profileName(name)
-    if not clean or type(json) ~= "string" or #json > 2097152 then return false, "InvalidProfile" end
+    if not clean or type(json) ~= "string" or #json > 2097152 then return false, "Invalid profile" end
     local ok, data = pcall(Http.JSONDecode, Http, json)
-    if not ok or type(data) ~= "table" or data.Version ~= 1 or type(data.Config) ~= "table" then return false, "InvalidProfile" end
+    if not ok or type(data) ~= "table" or data.Version ~= 1 or type(data.Config) ~= "table" then return false, "Invalid profile" end
     local path = self._profileManager:Path(clean)
     local checked, exists = self._profileManager:Call("isfile", path)
     if not checked then return false, exists end
-    if exists and overwrite ~= true then return false, "ProfileExists" end
+    if exists and overwrite ~= true then return false, "Profile already exists" end
     data.Game, data.PlaceId, data.UpdatedAt = self._profileManager.gameName, game.PlaceId, os.time()
     local wrote, err = self._profileManager:Write(path, data)
     if wrote then self._profileManager:Index(clean, true) end
