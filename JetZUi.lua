@@ -256,7 +256,7 @@ type Payload = { [any]: any }
 local U = {}
 local P: Payload = {}
 local Build: Payload = {}
-local Library: any = { Version = "1.6.0" }
+local Library: any = { Version = "1.6.1" }
 
 local V = Vector2.new
 local O = UDim2.fromOffset
@@ -340,6 +340,8 @@ local D = {
         Section = 12,
     },
     Animation = {
+        micro = 0.08,
+        fast = 0.14,
         hover = 0.10,
         state = 0.13,
         nav = 0.17,
@@ -2595,7 +2597,9 @@ function U.button(owner: any, scope: any, parent: Instance, props: Payload, fire
     end
     scope:Give(object.Activated:Connect(function(input: InputObject?)
         local w = owner._w
-        local recovery = object == w._reopen and not w._visible and not w._disabled
+        local recovery = not w._visible
+            and not w._disabled
+            and (object == w._floatingToggle or object == w._islandButton or object == w._reopen)
         if
             (owner:_canInteract() or recovery)
             and object.Interactable
@@ -4413,7 +4417,7 @@ function P.Window:_chrome()
 
     local islandTitle = U.text(w, life, island, "Control", self._gameName, "Text", {
         Position = O(76, 0),
-        Size = UDim2.new(1, -190, 1, 0),
+        Size = UDim2.new(1, -188, 1, 0),
         TextTruncate = Enum.TextTruncate.AtEnd,
         ZIndex = island.ZIndex + 2,
     })
@@ -4487,6 +4491,11 @@ function P.Window:_chrome()
             return
         end
         local touch = self._useTouch
+        local area = self._safe.AbsoluteSize
+        local islandWidth = math.clamp(area.X - 28, 238, 330)
+        island.Size = O(islandWidth, 62)
+        island.Position = UDim2.new(0.5, 0, 0, if touch then 10 else 12)
+        floating.Position = UDim2.new(0, if touch then 12 else 14, 0.5, 0)
         local showFloating = self._floatingToggleEnabled and (self._visible or not touch)
         local showIsland = self._dynamicIslandEnabled and touch and not self._visible
 
