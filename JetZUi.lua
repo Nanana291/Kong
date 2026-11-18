@@ -327,6 +327,44 @@ local D = {
     MaxScale = 1.25,
     ParticleMax = 48,
     ParticleTouchMax = 20,
+    -- Logical measurements are normalized to the reference's 286 × 58 capsule.
+    Island = {
+        Width = 286,
+        Height = 58,
+        ReferenceShortSide = 390,
+        MinimumScale = 0.76,
+        TopClearance = 4,
+        SideClearance = 8,
+        TopbarClearance = 4,
+        MotionOffset = 3,
+        SurfaceTop = C(30, 29, 34),
+        SurfaceMid = C(22, 22, 24),
+        SurfaceBottom = C(14, 14, 16),
+        BubbleInset = 7,
+        BubbleDiameter = 44,
+        BubbleBase = C(36, 32, 36),
+        BubbleTint = 0.16,
+        BubbleShade = C(186, 183, 188),
+        SymbolSize = 23,
+        TitleLeft = 61,
+        TitleGap = 12,
+        TitleSize = 17,
+        CountSize = 16,
+        TextColor = C(187, 185, 189),
+        CounterColor = C(190, 183, 189),
+        RightPad = 17,
+        CountGap = 10,
+        CountMinWidth = 22,
+        CountDigitWidth = 9,
+        WaveWidth = 29,
+        BarWidth = 5,
+        Bars = {
+            { X = 0, Y = 0, Rest = 21, Peak = 19, Time = 1.12, Delay = 0.00 },
+            { X = 8, Y = -0.25, Rest = 19, Peak = 21, Time = 1.24, Delay = 0.16 },
+            { X = 16, Y = 0.5, Rest = 7, Peak = 9, Time = 1.08, Delay = 0.30 },
+            { X = 24, Y = 0.25, Rest = 17, Peak = 15.5, Time = 1.32, Delay = 0.24 },
+        },
+    },
     Typography = {
         Brand = 16,
         Sidebar = 15,
@@ -3688,8 +3726,8 @@ function P.Window:SetLogo(v: any)
     if self._setFloatingLogo then
         self._setFloatingLogo(v)
     end
-    if self._setIslandLogo then
-        self._setIslandLogo(v)
+    if self._island then
+        self._island._setLogo(v)
     end
     return true
 end
@@ -3765,6 +3803,9 @@ function P.Window:SetDynamicIslandEnabled(value: boolean)
         return U.issue(self, "SetDynamicIslandEnabled", "expected boolean")
     end
     self._dynamicIslandEnabled = value
+    if not self._useTouch then
+        self._desktopIsland = value
+    end
     if self._syncFloatingOverlay then
         self:_syncFloatingOverlay(false)
     end
@@ -3953,6 +3994,9 @@ function P.Window:SetAnimationSpeed(v: number)
     end
     self._speed = speed
     self:_syncAnimations()
+    if self._island then
+        self._island:_refreshMotion()
+    end
     self:_reflect("speed", speed)
     return true
 end
@@ -4246,6 +4290,383 @@ function P.Window:_mountResizeGrip()
     end))
 end
 
+-- The launcher is a separate device-safe layer. The workspace still uses CoreUISafeInsets.
+P.Island = {}
+P.Island.__index = P.Island
+
+function P.Island._accent(colors: Payload): Color3
+    local hue, saturation, value = colors.Accent:ToHSV()
+    return Color3.fromHSV(hue, saturation * 0.88, math.clamp(value * 0.94, 0.59, 0.82))
+end
+
+function P.Island:_layout(): boolean
+    local spec = D.Island
+    local area = self._viewport.AbsoluteSize
+    if area.X <= 1 or area.Y <= 1 then
+        return false
+    end
+
+    local shortSide = math.min(area.X, area.Y)
+    local preferred = math.clamp(shortSide / spec.ReferenceShortSide, spec.MinimumScale, 1)
+    local scale = math.min(
+        preferred,
+        math.max(1, area.X - 2 * spec.SideClearance) / spec.Width,
+        math.max(1, area.Y - spec.TopClearance) / spec.Height
+    )
+    local centerX, topY = area.X / 2, spec.TopClearance
+
+    -- GetInsetArea gives both rectangles in the same (core-safe) coordinate space.
+    -- Convert to this overlay's device-safe origin instead of subtracting a topbar offset.
+    local ok, left, right, top, bottom = pcall(function()
+        local device = Gui:GetInsetArea(Enum.ScreenInsets.DeviceSafeInsets)
+        local topbar = Gui:GetInsetArea(Enum.ScreenInsets.TopbarSafeInsets)
+        return topbar.Min.X - device.Min.X,
+            topbar.Max.X - device.Min.X,
+            topbar.Min.Y - device.Min.Y,
+            topbar.Max.Y - device.Min.Y
+    end)
+    if ok and bottom > top and topY < bottom and topY + spec.Height * scale > top then
+        local centeredRoom = 2 * (math.min(centerX - left, right - centerX) - spec.TopbarClearance)
+        local centeredScale = centeredRoom / spec.Width
+        if centeredScale >= math.min(scale, spec.MinimumScale) then
+            scale = math.min(scale, centeredScale)
+        else
+            -- Narrow or asymmetric native controls: prefer a centered pill below them.
+            topY = math.max(topY, bottom + spec.TopbarClearance)
+        end
+    end
+
+    topY = math.clamp(topY, 0, math.max(0, area.Y - spec.Height * scale))
+    self._scale.Scale = scale
+    self._anchor.Position = O(centerX, topY)
+    local hitHeight = if self._w._useTouch then math.max(spec.Height, D.TouchHit / scale) else spec.Height
+    self._button.Size = O(spec.Width, hitHeight)
+    return true
+end
+
+function P.Island:_updateCount()
+    local spec = D.Island
+    local value = tostring(#Players:GetPlayers())
+    if self._count.Text == value then
+        return
+    end
+    self._count.Text = value
+    local digitsWidth = math.max(spec.CountMinWidth, #value * spec.CountDigitWidth + 2)
+    local waveInset = spec.RightPad + digitsWidth + spec.CountGap
+    self._count.Size = O(digitsWidth, spec.Height)
+    self._wave.Position = UDim2.new(1, -waveInset, 0.5, 0)
+    self._title.Size = UDim2.new(1, -(spec.TitleLeft + spec.TitleGap + spec.WaveWidth + waveInset), 1, 0)
+end
+
+function P.Island:_refreshMotion()
+    local speed = if self._shown and not Gui.ReducedMotionEnabled then self._w._speed else 0
+    if speed == self._waveSpeed then
+        return
+    end
+    self._waveSpeed = speed
+    self._life:Remove("wave")
+    local waveScope = U.scope()
+    if speed > 0 then
+        self._life:Give(waveScope, "wave")
+    end
+    for index, bar in self._bars do
+        local spec = D.Island.Bars[index]
+        bar.Size = O(D.Island.BarWidth, spec.Rest)
+        if speed > 0 then
+            local tween = Tweens:Create(
+                bar,
+                TweenInfo.new(
+                    spec.Time / speed,
+                    Enum.EasingStyle.Sine,
+                    Enum.EasingDirection.InOut,
+                    -1,
+                    true,
+                    spec.Delay / speed
+                ),
+                { Size = O(D.Island.BarWidth, spec.Peak) }
+            )
+            waveScope:Give(function()
+                tween:Cancel()
+                tween:Destroy()
+            end)
+            tween:Play()
+        end
+    end
+end
+
+function P.Island:_present(shown: boolean, instant: boolean?)
+    if self._shown == shown then
+        return
+    end
+    self._shown = shown
+    local w, life = self._w, self._life
+    local snap = instant or w._speed <= 0 or Gui.ReducedMotionEnabled
+    life:Remove("hide")
+    self._button.Interactable = shown
+    self._button.Selectable = shown
+    if shown then
+        self._screen.Enabled = true
+        self._anchor.Visible = self:_layout()
+        self:_updateCount()
+        U.tween(w, life, self._capsule, "presence", "fast", {
+            GroupTransparency = 0,
+            Position = O(0, 0),
+        }, snap)
+    else
+        life:Remove("count")
+        life:Remove("layout")
+        if Gui.SelectedObject == self._button then
+            Gui.SelectedObject = nil
+        end
+        U.tween(w, life, self._capsule, "presence", "fast", {
+            GroupTransparency = 1,
+            Position = O(0, D.Island.MotionOffset),
+        }, snap)
+        local function finish()
+            if not self._shown then
+                self._anchor.Visible = false
+                self._screen.Enabled = false
+            end
+        end
+        if snap then
+            finish()
+        else
+            U.later(w, life, "hide", D.Animation.fast / w._speed, finish)
+        end
+    end
+    self:_refreshMotion()
+end
+
+function P.Island._mount(w: any): any
+    local spec = D.Island
+    local life = U.scope()
+    w._life:Give(life, "dynamicIsland")
+    local screen = U.make("ScreenGui", nil, {
+        Name = w._gui.Name .. "_Island",
+        ResetOnSpawn = false,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+        DisplayOrder = w._gui.DisplayOrder,
+        ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets,
+        ClipToDeviceSafeArea = true,
+        SafeAreaCompatibility = Enum.SafeAreaCompatibility.None,
+        Enabled = false,
+    })
+    life:Give(screen)
+    local viewport = U.frame(screen, { Name = "DeviceSafeViewport", Size = S(1, 1) })
+    local anchor = U.frame(viewport, {
+        Name = "IslandAnchor",
+        AnchorPoint = V(0.5, 0),
+        Size = O(spec.Width, spec.Height),
+        Visible = false,
+    })
+    local scale = U.make("UIScale", anchor, { Scale = 1 })
+    local capsule = U.make("CanvasGroup", anchor, {
+        Name = "JetZDynamicIsland",
+        Size = S(1, 1),
+        Position = O(0, spec.MotionOffset),
+        GroupTransparency = 1,
+    })
+
+    -- Gradient colors modulate the underlying surface; the white base preserves the sampled tones.
+    local surface = U.frame(capsule, {
+        Name = "CapsuleSurface",
+        Size = S(1, 1),
+        BackgroundColor3 = White,
+        BackgroundTransparency = 0,
+    })
+    U.make("UICorner", surface, { CornerRadius = UDim.new(0.5, 0) })
+    U.make("UIGradient", surface, {
+        Rotation = 90,
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, spec.SurfaceTop),
+            ColorSequenceKeypoint.new(0.55, spec.SurfaceMid),
+            ColorSequenceKeypoint.new(1, spec.SurfaceBottom),
+        }),
+    })
+
+    local bubble = U.frame(capsule, {
+        Name = "BrandMedallion",
+        AnchorPoint = V(0, 0.5),
+        Position = UDim2.new(0, spec.BubbleInset, 0.5, 0),
+        Size = O(spec.BubbleDiameter, spec.BubbleDiameter),
+        ZIndex = 2,
+    })
+    local bubbleSurface = U.line(w, life, bubble, function(colors: Payload)
+        return spec.BubbleBase:Lerp(P.Island._accent(colors), spec.BubbleTint)
+    end, { Name = "MedallionSurface", Size = S(1, 1) })
+    U.make("UICorner", bubbleSurface, { CornerRadius = UDim.new(0.5, 0) })
+    U.make("UIGradient", bubbleSurface, { Rotation = 90, Color = ColorSequence.new(White, spec.BubbleShade) })
+    local _, setLogo = U.icon(w, life, bubble, w._logo, spec.SymbolSize, P.Island._accent, {
+        Name = "JetZBrand",
+        AnchorPoint = V(0.5, 0.5),
+        Position = S(0.5, 0.5),
+        Size = O(spec.SymbolSize, spec.SymbolSize),
+        ZIndex = 2,
+    })
+
+    local font = Font.fromEnum(Enum.Font.BuilderSansMedium)
+    local title = U.make("TextLabel", capsule, {
+        Name = "ExperienceTitle",
+        Position = O(spec.TitleLeft, 0),
+        Size = UDim2.new(1, -spec.TitleLeft, 1, 0),
+        Text = w._gameName,
+        FontFace = font,
+        TextSize = spec.TitleSize,
+        TextColor3 = spec.TextColor,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Center,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+        ZIndex = 2,
+    })
+    local wave = U.frame(capsule, {
+        Name = "Waveform",
+        AnchorPoint = V(1, 0.5),
+        Size = O(spec.WaveWidth, spec.Height),
+        ZIndex = 2,
+    })
+    local bars = table.create(#spec.Bars)
+    for index, shape in spec.Bars do
+        local bar = U.line(w, life, wave, P.Island._accent, {
+            Name = "Bar" .. tostring(index),
+            AnchorPoint = V(0, 0.5),
+            Position = UDim2.new(0, shape.X, 0.5, shape.Y),
+            Size = O(spec.BarWidth, shape.Rest),
+        })
+        U.make("UICorner", bar, { CornerRadius = UDim.new(0.5, 0) })
+        bars[index] = bar
+    end
+    local count = U.make("TextLabel", capsule, {
+        Name = "PlayerCount",
+        Text = "",
+        AnchorPoint = V(1, 0),
+        Position = UDim2.new(1, -spec.RightPad, 0, 0),
+        Size = O(spec.CountMinWidth, spec.Height),
+        FontFace = font,
+        TextSize = spec.CountSize,
+        TextColor3 = spec.CounterColor,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Center,
+        TextTruncate = Enum.TextTruncate.None,
+        ZIndex = 2,
+    })
+    local button = U.button(w, life, anchor, {
+        Name = "RestoreWindow",
+        Size = S(1, 1),
+        Interactable = false,
+        Selectable = false,
+        ZIndex = 3,
+    }, function()
+        if not w._visible then
+            w:Show()
+        end
+    end)
+
+    local island = setmetatable({
+        _w = w,
+        _life = life,
+        _screen = screen,
+        _viewport = viewport,
+        _anchor = anchor,
+        _capsule = capsule,
+        _scale = scale,
+        _button = button,
+        _title = title,
+        _count = count,
+        _wave = wave,
+        _bars = bars,
+        _setLogo = setLogo,
+        _shown = false,
+        _waveSpeed = 0,
+    }, P.Island)
+    w._islandButton = button
+    local function layoutChanged()
+        if island._shown then
+            U.later(w, life, "layout", nil, function()
+                island._anchor.Visible = island:_layout()
+            end)
+        end
+    end
+    life:Give(viewport:GetPropertyChangedSignal("AbsoluteSize"):Connect(layoutChanged))
+    life:Give(viewport:GetPropertyChangedSignal("AbsolutePosition"):Connect(layoutChanged))
+    life:Give(Gui:GetPropertyChangedSignal("TopbarInset"):Connect(layoutChanged))
+    life:Give(Gui:GetPropertyChangedSignal("ReducedMotionEnabled"):Connect(function()
+        island:_refreshMotion()
+    end))
+    life:Give(Players.PlayerAdded:Connect(function()
+        if island._shown then
+            island:_updateCount()
+        end
+    end))
+    life:Give(Players.PlayerRemoving:Connect(function()
+        if island._shown then
+            -- PlayerRemoving is delivered before the player leaves the Players service.
+            U.later(w, life, "count", nil, function()
+                island:_updateCount()
+            end)
+        end
+    end))
+    screen.Parent = w._gui.Parent
+    return island
+end
+
+local experienceNames: Payload = {}
+
+function U.resolveExperienceName(w: any)
+    local place = game.PlaceId
+    if place <= 0 then
+        return
+    end
+    local state = experienceNames[place]
+    if not state then
+        state = { pending = false, retryAt = 0, waiters = {} }
+        experienceNames[place] = state
+    end
+    if state.name then
+        w._gameName = state.name
+        return
+    end
+    if os.clock() < state.retryAt then
+        return
+    end
+    state.waiters[w] = true
+    w._life:Give(function()
+        state.waiters[w] = nil
+    end, "experienceName")
+    if state.pending then
+        return
+    end
+
+    state.pending = true
+    task.defer(function()
+        if next(state.waiters) == nil then
+            state.pending = false
+            return
+        end
+        local ok, info = pcall(Marketplace.GetProductInfoAsync, Marketplace, place, Enum.InfoType.Asset)
+        local clean = if ok and type(info) == "table" then U.str(info.Name) else ""
+        clean = string.match(clean, "^%s*(.-)%s*$") or ""
+        state.pending = false
+        if clean ~= "" then
+            state.name = clean
+        else
+            state.retryAt = os.clock() + 30
+        end
+        local waiters = state.waiters
+        state.waiters = {}
+        for window in waiters do
+            if not window._dead then
+                window._life:Forget("experienceName")
+                if state.name then
+                    window._gameName = state.name
+                    if window._island then
+                        window._island._title.Text = state.name
+                    end
+                end
+            end
+        end
+    end)
+end
+
 function P.Window:_chrome()
     local w, life = self, self._life
     local safe = self._safe
@@ -4369,241 +4790,30 @@ function P.Window:_chrome()
         end
     end))
 
-    -- Dynamic Island -----------------------------------------------------------
-    -- Rebuilt from zero against the supplied Apple-style reference.
-    -- Visual contract: ~5:1 capsule, integrated accent bubble, strong game title,
-    -- four animated bars, compact trailing count, no visible internal separators.
-    local island = U.make("CanvasGroup", safe, {
-        Name = "JetZDynamicIsland",
-        AnchorPoint = V(0.5, 0),
-        Position = UDim2.new(0.5, 0, 0, 0),
-        Size = O(264, 52),
-        BackgroundColor3 = C(5, 5, 7),
-        BackgroundTransparency = 0,
-        GroupTransparency = 1,
-        Visible = false,
-        Active = true,
-        ZIndex = 64,
-    })
-    self._dynamicIsland = island
-    life:Give(island)
-    U.corner(island, 26)
-
-    -- Nearly invisible edge: the reference reads as a black capsule, not a bordered card.
-    local islandEdge = U.make("UIStroke", island, {
-        Thickness = 0.75,
-        Transparency = 0.88,
-    })
-    life:Give(islandEdge)
-    U.paint(w, life, islandEdge, "Color", "Accent")
-
-    local islandShade = U.make("UIGradient", island, {
-        Rotation = 90,
-        Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0.00, C(17, 17, 20)),
-            ColorSequenceKeypoint.new(0.28, C(10, 10, 12)),
-            ColorSequenceKeypoint.new(0.72, C(6, 6, 8)),
-            ColorSequenceKeypoint.new(1.00, C(3, 3, 4)),
-        }),
-    })
-    life:Give(islandShade)
-
-    local islandScale = U.make("UIScale", island, { Scale = 0.95 })
-    life:Give(islandScale)
-    self._islandScale = islandScale
-
-    local islandButton = U.button(self, life, island, {
-        Name = "RestoreWindow",
-        Size = S(1, 1),
-        BackgroundTransparency = 1,
-        ZIndex = island.ZIndex + 9,
-    }, function()
-        if not w._visible then
-            w:Show()
-        end
-    end)
-    self._islandButton = islandButton
-
-    -- Accent bubble ------------------------------------------------------------
-    local logoBubble = U.frame(island, {
-        Name = "LogoBubble",
-        Position = O(6, 6),
-        Size = O(40, 40),
-        BackgroundTransparency = 0,
-        ZIndex = island.ZIndex + 2,
-    })
-    life:Give(logoBubble)
-    U.corner(logoBubble, 20)
-    U.fill(w, life, logoBubble, "AccentMuted")
-
-    local bubbleEdge = U.make("UIStroke", logoBubble, {
-        Thickness = 1,
-        Transparency = 0.76,
-    })
-    life:Give(bubbleEdge)
-    U.paint(w, life, bubbleEdge, "Color", "Accent")
-
-    local _, setIslandLogo = U.icon(w, life, logoBubble, self._logo, 18, "Accent", {
-        AnchorPoint = V(0.5, 0.5),
-        Position = S(0.5, 0.5),
-        Size = O(23, 23),
-        ZIndex = logoBubble.ZIndex + 1,
-    })
-    self._setIslandLogo = setIslandLogo
-
-    -- Title --------------------------------------------------------------------
-    local islandTitle = U.text(w, life, island, "Brand", self._gameName, "Text", {
-        Position = O(57, 0),
-        Size = UDim2.new(1, -148, 1, 0),
-        TextTruncate = Enum.TextTruncate.AtEnd,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        ZIndex = island.ZIndex + 3,
-    })
-    islandTitle.FontFace = BOLD
-    islandTitle.TextSize = 15
-    self._islandTitle = islandTitle
-
-    -- Equalizer ---------------------------------------------------------------
-    local barsHost = U.frame(island, {
-        Name = "Activity",
-        AnchorPoint = V(1, 0.5),
-        Position = UDim2.new(1, -42, 0.5, 0),
-        Size = O(38, 30),
-        ZIndex = island.ZIndex + 4,
-    })
-    life:Give(barsHost)
-
-    local bars = {}
-    local initialHeights = { 15, 24, 19, 26 }
-    for i = 1, 4 do
-        local bar = U.line(w, life, barsHost, "Accent", {
-            AnchorPoint = V(0.5, 0.5),
-            Position = UDim2.new(0, 4 + (i - 1) * 9, 0.5, 0),
-            Size = O(4, initialHeights[i]),
-            ZIndex = barsHost.ZIndex + 1,
-        })
-        U.corner(bar, 2)
-        bars[i] = bar
-    end
-    self._islandBars = bars
-
-    -- Trailing count -----------------------------------------------------------
-    local islandCount = U.text(w, life, island, "Brand", tostring(#Players:GetPlayers()), "Text", {
-        AnchorPoint = V(1, 0),
-        Position = UDim2.new(1, -10, 0, 0),
-        Size = O(27, 52),
-        TextXAlignment = Enum.TextXAlignment.Right,
-        ZIndex = island.ZIndex + 4,
-    })
-    islandCount.FontFace = BOLD
-    islandCount.TextSize = 15
-    self._islandCount = islandCount
-
-    local function refreshIslandCount()
-        if islandCount.Parent then
-            islandCount.Text = tostring(#Players:GetPlayers())
-        end
-    end
-    life:Give(Players.PlayerAdded:Connect(refreshIslandCount))
-    life:Give(Players.PlayerRemoving:Connect(function()
-        task.defer(refreshIslandCount)
-    end))
-
-    -- Smooth, bounded activity animation. No RenderStepped.
-    self._islandAnimating = false
-    function self:_setIslandActivity(active: boolean)
-        if self._islandAnimating == active then
-            return
-        end
-        self._islandAnimating = active
-        if not active then
-            for i, bar in bars do
-                U.tween(self, life, bar, "islandBar" .. tostring(i), "fast", {
-                    Size = O(4, initialHeights[i]),
-                })
-            end
-            return
-        end
-        task.spawn(function()
-            local phase = 0
-            while not self._dead and self._islandAnimating and island.Visible do
-                phase += 1
-                for i, bar in bars do
-                    local wave = (phase * 5 + i * 7) % 15
-                    local height = 11 + wave
-                    U.tween(self, life, bar, "islandBar" .. tostring(i), "micro", {
-                        Size = O(4, height),
-                    })
-                end
-                task.wait(math.max(0.095, 0.145 / math.max(self._speed, 0.2)))
-            end
-        end)
-    end
-
     function self:_syncFloatingOverlay(instant: boolean?)
         if self._dead then
             return
         end
         local touch = self._useTouch
-        local area = self._safe.AbsoluteSize
-
-        -- Reference ratio is very close to 5:1. Keep it stable rather than stretching
-        -- to arbitrary viewport percentages.
-        local islandHeight = 52
-        local islandWidth = math.clamp(islandHeight * 5.08, 252, math.min(272, area.X - 20))
-        island.Size = O(islandWidth, islandHeight)
-
-        -- ScreenGui uses CoreUISafeInsets. Compensate only this overlay so its physical
-        -- top edge visually matches the supplied reference while the main window stays safe.
-        local insetTop = 0
-        local okInset, topLeft = pcall(function()
-            local top, _ = Gui:GetGuiInset()
-            return top
-        end)
-        if okInset and typeof(topLeft) == "Vector2" then
-            insetTop = topLeft.Y
+        local showIsland = self._dynamicIslandEnabled and (touch or self._desktopIsland) and not self._visible
+        if showIsland and not self._island then
+            self._island = P.Island._mount(self)
         end
-        island.Position = UDim2.new(0.5, 0, 0, -insetTop + 4)
+        if self._island then
+            self._island:_present(showIsland, instant)
+        end
 
         floating.Position = UDim2.new(0, if touch then 12 else 14, 0.5, 0)
-        local showFloating = self._floatingToggleEnabled and (self._visible or not touch)
-        local showIsland = self._dynamicIslandEnabled and touch and not self._visible
-
+        local showFloating = self._floatingToggleEnabled and not showIsland
+        local changed = floating.Visible ~= showFloating
         floating.Visible = showFloating
         floating.Interactable = showFloating
         floating.Selectable = showFloating
-
-        if showFloating then
+        if showFloating and changed then
             floatingScale.Scale = if instant then 1 else 0.88
-            if not instant then
-                U.tween(self, life, floatingScale, "floatingShow", "fast", { Scale = 1 })
-            end
-        end
-
-        if showIsland then
-            island.Visible = true
-            island.GroupTransparency = if instant then 0 else 1
-            islandScale.Scale = if instant then 1 else 0.95
-            U.tween(self, life, island, "islandFade", "fast", { GroupTransparency = 0 }, instant)
-            U.tween(self, life, islandScale, "islandScale", "fast", { Scale = 1 }, instant)
-            self:_setIslandActivity(true)
-        else
-            self:_setIslandActivity(false)
-            if island.Visible then
-                if instant or self._speed <= 0 then
-                    island.GroupTransparency = 1
-                    islandScale.Scale = 0.95
-                    island.Visible = false
-                else
-                    U.tween(self, life, island, "islandFade", "fast", { GroupTransparency = 1 })
-                    U.tween(self, life, islandScale, "islandScale", "fast", { Scale = 0.95 })
-                    U.later(self, life, "islandHide", D.Animation.fast / math.max(self._speed, 0.2) + 0.03, function()
-                        if self._visible and island.Parent then
-                            island.Visible = false
-                        end
-                    end)
-                end
-            end
+            U.tween(self, life, floatingScale, "floatingShow", "fast", { Scale = 1 }, instant)
+        elseif not showFloating then
+            life:Remove("floatingShow")
         end
     end
     self._popupLayer = U.frame(safe, { Name = "PopupLayer", Size = S(1, 1), ZIndex = 20 })
@@ -4747,6 +4957,7 @@ function Library:CreateWindow(options: WindowOptions?): (WindowHandle | false, s
     w._logo = if c.Logo == nil then "brand" else U.copy(c.Logo)
     w._floatingToggleEnabled = c.FloatingToggle ~= false
     w._dynamicIslandEnabled = c.DynamicIsland ~= false
+    w._desktopIsland = c.DynamicIsland == true
     w._gameName = if game.Name ~= "" then game.Name else "Roblox"
     w._particleEnabled, w._particleCount, w._particleMode =
         c.Particles == true, math.clamp(math.round(U.number(c.ParticleCount, 16)), 0, D.ParticleMax), "Float"
@@ -4760,15 +4971,7 @@ function Library:CreateWindow(options: WindowOptions?): (WindowHandle | false, s
         return U.issue(nil, "CreateWindow", why)
     end
     roots[gui] = w
-    task.spawn(function()
-        local okInfo, info = pcall(Marketplace.GetProductInfo, Marketplace, game.PlaceId, Enum.InfoType.Asset)
-        if not w._dead and okInfo and type(info) == "table" and type(info.Name) == "string" and info.Name ~= "" then
-            w._gameName = info.Name
-            if w._islandTitle then
-                w._islandTitle.Text = info.Name
-            end
-        end
-    end)
+    U.resolveExperienceName(w)
     local stop = U.make("BindableFunction", gui, { Name = "Shutdown" })
     stop.OnInvoke = function()
         w:Destroy()
