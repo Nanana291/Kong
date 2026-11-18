@@ -13,6 +13,7 @@
 -- Controls support live dependencies: DependsOn/SetDependency and Toggle:AddSettings with Reveal/Disable/Dim modes.
 -- Any row supports Locked=true / SetLocked(), with JetZ-native PREMIUM chrome and anchored purchase callout.
 -- Locked purchase CTA is fixed: Buy Premium always copies the window Shop URL; per-control callbacks/URLs cannot override it.
+-- Floating window control is always available; touch devices morph to an animated Dynamic Island while the window is hidden.
 -- Settings > Configs owns persistent profiles, clipboard transfer, dirty state and per-game autoload.
 local Players = game:GetService("Players")
 local Input = game:GetService("UserInputService")
@@ -20,6 +21,7 @@ local Tweens = game:GetService("TweenService")
 local Gui = game:GetService("GuiService")
 local Run = game:GetService("RunService")
 local Http = game:GetService("HttpService")
+local Marketplace = game:GetService("MarketplaceService")
 
 export type Range = { Min: number, Max: number }
 export type Key = Enum.KeyCode | Enum.UserInputType
@@ -74,6 +76,8 @@ export type WindowOptions = {
     Touch: boolean?,
     Particles: boolean?,
     ParticleCount: number?,
+    FloatingToggle: boolean?,
+    DynamicIsland: boolean?,
 }
 export type ConfigOptions = { Silent: boolean?, Atomic: boolean?, IgnoreUnknown: boolean? }
 export type CustomContext = {
@@ -252,7 +256,7 @@ type Payload = { [any]: any }
 local U = {}
 local P: Payload = {}
 local Build: Payload = {}
-local Library: any = { Version = "1.5.1" }
+local Library: any = { Version = "1.6.0" }
 
 local V = Vector2.new
 local O = UDim2.fromOffset
@@ -3485,7 +3489,9 @@ function P.Window:_reflow()
     self._mobile.Visible = drawer
     self._mobile.Size = UDim2.new(1, 0, 0, self._layout.Header)
     self._drawerButton.Size = O(self._layout.Header, self._layout.Header)
-    self._reopen.Visible = not self._visible and touch
+    if self._syncFloatingOverlay then
+        self:_syncFloatingOverlay(true)
+    end
     if old and old.Drawer and not drawer then
         self:SetDrawerOpen(false)
     end
@@ -3661,6 +3667,12 @@ end
 function P.Window:SetLogo(v: any)
     self._logo = U.copy(v)
     self._setLogo(v)
+    if self._setFloatingLogo then
+        self._setFloatingLogo(v)
+    end
+    if self._setIslandLogo then
+        self._setIslandLogo(v)
+    end
     return true
 end
 function P.Window:GetLogo(): any
@@ -3697,7 +3709,9 @@ function P.Window:SetVisible(v: boolean)
         end
     end
     self:_syncAnimations()
-    self._reopen.Visible = self._useTouch and not v
+    if self._syncFloatingOverlay then
+        self:_syncFloatingOverlay(false)
+    end
     if self._particlesRefresh then
         self:_particlesRefresh()
     end
@@ -3712,6 +3726,41 @@ end
 function P.Window:Toggle()
     return self:SetVisible(not self._visible)
 end
+
+function P.Window:SetFloatingToggleEnabled(value: boolean)
+    if type(value) ~= "boolean" then
+        return U.issue(self, "SetFloatingToggleEnabled", "expected boolean")
+    end
+    self._floatingToggleEnabled = value
+    if self._syncFloatingOverlay then
+        self:_syncFloatingOverlay(false)
+    end
+    return true
+end
+
+function P.Window:IsFloatingToggleEnabled(): boolean
+    return self._floatingToggleEnabled == true
+end
+
+function P.Window:SetDynamicIslandEnabled(value: boolean)
+    if type(value) ~= "boolean" then
+        return U.issue(self, "SetDynamicIslandEnabled", "expected boolean")
+    end
+    self._dynamicIslandEnabled = value
+    if self._syncFloatingOverlay then
+        self:_syncFloatingOverlay(false)
+    end
+    return true
+end
+
+function P.Window:IsDynamicIslandEnabled(): boolean
+    return self._dynamicIslandEnabled == true
+end
+
+function P.Window:GetGameName(): string
+    return self._gameName or game.Name
+end
+
 function P.Window:Translate(text: string): string
     local locale = SystemLocales[self._settingsLanguage] or SystemLocales.English
     return locale[text] or text
@@ -4250,18 +4299,234 @@ function P.Window:_chrome()
         Size = UDim2.new(1, -36, 0, 33),
     })
     self:_mountResizeGrip()
-    self._reopen = U.button(
+
+    -- Floating window control ---------------------------------------------------
+    -- Desktop: remains visible and toggles the window both ways.
+    -- Touch: visible while open; when hidden it morphs into the Dynamic Island.
+    local floating = U.button(
         self,
         life,
         safe,
-        { Name = "Show window", Visible = false, Position = O(8, 8), Size = O(46, 46), ZIndex = 60 },
+        {
+            Name = "JetZFloatingToggle",
+            AnchorPoint = V(0, 0.5),
+            Position = UDim2.new(0, 14, 0.5, 0),
+            Size = O(50, 50),
+            ZIndex = 60,
+            BackgroundTransparency = 0,
+        },
         function()
-            w:Show()
+            w:Toggle()
         end
     )
-    U.corner(self._reopen, D.PopupRadius)
-    U.fill(w, life, self._reopen, "SurfaceRaised")
-    U.icon(w, life, self._reopen, "brand", 20, "Accent", { Size = S(1, 1) })
+    self._floatingToggle = floating
+    U.corner(floating, 25)
+    U.fill(w, life, floating, "SurfaceRaised")
+    local floatingStroke = U.make("UIStroke", floating, { Thickness = 1.4, Transparency = 0.18 })
+    life:Give(floatingStroke)
+    U.paint(w, life, floatingStroke, "Color", "Accent")
+    local floatingScale = U.make("UIScale", floating, { Scale = 1 })
+    life:Give(floatingScale)
+    local floatingLogo, setFloatingLogo = U.icon(w, life, floating, self._logo, 23, "Accent", {
+        AnchorPoint = V(0.5, 0.5),
+        Position = S(0.5, 0.5),
+        Size = O(28, 28),
+        ZIndex = floating.ZIndex + 2,
+    })
+    self._setFloatingLogo = setFloatingLogo
+    local floatingGlow = U.make("UIStroke", floating, { Thickness = 5, Transparency = 0.88 })
+    life:Give(floatingGlow)
+    U.paint(w, life, floatingGlow, "Color", "Accent")
+
+    life:Give(floating.MouseEnter:Connect(function()
+        if not w._useTouch then
+            U.tween(w, life, floatingScale, "floatingHover", "micro", { Scale = 1.08 })
+            floatingStroke.Transparency = 0.04
+        end
+    end))
+    life:Give(floating.MouseLeave:Connect(function()
+        if not w._useTouch then
+            U.tween(w, life, floatingScale, "floatingHover", "micro", { Scale = 1 })
+            floatingStroke.Transparency = 0.18
+        end
+    end))
+
+    -- Dynamic Island -----------------------------------------------------------
+    local island = U.make("CanvasGroup", safe, {
+        Name = "JetZDynamicIsland",
+        AnchorPoint = V(0.5, 0),
+        Position = UDim2.new(0.5, 0, 0, 12),
+        Size = O(330, 62),
+        BackgroundColor3 = C(8, 8, 11),
+        BackgroundTransparency = 0.04,
+        GroupTransparency = 1,
+        Visible = false,
+        Active = true,
+        ZIndex = 64,
+    })
+    self._dynamicIsland = island
+    life:Give(island)
+    U.corner(island, 31)
+    local islandStroke = U.make("UIStroke", island, { Thickness = 1.2, Transparency = 0.24 })
+    life:Give(islandStroke)
+    U.paint(w, life, islandStroke, "Color", "Accent")
+    local islandScale = U.make("UIScale", island, { Scale = 0.82 })
+    life:Give(islandScale)
+    self._islandScale = islandScale
+
+    local islandButton = U.button(self, life, island, {
+        Name = "RestoreWindow",
+        Size = S(1, 1),
+        BackgroundTransparency = 1,
+        ZIndex = island.ZIndex + 8,
+    }, function()
+        if not w._visible then
+            w:Show()
+        end
+    end)
+    self._islandButton = islandButton
+
+    local logoBubble = U.frame(island, {
+        Position = O(9, 9),
+        Size = O(44, 44),
+        BackgroundTransparency = 0,
+        ZIndex = island.ZIndex + 2,
+        Name = "LogoBubble",
+    })
+    life:Give(logoBubble)
+    U.corner(logoBubble, 22)
+    U.fill(w, life, logoBubble, "AccentMuted")
+    local islandLogo, setIslandLogo = U.icon(w, life, logoBubble, self._logo, 21, "Accent", {
+        AnchorPoint = V(0.5, 0.5),
+        Position = S(0.5, 0.5),
+        Size = O(25, 25),
+        ZIndex = logoBubble.ZIndex + 1,
+    })
+    self._setIslandLogo = setIslandLogo
+
+    local separatorA = U.line(w, life, island, "Stroke", {
+        Position = O(61, 13),
+        Size = O(1, 36),
+        ZIndex = island.ZIndex + 2,
+    })
+    separatorA.BackgroundTransparency = 0.25
+
+    local islandTitle = U.text(w, life, island, "Control", self._gameName, "Text", {
+        Position = O(76, 0),
+        Size = UDim2.new(1, -190, 1, 0),
+        TextTruncate = Enum.TextTruncate.AtEnd,
+        ZIndex = island.ZIndex + 2,
+    })
+    islandTitle.FontFace = BOLD
+    self._islandTitle = islandTitle
+
+    local separatorB = U.line(w, life, island, "Stroke", {
+        AnchorPoint = V(1, 0),
+        Position = UDim2.new(1, -68, 0, 13),
+        Size = O(1, 36),
+        ZIndex = island.ZIndex + 2,
+    })
+    separatorB.BackgroundTransparency = 0.25
+
+    local barsHost = U.frame(island, {
+        AnchorPoint = V(1, 0.5),
+        Position = UDim2.new(1, -78, 0.5, 0),
+        Size = O(48, 34),
+        ZIndex = island.ZIndex + 3,
+        Name = "Activity",
+    })
+    life:Give(barsHost)
+    local bars = {}
+    for i = 1, 4 do
+        local bar = U.line(w, life, barsHost, "Accent", {
+            AnchorPoint = V(0.5, 0.5),
+            Position = UDim2.new(0, 6 + (i - 1) * 11, 0.5, 0),
+            Size = O(4, 10 + ((i * 7) % 14)),
+            ZIndex = barsHost.ZIndex + 1,
+        })
+        U.corner(bar, 3)
+        bars[i] = bar
+    end
+    self._islandBars = bars
+
+    local islandPulse = U.make("Frame", island, {
+        AnchorPoint = V(0.5, 0.5),
+        Position = UDim2.new(1, -17, 0.5, 0),
+        Size = O(6, 6),
+        BackgroundTransparency = 0,
+        ZIndex = island.ZIndex + 3,
+    })
+    life:Give(islandPulse)
+    U.corner(islandPulse, 3)
+    U.fill(w, life, islandPulse, "Accent")
+
+    self._islandAnimating = false
+    function self:_setIslandActivity(active: boolean)
+        self._islandAnimating = active
+        if not active then
+            for i, bar in bars do
+                U.tween(self, life, bar, "islandBar" .. tostring(i), "fast", { Size = O(4, 10 + i * 2) })
+            end
+            return
+        end
+        task.spawn(function()
+            local phase = 0
+            while not self._dead and self._islandAnimating and island.Visible do
+                phase += 1
+                for i, bar in bars do
+                    local height = 8 + ((phase * 11 + i * 17) % 25)
+                    U.tween(self, life, bar, "islandBar" .. tostring(i), "micro", { Size = O(4, height) })
+                end
+                task.wait(math.max(0.11, 0.18 / math.max(self._speed, 0.2)))
+            end
+        end)
+    end
+
+    function self:_syncFloatingOverlay(instant: boolean?)
+        if self._dead then
+            return
+        end
+        local touch = self._useTouch
+        local showFloating = self._floatingToggleEnabled and (self._visible or not touch)
+        local showIsland = self._dynamicIslandEnabled and touch and not self._visible
+
+        floating.Visible = showFloating
+        floating.Interactable = showFloating
+        floating.Selectable = showFloating
+
+        if showFloating then
+            floatingScale.Scale = if instant then 1 else 0.86
+            if not instant then
+                U.tween(self, life, floatingScale, "floatingShow", "fast", { Scale = 1 })
+            end
+        end
+
+        if showIsland then
+            island.Visible = true
+            island.GroupTransparency = if instant then 0 else 1
+            islandScale.Scale = if instant then 1 else 0.82
+            U.tween(self, life, island, "islandFade", "fast", { GroupTransparency = 0 }, instant)
+            U.tween(self, life, islandScale, "islandScale", "fast", { Scale = 1 }, instant)
+            self:_setIslandActivity(true)
+        else
+            self:_setIslandActivity(false)
+            if island.Visible then
+                if instant or self._speed <= 0 then
+                    island.GroupTransparency = 1
+                    islandScale.Scale = 0.82
+                    island.Visible = false
+                else
+                    U.tween(self, life, island, "islandFade", "fast", { GroupTransparency = 1 })
+                    U.tween(self, life, islandScale, "islandScale", "fast", { Scale = 0.82 })
+                    U.later(self, life, "islandHide", D.Animation.fast / math.max(self._speed, 0.2) + 0.03, function()
+                        if self._visible and island.Parent then
+                            island.Visible = false
+                        end
+                    end)
+                end
+            end
+        end
+    end
     self._popupLayer = U.frame(safe, { Name = "PopupLayer", Size = S(1, 1), ZIndex = 20 })
     self._tipLayer = U.frame(safe, { Name = "TooltipLayer", Size = S(1, 1), ZIndex = 24 })
     self._modalLayer = U.frame(safe, { Name = "ModalLayer", Size = S(1, 1), ZIndex = 35 })
@@ -4401,6 +4666,9 @@ function Library:CreateWindow(options: WindowOptions?): (WindowHandle | false, s
     local _, key = U.key(c.HideKey)
     w._hideKey = key or Enum.KeyCode.RightShift
     w._logo = if c.Logo == nil then "brand" else U.copy(c.Logo)
+    w._floatingToggleEnabled = c.FloatingToggle ~= false
+    w._dynamicIslandEnabled = c.DynamicIsland ~= false
+    w._gameName = if game.Name ~= "" then game.Name else "Roblox"
     w._particleEnabled, w._particleCount, w._particleMode =
         c.Particles == true, math.clamp(math.round(U.number(c.ParticleCount, 16)), 0, D.ParticleMax), "Float"
     w:_chrome()
@@ -4413,6 +4681,15 @@ function Library:CreateWindow(options: WindowOptions?): (WindowHandle | false, s
         return U.issue(nil, "CreateWindow", why)
     end
     roots[gui] = w
+    task.spawn(function()
+        local okInfo, info = pcall(Marketplace.GetProductInfo, Marketplace, game.PlaceId, Enum.InfoType.Asset)
+        if not w._dead and okInfo and type(info) == "table" and type(info.Name) == "string" and info.Name ~= "" then
+            w._gameName = info.Name
+            if w._islandTitle then
+                w._islandTitle.Text = info.Name
+            end
+        end
+    end)
     local stop = U.make("BindableFunction", gui, { Name = "Shutdown" })
     stop.OnInvoke = function()
         w:Destroy()
@@ -4440,6 +4717,9 @@ function Library:CreateWindow(options: WindowOptions?): (WindowHandle | false, s
     end
     w:_globalInput()
     w:_reflow()
+    if w._syncFloatingOverlay then
+        w:_syncFloatingOverlay(true)
+    end
     if c.Size ~= nil then
         w:SetSize(c.Size)
     end
