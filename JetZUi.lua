@@ -249,7 +249,7 @@ type Payload = { [any]: any }
 local U = {}
 local P: Payload = {}
 local Build: Payload = {}
-local Library: any = { Version = "1.3.0" }
+local Library: any = { Version = "1.4.0" }
 
 local V = Vector2.new
 local O = UDim2.fromOffset
@@ -9064,7 +9064,10 @@ function P.ProfileManager:Load(name: string, silent: boolean?): (boolean, any)
     local data, why = self:ReadProfile(clean)
     if not data then return false, why end
     local ok, report = self:Apply(data, silent)
-    if ok then self.activeProfile, self.dirty, self.autoloadState = clean, false, "Ready" self:RefreshUI() end
+    if ok then
+        self.activeProfile, self.dirty, self.autoloadState = clean, false, "Ready"
+        self:RefreshUI()
+    end
     return ok, report
 end
 
@@ -9427,9 +9430,10 @@ function P.Window:AddSettings(options: any)
     end
 
     local general = tab:AddSubTab({ Name = "General", Icon = "filter", Order = 1 })
-    local appearance = tab:AddSubTab({ Name = "Appearance", Icon = "palette", Order = 2 })
-    local community = tab:AddSubTab({ Name = "Community", Icon = "users", Order = 3 })
-    local about = tab:AddSubTab({ Name = "About", Icon = "info", Order = 4 })
+    local configs = tab:AddSubTab({ Name = "Configs", Icon = "save", Order = 2 })
+    local appearance = tab:AddSubTab({ Name = "Appearance", Icon = "palette", Order = 3 })
+    local community = tab:AddSubTab({ Name = "Community", Icon = "users", Order = 4 })
+    local about = tab:AddSubTab({ Name = "About", Icon = "info", Order = 5 })
 
     local prefix = U.str(c.FlagPrefix, "ui.")
     local storeURL = U.str(c.StoreURL, "https://plak-hub.mysellauth.com/")
@@ -9560,6 +9564,191 @@ function P.Window:AddSettings(options: any)
     }), function(v: number)
         self:SetParticleCount(v)
     end)
+
+
+    -- Configs ------------------------------------------------------------------
+    local manager = self._profileManager
+    local profiles = section(configs, "Profiles", "Save, load and organize complete JetZ configurations.")
+
+    local profileStatus = profiles:AddStatus({
+        Name = "Profile status",
+        Text = "Active: " .. (manager.activeProfile or "None"),
+        Severity = manager.available and "Success" or "Warning",
+    })
+    local autoloadStatus = profiles:AddStatus({
+        Name = "Startup",
+        Text = "Autoload: Off",
+        Severity = manager.available and "Info" or "Warning",
+    })
+
+    local names = manager:Names()
+    local profileSelect = profiles:AddDropdown({
+        Name = "Saved config",
+        Values = #names > 0 and names or { "No profiles" },
+        Default = manager.activeProfile or names[1] or "No profiles",
+        RequireSelection = true,
+    })
+    local profileName = profiles:AddInput({
+        Name = "Config name",
+        Placeholder = "My Config",
+        MaxLength = 64,
+        Default = "",
+    })
+
+    local function selectedProfile(): string?
+        local value = profileSelect:GetValue()
+        return if type(value) == "string" and value ~= "No profiles" then value else nil
+    end
+    local function desiredName(): string?
+        return U.profileName(profileName:GetValue()) or selectedProfile()
+    end
+    local function result(title: string, ok: boolean, reason: any?)
+        self:Notify({
+            Title = title,
+            Description = if ok then nil else tostring(reason or "Operation failed"),
+            Severity = if ok then "Success" else "Warning",
+            Duration = 3,
+        })
+    end
+    local function refresh(selectName: string?)
+        local list = manager:Names()
+        profileSelect:SetValues(#list > 0 and list or { "No profiles" }, true)
+        local target = selectName or manager.activeProfile
+        if target and table.find(list, target) then profileSelect:SetValue(target, true) end
+        manager:RefreshUI()
+    end
+
+    local primary = profiles:AddInlineGroup({ Columns = 3, Gap = 8, MinimumWidth = 106 })
+    primary:AddButton({
+        Name = "Create config", Text = "Create", Icon = "file-plus",
+        Callback = function()
+            local name = U.profileName(profileName:GetValue())
+            if not name then result("Config not created", false, "Enter a valid config name") return end
+            local ok, why = self:CreateProfile(name)
+            result(ok and "Config created" or "Create failed", ok, why)
+            if ok then profileName:SetValue("", true) refresh(name) end
+        end,
+    })
+    primary:AddButton({
+        Name = "Save config", Text = "Save", Icon = "save",
+        Callback = function()
+            local name = desiredName()
+            if not name then result("Nothing to save", false, "Select a config or enter a name") return end
+            local ok, why = self:SaveProfile(name)
+            result(ok and "Config saved" or "Save failed", ok, why)
+            if ok then refresh(name) end
+        end,
+    })
+    primary:AddButton({
+        Name = "Load config", Text = "Load", Icon = "download",
+        Callback = function()
+            local name = selectedProfile()
+            if not name then result("Nothing to load", false, "Select a saved config") return end
+            local ok, why = self:LoadProfile(name, false)
+            result(ok and "Config loaded" or "Load failed", ok, why)
+            if ok then refresh(name) end
+        end,
+    })
+
+    local manage = section(configs, "Manage", "Rename, duplicate, delete or rescan configs.")
+    local manageActions = manage:AddInlineGroup({ Columns = 4, Gap = 8, MinimumWidth = 92 })
+    manageActions:AddButton({
+        Name = "Rename config", Text = "Rename", Icon = "pencil",
+        Callback = function()
+            local old, new = selectedProfile(), U.profileName(profileName:GetValue())
+            if not old or not new then result("Rename failed", false, "Select a config and enter the new name") return end
+            local ok, why = self:RenameProfile(old, new)
+            result(ok and "Config renamed" or "Rename failed", ok, why)
+            if ok then profileName:SetValue("", true) refresh(new) end
+        end,
+    })
+    manageActions:AddButton({
+        Name = "Duplicate config", Text = "Duplicate", Icon = "copy",
+        Callback = function()
+            local old, new = selectedProfile(), U.profileName(profileName:GetValue())
+            if not old or not new then result("Duplicate failed", false, "Select a config and enter the copy name") return end
+            local ok, why = self:DuplicateProfile(old, new)
+            result(ok and "Config duplicated" or "Duplicate failed", ok, why)
+            if ok then profileName:SetValue("", true) refresh(new) end
+        end,
+    })
+    manageActions:AddButton({
+        Name = "Delete config", Text = "Delete", Icon = "trash",
+        Callback = function()
+            local name = selectedProfile()
+            if not name then return end
+            self:CreateDialog({
+                Title = "Delete config?",
+                Description = "This permanently deletes \"" .. name .. "\" from local storage.",
+                Buttons = {
+                    { Text = "Cancel" },
+                    {
+                        Text = "Delete", Danger = true,
+                        Callback = function()
+                            local ok, why = self:DeleteProfile(name)
+                            result(ok and "Config deleted" or "Delete failed", ok, why)
+                            refresh(nil)
+                        end,
+                    },
+                },
+            })
+        end,
+    })
+    manageActions:AddButton({
+        Name = "Refresh configs", Text = "Refresh", Icon = "refresh-cw",
+        Callback = function()
+            refresh(selectedProfile())
+            self:Notify({ Title = "Configs refreshed", Severity = "Info", Duration = 2 })
+        end,
+    })
+
+    local startup = section(configs, "Autoload", "Restore one saved config automatically for this game.")
+    local autoActions = startup:AddInlineGroup({ Columns = 2, Gap = 8, MinimumWidth = 145 })
+    autoActions:AddButton({
+        Name = "Set autoload", Text = "Set Autoload", Icon = "play",
+        Callback = function()
+            local name = selectedProfile()
+            if not name then result("Autoload unchanged", false, "Select a saved config") return end
+            local ok, why = self:SetAutoload(name)
+            result(ok and "Autoload enabled" or "Autoload failed", ok, why)
+            manager:RefreshUI()
+        end,
+    })
+    autoActions:AddButton({
+        Name = "Disable autoload", Text = "Disable", Icon = "pause",
+        Callback = function()
+            local ok, why = self:DisableAutoload()
+            result(ok and "Autoload disabled" or "Autoload failed", ok, why)
+            manager:RefreshUI()
+        end,
+    })
+
+    local transfer = section(configs, "Import & Export", "Transfer configs using the clipboard or the public profile API.")
+    local transferActions = transfer:AddInlineGroup({ Columns = 2, Gap = 8, MinimumWidth = 145 })
+    transferActions:AddButton({
+        Name = "Export config", Text = "Copy Export", Icon = "upload",
+        Callback = function()
+            local json, why = self:ExportProfile(selectedProfile())
+            if not json then result("Export failed", false, why) return end
+            local copied = U.copyText(json)
+            result(copied and "Config copied" or "Clipboard unavailable", copied,
+                copied and nil or "Use Window:ExportProfile() to retrieve the JSON directly")
+        end,
+    })
+    transferActions:AddButton({
+        Name = "Import config", Text = "Import Clipboard", Icon = "download",
+        Callback = function()
+            local name, json = U.profileName(profileName:GetValue()), U.readClipboard()
+            if not name then result("Import failed", false, "Enter the destination config name first") return end
+            if not json then result("Import failed", false, "Clipboard read is unavailable") return end
+            local ok, why = self:ImportProfile(name, json, false)
+            result(ok and "Config imported" or "Import failed", ok, why)
+            if ok then profileName:SetValue("", true) refresh(name) end
+        end,
+    })
+
+    manager.ui = { Profile = profileSelect, Status = profileStatus, AutoloadStatus = autoloadStatus }
+    manager:RefreshUI()
 
     -- Appearance ---------------------------------------------------------------
     local themes = section(appearance, "Theme", "Choose a preset, then fine-tune accent and contrast.")
