@@ -473,12 +473,21 @@ function U.cfg(c: any): Payload
 end
 
 function U.copyText(value: string): boolean
-    local fn = (getgenv and getgenv().setclipboard) or setclipboard or toclipboard
+    local env = getfenv()
+    local fn = rawget(env, "setclipboard") or rawget(env, "toclipboard")
+    if type(fn) ~= "function" then
+        local getGlobal = rawget(env, "getgenv")
+        if type(getGlobal) == "function" then
+            local ok, globals = pcall(getGlobal)
+            if ok and type(globals) == "table" then
+                fn = rawget(globals, "setclipboard") or rawget(globals, "toclipboard")
+            end
+        end
+    end
     if type(fn) ~= "function" then
         return false
     end
-    local ok = pcall(fn, value)
-    return ok
+    return pcall(fn, value)
 end
 
 function U.copy(v: any): any
@@ -9029,7 +9038,7 @@ function P.Window:AddSettings(options: any)
         self._settingsTab = tab
     end
 
-    local general = tab:AddSubTab({ Name = "General", Icon = "sliders-horizontal", Order = 1 })
+    local general = tab:AddSubTab({ Name = "General", Icon = "filter", Order = 1 })
     local appearance = tab:AddSubTab({ Name = "Appearance", Icon = "palette", Order = 2 })
     local community = tab:AddSubTab({ Name = "Community", Icon = "users", Order = 3 })
     local about = tab:AddSubTab({ Name = "About", Icon = "info", Order = 4 })
