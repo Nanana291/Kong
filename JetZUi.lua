@@ -250,7 +250,7 @@ type Payload = { [any]: any }
 local U = {}
 local P: Payload = {}
 local Build: Payload = {}
-local Library: any = { Version = "1.4.5" }
+local Library: any = { Version = "1.4.6" }
 
 local V = Vector2.new
 local O = UDim2.fromOffset
@@ -10042,13 +10042,13 @@ function P.Window:AddSettings(options: any)
         Name = "Profile status",
         Text = "Active: " .. (manager.activeProfile or "None"),
         Severity = manager.available and "Success" or "Warning",
-        ColorToken = "TextSecondary",
+        ColorToken = "Accent",
     })
     local autoloadStatus = profiles:AddStatus({
         Name = "Startup",
         Text = "Autoload: Off",
         Severity = manager.available and "Info" or "Warning",
-        ColorToken = "TextSecondary",
+        ColorToken = "Accent",
     })
 
     local names = manager:Names()
