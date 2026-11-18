@@ -54,6 +54,19 @@ export type DropdownOptions<T> = ValueOptions<T> & {
     MaxVisibleItems: number?,
     Placeholder: string?,
 }
+export type UtilityServer = { JobId: string, Players: number, MaxPlayers: number, Ping: number? }
+export type UtilityOptions = {
+    CanSpectate: ((Player) -> boolean)?,
+    Movement: ((action: string, value: any) -> (boolean, string?))?,
+    MovementCapabilities: { [string]: boolean }?,
+    Freecam: ((enabled: boolean) -> boolean)?,
+    ListServers: ((placeId: number) -> { UtilityServer })?,
+    JoinServer: ((placeId: number, jobId: string?) -> (boolean, string?))?,
+    ServerStartedAt: number?,
+    AllowWorldChanges: boolean?,
+    Skyboxes: { [string]: { [string]: string } }?,
+    SetFPSCap: ((fps: number) -> any)?,
+}
 export type WindowOptions = {
     Id: string?,
     Title: string?,
@@ -78,6 +91,7 @@ export type WindowOptions = {
     ParticleCount: number?,
     FloatingToggle: boolean?,
     DynamicIsland: boolean?,
+    Utilities: UtilityOptions?,
 }
 export type ConfigOptions = { Silent: boolean?, Atomic: boolean?, IgnoreUnknown: boolean? }
 export type CustomContext = {
@@ -1066,8 +1080,15 @@ function P.Scope:Destroy()
         return
     end
     self._dead = true
-    for key in self._items do
-        self:Remove(key)
+    -- Reentrant teardown (for example a dialog closing a contextual owner) may
+    -- remove or forget other keys. Detach the snapshot before invoking disposers.
+    local items = self._items
+    self._items = {}
+    for _, item in items do
+        local ok, err = pcall(U.dispose, item)
+        if not ok then
+            U.issue(nil, "cleanup", err)
+        end
     end
 end
 
@@ -3022,17 +3043,33 @@ function P.Window:_syncView(item: any, active: boolean)
     end
 end
 
+-- System roles are assigned only by built-in constructors, never by consumer Order/Id.
+function P.Window:_orderedTabs(): { any }
+    local order = U.sort(self._tabs)
+    for _, system in { self._utilitiesTab, self._settingsTab } do
+        if system and not system._dead then
+            U.remove(order, system)
+            table.insert(order, system)
+        end
+    end
+    return order
+end
+
 function P.Window:_refreshNav(animate: boolean?)
     if not self._layout or self._dead then
         return
     end
     local oldTab, oldSub = self._activeTab, self._activeSub
-    local tabs = U.sort(self._tabs)
-    if self._settingsTab and not self._settingsTab._dead then
-        U.remove(tabs, self._settingsTab)
-        table.insert(tabs, self._settingsTab)
-    end
+    local tabs = self:_orderedTabs()
     local tab = self._wantedTab
+    if self._autoTab and tab and tab._systemRole then
+        for _, normal in tabs do
+            if not normal._systemRole and U.eligible(normal) then
+                tab, self._wantedTab = normal, normal
+                break
+            end
+        end
+    end
     if not U.eligible(tab) then
         tab = nil
         for _, t in tabs do
@@ -3041,7 +3078,7 @@ function P.Window:_refreshNav(animate: boolean?)
                 break
             end
         end
-        self._wantedTab = tab
+        self._wantedTab, self._autoTab = tab, true
     end
     local sub = tab and tab._wantedSub
     if tab and not U.eligible(sub) then
@@ -3074,9 +3111,9 @@ function P.Window:_refreshNav(animate: boolean?)
     end
     local g = self._layout
     local visible = 0
-    for _, t in tabs do
+    for index, t in tabs do
         t._root.Visible = t._visible
-        t._root.LayoutOrder = t._order
+        t._root.LayoutOrder = index
         t._navRender(animate == true)
         self:_syncView(t, t == tab and not sub)
         for _, s in t._subs do
@@ -3100,17 +3137,18 @@ function P.Window:_refreshNav(animate: boolean?)
     self._mobileTitle.Text = if tab then tab._name else self._name
     local cursor, subX, subW = 0, 0, 0
     if tab then
+        local compactSystemStrip = tab._systemRole == "utilities"
         for _, s in U.sort(tab._subs) do
             if s._visible then
-                local width =
-                    math.clamp(U.measure(s._name, D.Typography.TopTab) + (if s._icon then 61 else 46), 66, 195)
+                local padding = if compactSystemStrip then (if s._icon then 31 else 18) else (if s._icon then 61 else 46)
+                local width = math.clamp(U.measure(s._name, D.Typography.TopTab) + padding, 66, 195)
                 s._root.Position = O(cursor, 0)
                 s._root.Size = UDim2.new(0, width, 1, 0)
                 s._navRender()
                 if s == sub then
                     subX, subW = cursor, width
                 end
-                cursor += width + (if g.Compact then 7 else 21)
+                cursor += width + (if compactSystemStrip then 4 elseif g.Compact then 7 else 21)
             end
         end
     end
@@ -3136,6 +3174,9 @@ function P.Window:_refreshNav(animate: boolean?)
     end
     if oldTab ~= tab or oldSub ~= sub then
         self:_syncAnimations()
+        if self._useTouch and self._visible and self._syncFloatingOverlay then
+            self:_syncFloatingOverlay(false)
+        end
     end
     if animate and (oldTab or oldSub) and (oldTab ~= tab or oldSub ~= sub) then
         self._veil.BackgroundTransparency = 0.22
@@ -3226,22 +3267,64 @@ function P.SubTab:Select(): boolean
     return self._w:SelectTab(self._owner)
 end
 
+function P.Window:_systemTab(key: any): any
+    if type(key) ~= "string" then
+        return nil
+    end
+    local lower = string.lower(key)
+    local util, settings = self._utilitiesTab, self._settingsTab
+    if util and (lower == "utilities" or lower == string.lower(util._name)) then
+        return util
+    end
+    if settings and (lower == "settings" or lower == string.lower(settings._name)) then
+        return settings
+    end
+    return nil
+end
+
+function P.Tab:SetName(value: string)
+    local system = self._w:_systemTab(value)
+    if system and system ~= self then
+        return U.issue(self, "SetName", "reserved system tab name")
+    end
+    return P.Base.SetName(self, value)
+end
+
+function P.Tab:SetVisible(value: boolean)
+    if self._systemRole and value == false then
+        return U.issue(self, "SetVisible", "system tabs cannot be hidden")
+    end
+    return P.Base.SetVisible(self, value)
+end
+
+function P.Tab:SetDisabled(value: boolean)
+    if self._systemRole and value == true then
+        return U.issue(self, "SetDisabled", "system tabs cannot be disabled")
+    end
+    return P.Base.SetDisabled(self, value)
+end
+
+function P.Tab:Destroy()
+    if self._systemRole and not self._w._dead then
+        return U.issue(self, "Destroy", "system tabs belong to the window")
+    end
+    P.Base.Destroy(self)
+end
+
 function P.Window:AddTab(options: any)
     local c = U.cfg(options)
-    local systemSettings = c._SystemSettings == true
-    if systemSettings then
-        c = table.clone(c)
-        c.Order = 2147483647
-    end
-    local hadUserTab = false
-    for _, existing in self._tabs do
-        if not existing._systemSettings and not existing._dead then
-            hadUserTab = true
-            break
-        end
-    end
+    local system = self:_systemTab(c.Name) or self:_systemTab(c.Id)
+    return system or self:_addTab(c)
+end
+
+function P.Window:_addTab(c: Payload, role: string?)
     local t = U.node(self, P.Tab, "Tab", c, self, nil)
-    t._systemSettings = systemSettings
+    t._systemRole = role
+    if role == "utilities" then
+        self._utilitiesTab = t
+    elseif role == "settings" then
+        self._settingsTab = t
+    end
     t._view = U.view(self, t)
     t._subs, t._icon = {}, U.copy(c.Icon)
     t._badgeText = if type(c.Badge) == "string" or U.finite(c.Badge) then tostring(c.Badge) else ""
@@ -3340,12 +3423,7 @@ function P.Window:AddTab(options: any)
         t:Select()
     end)
     table.insert(self._tabs, t)
-    U.adopt(self, t)
-    if not systemSettings and not hadUserTab and self._settingsTab and self._wantedTab == self._settingsTab then
-        self._wantedTab = t
-        self:_refreshNav(false)
-    end
-    return t
+    return U.adopt(self, t)
 end
 
 function P.Tab:AddSubTab(options: any)
@@ -3408,15 +3486,10 @@ function P.Tab:AddSubTab(options: any)
 end
 
 function P.Window:GetTabs(): { any }
-    local sorted = U.sort(self._tabs)
-    if self._settingsTab and not self._settingsTab._dead then
-        U.remove(sorted, self._settingsTab)
-        table.insert(sorted, self._settingsTab)
-    end
-    return sorted
+    return self:_orderedTabs()
 end
 function P.Window:GetTab(key: any): any
-    return U.find(self._tabs, key)
+    return self:_systemTab(key) or U.find(self._tabs, key)
 end
 function P.Window:GetSelectedTab(): any
     return self._activeTab
@@ -3426,7 +3499,7 @@ function P.Window:SelectTab(key: any): boolean
     if not U.eligible(t) then
         return false
     end
-    self._wantedTab = t
+    self._wantedTab, self._autoTab = t, false
     self:SetDrawerOpen(false)
     self:_refreshNav(true)
     return true
@@ -3978,6 +4051,9 @@ function P.Window:GetScale(): number
     return self._scale
 end
 function P.Window:_syncAnimations()
+    if self._utilities then
+        self._utilities:Sync()
+    end
     for n in self._animated do
         if not n._dead then
             n:_updateAnimation()
@@ -4803,7 +4879,9 @@ function P.Window:_chrome()
             self._island:_present(showIsland, instant)
         end
 
-        floating.Position = UDim2.new(0, if touch then 12 else 14, 0.5, 0)
+        local utilityDock = touch and self._visible and self._activeTab ~= nil and self._activeTab == self._utilitiesTab
+        floating.Position = if utilityDock then UDim2.new(0, 12, 1, -30)
+            else UDim2.new(0, if touch then 12 else 14, 0.5, 0)
         local showFloating = self._floatingToggleEnabled and not showIsland
         local changed = floating.Visible ~= showFloating
         floating.Visible = showFloating
@@ -5009,6 +5087,7 @@ function Library:CreateWindow(options: WindowOptions?): (WindowHandle | false, s
         w:SetPosition(c.Position)
     end
     w:AddSettings(type(c.Settings) == "table" and c.Settings or {})
+    U.buildUtilities(w, U.cfg(c.Utilities))
     return w, nil
 end
 
@@ -6577,6 +6656,7 @@ function Build.Check(owner: any, c: Payload, kind: string)
     setmetatable(n, P.Check)
     local w, life = n._w, n._life
     local switch = c.Style == "Switch"
+    local alignRight = c.CheckAlign == "Right"
     n._titleLeft = if switch then 56 else 44
     n._bindSlot = c.ShowKeybind == true or c.Keybind ~= nil
     local _, key = U.key(c.Keybind)
@@ -6591,7 +6671,8 @@ function Build.Check(owner: any, c: Payload, kind: string)
         end
     end)
     local size = if switch then 34 else D.Check
-    local box = U.frame(hit, { Name = "Check", AnchorPoint = V(0, 0.5), Position = S(0, 0.5), Size = O(size, D.Check) })
+    local anchor = if alignRight then 1 else 0
+    local box = U.frame(hit, { Name = "Check", AnchorPoint = V(anchor, 0.5), Position = S(anchor, 0.5), Size = O(size, D.Check) })
     U.corner(box, if switch then 11 else 3)
     local glyph, dot
     if switch then
@@ -6632,16 +6713,18 @@ function Build.Check(owner: any, c: Payload, kind: string)
         keyLabel.Text = if Capturing == self then "[PRESS KEY]" else U.keyText(self._key)
         keyPaint()
         keyHit.Visible = self._bindSlot
-        self._reserve = if self._bindSlot
+        local keyWidth = if self._bindSlot
             then math.max(w._layout.Hit, U.measure(keyLabel.Text, D.Typography.Numeric) + 8)
             else 0
-        keyHit.Size = UDim2.new(0, self._reserve, 1, 0)
+        self._keyWidth = keyWidth
+        self._reserve = keyWidth + (if alignRight then size + 10 else 0)
+        keyHit.Size = UDim2.new(0, keyWidth, 1, 0)
         self:_headingLayout()
     end
     function n:_layoutRender()
-        self._titleLeft = if w._layout.Touch then (if switch then 46 else 33) else (if switch then 56 else 44)
+        self._titleLeft = if alignRight then 5 elseif w._layout.Touch then (if switch then 46 else 33) else (if switch then 56 else 44)
         self:_bindRender()
-        hit.Size = UDim2.new(1, -self._reserve, 1, 0)
+        hit.Size = UDim2.new(1, -self._keyWidth, 1, 0)
     end
     function n:_valueRender(instant: boolean)
         self._dim = not self._value and c.DimUnchecked ~= false
@@ -9284,7 +9367,8 @@ function P.Window:CreateContextMenu(anchor: any, options: any)
         return U.issue(self, "CreateContextMenu", "expected a descendant GuiObject or live controller")
     end
     local c = U.cfg(options)
-    local semantic = if type(anchor) == "table" and anchor._w == self then anchor else self
+    local semantic = if type(c.Owner) == "table" and c.Owner._w == self and not c.Owner._dead then c.Owner
+        elseif type(anchor) == "table" and anchor._w == self then anchor else self
     local n = U.node(self, P.Context, "ContextMenu", c, semantic, nil)
     n._context, n._contextAnchor = { Items = c.Items, Build = c.Build, Width = c.Width }, object
     n._life:Give(object.Destroying:Connect(function()
@@ -9879,8 +9963,9 @@ function P.Window:CreateDialog(options: any)
     local w, life = self, n._life
     n._escape = c.Escape ~= false
     n._actions = {}
-    n._preferredWidth = math.clamp(U.number(c.Width, 366), 260, 600)
-    n._preferredHeight = math.clamp(U.number(c.Height, 132), 98, 420)
+    local custom = type(c.BuildContent) == "function"
+    n._preferredWidth = math.clamp(U.number(c.Width, 366), 260, if custom then 880 else 600)
+    n._preferredHeight = math.clamp(U.number(c.Height, 132), 98, if custom then 680 else 420)
     local scrim = U.button(n, life, root, {
         Size = S(1, 1),
         Selectable = false,
@@ -9943,6 +10028,12 @@ function P.Window:CreateDialog(options: any)
     U.adopt(self, n)
     if not n:SetButtons(c.Buttons or {}) then
         n:SetButtons({})
+    end
+    if custom then
+        U.layout(n._body, 6)
+        desc.LayoutOrder, desc.Visible = 0, n._description ~= ""
+        local body = U.frame(n._body, { Name = "Content", Size = UDim2.new(1, -3, 0, 0), LayoutOrder = 1 })
+        U.call(n, "BuildContent", c.BuildContent, body, life, n)
     end
     U.tween(w, life, scrim, "scrim", "modal", { BackgroundTransparency = 0.43 })
     U.tween(w, life, panel, "panel", "modal", { GroupTransparency = 0 })
@@ -10724,13 +10815,10 @@ function P.Window:AddSettings(options: any)
 
     local tab = self._settingsTab
     if not tab or tab._dead then
-        tab = self:AddTab({
-            Name = U.str(c.Name, "Settings"),
+        tab = self:_addTab({
+            Name = if type(c.Name) == "string" and string.lower(c.Name) ~= "utilities" then c.Name else "Settings",
             Icon = c.Icon or "settings",
-            Order = 2147483647,
-            _SystemSettings = true,
-        })
-        self._settingsTab = tab
+        }, "settings")
     end
 
     local general = tab:AddSubTab({ Name = "General", Icon = "filter", Order = 1 })
@@ -11806,6 +11894,3450 @@ function Library:CreateReferenceDemo(options: WindowOptions?)
     settings:AddSubTab("Other")
     aimbot:Select()
     return w
+end
+
+
+-- A table owns data and selection; row instances are a bounded recycling pool.
+-- Columns: Key, Name, Width (relative weight), Sortable, Kind ("Primary", "Badge",
+-- "Actions"), Format(value, row). Row: Key, [column.Key], Image, Subtitle, Tone.
+-- OnAction(row) handles the primary button; GetActions(row) returns context items.
+do
+    local T = { Header = 34, DesktopRow = 42, MobileDetail = 84, Inset = 9, Rail = 10, Empty = 76 }
+    P.DataTable = U.class(P.Base)
+
+    local function validKey(key: any): boolean
+        return (type(key) == "string" and #key > 0 and utf8.len(key) ~= nil) or U.finite(key)
+    end
+
+    local function display(v: any): string
+        if type(v) == "string" and utf8.len(v) ~= nil then
+            return v
+        end
+        if U.finite(v) then
+            return tostring(v)
+        end
+        return "—"
+    end
+
+    local function text(parent: Instance, n: any, role: string, token: any, props: Payload?): (any, any)
+        return U.text(n._w, n._life, parent, role, "", token, props)
+    end
+
+    local function rowButton(n: any, parent: Instance, label: string?, icon: string?, cb: () -> ())
+        local refresh: any
+        local state = "idle"
+        local button = U.button(n, n._life, parent, {}, cb, function(nextState: string)
+            state = nextState
+            if refresh then
+                refresh()
+            end
+        end)
+        U.corner(button, D.FieldRadius)
+        refresh = U.fill(n._w, n._life, button, function(colors: Payload)
+            return if state == "press"
+                then colors.Pressed
+                elseif state == "hover" then colors.Hover
+                else colors.SurfaceRaised
+        end)
+        if icon then
+            local host = U.icon(n._w, n._life, button, icon, 14, "TextSecondary", {})
+            host.AnchorPoint, host.Position, host.Size = V(0.5, 0.5), S(0.5, 0.5), O(14, 14)
+        else
+            local caption = text(button, n, "Popup", "Text", { TextXAlignment = Enum.TextXAlignment.Center })
+            caption.Text = label or "Select"
+        end
+        U.focusable(n, n._life, button, cb)
+        return button
+    end
+
+    function P.DataTable:_closeMenu()
+        self._life:Remove("rowMenu")
+    end
+
+    function P.DataTable:_newRow(): any
+        local w, life = self._w, self._life
+        local row = { key = nil, cells = {}, state = "idle", slot = "selection:" .. tostring(#self._pool + 1) }
+        local face = U.frame(self._scroll, {
+            Size = UDim2.new(1, -T.Rail, 0, 0),
+            Name = "DataRow",
+            Visible = false,
+            ClipsDescendants = true,
+        })
+        row.root = face
+        row.paint = U.fill(w, life, face, function(c: Payload)
+            if row.key ~= nil and row.key == self._selected then
+                return c.AccentMuted
+            end
+            return if row.state == "hover" then c.Hover else c.Row
+        end)
+        row.rail = U.line(w, life, face, "Accent", { Size = UDim2.new(0, 2, 1, 0) })
+        row.rail.BackgroundTransparency = 1
+        U.line(w, life, face, "Divider", {
+            Size = UDim2.new(1, 0, 0, 1),
+            Position = S(0, 1),
+            AnchorPoint = V(0, 1),
+        })
+        life:Give(face.MouseEnter:Connect(function()
+            if not self:_isDisabled() then
+                row.state = "hover"
+                row.paint()
+            end
+        end))
+        life:Give(face.MouseLeave:Connect(function()
+            row.state = "idle"
+            row.paint()
+        end))
+        for i, col in self._columns do
+            local cell = U.frame(face, { Name = col.Key, ClipsDescendants = true })
+            local info: any = { root = cell }
+            row.cells[i] = info
+            if col.Kind == "Actions" then
+                info.primary = rowButton(self, cell, col.ActionTitle, nil, function()
+                    local data = self._rows[row.key]
+                    if data then
+                        if self._selectOnAction then
+                            self:SelectRow(row.key)
+                        end
+                        U.call(self, "RowAction", self._onAction, U.copy(data))
+                    end
+                end)
+                if self._getActions then
+                    info.menu = rowButton(self, cell, nil, "more", function()
+                        local data = self._rows[row.key]
+                        if not data then
+                            return
+                        end
+                        local ok, options = U.call(self, "GetActions", self._getActions, U.copy(data))
+                        if not ok or type(options) ~= "table" or #options == 0 then
+                            return
+                        end
+                        self:_closeMenu()
+                        local menu =
+                            w:CreateContextMenu(info.menu, { Items = options, Name = "Row actions", Owner = self })
+                        if menu then
+                            self._life:Give(menu, "rowMenu")
+                            menu:Open()
+                        end
+                    end)
+                end
+            elseif col.Kind == "Primary" then
+                info.image = U.make("ImageLabel", cell, {
+                    Size = O(29, 29),
+                    Position = UDim2.new(0, 0, 0.5, 0),
+                    AnchorPoint = V(0, 0.5),
+                    ScaleType = Enum.ScaleType.Crop,
+                })
+                U.fill(w, life, info.image, "SurfaceRaised")
+                U.corner(info.image, D.FieldRadius)
+                info.label = text(cell, self, "Control", "Text")
+                info.subtitle = text(cell, self, "Muted", "TextSecondary")
+            else
+                info.caption = text(cell, self, "Muted", "TextMuted", { Size = UDim2.new(1, 0, 0, 14) })
+                local badge = col.Kind == "Badge"
+                info.label, info.refresh = text(cell, self, if badge then "Popup" else "Control", function(c: Payload)
+                    local data = self._rows[row.key]
+                    local tone = data and data.Tone
+                    if badge and (tone == "Success" or tone == "Warning" or tone == "Danger") then
+                        return c[tone]
+                    end
+                    return if badge then c.TextSecondary else c.Text
+                end)
+                if badge then
+                    local label = info.label
+                    info.badge = U.line(w, life, cell, "SurfaceRaised", { ZIndex = label.ZIndex })
+                    label.ZIndex += 1
+                    U.corner(info.badge, 4)
+                end
+            end
+        end
+        table.insert(self._pool, row)
+        return row
+    end
+
+    function P.DataTable:_paint()
+        if self._dead then
+            return
+        end
+        local total, rh = #self._viewRows, self._rh
+        local head = if self._stacked then 0 else T.Header
+        local disabled = self:_isDisabled()
+        local first = math.max(1, math.floor(self._scroll.CanvasPosition.Y / (self._w._scale * rh)) + 1)
+        local limit = if self._state == "Ready" then self._heightRows + 1 else 0
+        if self._first ~= first then
+            self:_closeMenu()
+            self._first = first
+        end
+        local rest = math.max(0, total - first + 1)
+        local count = math.min(rest, limit)
+        for i = 1, math.max(count, #self._pool) do
+            local row = self._pool[i] or self:_newRow()
+            local index = first + i - 1
+            local data = if i <= count then self._viewRows[index] else nil
+            if not data then
+                row.root.Visible, row.key = false, nil
+                continue
+            end
+            if row.key == nil or row.key ~= data.Key or disabled then
+                row.state = "idle"
+            end
+            row.key = data.Key
+            row.root.Visible = true
+            row.root.Position, row.root.Size = O(0, (index - 1) * rh), UDim2.new(1, -T.Rail, 0, rh)
+            local selected = self._selected == data.Key
+            if row.selected ~= selected then
+                row.selected = selected
+                U.tween(
+                    self._w,
+                    self._life,
+                    row.rail,
+                    row.slot,
+                    "state",
+                    { BackgroundTransparency = if selected then 0 else 1 },
+                    Gui.ReducedMotionEnabled
+                )
+            end
+            row.paint()
+            local mobile, meta = self._stacked, 0
+            local hit = self._hit
+            for j, col in self._columns do
+                local cell = row.cells[j]
+                local box = cell.root
+                if not mobile then
+                    box.Position = UDim2.new(col.Start, T.Inset, 0, 0)
+                    box.Size = UDim2.new(col.Fraction, -T.Inset, 1, 0)
+                elseif col.Kind == "Primary" then
+                    box.Position, box.Size = O(T.Inset, 0), UDim2.new(1, -2 * T.Inset, 0, 42)
+                elseif col.Kind == "Actions" then
+                    box.Position = UDim2.new(0, T.Inset, 1, -hit - 4)
+                    box.Size = UDim2.new(1, -2 * T.Inset, 0, hit)
+                else
+                    local cols = math.max(1, self._metaCount)
+                    local segment = meta % self._stackColumns
+                    local line = math.floor(meta / self._stackColumns)
+                    local columns = math.min(cols, self._stackColumns)
+                    box.Position = UDim2.new(segment / columns, T.Inset, 0, 43 + line * 34)
+                    box.Size = UDim2.new(1 / columns, -T.Inset, 0, 33)
+                    meta += 1
+                end
+                if col.Kind == "Actions" then
+                    local menu = cell.menu
+                    local enabled = not disabled and data.ActionDisabled ~= true
+                    local reserved = if menu then hit + 5 else 0
+                    local width =
+                        math.max(hit, math.min(70, (self._logicalWidth - T.Rail) * col.Fraction - T.Inset - reserved))
+                    cell.primary.Size = if mobile then UDim2.new(1, -reserved, 0, hit) else O(width, hit)
+                    cell.primary.Position = if mobile
+                        then UDim2.new(0, 0, 0.5, -hit / 2)
+                        else UDim2.new(1, -reserved - width, 0.5, -hit / 2)
+                    cell.primary.Interactable, cell.primary.Selectable = enabled, enabled
+                    cell.primary.BackgroundTransparency = if enabled then 0 else 0.4
+                    if menu then
+                        menu.Position = UDim2.new(1, -hit, 0.5, -hit / 2)
+                        menu.Size = O(hit, hit)
+                        menu.Interactable, menu.Selectable = not disabled, not disabled
+                    end
+                else
+                    local value = data[col.Key]
+                    if col.Format then
+                        local ok, out = U.call(self, "Format " .. col.Key, col.Format, value, U.copy(data))
+                        if ok then
+                            value = out
+                        end
+                    end
+                    cell.label.Text = display(value)
+                    if cell.refresh then
+                        cell.refresh()
+                    end
+                    if col.Kind == "Primary" then
+                        local hasImage = type(data.Image) == "string"
+                        local offset = if hasImage then 37 else 0
+                        local subtitle = type(data.Subtitle) == "string" and display(data.Subtitle) or ""
+                        cell.image.Visible, cell.image.Image = hasImage, if hasImage then data.Image else ""
+                        cell.label.Position = UDim2.new(0, offset, 0.5, if subtitle == "" then -11 else -18)
+                        cell.label.Size = UDim2.new(1, -offset, 0, 22)
+                        cell.subtitle.Position = UDim2.new(0, offset, 0.5, 2)
+                        cell.subtitle.Size = UDim2.new(1, -offset, 0, 17)
+                        cell.subtitle.Text = subtitle
+                    else
+                        local y = if mobile then 15 else (rh - 22) / 2
+                        cell.caption.Text = col.Name
+                        cell.caption.Visible = mobile
+                        if cell.badge then
+                            local width = math.max(
+                                0,
+                                math.min(
+                                    (self._logicalWidth - T.Rail)
+                                            * (if mobile
+                                                then 1 / math.min(self._stackColumns, self._metaCount)
+                                                else col.Fraction)
+                                        - T.Inset
+                                        - 2,
+                                    U.measure(cell.label.Text, D.Typography.Popup) + 12
+                                )
+                            )
+                            cell.badge.Position, cell.badge.Size = O(0, y), O(width, 20)
+                        end
+                        cell.label.Position = O(if cell.badge then 5 else 0, y)
+                        cell.label.Size = UDim2.new(1, if cell.badge then -7 else 0, 0, 21)
+                    end
+                end
+            end
+        end
+        for i, header in self._headers do
+            local col = self._columns[i]
+            header.root.Position = UDim2.new(col.Start, T.Inset, 0, 0)
+            header.root.Size = UDim2.new(col.Fraction, -T.Inset, 0, head)
+            header.label.Text = col.Name
+            if header.arrow then
+                local active = self._sortKey == col.Key
+                header.arrow.Visible = active
+                header.arrow.Rotation = if self._descending then 0 else 180
+            end
+            header.root.Interactable = col.Sortable and not disabled
+            header.root.Selectable = header.root.Interactable
+        end
+    end
+
+    function P.DataTable:_measure()
+        if self._dead then
+            return
+        end
+        local g = self._w._layout
+        local width = self._root.AbsoluteSize.X / self._w._scale
+        if width < 1 then
+            width = g.Width - g.Sidebar - g.Left - g.Right
+        end
+        local stacked = width < self._breakpoint
+        local stackColumns = if width < 275 then 2 else 3
+        local hit = math.max(26, if g.Touch then D.TouchHit else 0)
+        local rh = if stacked
+            then math.max(T.MobileDetail, 47 + math.ceil(self._metaCount / stackColumns) * 34) + hit
+            else math.max(T.DesktopRow, hit + 4)
+        if self._rh ~= rh then
+            self:_closeMenu()
+        end
+        self._stacked, self._stackColumns, self._rh, self._hit = stacked, stackColumns, rh, hit
+        self._logicalWidth = width
+        local headers = stacked and not self._mobileSort and 0 or math.max(T.Header, hit)
+        self._header.Visible = headers > 0
+        self._mobileBar.Visible = stacked and self._mobileSort
+        self._desktopBar.Visible = not stacked
+        self._header.Size = UDim2.new(1, 0, 0, headers)
+        self._heightRows = if stacked then math.min(2, self._maxRows) else self._maxRows
+        local total = if self._state == "Ready" then #self._viewRows else 0
+        local h = if total == 0 then T.Empty else math.min(total, self._heightRows) * rh
+        self._scroll.Position, self._scroll.Size = O(0, headers), UDim2.new(1, 0, 0, h)
+        self._scroll.CanvasSize = O(0, math.max(h, total * rh))
+        local maxScroll = math.max(0, (total * rh - h) * self._w._scale)
+        if self._scroll.CanvasPosition.Y > maxScroll then
+            self._scroll.CanvasPosition = V(0, maxScroll)
+        end
+        self._notice.Visible = total == 0
+        self._notice.Position, self._notice.Size = O(T.Inset, headers), UDim2.new(1, -2 * T.Inset, 0, h)
+        self._rail.Position, self._rail.Size = UDim2.new(1, -T.Rail, 0, headers), O(T.Rail, h)
+        local old = self._height
+        self._height = headers + h
+        local x = self._root.Size.X
+        self._root.Size = UDim2.new(x.Scale, x.Offset, 0, self._height)
+        self:_paint()
+        if old ~= self._height then
+            U.parentChanged(self, "height")
+        end
+    end
+
+    function P.DataTable:_rebuild()
+        local out, query = {}, self._search
+        if self._state == "Ready" then
+            for _, key in self._keys do
+                local row = self._rows[key]
+                local excluded = false
+                if self._filter then
+                    local ok, allow = U.call(self, "RowFilter", self._filter, U.copy(row))
+                    excluded = not ok or allow ~= true
+                end
+                if not excluded then
+                    local match = query == "" or string.find(string.lower(display(row.Subtitle)), query, 1, true) ~= nil
+                    for _, col in self._columns do
+                        if
+                            not match
+                            and col.Searchable
+                            and string.find(string.lower(display(row[col.Key])), query, 1, true)
+                        then
+                            match = true
+                        end
+                    end
+                    if match then
+                        table.insert(out, row)
+                    end
+                end
+            end
+        end
+        local key = self._sortKey
+        if key then
+            local seq, desc = self._indices, self._descending
+            table.sort(out, function(a: Payload, b: Payload)
+                local av, bv = a[key], b[key]
+                local missingA, missingB = av == nil or av == false, bv == nil or bv == false
+                if missingA or missingB then
+                    if missingA == missingB then
+                        return seq[a.Key] < seq[b.Key]
+                    end
+                    return missingB
+                end
+                local numberA, numberB = U.finite(av), U.finite(bv)
+                if numberA ~= numberB then
+                    return numberA
+                end
+                if numberA and numberB then
+                    if av ~= bv then
+                        if desc then
+                            return av > bv
+                        else
+                            return av < bv
+                        end
+                    end
+                else
+                    local aa, bb = string.lower(display(av)), string.lower(display(bv))
+                    if aa ~= bb then
+                        if desc then
+                            return aa > bb
+                        else
+                            return aa < bb
+                        end
+                    end
+                end
+                return seq[a.Key] < seq[b.Key]
+            end)
+        end
+        local previous = #self._viewRows
+        self._viewRows = out
+        local fallback = if self._state == "Loading"
+            then "Loading…"
+            elseif self._state == "Error" then "Could not load rows."
+            elseif previous == 0 and #self._keys == 0 then self._empty
+            else if self._search ~= "" or self._filter then self._noResults else self._empty
+        self._notice.Text = self._stateMessage or fallback
+        self:_measure()
+        if #out ~= previous then
+            U.emit(self, "RowsChanged", #out)
+        end
+    end
+
+    function P.DataTable:_dirty(reset: boolean?)
+        if reset then
+            self:_closeMenu()
+            self._scroll.CanvasPosition = V(0, 0)
+        end
+        U.later(self, self._life, "render", nil, function()
+            self:_rebuild()
+        end)
+    end
+
+    function P.DataTable:SetRows(rows: { any })
+        if not U.dense(rows) then
+            return U.issue(self, "SetRows", "expected an array")
+        end
+        local keys, data, seq = {}, {}, {}
+        for i, row in ipairs(rows) do
+            if type(row) ~= "table" or not validKey(row.Key) or data[row.Key] ~= nil then
+                return U.issue(self, "SetRows", "row " .. tostring(i) .. " needs a unique string or numeric Key")
+            end
+            keys[i], data[row.Key], seq[row.Key] = row.Key, U.copy(row), i
+        end
+        self._keys, self._rows, self._indices = keys, data, seq
+        if self._selected ~= nil and data[self._selected] == nil then
+            self:SelectRow(nil)
+        end
+        self:_dirty(true)
+        return true
+    end
+
+    function P.DataTable:AddRow(row: Payload)
+        if type(row) ~= "table" or not validKey(row.Key) or self._rows[row.Key] ~= nil then
+            return U.issue(self, "AddRow", "expected a unique string or numeric Key")
+        end
+        self._rows[row.Key] = U.copy(row)
+        table.insert(self._keys, row.Key)
+        self._indices[row.Key] = #self._keys
+        self:_dirty()
+        return true
+    end
+
+    function P.DataTable:RemoveRow(key: any)
+        if not validKey(key) or not self._rows[key] then
+            return false
+        end
+        self._rows[key], self._indices[key] = nil, nil
+        U.remove(self._keys, key)
+        for i, k in self._keys do
+            self._indices[k] = i
+        end
+        if self._selected == key then
+            self:SelectRow(nil)
+        end
+        self:_closeMenu()
+        self:_dirty()
+        return true
+    end
+
+    function P.DataTable:UpdateRow(key: any, patch: Payload)
+        local row = if validKey(key) then self._rows[key] else nil
+        if not row or type(patch) ~= "table" then
+            return U.issue(self, "UpdateRow", "expected an existing Key and field table")
+        end
+        local changed = false
+        for name, value in patch do
+            if name ~= "Key" and not U.same(row[name], value) then
+                row[name] = U.copy(value)
+                changed = true
+            end
+        end
+        if changed then
+            self:_dirty()
+        end
+        return true
+    end
+
+    function P.DataTable:Clear()
+        return self:SetRows({})
+    end
+    function P.DataTable:GetRow(key: any): any
+        return if validKey(key) then U.copy(self._rows[key]) else nil
+    end
+    function P.DataTable:GetResultCount(): number
+        return #self._viewRows
+    end
+    function P.DataTable:GetSelectedRow(): any
+        return if self._selected ~= nil then self:GetRow(self._selected) else nil
+    end
+
+    function P.DataTable:SelectRow(key: any)
+        if key ~= nil and (not validKey(key) or self._rows[key] == nil) then
+            return U.issue(self, "SelectRow", "unknown row Key")
+        end
+        if key ~= self._selected then
+            self._selected = key
+            self:_paint()
+            U.emit(self, "SelectionChanged", self:GetSelectedRow())
+        end
+        return true
+    end
+
+    function P.DataTable:OnSelectionChanged(fn: any): Connection
+        return U.event(self, "SelectionChanged"):Connect(fn)
+    end
+
+    function P.DataTable:OnResultCountChanged(fn: any): Connection
+        return U.event(self, "RowsChanged"):Connect(fn)
+    end
+
+    function P.DataTable:SetFilter(fn: any)
+        if fn ~= nil and type(fn) ~= "function" then
+            return U.issue(self, "SetFilter", "expected function or nil")
+        end
+        self._filter = fn
+        self:_dirty(true)
+        return true
+    end
+
+    function P.DataTable:SetSearch(query: string)
+        if type(query) ~= "string" or utf8.len(query) == nil then
+            return U.issue(self, "SetSearch", "expected text")
+        end
+        self._search = string.lower((query:match("^%s*(.-)%s*$") or ""))
+        self:_dirty(true)
+        return true
+    end
+
+    function P.DataTable:SetSort(key: string?, direction: string?)
+        local col = if type(key) == "string" then self._byKey[key] else nil
+        if key ~= nil and (not col or not col.Sortable) then
+            return U.issue(self, "SetSort", "column is not sortable")
+        end
+        if direction ~= nil and direction ~= "Ascending" and direction ~= "Descending" then
+            return U.issue(self, "SetSort", "expected Ascending or Descending")
+        end
+        self._sortKey, self._descending = key, direction == "Descending"
+        self:_dirty(true)
+        return true
+    end
+
+    function P.DataTable:SetState(state: string, message: string?)
+        if state ~= "Ready" and state ~= "Loading" and state ~= "Error" then
+            return U.issue(self, "SetState", "expected Ready, Loading or Error")
+        end
+        if message ~= nil and (type(message) ~= "string" or utf8.len(message) == nil) then
+            return U.issue(self, "SetState", "expected an optional text message")
+        end
+        self._state, self._stateMessage = state, message
+        self:_dirty(true)
+        return true
+    end
+
+    function P.Collection:AddDataTable(options: any)
+        local c = U.cfg(options)
+        if type(c.Columns) ~= "table" or #c.Columns == 0 or #c.Columns > 10 then
+            return U.issue(self, "AddDataTable", "expected between 1 and 10 columns")
+        end
+        local columns, byKey, weight, metacount = {}, {}, 0, 0
+        for index, item in ipairs(c.Columns) do
+            if type(item) ~= "table" or type(item.Key) ~= "string" or not validKey(item.Key) or byKey[item.Key] then
+                return U.issue(self, "AddDataTable", "expected unique string column keys")
+            end
+            local kind = item.Kind
+            local col = {
+                Key = item.Key,
+                Name = U.str(item.Name, item.Key),
+                Width = math.max(0.01, U.number(item.Width, 1)),
+                Kind = kind,
+                Sortable = item.Sortable == true,
+                Searchable = item.Searchable ~= false and kind ~= "Actions",
+                Format = if type(item.Format) == "function" then item.Format else nil,
+                ActionTitle = U.str(item.ActionTitle, "Select"),
+            }
+            if index > 1 and kind == "Primary" then
+                return U.issue(self, "AddDataTable", "primary column must be first")
+            end
+            if kind == "Actions" and index ~= #c.Columns then
+                return U.issue(self, "AddDataTable", "actions column must be last")
+            end
+            columns[index], byKey[col.Key], weight = col, col, weight + col.Width
+            if kind ~= "Primary" and kind ~= "Actions" then
+                metacount += 1
+            end
+        end
+        local w = self._w
+        local root = U.frame(self._host, { Size = UDim2.new(1, 0, 0, T.Empty), ClipsDescendants = true })
+        local n = U.node(w, P.DataTable, "DataTable", c, self, root)
+        local life = n._life
+        n._columns, n._byKey, n._metaCount = columns, byKey, metacount
+        n._rows, n._keys, n._indices, n._viewRows, n._pool, n._headers = {}, {}, {}, {}, {}, {}
+        n._state, n._search = "Ready", ""
+        n._empty, n._noResults = U.str(c.EmptyText, "No rows yet."), U.str(c.NoResultsText, "No matching results.")
+        n._maxRows = math.clamp(math.floor(U.number(c.MaxVisibleRows, 6)), 1, 14)
+        n._breakpoint = math.clamp(U.number(c.MobileBreakpoint, 530), 320, 920)
+        n._onAction, n._getActions, n._selectOnAction = c.OnAction, c.GetActions, c.SelectOnAction ~= false
+        U.fill(w, life, root, "Surface")
+        U.corner(root, D.RowRadius)
+        n._header = U.line(w, life, root, "SurfaceRaised", { Size = UDim2.new(1, 0, 0, T.Header) })
+        n._desktopBar = U.frame(n._header, { Size = UDim2.new(1, -T.Rail, 1, 0) })
+        n._mobileBar = U.frame(n._header, { Size = UDim2.new(1, -T.Rail, 1, 0), Visible = false })
+        local start, sortOptions = 0, {}
+        for i, col in columns do
+            col.Start, col.Fraction = start, col.Width / weight
+            start += col.Fraction
+            local function sortColumn()
+                if col.Sortable then
+                    n:SetSort(
+                        col.Key,
+                        if n._sortKey == col.Key and not n._descending then "Descending" else "Ascending"
+                    )
+                end
+            end
+            local b = U.button(n, life, n._desktopBar, {}, sortColumn)
+            local label = text(b, n, "Popup", "TextSecondary", { Size = UDim2.new(1, -15, 1, 0) })
+            local arrow
+            if col.Sortable then
+                arrow = U.icon(w, life, b, "arrow-down", 12, "Accent", {
+                    AnchorPoint = V(1, 0.5),
+                    Position = S(1, 0.5),
+                    Size = O(12, 12),
+                    Visible = false,
+                })
+                table.insert(sortOptions, col)
+                U.focusable(n, life, b, sortColumn)
+            end
+            n._headers[i] = { root = b, label = label, arrow = arrow }
+        end
+        n._mobileSort = #sortOptions > 0
+        if n._mobileSort then
+            local sortLabel, mobileMenu, b
+            b = rowButton(n, n._mobileBar, "Sort", nil, function()
+                if not mobileMenu then
+                    local items = {}
+                    for _, col in sortOptions do
+                        table.insert(items, {
+                            Name = col.Name,
+                            Callback = function()
+                                local descending = n._sortKey == col.Key and not n._descending
+                                n:SetSort(col.Key, if descending then "Descending" else "Ascending")
+                                sortLabel.Text = col.Name .. (descending and " · Descending" or " · Ascending")
+                            end,
+                        })
+                    end
+                    mobileMenu = w:CreateContextMenu(b, { Items = items, Name = "Sort by", Owner = n, Width = 166 })
+                    if mobileMenu then
+                        life:Give(mobileMenu)
+                    end
+                end
+                if mobileMenu then
+                    mobileMenu:Toggle()
+                end
+            end)
+            b.Size = UDim2.new(0, 80, 1, 0)
+            sortLabel =
+                text(n._mobileBar, n, "Popup", "TextSecondary", { Position = O(90, 0), Size = UDim2.new(1, -90, 1, 0) })
+            sortLabel.Text = "Sort by column"
+        end
+        n._scroll = U.scroll(root, false, { AutomaticCanvasSize = Enum.AutomaticSize.None, Name = "DataRows" })
+        n._rail = U.scrollbar(w, n, life, n._scroll, root, { Name = "DataScrollbar" })
+        n._notice = text(
+            root,
+            n,
+            "Control",
+            "TextSecondary",
+            { TextXAlignment = Enum.TextXAlignment.Center, TextWrapped = true }
+        )
+        n._visibilityRender = function()
+            if not n._visible then
+                n:_closeMenu()
+            end
+        end
+        n._stateRender = function()
+            if n:_isDisabled() then
+                n:_closeMenu()
+            end
+            n:_paint()
+        end
+        life:Give(n._scroll:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
+            n:_paint()
+        end))
+        life:Give(root:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+            n:_measure()
+        end))
+        w._responsive[n] = true
+        life:Give(function()
+            w._responsive[n] = nil
+        end)
+        n:_measure()
+        if c.Rows then
+            n:SetRows(c.Rows)
+        else
+            n:_dirty()
+        end
+        if c.Sort then
+            n:SetSort(c.Sort)
+        end
+        return U.adopt(self, n)
+    end
+end
+
+-- Utilities is lazy per page. All state belongs to this window.
+-- Privileged operations are opt-in integration points for experiences you administer:
+-- Utilities.CanSpectate(Player) -> boolean (check the experience's spectator policy)
+-- Utilities.Movement(Action, value) -> true | false, EnglishReason
+-- Utilities.MovementCapabilities = { [Action] = true }, optional allowlist.
+-- Utilities.ListServers(PlaceId) -> array of public {JobId, Players, MaxPlayers, Ping?}
+-- Utilities.JoinServer(PlaceId, JobId?) -> true | false, EnglishReason
+-- Set AllowWorldChanges = true only in an experience where you control presentation.
+-- Server-side handlers must independently validate permissions, targets and bounds.
+do
+    P.Utilities = U.class(nil)
+    P.UtilityCard = U.class(P.Collection)
+    P.UtilityLane = U.class(P.Base)
+
+    function U.utilityTitle(page: any, icon: string, description: string)
+        local s = page:AddSection({ ShowHeading = false })
+        local w, life = page._w, s._life
+        local row = U.frame(s._host, { LayoutOrder = -1, Size = UDim2.new(1, 0, 0, 55) })
+        U.icon(w, life, row, icon, 22, "Accent", { Position = O(1, 11), Size = O(22, 22) })
+        U.text(w, life, row, "Brand", page._name, "Text", { Position = O(34, 2), Size = UDim2.new(1, -34, 0, 25) })
+        U.text(
+            w,
+            life,
+            row,
+            "Muted",
+            description,
+            "TextSecondary",
+            { Position = O(34, 26), Size = UDim2.new(1, -34, 0, 21) }
+        )
+        return s
+    end
+
+    function U.utilityLanes(section: any, count: number, weight: number?)
+        local w = section._w
+        local container = U.frame(section._host, { Size = UDim2.new(1, 0, 0, 0) })
+        local lanes = {}
+        local lists = {}
+        local life = section._life
+        local function layout()
+            local width = container.AbsoluteSize.X / w._scale
+            if width <= 0 then
+                width = w._layout.Width - w._layout.Sidebar - w._layout.Left - w._layout.Right
+            end
+            local stacked = width < 536 or count == 1
+            local sum, maxHeight = 0, 0
+            local split = weight or 0.5
+            for index, lane in lanes do
+                local h = math.ceil(lists[index].AbsoluteContentSize.Y / w._scale)
+                local left, proportion = 0, 1
+                if not stacked then
+                    left, proportion = if index == 1 then 0 else split, if index == 1 then split else 1 - split
+                end
+                lane._root.Position =
+                    UDim2.new(left, if not stacked and index > 1 then 6 else 0, 0, if stacked then sum else 0)
+                lane._root.Size = UDim2.new(proportion, if stacked then 0 else -6, 0, h)
+                sum += h + 10
+                maxHeight = math.max(maxHeight, h)
+            end
+            container.Size = UDim2.new(1, 0, 0, (if stacked then math.max(0, sum - 10) else maxHeight) + 11)
+        end
+        local function changed()
+            U.later(section, life, container, nil, layout)
+        end
+        for i = 1, count do
+            local root = U.frame(container, { Size = UDim2.new(1, 0, 0, 0) })
+            local lane = U.node(w, P.UtilityLane, "UtilityLane", { Name = "Column " .. i }, section, root)
+            lane._host = root
+            lanes[i] = U.adopt(section, lane)
+            local list = U.layout(root, 10)
+            lists[i] = list
+            life:Give(list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(changed))
+        end
+        life:Give(container:GetPropertyChangedSignal("AbsoluteSize"):Connect(changed))
+        changed()
+        return table.unpack(lanes)
+    end
+
+    function U.utilityCard(owner: any, name: string, description: string?, icon: string?)
+        local w = owner._w
+        local root = U.frame(owner._host, { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y })
+        local n = U.node(w, P.UtilityCard, "UtilityCard", { Name = name }, owner, root)
+        local life = n._life
+        U.fill(w, life, root, "Surface")
+        U.corner(root, D.PopupRadius)
+        local edge = U.make("UIStroke", root, { Thickness = 1, Transparency = 0.42 })
+        U.paint(w, life, edge, "Color", "Stroke")
+        U.padding(root, 11, 8)
+        U.layout(root, 3)
+        if name ~= "" then
+            local head = U.frame(root, { Size = UDim2.new(1, 0, 0, if description then 42 else 27), LayoutOrder = -10 })
+            local inset = if icon then 24 else 0
+            if icon then
+                U.icon(w, life, head, icon, 16, "Accent", { Position = O(0, 5), Size = O(16, 16) })
+            end
+            U.text(
+                w,
+                life,
+                head,
+                "Section",
+                name,
+                "Text",
+                { Position = O(inset, 0), Size = UDim2.new(1, -inset, 0, 25) }
+            )
+            if description then
+                U.text(w, life, head, "Muted", description, "TextSecondary", {
+                    Position = O(inset, 23),
+                    Size = UDim2.new(1, -inset, 0, 17),
+                })
+            end
+        end
+        n._host = U.frame(root, { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 0 })
+        n._small = true
+        U.layout(n._host, 3)
+        return U.adopt(owner, n)
+    end
+
+    function U.utilButton(
+        n: any,
+        life: any,
+        parent: Instance,
+        text: string?,
+        icon: string?,
+        action: () -> (),
+        accent: boolean?
+    )
+        local w = n._w
+        local state, paint = "idle", nil
+        local b = U.button(n, life, parent, { Name = text or icon or "Action" }, action, function(value: string)
+            state = value
+            if paint then
+                paint()
+            end
+        end)
+        U.corner(b, D.FieldRadius)
+        paint = U.fill(w, life, b, function(colors: Payload)
+            if accent then
+                return if state == "press" then colors.Accent:Lerp(colors.Background, 0.13) else colors.Accent
+            end
+            return if state == "press"
+                then colors.Pressed
+                elseif state == "hover" then colors.Hover
+                else colors.SurfaceRaised
+        end)
+        if icon then
+            U.icon(w, life, b, icon, 16, if accent then "AccentInk" else "Accent", {
+                AnchorPoint = V(if text then 0 else 0.5, 0.5),
+                Size = O(16, 16),
+                Position = if text then UDim2.new(0, 9, 0.5, 0) else S(0.5, 0.5),
+            })
+        end
+        local caption
+        if text then
+            local offset = if icon then 32 else 8
+            caption = U.text(w, life, b, "Popup", text, "Text", {
+                Position = O(offset, 0),
+                Size = UDim2.new(1, -offset - 5, 1, 0),
+            })
+        end
+        U.focusable(n, life, b, action)
+        return b, caption
+    end
+
+    function U.utilityToolbar(
+        owner: any,
+        categories: { string },
+        onFilter: any,
+        refresh: () -> (),
+        search: ((string) -> ())?
+    )
+        local w = owner._w
+        local root = U.frame(owner._host, { Size = UDim2.new(1, 0, 0, 42) })
+        local n = U.node(w, P.Base, "UtilityToolbar", { Name = "Toolbar" }, owner, root)
+        local life = n._life
+        local filter: any, caption: any, menu: any
+        filter, caption = U.utilButton(n, life, root, "Filter", "filter", function()
+            if not menu then
+                local choices = {}
+                for _, name in categories do
+                    table.insert(choices, {
+                        Name = name,
+                        Callback = function()
+                            caption.Text = if name == categories[1] then "Filter" else name
+                            onFilter(name)
+                        end,
+                    })
+                end
+                menu = w:CreateContextMenu(filter, { Name = "Filters", Items = choices, Width = 156, Owner = n })
+                if menu then
+                    life:Give(menu)
+                end
+            end
+            if menu then
+                menu:Toggle()
+            end
+        end)
+        filter.Name = "Filter"
+        local reload = U.utilButton(n, life, root, "Refresh", "refresh-cw", refresh)
+        local result =
+            U.text(w, life, root, "Muted", "", "TextSecondary", { TextXAlignment = Enum.TextXAlignment.Right })
+        local searchShell, field
+        if search then
+            searchShell = U.line(w, life, root, "SurfaceRaised", {})
+            U.corner(searchShell, D.FieldRadius)
+            local border = U.make("UIStroke", searchShell, { Thickness = 1 })
+            local focused = false
+            local paint = U.paint(w, life, border, "Color", function(c: Payload)
+                return if focused then c.Accent else c.Stroke
+            end)
+            U.icon(w, life, searchShell, "search", 15, "TextSecondary", {
+                Position = UDim2.new(0, 9, 0.5, 0),
+                AnchorPoint = V(0, 0.5),
+                Size = O(15, 15),
+            })
+            field = U.make("TextBox", searchShell, {
+                Name = "Player Search",
+                Text = "",
+                PlaceholderText = "Search players…",
+                ClearTextOnFocus = false,
+                Position = O(31, 0),
+                Size = UDim2.new(1, -39, 1, 0),
+                TextSize = D.Typography.Control,
+                FontFace = MEDIUM,
+                TextXAlignment = Enum.TextXAlignment.Left,
+            })
+            U.paint(w, life, field, "TextColor3", "Text")
+            U.paint(w, life, field, "PlaceholderColor3", "TextMuted")
+            life:Give(field.Focused:Connect(function()
+                focused = true
+                paint()
+            end))
+            life:Give(field.FocusLost:Connect(function()
+                focused = false
+                paint()
+            end))
+            life:Give(field:GetPropertyChangedSignal("Text"):Connect(function()
+                U.later(n, life, "query", 0.065, function()
+                    search(field.Text)
+                end)
+            end))
+            U.focusable(n, life, field, function()
+                field:CaptureFocus()
+            end)
+        end
+        function n:_measure()
+            local hit = if w._useTouch then D.TouchHit else 35
+            local width = root.AbsoluteSize.X / w._scale
+            if width < 1 then
+                width = w._layout.Width - w._layout.Sidebar - w._layout.Left - w._layout.Right
+            end
+            local stack = searchShell ~= nil and width < 474
+            local y = if stack then hit + 6 else 0
+            local trailing = math.min(88, math.max(56, width * 0.26))
+            local button = math.min(106, math.max(70, (width - trailing - 9) / 2))
+            result.Position, result.Size = UDim2.new(1, -trailing, 0, y), O(trailing, hit)
+            reload.Position, reload.Size = UDim2.new(1, -trailing - button - 5, 0, y), O(button, hit)
+            filter.Position, filter.Size = UDim2.new(1, -trailing - 2 * button - 10, 0, y), O(button, hit)
+            if searchShell then
+                searchShell.Size = UDim2.new(1, if stack then 0 else -(trailing + 2 * button + 16), 0, hit)
+            end
+            root.Size = UDim2.new(1, 0, 0, y + hit + 6)
+        end
+        w._responsive[n] = true
+        life:Give(function()
+            w._responsive[n] = nil
+        end)
+        life:Give(root:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+            n:_measure()
+        end))
+        n:_measure()
+        U.adopt(owner, n)
+        return result, reload, field
+    end
+
+    function U.utilityMetric(owner: any, name: string, icon: string, initial: string, copy: any?)
+        local w = owner._w
+        local h = if copy and w._useTouch then D.TouchHit else 29
+        local root = U.frame(owner._host, { Size = UDim2.new(1, 0, 0, h) })
+        local n = U.node(w, P.Base, "Metric", { Name = name }, owner, root)
+        local life = n._life
+        U.icon(
+            w,
+            life,
+            root,
+            icon,
+            14,
+            "TextMuted",
+            { AnchorPoint = V(0, 0.5), Position = S(0, 0.5), Size = O(14, 14) }
+        )
+        U.text(
+            w,
+            life,
+            root,
+            "Popup",
+            name,
+            "TextSecondary",
+            { Position = O(22, 0), Size = UDim2.new(0.39, -22, 1, 0) }
+        )
+        local value = U.text(w, life, root, "Numeric", initial, "Text", {
+            Position = S(0.39, 0),
+            Size = UDim2.new(0.61, if copy then -h - 5 else -4, 1, 0),
+            TextXAlignment = Enum.TextXAlignment.Right,
+        })
+        U.line(w, life, root, "Divider", { Position = S(0, 1), AnchorPoint = V(0, 1), Size = UDim2.new(1, 0, 0, 1) })
+        if copy then
+            local b = U.utilButton(n, life, root, nil, "copy", copy)
+            b.Position, b.Size = UDim2.new(1, -h, 0, 0), O(h, h)
+            b.Name = "Copy " .. name
+        end
+        function n:SetText(v: string)
+            value.Text = v
+        end
+        function n:GetText()
+            return value.Text
+        end
+        return U.adopt(owner, n)
+    end
+
+    function P.Utilities:_toast(title: string, text: string?, failure: boolean?)
+        if not self._dead and not self._w._dead then
+            self._w:Notify({ Title = title, Description = text, Severity = if failure then "Warning" else "Info" })
+        end
+    end
+
+    function P.Utilities:_copy(title: string, text: string)
+        if U.copyText(text) then
+            self:_toast("Copied", title)
+        elseif self._w:IsVisible() then
+            self._w:CreateDialog({
+                Title = title,
+                Description = "Select and copy the text below.",
+                Width = 570,
+                Height = 185,
+                Buttons = { { Name = "Done" } },
+                BuildContent = function(host: Frame, life: any)
+                    host.Size = UDim2.new(1, -3, 0, 79)
+                    local field = U.make("TextBox", host, {
+                        Name = "CopyText",
+                        Size = S(1, 1),
+                        Text = text,
+                        MultiLine = true,
+                        TextWrapped = true,
+                        TextEditable = false,
+                        ClearTextOnFocus = false,
+                        FontFace = MEDIUM,
+                        TextSize = 13,
+                    })
+                    U.fill(self._w, life, field, "SurfaceRaised")
+                    U.paint(self._w, life, field, "TextColor3", "Text")
+                    U.corner(field, D.FieldRadius)
+                    U.padding(field, 7, 5)
+                end,
+            })
+        else
+            self:_toast("Clipboard unavailable", "Open the window to view the value.", true)
+        end
+    end
+
+    local function humanoid(p: any): Humanoid?
+        local c = p and p.Character
+        return c and c:FindFirstChildOfClass("Humanoid") or nil
+    end
+
+    function U.playerRoot(p: any): BasePart?
+        local c = p and p.Character
+        local root = c and c:FindFirstChild("HumanoidRootPart")
+        return if root and root:IsA("BasePart") then root else nil
+    end
+
+    local function distanceString(v: number?): string
+        -- Roblox distance is measured in studs; use that unit without assuming an experience's scale.
+        return if U.finite(v) then string.format("%.1f st", v) else "—"
+    end
+
+    local function playerInfo(p: Player, cache: Payload, character: Model?): Payload
+        local image = cache[p.UserId]
+        local h = character and character:FindFirstChildOfClass("Humanoid")
+        return {
+            Key = p.UserId,
+            Player = p.DisplayName,
+            Subtitle = if p.DisplayName ~= p.Name then "@" .. p.Name else "",
+            Username = p.Name,
+            Image = if type(image) == "string" then image else "",
+            Team = if p.Team then p.Team.Name else "Neutral",
+            Status = if not h then "Missing Character" elseif h.Health > 0 then "Active" else "Dead",
+            Tone = if not h then "Warning" elseif h.Health > 0 then "Success" else "Danger",
+        }
+    end
+
+    function P.Utilities:_updatePlayer(record: any)
+        local p, tbl = record.player, self._playerTable
+        if self._dead or self._people[p.UserId] ~= record then
+            return
+        end
+        local data = playerInfo(p, self._thumbs, record.character)
+        record.info = data
+        if tbl then
+            if tbl:GetRow(p.UserId) then
+                tbl:UpdateRow(p.UserId, data)
+            else
+                tbl:AddRow(data)
+            end
+        end
+        if self._target == p then
+            self:_spectateRender()
+        end
+        if self._avatarUpdate and self._avatarPlayer == p then
+            self._avatarUpdate()
+        end
+    end
+
+    function P.Utilities:_thumbnail(p: Player)
+        local key = p.UserId
+        if key <= 0 or self._thumbs[key] ~= nil then
+            return
+        end
+        if #self._thumbKeys >= 384 then
+            for i, old in self._thumbKeys do
+                if not self._people[old] then
+                    self._thumbs[old] = nil
+                    table.remove(self._thumbKeys, i)
+                    break
+                end
+            end
+        end
+        table.insert(self._thumbKeys, key)
+        self._thumbs[key] = false
+        table.insert(self._thumbQueue, key)
+        self:_pumpThumbnails()
+    end
+
+    function P.Utilities:_pumpThumbnails()
+        local life = self._life
+        while self._thumbJobs < 4 and #self._thumbQueue > 0 do
+            local key = table.remove(self._thumbQueue, 1)
+            if not self._people[key] then
+                self._thumbs[key] = nil
+                continue
+            end
+            self._thumbJobs += 1
+            local slot = "thumbnail:" .. tostring(key)
+            life:Give(
+                task.defer(function()
+                    local ok, image = pcall(
+                        Players.GetUserThumbnailAsync,
+                        Players,
+                        key,
+                        Enum.ThumbnailType.HeadShot,
+                        Enum.ThumbnailSize.Size100x100
+                    )
+                    if self._dead then
+                        return
+                    end
+                    life:Forget(slot)
+                    self._thumbJobs -= 1
+                    if ok and type(image) == "string" and image ~= "" then
+                        self._thumbs[key] = image
+                    end
+                    local record = self._people[key]
+                    if record then
+                        self:_updatePlayer(record)
+                    end
+                    self:_pumpThumbnails()
+                end),
+                slot
+            )
+        end
+    end
+
+    function P.Utilities:_track(p: Player)
+        local key = p.UserId
+        if self._people[key] then
+            return
+        end
+        local life = U.scope()
+        self._life:Give(life, "player:" .. tostring(key))
+        local record = { player = p, root = nil }
+        self._people[key] = record
+        local function character(model: Model?)
+            record.character = model
+            local scope = U.scope()
+            life:Give(scope, "character")
+            local function changed()
+                record.root = U.playerRoot(p)
+                self:_updatePlayer(record)
+                if self._target == p then
+                    self:_applySubject()
+                elseif self._target and p == Players.LocalPlayer then
+                    U.later(self._w, scope, "restoreSpectate", nil, function()
+                        self:_applySubject()
+                    end)
+                end
+            end
+            if model then
+                local function watchHumanoid()
+                    scope:Remove("health")
+                    local h = model:FindFirstChildOfClass("Humanoid")
+                    if h then
+                        local alive = h.Health > 0
+                        scope:Give(
+                            h.HealthChanged:Connect(function(value: number)
+                                if (value > 0) ~= alive then
+                                    alive = value > 0
+                                    changed()
+                                end
+                            end),
+                            "health"
+                        )
+                    end
+                    changed()
+                end
+                for _, event in { model.ChildAdded, model.ChildRemoved } do
+                    scope:Give(event:Connect(function(node: Instance)
+                        if node:IsA("Humanoid") then
+                            watchHumanoid()
+                        elseif node.Name == "HumanoidRootPart" then
+                            changed()
+                        end
+                    end))
+                end
+                watchHumanoid()
+            else
+                record.root = nil
+                self:_updatePlayer(record)
+                if self._target == p then
+                    self:_restoreSubject(false)
+                end
+            end
+        end
+        life:Give(p.CharacterAdded:Connect(character))
+        life:Give(p.CharacterRemoving:Connect(function()
+            character(nil)
+        end))
+        for _, property in { "Team", "Neutral", "DisplayName", "Name" } do
+            life:Give(p:GetPropertyChangedSignal(property):Connect(function()
+                self:_updatePlayer(record)
+            end))
+        end
+        character(p.Character)
+        if self._playerTable or self._target == p then
+            self:_thumbnail(p)
+        end
+    end
+
+    function P.Utilities:_ensurePeople()
+        if self._tracking then
+            return
+        end
+        self._tracking = true
+        for _, p in Players:GetPlayers() do
+            self:_track(p)
+        end
+        self._life:Give(Players.PlayerAdded:Connect(function(p: Player)
+            self:_track(p)
+        end))
+        self._life:Give(Players.PlayerRemoving:Connect(function(p: Player)
+            if self._target == p then
+                self:StopSpectating()
+            end
+            if self._avatarPlayer == p and self._avatar and self._avatar:IsOpen() then
+                self._avatar:Close()
+            end
+            self._people[p.UserId] = nil
+            self._life:Remove("player:" .. tostring(p.UserId))
+            if self._playerTable then
+                self._playerTable:RemoveRow(p.UserId)
+            end
+        end))
+    end
+
+    function P.Utilities:_distancePage()
+        local my = Players.LocalPlayer
+        local own = my and self._people[my.UserId]
+        local origin = own and own.root and own.root.Position
+        for key, record in self._people do
+            local d = if origin and record.root
+                then math.floor((record.root.Position - origin).Magnitude * 10 + 0.5) / 10
+                else false
+            if d ~= record.distance then
+                record.distance = d
+                self._playerTable:UpdateRow(key, { Distance = d })
+            end
+        end
+        if self._avatarUpdate then
+            self._avatarUpdate()
+        end
+    end
+
+    function P.Utilities:_canSpectate(target: Player?): boolean
+        if target == nil or target == Players.LocalPlayer or target.Parent ~= Players then
+            return false
+        end
+        if type(self._options.CanSpectate) ~= "function" then
+            return false
+        end
+        local ok, permitted = U.call(self._w, "Spectate permission", self._options.CanSpectate, target)
+        return ok and permitted == true
+    end
+
+    function P.Utilities:_restoreSubject(clear: boolean)
+        local camera = self._subjectCamera
+        if camera and camera.CameraSubject == self._appliedSubject then
+            local old = self._originalSubject
+            local own = humanoid(Players.LocalPlayer)
+            if old and old.Parent then
+                camera.CameraSubject = old
+            elseif own then
+                camera.CameraSubject = own
+            end
+        end
+        self._appliedSubject = nil
+        if clear then
+            self._subjectCamera, self._originalSubject = nil, nil
+        end
+    end
+
+    function P.Utilities:_applySubject()
+        local target = self._target
+        if not target then
+            return
+        end
+        if not self:_canSpectate(target) then
+            self:StopSpectating()
+            return
+        end
+        local camera = workspace.CurrentCamera
+        if camera ~= self._subjectCamera then
+            self:_restoreSubject(true)
+            self._subjectCamera = camera
+            self._originalSubject = camera and camera.CameraSubject
+        end
+        local h = humanoid(target)
+        if camera and h then
+            if camera.CameraSubject ~= h then
+                camera.CameraSubject = h
+            end
+            self._appliedSubject = h
+        end
+    end
+
+    function P.Utilities:_spectateRender()
+        local widget, target = self._widget, self._target
+        if not widget or not target then
+            return
+        end
+        local h = humanoid(target)
+        widget.detail.Text = if h
+            then (if self._w._useTouch then "" else "Current target: ") .. target.DisplayName
+            else "Waiting for " .. target.DisplayName
+        widget.avatar.Image = self._thumbs[target.UserId] or ""
+    end
+
+    function P.Utilities:_stepSpectate(direction: number)
+        local pool = {}
+        for _, record in self._people do
+            local p = record.player
+            if self:_canSpectate(p) then
+                table.insert(pool, p)
+            end
+        end
+        table.sort(pool, function(a: Player, b: Player)
+            return a.UserId < b.UserId
+        end)
+        if #pool == 0 then
+            self:StopSpectating()
+            return
+        end
+        local index = table.find(pool, self._target) or 1
+        self:Spectate(pool[(index - 1 + direction) % #pool + 1])
+    end
+
+    function P.Utilities:_openWidget()
+        local w = self._w
+        if self._widget then
+            local n = self._widget.node
+            n._life:Remove("dismiss")
+            n._root.Visible, n._visible = true, true
+            U.tween(w, n._life, n._root, "presence", "fast", { GroupTransparency = 0 }, Gui.ReducedMotionEnabled)
+            return
+        end
+        local root = U.make("CanvasGroup", w._safe, { ZIndex = 28, GroupTransparency = 1, Active = true })
+        local n = U.adopt(w, U.node(w, P.Base, "SpectateWidget", { Name = "SpectateWidget" }, w, root))
+        self._life:Give(n, "widget")
+        local life = n._life
+        U.fill(w, life, root, "SurfaceRaised")
+        U.corner(root, D.PopupRadius)
+        U.line(w, life, root, "Accent", { Size = UDim2.new(0, 3, 1, 0) })
+        local hit = if w._useTouch then D.TouchHit else 34
+        local stop = U.utilButton(n, life, root, nil, "check", function()
+            self:StopSpectating()
+        end, true)
+        stop.Name = "Stop spectating"
+        stop.Position, stop.Size = O(9, 7), O(hit, hit)
+        U.hints(
+            setmetatable({ _w = w, _life = life, _tooltip = "Stop spectating", _owner = n, _visible = true }, P.Base),
+            stop
+        )
+        local heading = U.text(w, life, root, "Control", "Spectating Player", "Text", {
+            Position = O(hit + 17, 4),
+            Size = UDim2.new(1, -(hit * 3 + 64), 0, 24),
+        })
+        local detail = U.text(w, life, root, "Muted", "", "TextSecondary", {
+            Position = O(hit + 17, 26),
+            Size = UDim2.new(1, -(hit * 3 + 64), 0, 24),
+        })
+        heading.Active = true
+        local avatar = U.make("ImageLabel", root, {
+            AnchorPoint = V(1, 0.5),
+            Position = UDim2.new(1, -2 * hit - 15, 0.5, 0),
+            Size = O(30, 30),
+            ScaleType = Enum.ScaleType.Crop,
+        })
+        U.fill(w, life, avatar, "AccentMuted")
+        U.corner(avatar, 15)
+        local previous = U.utilButton(n, life, root, nil, "arrow-left", function()
+            self:_stepSpectate(-1)
+        end)
+        previous.Name = "Previous player"
+        local nextPlayer = U.utilButton(n, life, root, nil, "chevron-right", function()
+            self:_stepSpectate(1)
+        end)
+        nextPlayer.Name = "Next player"
+        previous.Position, previous.Size = UDim2.new(1, -2 * hit - 10, 0, 7), O(hit, hit)
+        nextPlayer.Position, nextPlayer.Size = UDim2.new(1, -hit - 6, 0, 7), O(hit, hit)
+        self._widget = { node = n, detail = detail, avatar = avatar, position = V(16, 82) }
+        local function clamp()
+            local area = w:_area()
+            local width, height = math.max(1, math.min(445, area.X - 20)), hit + 14
+            local pos = self._widget.position
+            root.Size = O(width, height)
+            root.Position =
+                O(math.clamp(pos.X, 0, math.max(0, area.X - width)), math.clamp(pos.Y, 0, math.max(0, area.Y - height)))
+        end
+        life:Give(w._safe:GetPropertyChangedSignal("AbsoluteSize"):Connect(clamp))
+        life:Give(heading.InputBegan:Connect(function(input: InputObject)
+            local start = root.Position
+            local from = U.point(input)
+            w:_take(n, input, {
+                Move = function(p: Vector2)
+                    self._widget.position = V(start.X.Offset, start.Y.Offset) + (p - from)
+                    clamp()
+                    self._widget.position = V(root.Position.X.Offset, root.Position.Y.Offset)
+                end,
+            })
+        end))
+        clamp()
+        U.tween(w, life, root, "presence", "fast", { GroupTransparency = 0 }, Gui.ReducedMotionEnabled)
+    end
+
+    function P.Utilities:Spectate(target: any)
+        if typeof(target) ~= "Instance" or not target:IsA("Player") or not self:_canSpectate(target) then
+            self:_toast(
+                "Spectate unavailable",
+                "This experience has not authorized that player as a camera target.",
+                true
+            )
+            return false
+        end
+        if self._freecamOn then
+            local ok, stopped = U.call(self._w, "Release freecam", self._options.Freecam, false)
+            if not ok or stopped ~= true then
+                self:_toast("Camera in use", "Disable freecam before spectating.", true)
+                return false
+            end
+            self._freecamOn = false
+            if self._freecamControl then
+                self._freecamControl:SetValue(false, true)
+            end
+        end
+        self:_ensurePeople()
+        self._target = target
+        self:_thumbnail(target)
+        self:_openWidget()
+        self:_applySubject()
+        self:_spectateRender()
+        return true
+    end
+
+    function P.Utilities:StopSpectating()
+        self._target = nil
+        self:_restoreSubject(true)
+        local widget, w = self._widget, self._w
+        if widget and not w._dead then
+            local n = widget.node
+            n._visible = false
+            w:_quiet(n)
+            local snap = w._speed <= 0 or Gui.ReducedMotionEnabled
+            U.tween(w, n._life, n._root, "presence", "fast", { GroupTransparency = 1 }, snap)
+            if snap then
+                n._root.Visible = false
+            else
+                U.later(n, n._life, "dismiss", D.Animation.fast / w._speed, function()
+                    if not self._target then
+                        n._root.Visible = false
+                    end
+                end)
+            end
+        end
+        return true
+    end
+
+    function P.Utilities:_playerActions(row: Payload): { any }
+        local data = self._people[row.Key]
+        if not data then
+            return {}
+        end
+        local p = data.player
+        return {
+            {
+                Name = "Teleport",
+                Icon = "map-pin",
+                Disabled = not self:_movementAllowed("TeleportPlayer") or not data.root or p == Players.LocalPlayer,
+                Callback = function()
+                    if self._people[row.Key] == data and data.root and U.playerRoot(Players.LocalPlayer) then
+                        self:_authorizeMove("TeleportPlayer", { UserId = p.UserId })
+                    else
+                        self:_toast("Player unavailable", "Wait for both characters to spawn.", true)
+                    end
+                end,
+            },
+            {
+                Name = "Spectate",
+                Icon = "eye",
+                Disabled = not self:_canSpectate(p),
+                Callback = function()
+                    self:Spectate(p)
+                end,
+            },
+            {
+                Name = "View Avatar",
+                Icon = "user",
+                Callback = function()
+                    self:ViewAvatar(p)
+                end,
+            },
+            {
+                Name = "Copy Username",
+                Icon = "copy",
+                Callback = function()
+                    self:_copy("Username", p.Name)
+                end,
+            },
+            {
+                Name = "Copy UserId",
+                Icon = "copy",
+                Callback = function()
+                    self:_copy("User ID", tostring(p.UserId))
+                end,
+            },
+        }
+    end
+
+    function P.Utilities:_buildPlayers(page: any)
+        local section = U.utilityTitle(page, "users", "Find and inspect players in this server.")
+        local card = U.utilityCard(section, "", nil, nil)
+        local board
+        local results = U.utilityToolbar(
+            card,
+            { "All", "Same Team", "Other Team", "Alive", "Dead", "Nearby" },
+            function(value: string)
+                if not board then
+                    return
+                end
+                if value == "All" then
+                    board:SetFilter(nil)
+                    return
+                end
+                board:SetFilter(function(row: Payload)
+                    local p = self._people[row.Key] and self._people[row.Key].player
+                    if not p then
+                        return false
+                    end
+                    local localTeam = Players.LocalPlayer and Players.LocalPlayer.Team
+                    if value == "Same Team" then
+                        return localTeam ~= nil and p.Team == localTeam
+                    end
+                    if value == "Other Team" then
+                        return p.Team ~= nil and p.Team ~= localTeam
+                    end
+                    if value == "Alive" then
+                        return row.Status == "Active"
+                    end
+                    if value == "Dead" then
+                        return row.Status == "Dead"
+                    end
+                    return U.finite(row.Distance) and row.Distance <= 75
+                end)
+            end,
+            function()
+                for _, p in Players:GetPlayers() do
+                    self:_track(p)
+                end
+                for _, record in self._people do
+                    self:_updatePlayer(record)
+                end
+                self:_distancePage()
+            end,
+            function(value: string)
+                if board then
+                    board:SetSearch(value)
+                end
+            end
+        )
+        board = card:AddDataTable({
+            Name = "Players",
+            EmptyText = "No players available.",
+            NoResultsText = "No players match your filters.",
+            MobileBreakpoint = 552,
+            Columns = {
+                { Key = "Player", Width = 0.286, Sortable = true, Kind = "Primary" },
+                { Key = "Distance", Width = 0.157, Sortable = true, Searchable = false, Format = distanceString },
+                { Key = "Status", Width = 0.183, Sortable = true, Searchable = false, Kind = "Badge" },
+                { Key = "Team", Width = 0.142, Sortable = true, Searchable = false },
+                { Key = "Action", Width = 0.232, Kind = "Actions" },
+            },
+            GetActions = function(row: Payload)
+                return self:_playerActions(row)
+            end,
+        })
+        self._playerTable = board
+        board:OnResultCountChanged(function(count: number)
+            results.Text = tostring(count) .. (count == 1 and " result" or " results")
+        end)
+        self:_ensurePeople()
+        for _, record in self._people do
+            self:_updatePlayer(record)
+            self:_thumbnail(record.player)
+        end
+        results.Text = "0 results"
+    end
+
+    function P.Utilities:GetTab()
+        return self._tab
+    end
+    function P.Utilities:GetSpectateTarget()
+        return self._target
+    end
+
+    function P.Utilities:Sync()
+        if self._dead or not self._ready or self._syncing then
+            return
+        end
+        self._syncing = true
+        local w = self._w
+        local page = if w._visible and w._activeTab == self._tab then w._activeSub else nil
+        local key = page and page._id
+        if key and not self._built[key] then
+            self._built[key] = true
+            local builder = self["_build" .. key]
+            if builder then
+                local ok = U.call(w, "Utilities " .. key, builder, self, page)
+                if not ok then
+                    local section = page:AddSection({ Name = "Unavailable", Collapsible = false })
+                    section:AddParagraph({ Text = "This utility did not load. Reopen JetZ to retry." })
+                end
+            end
+        end
+        if self._shownPage ~= key then
+            self._shownPage = key
+            self._life:Remove("visiblePage")
+            local active = U.scope()
+            if key then
+                self._life:Give(active, "visiblePage")
+            end
+            local function every(seconds: number, callback: () -> ())
+                local function tick()
+                    if active._dead or self._dead then
+                        return
+                    end
+                    callback()
+                    if not active._dead then
+                        U.later(w, active, "sample", seconds, tick)
+                    end
+                end
+                tick()
+            end
+            if key == "Players" and self._playerTable then
+                every(0.42, function()
+                    self:_distancePage()
+                end)
+            elseif key == "Waypoints" and self._waypointsTable then
+                every(0.48, function()
+                    self:_refreshWaypointDistances()
+                end)
+            elseif key == "Performance" and self._metrics then
+                self:_startMetrics(active)
+            elseif key == "Server" and self._serverInfo then
+                every(1, function()
+                    self:_renderServerInfo()
+                end)
+            end
+        end
+        self._syncing = false
+    end
+
+    function U.buildUtilities(w: any, options: Payload)
+        if w._utilities then
+            return w._utilities
+        end
+        local tab = w:_addTab({ Name = "Utilities", Icon = "wrench" }, "utilities")
+        local n = setmetatable({
+            _w = w,
+            _tab = tab,
+            _options = options,
+            _life = U.scope(),
+            _built = {},
+            _people = {},
+            _thumbs = {},
+            _thumbKeys = {},
+            _thumbQueue = {},
+            _thumbJobs = 0,
+            _dead = false,
+        }, P.Utilities)
+        w._utilities = n
+        tab._life:Give(n._life)
+        n._life:Give(workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+            if n._restoreCamera then
+                n:_restoreCamera(true)
+            end
+            n:_applySubject()
+        end))
+        if Players.LocalPlayer and type(options.Movement) == "function" then
+            n._life:Give(Players.LocalPlayer.CharacterRemoving:Connect(function()
+                n:_releaseMove()
+            end))
+        end
+        n._life:Give(function()
+            n._dead = true
+            n:_restoreSubject(true)
+            if n._restoreCamera then
+                n:_restoreCamera()
+            end
+            if n._restoreWorld then
+                n:_restoreWorld()
+            end
+            if n._releaseMove then
+                n:_releaseMove()
+            end
+        end)
+        for order, item in
+            {
+                { "Players", "users" },
+                { "Server", "server" },
+                { "Movement", "move" },
+                { "Camera", "camera" },
+                { "World", "globe" },
+                { "Waypoints", "map-pin" },
+                { "Performance", "activity" },
+            }
+        do
+            tab:AddSubTab({ Id = item[1], Name = item[1], Icon = item[2], Order = order })
+        end
+        n._ready = true
+        n:Sync()
+        return n
+    end
+
+    function P.Window:GetUtilities()
+        return self._utilities
+    end
+end
+
+do
+    local function getDescription(p: Player): (HumanoidDescription?, any)
+        local h = p.Character and p.Character:FindFirstChildOfClass("Humanoid")
+        if h then
+            local ok, description = pcall(h.GetAppliedDescription, h)
+            if ok and description then
+                return description, h.RigType
+            end
+        end
+        return nil, nil
+    end
+
+    function P.Utilities:_copyOutfit(p: Player)
+        local desc, rig = getDescription(p)
+        if not desc then
+            self:_toast("Outfit unavailable", "The character has no loaded avatar description.", true)
+            return
+        end
+        local data = { UserId = p.UserId, Rig = rig.Name, Assets = {}, Accessories = {} } :: Payload
+        for _, key in
+            { "Head", "Face", "Torso", "LeftArm", "RightArm", "LeftLeg", "RightLeg", "Shirt", "Pants", "GraphicTShirt" }
+        do
+            local id = (desc :: any)[key]
+            if U.finite(id) and id > 0 then
+                data.Assets[key] = id
+            end
+        end
+        local ok, accessories = pcall(desc.GetAccessories, desc, true)
+        if ok then
+            for _, entry in accessories do
+                table.insert(
+                    data.Accessories,
+                    { AssetId = entry.AssetId, Type = entry.AccessoryType.Name, Order = entry.Order }
+                )
+            end
+        end
+        desc:Destroy()
+        local encoded, value = pcall(Http.JSONEncode, Http, data)
+        if encoded then
+            self:_copy("Outfit asset IDs", value)
+        else
+            self:_toast("Outfit unavailable", "Could not encode avatar assets.", true)
+        end
+    end
+
+    local function buildSkeleton(w: any, life: any, group: WorldModel, model: Model)
+        local bones = {}
+        local parts = {}
+        local function link(a: Vector3, b: Vector3)
+            local length = (a - b).Magnitude
+            if length < 0.03 then
+                return
+            end
+            local bone = U.make("Part", nil, {
+                Name = "PreviewBone",
+                Size = Vector3.new(0.055, 0.055, length),
+                CFrame = CFrame.lookAt((a + b) / 2, b),
+                Material = Enum.Material.Neon,
+                Anchored = true,
+                CanCollide = false,
+                CanTouch = false,
+                CanQuery = false,
+                CastShadow = false,
+                Transparency = 1,
+            })
+            table.insert(bones, bone)
+            U.paint(w, life, bone, "Color", "Accent")
+            bone.Parent = group
+        end
+        for _, child in model:GetDescendants() do
+            if child:IsA("Motor6D") then
+                local a, b = child.Part0, child.Part1
+                if a and b and a:IsDescendantOf(model) and b:IsDescendantOf(model) then
+                    local joint = (a.CFrame * child.C0).Position
+                    link(a.Position, joint)
+                    link(joint, b.Position)
+                end
+            elseif child:IsA("BasePart") then
+                parts[child] = child.LocalTransparencyModifier
+            end
+        end
+        return function(enabled: boolean)
+            for _, bone in bones do
+                bone.Transparency = if enabled then 0.04 else 1
+            end
+            for part, opacity in parts do
+                part.LocalTransparencyModifier = if enabled then math.max(opacity, 0.65) else opacity
+            end
+        end
+    end
+
+    function P.Utilities:_avatarContent(host: Frame, life: any, dialog: any, p: Player)
+        local w = self._w
+        local stage = U.line(w, life, host, "SurfaceRaised", { ClipsDescendants = true })
+        local info = U.line(w, life, host, "Surface", {})
+        U.corner(stage, D.PopupRadius)
+        U.corner(info, D.PopupRadius)
+        U.line(w, life, stage, "Accent", { Position = O(10, 1), Size = O(42, 2), ZIndex = 2 })
+        local avatar = U.make("ImageLabel", info, {
+            Image = self._thumbs[p.UserId] or "",
+            Position = O(12, 9),
+            Size = O(45, 45),
+            ScaleType = Enum.ScaleType.Crop,
+        })
+        U.fill(w, life, avatar, "AccentMuted")
+        U.corner(avatar, D.FieldRadius)
+        local name = U.text(
+            w,
+            life,
+            info,
+            "Brand",
+            p.DisplayName,
+            "Text",
+            { Position = O(68, 6), Size = UDim2.new(1, -75, 0, 26) }
+        )
+        local uname = U.text(
+            w,
+            life,
+            info,
+            "Muted",
+            "@" .. p.Name,
+            "TextSecondary",
+            { Position = O(68, 30), Size = UDim2.new(1, -75, 0, 20) }
+        )
+        local meta = U.text(
+            w,
+            life,
+            info,
+            "Popup",
+            "",
+            "TextSecondary",
+            { Position = O(12, 58), Size = UDim2.new(1, -24, 0, 27) }
+        )
+        local viewport = U.make("ViewportFrame", stage, {
+            Active = true,
+            Size = UDim2.new(1, 0, 1, -40),
+            Ambient = C(171, 166, 177),
+            LightColor = White,
+            LightDirection = Vector3.new(-1, -0.7, -1),
+        })
+        local world = U.make("WorldModel", viewport, {})
+        local camera = U.make("Camera", viewport, { FieldOfView = 32 })
+        viewport.CurrentCamera = camera
+        local hint = U.text(w, life, stage, "Muted", "Loading avatar…", "TextSecondary", {
+            Position = UDim2.new(0, 10, 1, -39),
+            Size = UDim2.new(1, -124, 0, 38),
+        })
+        local angle, zoom, center, radius = 0, 1, Vector3.new(), 4
+        local loaded, showBones = false, false
+        local applyBones: ((boolean) -> ())?
+        local function cameraUpdate()
+            local aspect = viewport.AbsoluteSize.X / math.max(1, viewport.AbsoluteSize.Y)
+            local d = radius * zoom * math.max(1, 0.84 / math.max(0.25, aspect))
+            local offset = Vector3.new(math.sin(angle) * d, d * 0.12, math.cos(angle) * d)
+            camera.CFrame = CFrame.lookAt(center + offset, center)
+        end
+        local function changeZoom(factor: number)
+            if not loaded then
+                return
+            end
+            zoom = math.clamp(zoom * factor, 0.63, 1.8)
+            cameraUpdate()
+        end
+        local hit = if w._useTouch then D.TouchHit else 34
+        local minus = U.utilButton(dialog, life, stage, nil, "minus", function()
+            changeZoom(1.15)
+        end)
+        local plus = U.utilButton(dialog, life, stage, nil, "plus", function()
+            changeZoom(0.87)
+        end)
+        minus.Name, plus.Name = "Zoom out", "Zoom in"
+        minus.ZIndex, plus.ZIndex = 3, 3
+        minus.Position, plus.Position = UDim2.new(1, -2 * hit - 10, 1, -hit - 2), UDim2.new(1, -hit - 4, 1, -hit - 2)
+        minus.Size, plus.Size = O(hit, hit), O(hit, hit)
+        local cards = {}
+        local function option(title: string, description: string, icon: string, fire: () -> ())
+            local button = U.utilButton(dialog, life, info, nil, nil, fire)
+            button.Name = title
+            U.icon(w, life, button, icon, 17, "Accent", { Position = O(9, 7), Size = O(17, 17) })
+            U.text(w, life, button, "Control", title, "Text", { Position = O(9, 26), Size = UDim2.new(1, -17, 0, 20) })
+            U.text(
+                w,
+                life,
+                button,
+                "Muted",
+                description,
+                "TextSecondary",
+                { Position = O(9, 47), Size = UDim2.new(1, -17, 0, 18) }
+            )
+            local outline = U.make("UIStroke", button, { Thickness = 1, Transparency = 0.57 })
+            local selected = false
+            local paint = U.paint(w, life, outline, "Color", function(c: Payload)
+                return if selected then c.Accent else c.Stroke
+            end)
+            return button,
+                function(value: boolean)
+                    selected = value
+                    paint()
+                    U.tween(
+                        w,
+                        life,
+                        outline,
+                        "card:" .. title,
+                        "state",
+                        { Transparency = if value then 0.08 else 0.57 },
+                        Gui.ReducedMotionEnabled
+                    )
+                end
+        end
+        local highlight
+        cards[1], highlight = option("Show Skeleton", "Avatar joints only", "layers", function()
+            if not applyBones then
+                return
+            end
+            showBones = not showBones
+            applyBones(showBones)
+            highlight(showBones)
+        end)
+        cards[2] = option("Focus Camera", "Authorized subject", "crosshair", function()
+            if self:Spectate(p) then
+                dialog:Close()
+            end
+        end)
+        cards[3] = option("Copy Outfit", "Export avatar asset IDs", "box", function()
+            self:_copyOutfit(p)
+        end)
+        cards[4] = option("Spectate Player", "Show the camera widget", "play", function()
+            if self:Spectate(p) then
+                dialog:Close()
+            end
+        end)
+        cards[1].Interactable, cards[1].Selectable = false, false
+        local function update()
+            local record = self._people[p.UserId]
+            local team = if p.Team then p.Team.Name else "Neutral"
+            local d = record and record.distance
+            meta.Text = "Team: " .. team .. "  ·  " .. (if U.finite(d) then string.format("%.1f st", d) else "—")
+            name.Text, uname.Text, avatar.Image = p.DisplayName, "@" .. p.Name, self._thumbs[p.UserId] or ""
+            local allowed = self:_canSpectate(p)
+            cards[2].Interactable, cards[2].Selectable = allowed, allowed
+            cards[4].Interactable, cards[4].Selectable = allowed, allowed
+        end
+        self._avatarUpdate = update
+        life:Give(function()
+            if self._avatar == dialog then
+                self._avatar, self._avatarUpdate, self._avatarPlayer = nil, nil, nil
+            end
+        end)
+        local function layout()
+            local side = host.AbsoluteSize.X >= 590
+            local stageH = if side then 300 else 233
+            local infoH = 248
+            stage.Size = UDim2.new(if side then 0.515 else 1, if side then -6 else 0, 0, stageH)
+            info.Position = if side then UDim2.new(0.515, 6, 0, 0) else O(0, stageH + 8)
+            info.Size = UDim2.new(if side then 0.485 else 1, if side then -6 else 0, 0, infoH)
+            host.Size = UDim2.new(1, -3, 0, if side then stageH else stageH + infoH + 8)
+            viewport.Size = UDim2.new(1, 0, 1, -hit - 5)
+            hint.Size = UDim2.new(1, -2 * hit - 25, 0, hit)
+            hint.Position = UDim2.new(0, 10, 1, -hit - 3)
+            for i, button in cards do
+                local col, row = (i - 1) % 2, math.floor((i - 1) / 2)
+                button.Position = UDim2.new(col / 2, if col == 0 then 10 else 3, 0, 91 + row * 76)
+                button.Size = UDim2.new(0.5, -13, 0, 70)
+            end
+        end
+        life:Give(viewport.InputBegan:Connect(function(input: InputObject)
+            if not loaded then
+                return
+            end
+            local start, from = angle, U.point(input)
+            w:_take(dialog, input, {
+                Axis = "x",
+                Scroll = dialog._body,
+                Move = function(pos: Vector2)
+                    angle = start + (pos.X - from.X) * 0.015
+                    cameraUpdate()
+                end,
+            })
+        end))
+        life:Give(viewport.InputChanged:Connect(function(input: InputObject)
+            if input.UserInputType == Enum.UserInputType.MouseWheel and dialog:_canInteract() then
+                changeZoom(if input.Position.Z > 0 then 0.9 else 1.11)
+            end
+        end))
+        life:Give(host:GetPropertyChangedSignal("AbsoluteSize"):Connect(layout))
+        life:Give(viewport:GetPropertyChangedSignal("AbsoluteSize"):Connect(cameraUpdate))
+        layout()
+        update()
+        task.defer(function()
+            if dialog._dead then
+                return
+            end
+            local desc, rig = getDescription(p)
+            local accountAvatar = false
+            if not desc and p.UserId > 0 then
+                local ok, fallback = pcall(Players.GetHumanoidDescriptionFromUserIdAsync, Players, p.UserId)
+                if ok and fallback then
+                    desc, rig, accountAvatar = fallback, Enum.HumanoidRigType.R15, true
+                end
+            end
+            if dialog._dead then
+                if desc then
+                    desc:Destroy()
+                end
+                return
+            end
+            if not desc then
+                hint.Text = "Avatar unavailable"
+                return
+            end
+            local ok, model = pcall(Players.CreateHumanoidModelFromDescriptionAsync, Players, desc, rig)
+            desc:Destroy()
+            if not ok or not model then
+                if not dialog._dead then
+                    hint.Text = "Could not load 3D avatar"
+                end
+                return
+            end
+            if dialog._dead then
+                model:Destroy()
+                return
+            end
+            for _, child in model:GetDescendants() do
+                if child:IsA("LuaSourceContainer") then
+                    child:Destroy()
+                elseif child:IsA("BasePart") then
+                    child.Anchored, child.CanCollide = true, false
+                end
+            end
+            local cf, size = model:GetBoundingBox()
+            center, radius = cf.Position, math.max(3.4, size.Y * 1.95, size.X * 2)
+            model.Parent = world
+            applyBones = buildSkeleton(w, life, world, model)
+            loaded = true
+            cards[1].Interactable, cards[1].Selectable = true, true
+            local how = if w._useTouch then "Drag to rotate" else "Drag to rotate · Scroll to zoom"
+            hint.Text = (if accountAvatar then "Account avatar · " else "") .. how
+            cameraUpdate()
+        end)
+    end
+
+    function P.Utilities:ViewAvatar(p: any)
+        if typeof(p) ~= "Instance" or not p:IsA("Player") or p.Parent ~= Players then
+            self:_toast("Avatar unavailable", "That player has left the server.", true)
+            return false
+        end
+        if not self._w:IsVisible() then
+            return false
+        end
+        self:_ensurePeople()
+        self:_thumbnail(p)
+        local dialog = self._w:CreateDialog({
+            Title = "View Avatar",
+            Width = 820,
+            Height = 396,
+            Buttons = { { Name = "Done" } },
+            BuildContent = function(host: Frame, life: any, controller: any)
+                self._avatar, self._avatarPlayer = controller, p
+                self:_avatarContent(host, life, controller, p)
+            end,
+        })
+        return dialog ~= nil
+    end
+end
+
+do
+    local function jobId(value: any): boolean
+        return type(value) == "string" and #value > 0 and #value <= 80 and value:match("^[%w%-]+$") ~= nil
+    end
+
+    function P.Utilities:_renderServerInfo()
+        local a = self._serverInfo
+        if not a then
+            return
+        end
+        local start = self._options.ServerStartedAt
+        local value = if U.finite(start) and start > 0 and start <= os.time() then os.time() - start else nil
+        a.Uptime:SetText(
+            if value
+                then string.format(
+                    "%02d:%02d:%02d",
+                    math.floor(value / 3600),
+                    math.floor(value / 60) % 60,
+                    math.floor(value) % 60
+                )
+                else "—"
+        )
+    end
+
+    function P.Utilities:_listServers()
+        local tbl = self._serverTable
+        if self._serverLoading then
+            return
+        end
+        local provider = self._options.ListServers
+        if type(provider) ~= "function" then
+            self._servers = {}
+            tbl:SetState("Error", "Public server listing is not available in this experience.")
+            return
+        end
+        self._serverLoading = true
+        tbl:SetState("Loading", "Loading public servers…")
+        self._life:Give(
+            task.defer(function()
+                local ok, result = U.call(self._w, "List servers", provider, game.PlaceId)
+                if self._dead then
+                    return
+                end
+                self._life:Forget("serverList")
+                self._serverLoading = false
+                if not ok or type(result) ~= "table" then
+                    self._servers = {}
+                    tbl:SetState("Error", "Could not fetch public servers. Try Refresh.")
+                    return
+                end
+                local seen, rows = {}, {}
+                for _, item in ipairs(result) do
+                    if #rows >= 300 then
+                        break
+                    end
+                    if
+                        type(item) == "table"
+                        and jobId(item.JobId)
+                        and not seen[item.JobId]
+                        and U.finite(item.Players)
+                        and U.finite(item.MaxPlayers)
+                        and item.Players >= 0
+                        and item.MaxPlayers >= 1
+                        and item.Players <= item.MaxPlayers
+                    then
+                        seen[item.JobId] = true
+                        table.insert(rows, {
+                            Key = item.JobId,
+                            Job = item.JobId,
+                            Players = math.floor(item.Players),
+                            Maximum = math.floor(item.MaxPlayers),
+                            Ping = if U.finite(item.Ping) and item.Ping >= 0 then item.Ping else false,
+                            ActionDisabled = type(self._options.JoinServer) ~= "function"
+                                or item.JobId == game.JobId
+                                or item.Players >= item.MaxPlayers,
+                        })
+                    end
+                end
+                self._servers = rows
+                tbl:SetRows(rows)
+                tbl:SetState("Ready")
+            end),
+            "serverList"
+        )
+    end
+
+    function P.Utilities:_join(job: string?)
+        if self._joinFlight then
+            self:_toast("Join in progress", "Wait for the current request to finish.", true)
+            return
+        end
+        if job ~= nil and not jobId(job) then
+            self:_toast("Invalid JobId", "Enter a valid public server JobId.", true)
+            return
+        end
+        local handler = self._options.JoinServer
+        if type(handler) ~= "function" then
+            self:_toast("Join unavailable", "This experience has no authorized teleport handler.", true)
+            return
+        end
+        self._joinFlight = true
+        self._life:Give(
+            task.defer(function()
+                local ok, accepted, reason = pcall(handler, game.PlaceId, job)
+                if self._dead then
+                    return
+                end
+                self._life:Forget("joinServer")
+                if not ok or accepted ~= true then
+                    self._joinFlight = false
+                    self:_toast(
+                        "Could not join server",
+                        if ok and type(reason) == "string" then reason else "The host did not accept the teleport.",
+                        true
+                    )
+                    return
+                end
+                self:_toast("Join requested", "Waiting for Roblox to transfer the session.")
+                U.later(self._w, self._life, "joinCooldown", 5, function()
+                    self._joinFlight = false
+                end)
+            end),
+            "joinServer"
+        )
+    end
+
+    function P.Utilities:_otherServer(mode: string)
+        if self._serverLoading then
+            self:_toast("Server list is loading", "Try again after the refresh.")
+            return
+        end
+        local candidates = {}
+        for _, row in self._servers or {} do
+            if row.Key ~= game.JobId and row.Players < row.Maximum then
+                table.insert(candidates, row)
+            end
+        end
+        if #candidates == 0 then
+            self:_toast("No eligible server", "Refresh the list for open public servers.", true)
+            return
+        end
+        if mode == "Hop" then
+            self:_join(candidates[math.random(1, #candidates)].Key)
+            return
+        end
+        table.sort(candidates, function(a, b)
+            if a.Players == b.Players then
+                return a.Key < b.Key
+            end
+            if mode == "Small" then
+                return a.Players < b.Players
+            end
+            return a.Players > b.Players
+        end)
+        self:_join(candidates[1].Key)
+    end
+
+    function P.Utilities:_buildServer(page: any)
+        local section = U.utilityTitle(page, "server", "Session details and public server navigation.")
+        local left, right = U.utilityLanes(section, 2, 0.53)
+        local current = U.utilityCard(left, "Current Server", "This Roblox session", "server")
+        local count = U.utilityMetric(current, "Players", "users", "—")
+        local function updateCount()
+            count:SetText(tostring(#Players:GetPlayers()))
+        end
+        updateCount()
+        for _, event in { Players.PlayerAdded, Players.PlayerRemoving } do
+            self._life:Give(event:Connect(function()
+                U.later(self._w, self._life, "serverCount", nil, updateCount)
+            end))
+        end
+        U.utilityMetric(current, "Max Players", "user", tostring(Players.MaxPlayers))
+        U.utilityMetric(
+            current,
+            "JobId",
+            "server",
+            if game.JobId == "" then "—" else game.JobId,
+            if game.JobId ~= ""
+                then function()
+                    self:_copy("JobId", game.JobId)
+                end
+                else nil
+        )
+        U.utilityMetric(current, "PlaceId", "map-pin", tostring(game.PlaceId), function()
+            self:_copy("PlaceId", tostring(game.PlaceId))
+        end)
+        self._serverInfo = { Uptime = U.utilityMetric(current, "Uptime", "activity", "—") }
+        local actions = U.utilityCard(right, "Server Actions", "Transfer this session to another server", "refresh-cw")
+        local enabled = type(self._options.JoinServer) == "function"
+        local canList = type(self._options.ListServers) == "function"
+        local grid = actions:AddInlineGroup({ Columns = 2, MinimumWidth = 110, Gap = 6 })
+        grid:AddButton({
+            Name = "Rejoin",
+            Icon = "refresh-cw",
+            Style = "Accent",
+            Disabled = not enabled,
+            Callback = function()
+                self:_join(if game.JobId ~= "" then game.JobId else nil)
+            end,
+        })
+        grid:AddButton({
+            Name = "Server Hop",
+            Icon = "server",
+            Disabled = not (enabled and canList),
+            Callback = function()
+                self:_otherServer("Hop")
+            end,
+        })
+        grid:AddButton({
+            Name = "Small Server",
+            Disabled = not (enabled and canList),
+            Callback = function()
+                self:_otherServer("Small")
+            end,
+        })
+        grid:AddButton({
+            Name = "Large Server",
+            Disabled = not (enabled and canList),
+            Callback = function()
+                self:_otherServer("Large")
+            end,
+        })
+        local input = actions:AddInput({
+            Name = "JobId",
+            Placeholder = "Enter a public JobId",
+            Disabled = not enabled,
+            MaxLength = 80,
+        })
+        actions:AddButton({
+            Name = "Join JobId",
+            Icon = "play",
+            Disabled = not enabled,
+            Callback = function()
+                self:_join(input:GetValue())
+            end,
+        })
+        if not enabled then
+            actions:AddLabel({ Text = "No authorized server transfer provider." })
+        end
+        local browser =
+            U.utilityCard(section, "Server Browser", "Public server populations and available latency", "globe")
+        local toolbar = browser:AddInlineGroup({ Columns = 2, MinimumWidth = 155, Gap = 8 })
+        toolbar:AddButton({
+            Name = "Refresh",
+            Icon = "refresh-cw",
+            Disabled = not canList,
+            Callback = function()
+                self:_listServers()
+            end,
+        })
+        toolbar:AddDropdown({
+            Name = "Filter",
+            Values = { "All", "Open", "Not Current" },
+            Default = "All",
+            Callback = function(v: string)
+                self._serverTable:SetFilter(if v == "All"
+                    then nil
+                    else function(row: Payload)
+                        return if v == "Open" then row.Players < row.Maximum else row.Key ~= game.JobId
+                    end)
+            end,
+        })
+        self._serverTable = browser:AddDataTable({
+            Name = "Servers",
+            EmptyText = "No public servers are available.",
+            SelectOnAction = false,
+            Columns = {
+                {
+                    Key = "Players",
+                    Width = 0.23,
+                    Sortable = true,
+                    Kind = "Primary",
+                    Format = function(value: number, row: Payload)
+                        return tostring(value) .. " / " .. row.Maximum
+                    end,
+                },
+                {
+                    Key = "Ping",
+                    Width = 0.18,
+                    Sortable = true,
+                    Format = function(value: number?)
+                        return if U.finite(value) then string.format("%d ms", value) else "—"
+                    end,
+                },
+                { Key = "Job", Name = "JobId", Width = 0.35, Sortable = true },
+                { Key = "Action", Width = 0.24, Kind = "Actions", ActionTitle = "Join" },
+            },
+            OnAction = function(row: Payload)
+                if row.Players >= row.Maximum then
+                    self:_toast("Server full", "Choose a server with space.", true)
+                elseif row.Key == game.JobId then
+                    self:_toast("Current server", "Use Rejoin to reconnect.")
+                else
+                    self:_join(row.Key)
+                end
+            end,
+            GetActions = function(row: Payload)
+                return {
+                    {
+                        Name = "Copy JobId",
+                        Icon = "copy",
+                        Callback = function()
+                            self:_copy("JobId", row.Key)
+                        end,
+                    },
+                }
+            end,
+        })
+        self:_listServers()
+    end
+end
+
+do
+    function P.Utilities:_movementAllowed(action: string)
+        local caps = self._options.MovementCapabilities
+        return type(self._options.Movement) == "function" and (type(caps) ~= "table" or caps[action] == true)
+    end
+
+    function P.Utilities:_authorizeMove(action: string, data: any, control: any?)
+        if not self:_movementAllowed(action) then
+            self:_toast("Action unavailable", "This experience has no authorized handler for " .. action .. ".", true)
+            return
+        end
+        self._movePending = self._movePending or {}
+        self._movePending[action] = { value = U.copy(data), control = control }
+        U.later(self._w, self._life, "moveInput", if control then 0.12 else nil, function()
+            self:_drainMovement()
+        end)
+    end
+
+    function P.Utilities:_drainMovement()
+        if self._moveFlight or self._dead then
+            return
+        end
+        local action, request: any
+        if self._moveNeedsRestore then
+            self._moveNeedsRestore = false
+            action, request = "Restore", {}
+        elseif self._movePending then
+            action, request = next(self._movePending)
+            if action then
+                self._movePending[action] = nil
+            end
+        end
+        if not action then
+            return
+        end
+
+        local flight = { started = false }
+        local generation, handler = self._moveGeneration, self._options.Movement
+        self._moveFlight = flight
+        self._moveAccepted = self._moveAccepted or {}
+        local thread = task.defer(function()
+            flight.started = true
+            local ok, accepted, reason = pcall(handler, action, request.value)
+            self._moveFlight = nil
+            if self._dead then
+                -- An already dispatched host request cannot be cancelled by hiding the view.
+                if action ~= "Restore" then
+                    pcall(handler, "Restore", nil)
+                end
+                return
+            end
+            self._life:Forget("moveFlight")
+            if self._moveGeneration == generation and action ~= "Restore" then
+                if ok and accepted == true then
+                    self._moveActive = true
+                    self._moveAccepted[action] = request.value
+                elseif not self._movePending[action] then
+                    if request.control and not request.control:IsDestroyed() then
+                        local last = self._moveAccepted[action]
+                        request.control:SetValue(if last == nil then request.control:GetDefault() else last, true)
+                    end
+                    self:_toast(
+                        "Action declined",
+                        if ok and type(reason) == "string"
+                            then reason
+                            else "The experience did not accept " .. action .. ".",
+                        true
+                    )
+                end
+            end
+            self:_drainMovement()
+        end)
+        self._life:Give(function()
+            if not flight.started then
+                U.dispose(thread)
+            end
+        end, "moveFlight")
+    end
+
+    function P.Utilities:_releaseMove()
+        self._moveGeneration = (self._moveGeneration or 0) + 1
+        self._life:Remove("moveInput")
+        self._movePending = {}
+        local flight = self._moveFlight
+        if self._dead then
+            if self._moveActive and not (flight and flight.started) then
+                local handler = self._options.Movement
+                task.defer(function()
+                    pcall(handler, "Restore", nil)
+                end)
+            end
+        elseif self._moveActive or flight then
+            self._moveNeedsRestore = true
+            self:_drainMovement()
+        end
+        self._moveActive = false
+        self._moveAccepted = {}
+        if not self._dead then
+            for _, control in self._movementControls or {} do
+                control:Reset(true)
+            end
+        end
+    end
+
+    function P.Utilities:_movementControl(card: any, kind: string, action: string, options: Payload)
+        local control
+        options.Disabled = not self:_movementAllowed(action)
+        options.DimUnchecked, options.CheckAlign = false, "Right"
+        options.Callback = function(value: any)
+            self:_authorizeMove(action, value, control)
+        end
+        control = card["Add" .. kind](card, options)
+        self._movementControls = self._movementControls or {}
+        table.insert(self._movementControls, control)
+        return control
+    end
+
+    function P.Utilities:_confirm(title: string, description: string, accept: () -> ())
+        return self._w:CreateDialog({
+            Title = title,
+            Description = description,
+            Buttons = { { Name = "Cancel" }, { Name = "Confirm", Danger = true, Callback = accept } },
+        })
+    end
+
+    function P.Utilities:_buildMovement(page: any)
+        local section = U.utilityTitle(page, "move", "Character settings and host-authorized traversal.")
+        if type(self._options.Movement) ~= "function" then
+            section:AddLabel({ Text = "Movement requires authorization from this experience." })
+        end
+        local left, right = U.utilityLanes(section, 2)
+        local motion = U.utilityCard(left, "Character Movement", "Adjust locomotion parameters", "move")
+        local character = Players.LocalPlayer and Players.LocalPlayer.Character
+        local human = character and character:FindFirstChildOfClass("Humanoid")
+        local usePower = not human or human.UseJumpPower
+        local function add(card: any, kind: string, action: string, c: Payload)
+            return self:_movementControl(card, kind, action, c)
+        end
+        add(
+            motion,
+            "Slider",
+            "WalkSpeed",
+            { Name = "WalkSpeed", Min = 0, Max = 60, Default = human and human.WalkSpeed or 16, Suffix = " st/s" }
+        )
+        add(motion, "Slider", if usePower then "JumpPower" else "JumpHeight", {
+            Name = if usePower then "JumpPower" else "JumpHeight",
+            Min = 0,
+            Max = if usePower then 100 else 30,
+            Increment = if usePower then 1 else 0.5,
+            Default = if human then (if usePower then human.JumpPower else human.JumpHeight) else 50,
+        })
+        add(motion, "Toggle", "InfiniteJump", { Name = "Infinite Jump", Style = "Switch" })
+        add(motion, "Toggle", "AntiVoid", { Name = "Anti Void", Style = "Switch" })
+        motion:AddButton({
+            Name = "Reset Position",
+            Icon = "refresh-cw",
+            Disabled = not self:_movementAllowed("ResetPosition"),
+            Callback = function()
+                self:_confirm("Reset position?", "Your character may respawn.", function()
+                    self:_authorizeMove("ResetPosition", true)
+                end)
+            end,
+        })
+        local traversal = U.utilityCard(right, "Traversal", "Set behavior for permitted abilities", "map-pin")
+        local flight = add(traversal, "Toggle", "Fly", { Name = "Fly", Style = "Switch" })
+        local flightSettings = flight:AddSettings({ Mode = "Disable" })
+        add(flightSettings, "Slider", "FlySpeed", { Name = "Fly Speed", Min = 5, Max = 120, Default = 50 })
+        add(flightSettings, "Slider", "VerticalSpeed", { Name = "Vertical Speed", Min = 5, Max = 100, Default = 40 })
+        add(
+            flightSettings,
+            "Dropdown",
+            "FlyMode",
+            { Name = "Mode", Values = { "Smooth", "Precise" }, Default = "Smooth" }
+        )
+        add(traversal, "Toggle", "Noclip", { Name = "Noclip", Style = "Switch" })
+        local click = add(traversal, "Toggle", "ClickTeleport", { Name = "Click Teleport", Style = "Switch" })
+        local clickSettings = click:AddSettings({ Mode = "Disable" })
+        add(
+            clickSettings,
+            "Slider",
+            "TeleportOffset",
+            { Name = "Offset", Min = 0, Max = 10, Increment = 0.5, Default = 3 }
+        )
+        add(clickSettings, "Checkbox", "GroundCheck", { Name = "Ground Check", Default = true })
+        add(traversal, "Toggle", "TeleportTool", { Name = "TP Tool", Style = "Switch" })
+    end
+
+    function P.Utilities:_restoreCamera(keepFreecam: boolean?)
+        self._life:Remove("fov")
+        if self._freecamOn and not keepFreecam then
+            self._freecamOn = false
+            local callback = self._options.Freecam
+            task.defer(function()
+                pcall(callback, false)
+            end)
+            if self._freecamControl and not self._dead then
+                self._freecamControl:SetValue(false, true)
+            end
+        end
+        local state = self._cameraSettings
+        if not state then
+            return
+        end
+        local camera = state.camera
+        if camera and camera.Parent and state.fovChanged then
+            camera.FieldOfView = state.fov
+        end
+        local p = Players.LocalPlayer
+        if p then
+            if state.modeChanged then
+                p.CameraMode = state.mode
+            end
+            if state.zoomChanged then
+                p.CameraMaxZoomDistance = state.maxZoom
+            end
+        end
+        self._cameraSettings = nil
+    end
+
+    function P.Utilities:_getCameraSettings()
+        local p, camera = Players.LocalPlayer, workspace.CurrentCamera
+        if not p or not camera then
+            return nil
+        end
+        if self._cameraSettings and self._cameraSettings.camera ~= camera then
+            self:_restoreCamera(true)
+        end
+        if not self._cameraSettings then
+            self._cameraSettings = {
+                camera = camera,
+                fov = camera.FieldOfView,
+                mode = p.CameraMode,
+                minZoom = p.CameraMinZoomDistance,
+                maxZoom = p.CameraMaxZoomDistance,
+            }
+        end
+        return self._cameraSettings
+    end
+
+    function P.Utilities:_buildCamera(page: any)
+        local section = U.utilityTitle(page, "camera", "Personal framing, zoom limits, and authorized subjects.")
+        local left, right = U.utilityLanes(section, 2)
+        local look = U.utilityCard(left, "Framing", "Does not increase the experience's zoom limit", "camera")
+        local subject = U.utilityCard(right, "Camera Subject", "Shares the spectate controller", "eye")
+        local player, current = Players.LocalPlayer, workspace.CurrentCamera
+        local defaultFov = current and current.FieldOfView or 70
+        local defaultCap = player and player.CameraMaxZoomDistance or 12
+        local minCap = player and player.CameraMinZoomDistance or 0.5
+        local smooth = look:AddToggle({
+            Name = "Smooth Camera",
+            Description = "Ease field-of-view adjustments.",
+            Style = "Switch",
+            Default = true,
+        })
+        local fov = look:AddSlider({
+            Name = "Field of View",
+            Min = math.min(50, defaultFov),
+            Max = math.max(90, defaultFov),
+            Default = defaultFov,
+            Callback = function(value: number)
+                local s = self:_getCameraSettings()
+                if s then
+                    s.fovChanged = true
+                    U.tween(
+                        self._w,
+                        self._life,
+                        s.camera,
+                        "fov",
+                        "fast",
+                        { FieldOfView = value },
+                        not smooth:GetValue() or Gui.ReducedMotionEnabled
+                    )
+                end
+            end,
+        })
+        local cameraMode = look:AddDropdown({
+            Name = "Camera Mode",
+            Values = { "Experience Default", "First Person" },
+            Default = "Experience Default",
+            Callback = function(v: string)
+                local s = self:_getCameraSettings()
+                if s and player then
+                    s.modeChanged = true
+                    player.CameraMode = if v == "First Person" then Enum.CameraMode.LockFirstPerson else s.mode
+                end
+            end,
+        })
+        local zoom = look:AddSlider({
+            Name = "Zoom Distance Limit",
+            Min = minCap,
+            Max = math.max(minCap, defaultCap),
+            Default = defaultCap,
+            Increment = 0.5,
+            Disabled = minCap >= defaultCap,
+            Callback = function(value: number)
+                local s = self:_getCameraSettings()
+                if s and player then
+                    s.zoomChanged = true
+                    player.CameraMaxZoomDistance = math.clamp(
+                        value,
+                        player.CameraMinZoomDistance,
+                        math.max(s.maxZoom, player.CameraMinZoomDistance)
+                    )
+                end
+            end,
+        })
+        subject:AddButton({
+            Name = "Local Player",
+            Icon = "user",
+            Callback = function()
+                self:StopSpectating()
+            end,
+        })
+        subject:AddButton({
+            Name = "Spectate Selected Player",
+            Icon = "eye",
+            Disabled = type(self._options.CanSpectate) ~= "function",
+            Callback = function()
+                local row = self._playerTable and self._playerTable:GetSelectedRow()
+                local record = row and self._people[row.Key]
+                if record then
+                    self:Spectate(record.player)
+                else
+                    self:_toast("No player selected", "Select a target in Utilities / Players first.", true)
+                end
+            end,
+        })
+        local freecam
+        freecam = subject:AddToggle({
+            Name = "Freecam",
+            Style = "Switch",
+            Disabled = type(self._options.Freecam) ~= "function",
+            Callback = function(value: boolean)
+                if type(self._options.Freecam) ~= "function" then
+                    freecam:SetValue(false, true)
+                    return
+                end
+                if value then
+                    self:StopSpectating()
+                end
+                local ok, accepted = U.call(self._w, "Freecam", self._options.Freecam, value)
+                if ok and accepted == true then
+                    self._freecamOn = value
+                else
+                    freecam:SetValue(self._freecamOn == true, true)
+                    self:_toast("Freecam unavailable", "The experience did not accept the camera change.", true)
+                end
+            end,
+        })
+        self._freecamControl = freecam
+        subject:AddButton({
+            Name = "Reset Camera",
+            Icon = "refresh-cw",
+            Callback = function()
+                self:StopSpectating()
+                self:_restoreCamera()
+                fov:Reset(true)
+                cameraMode:Reset(true)
+                zoom:Reset(true)
+                freecam:Reset(true)
+                smooth:Reset(true)
+            end,
+        })
+    end
+end
+
+do
+    local lighting = game:GetService("Lighting")
+    local skyFields = { "SkyboxBk", "SkyboxDn", "SkyboxFt", "SkyboxLf", "SkyboxRt", "SkyboxUp" }
+    local displayOptions = {
+        { "Fullbright", "Fullbright" },
+        { "Fog", "Remove Fog" },
+        { "Shadows", "Disable Shadows" },
+        { "Particles", "Disable Particles" },
+        { "Post", "Disable Post Processing" },
+        { "Low", "Low Graphics" },
+    }
+
+    function P.Utilities:_worldProperty(node: Instance, key: string, desired: any)
+        local props = self._worldOriginal[node]
+        local old = props and props[key]
+        local object: any = node
+        if desired == nil then
+            if old then
+                if object[key] == old.set then
+                    object[key] = old.original
+                end
+                props[key] = nil
+                if next(props) == nil then
+                    self._worldOriginal[node] = nil
+                end
+            end
+            return
+        end
+        if not props then
+            props = {}
+            self._worldOriginal[node] = props
+        end
+        if not old then
+            old = { original = object[key] }
+            props[key] = old
+        end
+        if object[key] ~= desired then
+            object[key] = desired
+        end
+        old.set = object[key]
+    end
+
+    function P.Utilities:_worldEffect(node: Instance)
+        local v = self._worldValues
+        if node:IsA("PostEffect") then
+            self:_worldProperty(node, "Enabled", if v.Post or v.Low then false else nil)
+        elseif
+            node:IsA("ParticleEmitter")
+            or node:IsA("Trail")
+            or node:IsA("Beam")
+            or node:IsA("Smoke")
+            or node:IsA("Fire")
+            or node:IsA("Sparkles")
+        then
+            self:_worldProperty(node, "Enabled", if v.Particles or v.Low then false else nil)
+        elseif node:IsA("Atmosphere") then
+            self:_worldProperty(node, "Density", if v.Fog or v.Low then 0 else nil)
+            self:_worldProperty(node, "Haze", if v.Fog or v.Low then 0 else nil)
+            self:_worldProperty(node, "Glare", if v.Fog or v.Low then 0 else nil)
+        end
+    end
+
+    function P.Utilities:_startWorldEffects()
+        if self._worldNodes then
+            return
+        end
+        local scope = U.scope()
+        self._life:Give(scope, "worldEffects")
+        self._worldNodes = setmetatable({}, { __mode = "k" })
+        local function add(node: Instance)
+            if
+                node:IsA("PostEffect")
+                or node:IsA("ParticleEmitter")
+                or node:IsA("Trail")
+                or node:IsA("Beam")
+                or node:IsA("Smoke")
+                or node:IsA("Fire")
+                or node:IsA("Sparkles")
+                or node:IsA("Atmosphere")
+            then
+                self._worldNodes[node] = true
+                self:_worldEffect(node)
+            end
+        end
+        local function remove(node: Instance)
+            self._worldNodes[node] = nil
+            local props = self._worldOriginal[node]
+            if props then
+                for key in table.clone(props) do
+                    self:_worldProperty(node, key, nil)
+                end
+            end
+        end
+        for _, root in { lighting, workspace } do
+            scope:Give(root.DescendantAdded:Connect(add))
+            scope:Give(root.DescendantRemoving:Connect(remove))
+            for _, node in root:GetDescendants() do
+                add(node)
+            end
+        end
+    end
+
+    function P.Utilities:_applyWorld()
+        if self._options.AllowWorldChanges ~= true then
+            return
+        end
+        local v = self._worldValues
+        self:_worldProperty(lighting, "Brightness", if v.Fullbright then 3 else v.Brightness)
+        self:_worldProperty(lighting, "Ambient", if v.Fullbright then C(180, 180, 180) else v.Ambient)
+        self:_worldProperty(lighting, "OutdoorAmbient", if v.Fullbright then C(193, 193, 193) else nil)
+        self:_worldProperty(lighting, "ClockTime", v.Time)
+        self:_worldProperty(lighting, "FogEnd", if v.Fog or v.Low then 100000 else nil)
+        self:_worldProperty(lighting, "GlobalShadows", if v.Shadows or v.Low then false else nil)
+        local keys = {
+            if v.Particles then "p" else "",
+            if v.Post then "e" else "",
+            if v.Low then "l" else "",
+            if v.Fog then "f" else "",
+        }
+        local signature = table.concat(keys)
+        if signature ~= self._worldEffectSignature then
+            self._worldEffectSignature = signature
+            if signature ~= "" then
+                self:_startWorldEffects()
+            end
+            for node in self._worldNodes or {} do
+                self:_worldEffect(node)
+            end
+            if signature == "" then
+                self._life:Remove("worldEffects")
+                self._worldNodes = nil
+            end
+        end
+        local variants = self._options.Skyboxes
+        local preset = type(variants) == "table" and variants[v.Sky]
+        local sky = lighting:FindFirstChildOfClass("Sky")
+        if sky then
+            for _, key in skyFields do
+                local id = type(preset) == "table" and preset[key]
+                self:_worldProperty(
+                    sky,
+                    key,
+                    if type(id) == "string" and string.match(id, "^rbxassetid://%d+$") then id else nil
+                )
+            end
+        end
+    end
+
+    function P.Utilities:_restoreWorld()
+        self._life:Remove("worldEffects")
+        self._worldNodes, self._worldEffectSignature = nil, nil
+        if self._worldOriginal then
+            for node, fields in self._worldOriginal do
+                if node.Parent then
+                    local object: any = node
+                    for key, entry in fields do
+                        if object[key] == entry.set then
+                            object[key] = entry.original
+                        end
+                    end
+                end
+            end
+            table.clear(self._worldOriginal)
+        end
+        self._worldValues = {}
+        if not self._dead then
+            for _, list in self._worldControls or {} do
+                for _, control in list do
+                    control:Reset(true)
+                end
+            end
+        end
+    end
+
+    function P.Utilities:_worldSet(key: string, value: any)
+        if self._options.AllowWorldChanges ~= true then
+            return
+        end
+        self._worldValues[key] = value
+        for _, control in self._worldControls[key] or {} do
+            control:SetValue(value, true)
+        end
+        self:_applyWorld()
+    end
+
+    function P.Utilities:_worldControl(card: any, kind: string, key: string, options: Payload)
+        self._worldValues = self._worldValues or {}
+        self._worldOriginal = self._worldOriginal or setmetatable({}, { __mode = "k" })
+        self._worldControls = self._worldControls or {}
+        self._worldControls[key] = self._worldControls[key] or {}
+        options.DimUnchecked, options.CheckAlign = false, "Right"
+        options.Callback = function(value: any)
+            self:_worldSet(key, value)
+        end
+        options.Disabled = options.Disabled or self._options.AllowWorldChanges ~= true
+        local control = card["Add" .. kind](card, options)
+        table.insert(self._worldControls[key], control)
+        if self._worldValues[key] ~= nil then
+            control:SetValue(self._worldValues[key], true)
+        end
+        return control
+    end
+
+    function P.Utilities:_buildWorld(page: any)
+        local section = U.utilityTitle(page, "globe", "Reversible lighting and presentation controls.")
+        if self._options.AllowWorldChanges ~= true then
+            section:AddLabel({ Text = "World changes are disabled by the experience." })
+        end
+        local left, right = U.utilityLanes(section, 2, 0.42)
+        local effects = U.utilityCard(left, "Visual Effects", nil, "layers")
+        for _, item in displayOptions do
+            self:_worldControl(effects, "Toggle", item[1], { Name = item[2], Style = "Switch" })
+        end
+        local env = U.utilityCard(right, "Environment", "Adjust local lighting in this experience", "sun")
+        self:_worldControl(
+            env,
+            "Slider",
+            "Brightness",
+            { Name = "Brightness", Min = 0, Max = 10, Default = lighting.Brightness, Increment = 0.1 }
+        )
+        self:_worldControl(env, "ColorPicker", "Ambient", { Name = "Ambient", Default = lighting.Ambient })
+        self:_worldControl(
+            env,
+            "Slider",
+            "Time",
+            { Name = "Clock Time", Min = 0, Max = 24, Default = lighting.ClockTime, Increment = 0.1 }
+        )
+        local choices = { "Default" }
+        if lighting:FindFirstChildOfClass("Sky") and type(self._options.Skyboxes) == "table" then
+            for key, v in self._options.Skyboxes do
+                if type(key) == "string" and key ~= "Default" and type(v) == "table" then
+                    table.insert(choices, key)
+                end
+            end
+            table.sort(choices, function(a: string, b: string)
+                if a == b then
+                    return false
+                end
+                if a == "Default" then
+                    return true
+                elseif b == "Default" then
+                    return false
+                else
+                    return a < b
+                end
+            end)
+        end
+        self:_worldControl(
+            env,
+            "Dropdown",
+            "Sky",
+            { Name = "Skybox", Values = choices, Default = "Default", Disabled = #choices < 2 }
+        )
+        local moments = U.utilityCard(right, "Time of Day", nil, "sun")
+        local times = { Morning = 7, Day = 12, Evening = 18, Night = 0 }
+        local timeButtons = moments:AddInlineGroup({ Columns = 2, MinimumWidth = 108, Gap = 6 })
+        for _, entry in { { "Morning", "sun" }, { "Day", "sun" }, { "Evening", "sun" }, { "Night", "moon" } } do
+            timeButtons:AddButton({
+                Name = entry[1],
+                Icon = entry[2],
+                Disabled = self._options.AllowWorldChanges ~= true,
+                Callback = function()
+                    self:_worldSet("Time", times[entry[1]])
+                end,
+            })
+        end
+        local presets = U.utilityCard(right, "World Presets", "Apply a cohesive presentation profile", "layers")
+        local buttons = presets:AddInlineGroup({ Columns = 2, MinimumWidth = 114, Gap = 6 })
+        for _, preset in { "Default", "Bright", "Clean", "Performance" } do
+            buttons:AddButton({
+                Name = preset,
+                Disabled = self._options.AllowWorldChanges ~= true,
+                Callback = function()
+                    self:_restoreWorld()
+                    if preset == "Bright" then
+                        self:_worldSet("Fullbright", true)
+                    elseif preset == "Clean" then
+                        self:_worldSet("Particles", true)
+                        self:_worldSet("Post", true)
+                    elseif preset == "Performance" then
+                        self:_worldSet("Low", true)
+                    end
+                end,
+            })
+        end
+        presets:AddButton({
+            Name = "Restore",
+            Icon = "refresh-cw",
+            Disabled = self._options.AllowWorldChanges ~= true,
+            Callback = function()
+                self:_restoreWorld()
+            end,
+        })
+    end
+end
+
+do
+    local function pointName(value: any): string?
+        if type(value) ~= "string" or not utf8.len(value) then
+            return nil
+        end
+        local clean = value:match("^%s*(.-)%s*$") or ""
+        return if #clean > 0 and #clean <= 50 and not clean:find("%c") then clean else nil
+    end
+
+    local function validFrame(value: any): boolean
+        if type(value) ~= "table" or #value ~= 12 then
+            return false
+        end
+        for i = 1, 12 do
+            if not U.finite(value[i]) then
+                return false
+            end
+        end
+        return true
+    end
+
+    function P.Utilities:_saveWaypoints()
+        local manager = self._w._profileManager
+        if not manager.available then
+            return
+        end
+        local ok = manager:Write(self._waypointPath, { Version = 1, PlaceId = game.PlaceId, Points = self._waypoints })
+        if not ok then
+            self._waypointStatus:SetText("Could not save waypoints. Changes remain in this session.")
+            self:_toast("Waypoint not saved", "The local filesystem write did not complete.", true)
+        else
+            self._waypointStatus:SetText("Saved for this place.")
+        end
+    end
+
+    function P.Utilities:_refreshWaypointDistances()
+        local root = U.playerRoot(Players.LocalPlayer)
+        local pos = root and root.Position
+        self._waypointPosition:SetText(
+            if pos
+                then string.format("Current position  ·  %.1f, %.1f, %.1f", pos.X, pos.Y, pos.Z)
+                else "Current position  ·  —"
+        )
+        for _, point in self._waypoints do
+            local frame = point.Frame
+            local distance = if pos
+                then math.floor((pos - Vector3.new(frame[1], frame[2], frame[3])).Magnitude * 10 + 0.5) / 10
+                else false
+            if self._waypointDistances[point.Id] ~= distance then
+                self._waypointDistances[point.Id] = distance
+                self._waypointsTable:UpdateRow(point.Id, { Distance = distance })
+            end
+        end
+    end
+
+    function P.Utilities:_changeWaypoint(id: number, name: string?)
+        for index, point in self._waypoints do
+            if point.Id == id then
+                if name then
+                    point.Name = name
+                    self._waypointsTable:UpdateRow(id, { Name = name })
+                else
+                    table.remove(self._waypoints, index)
+                    self._waypointDistances[id] = nil
+                    self._waypointsTable:RemoveRow(id)
+                end
+                self:_saveWaypoints()
+                return
+            end
+        end
+    end
+
+    function P.Utilities:_renameWaypoint(id: number, name: string)
+        local input: any
+        self._w:CreateDialog({
+            Title = "Rename waypoint",
+            Height = 115,
+            Buttons = {
+                { Name = "Cancel" },
+                {
+                    Name = "Rename",
+                    Primary = true,
+                    Callback = function()
+                        local clean = input and pointName(input.Text)
+                        if clean then
+                            self:_changeWaypoint(id, clean)
+                        else
+                            self:_toast("Invalid name", "Use 1–50 bytes of valid text.", true)
+                        end
+                    end,
+                },
+            },
+            BuildContent = function(host: Frame, life: any)
+                host.Size = UDim2.new(1, -3, 0, 46)
+                input = U.make(
+                    "TextBox",
+                    host,
+                    { Size = S(1, 1), Text = name, ClearTextOnFocus = false, FontFace = MEDIUM, TextSize = 14 }
+                )
+                U.fill(self._w, life, input, "SurfaceRaised")
+                U.paint(self._w, life, input, "TextColor3", "Text")
+                U.corner(input, D.FieldRadius)
+            end,
+        })
+    end
+
+    function P.Utilities:_buildWaypoints(page: any)
+        local section = U.utilityTitle(page, "map-pin", "Save and manage positions in this place.")
+        local setup = U.utilityCard(section, "Create Waypoint", nil, "map-pin")
+        self._waypointPosition = setup:AddLabel({ Text = "Current position  ·  —" })
+        local group = setup:AddInlineGroup({ Columns = 2, MinimumWidth = 156, Gap = 8 })
+        local input = group:AddInput({ Name = "Name", Placeholder = "Waypoint name", MaxLength = 50 })
+        self._waypoints, self._waypointDistances, self._waypointSequence = {}, {}, 0
+        local manager = self._w._profileManager
+        self._waypointPath = manager.root .. "/Waypoints/place-" .. tostring(game.PlaceId) .. ".json"
+        self._waypointStatus = setup:AddLabel({
+            Text = if manager.available
+                then "Saved for this place."
+                else "Filesystem unavailable. Waypoints last for this session.",
+        })
+        if manager.available then
+            local data = manager:Read(self._waypointPath)
+            if data and data.Version == 1 and data.PlaceId == game.PlaceId and type(data.Points) == "table" then
+                for _, point in ipairs(data.Points) do
+                    if #self._waypoints >= 100 then
+                        break
+                    end
+                    if type(point) == "table" and validFrame(point.Frame) and pointName(point.Name) then
+                        self._waypointSequence += 1
+                        table.insert(
+                            self._waypoints,
+                            { Id = self._waypointSequence, Name = point.Name, Frame = point.Frame }
+                        )
+                    end
+                end
+            end
+        end
+        group:AddButton({
+            Name = "Create",
+            Icon = "map-pin",
+            Callback = function()
+                local root, name = U.playerRoot(Players.LocalPlayer), pointName(input:GetValue())
+                if not name or not root then
+                    self:_toast("Cannot create waypoint", "Enter a name and wait for your character to spawn.", true)
+                    return
+                end
+                if #self._waypoints >= 100 then
+                    self:_toast("Waypoint limit", "Remove a waypoint before creating more.", true)
+                    return
+                end
+                local cf = { root.CFrame:GetComponents() }
+                if not validFrame(cf) then
+                    self:_toast("Position unavailable", "This character position could not be saved.", true)
+                    return
+                end
+                self._waypointSequence += 1
+                local id = self._waypointSequence
+                table.insert(self._waypoints, { Id = id, Name = name, Frame = cf })
+                self._waypointsTable:AddRow({ Key = id, Name = name, Frame = cf, Distance = 0 })
+                self:_saveWaypoints()
+                input:Clear()
+            end,
+        })
+        local board = U.utilityCard(section, "Saved Waypoints", nil, "layers")
+        self._waypointsTable = board:AddDataTable({
+            Name = "Waypoints",
+            EmptyText = "No waypoints saved.",
+            SelectOnAction = false,
+            MobileBreakpoint = 420,
+            Columns = {
+                { Key = "Name", Width = 0.53, Sortable = true, Kind = "Primary" },
+                {
+                    Key = "Distance",
+                    Width = 0.22,
+                    Sortable = true,
+                    Format = function(v: any)
+                        return if U.finite(v) then string.format("%.1f st", v) else "—"
+                    end,
+                },
+                {
+                    Key = "Action",
+                    Width = 0.25,
+                    Kind = "Actions",
+                    ActionTitle = if self:_movementAllowed("TeleportWaypoint") then "Teleport" else "Details",
+                },
+            },
+            OnAction = function(row: Payload)
+                if self:_movementAllowed("TeleportWaypoint") then
+                    self:_authorizeMove(
+                        "TeleportWaypoint",
+                        { Name = row.Name, Components = row.Frame, PlaceId = game.PlaceId }
+                    )
+                else
+                    self:_toast(row.Name, "Teleport requires authorization from this experience.")
+                end
+            end,
+            GetActions = function(row: Payload)
+                return {
+                    {
+                        Name = "Rename",
+                        Icon = "pen-tool",
+                        Callback = function()
+                            self:_renameWaypoint(row.Key, row.Name)
+                        end,
+                    },
+                    {
+                        Name = "Copy CFrame",
+                        Icon = "copy",
+                        Callback = function()
+                            local out = {}
+                            for i, v in row.Frame do
+                                out[i] = string.format("%.9g", v)
+                            end
+                            self:_copy("Waypoint CFrame", "CFrame.new(" .. table.concat(out, ", ") .. ")")
+                        end,
+                    },
+                    {
+                        Name = "Delete",
+                        Icon = "close",
+                        Callback = function()
+                            self:_confirm(
+                                "Delete waypoint?",
+                                row.Name .. " will be removed from this place.",
+                                function()
+                                    self:_changeWaypoint(row.Key, nil)
+                                end
+                            )
+                        end,
+                    },
+                }
+            end,
+        })
+        for _, point in self._waypoints do
+            self._waypointsTable:AddRow({ Key = point.Id, Name = point.Name, Frame = point.Frame })
+        end
+    end
+end
+
+do
+    local stats = game:GetService("Stats")
+
+    function P.Utilities:_startMetrics(scope: any)
+        local metrics = self._metrics
+        local elapsed, frames = 0, 0
+        local function sample(fps: number?)
+            local player = Players.LocalPlayer
+            local got, ping = pcall(function()
+                return player and player:GetNetworkPing()
+            end)
+            local memoryOk, memory = pcall(stats.GetTotalMemoryUsageMb, stats)
+            local countOk, instanceCount = pcall(function()
+                return stats.InstanceCount
+            end)
+            metrics.FPS:SetText("FPS  ·  " .. (if U.finite(fps) then string.format("%d", fps) else "—"))
+            metrics.Ping:SetText(
+                "Network latency  ·  "
+                    .. (if got and U.finite(ping) then string.format("%.0f ms", ping * 1000) else "—")
+            )
+            metrics.Memory:SetText(
+                "Memory  ·  " .. (if memoryOk and U.finite(memory) then string.format("%.0f MB", memory) else "—")
+            )
+            metrics.Players:SetText("Players  ·  " .. tostring(#Players:GetPlayers()))
+            metrics.Objects:SetText(
+                "Instance count  ·  "
+                    .. (if countOk and U.finite(instanceCount) then tostring(instanceCount) else "—")
+            )
+        end
+        sample(nil)
+        scope:Give(Run.RenderStepped:Connect(function(dt: number)
+            elapsed += dt
+            frames += 1
+            if elapsed >= 0.55 then
+                sample(math.floor(frames / elapsed + 0.5))
+                elapsed, frames = 0, 0
+            end
+        end))
+    end
+
+    function P.Utilities:_buildPerformance(page: any)
+        local section = U.utilityTitle(page, "activity", "Measured client performance and visual controls.")
+        local left, right = U.utilityLanes(section, 2)
+        local reading = U.utilityCard(left, "Live Metrics", "Sampling pauses when this page is hidden.", "gauge")
+        self._metrics = {}
+        for _, item in
+            {
+                { "FPS", "FPS" },
+                { "Ping", "Network latency" },
+                { "Memory", "Memory" },
+                { "Players", "Players" },
+                { "Objects", "Instance count" },
+            }
+        do
+            self._metrics[item[1]] = reading:AddLabel({ Text = item[2] .. "  ·  —" })
+        end
+        local tuning = U.utilityCard(right, "Graphics", "Shares reversible World settings.", "layers")
+        self:_worldControl(tuning, "Toggle", "Low", { Name = "Low Graphics", Style = "Switch" })
+        self:_worldControl(tuning, "Toggle", "Particles", { Name = "Disable Particles", Style = "Switch" })
+        self:_worldControl(tuning, "Toggle", "Post", { Name = "Disable Post Processing", Style = "Switch" })
+        self:_worldControl(tuning, "Toggle", "Shadows", { Name = "Disable Shadows", Style = "Switch" })
+        local cap = self._options.SetFPSCap or U.resolveExecutor("setfpscap")
+        if type(cap) == "function" then
+            local limit = tuning:AddSlider({ Name = "FPS Cap", Min = 30, Max = 240, Default = 60, Increment = 1 })
+            tuning:AddButton({
+                Name = "Apply FPS Cap",
+                Icon = "gauge",
+                Callback = function()
+                    local ok, result = pcall(cap, limit:GetValue())
+                    self:_toast(
+                        if ok and result ~= false then "FPS cap requested" else "FPS cap failed",
+                        nil,
+                        not ok or result == false
+                    )
+                end,
+            })
+        end
+    end
 end
 
 -- Guard all public prototype entries at a single boundary. Private teardown methods
