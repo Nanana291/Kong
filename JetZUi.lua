@@ -4242,9 +4242,27 @@ function P.Row:AddSettings(options: any)
     end, {
         Size = S(1, 1),
     })
+    group._statusDot = U.line(self._w, group._life, group._chevronButton, function(t: Payload)
+        return if group:IsActive() then t.Accent else t.TextMuted
+    end, {
+        AnchorPoint = V(0.5, 0.5),
+        Position = UDim2.new(1, -2, 0.5, 0),
+        Size = O(4, 4),
+        ZIndex = 10,
+        Name = "DependencyStatus",
+    })
+    U.corner(group._statusDot, 4)
+    group._refreshStatus = U.paint(self._w, group._life, group._statusDot, "BackgroundColor3", function(t: Payload)
+        return if group:IsActive() then t.Accent else t.TextMuted
+    end)
     self._interactive[group._chevronButton] = function()
         return group:IsActive() or group._mode ~= "Reveal"
     end
+    group._life:Give(function()
+        if self._interactive then
+            self._interactive[group._chevronButton] = nil
+        end
+    end, "dependencyChevronRegistration")
     U.focusable(self, group._life, group._chevronButton, function()
         if group:IsActive() or group._mode ~= "Reveal" then
             group:SetExpanded(not group._expanded)
@@ -4289,7 +4307,10 @@ function P.Dependency:IsActive(): boolean
         and (not self._owner._root or U.guiVisible(self._owner._root))
 end
 
-function P.Dependency:_dependencySync(_: any?, immediate: boolean?)
+function P.Dependency:_dependencySync(source: any?, immediate: boolean?)
+    if type(source) == "boolean" and immediate == nil then
+        immediate = source
+    end
     if self._dead or not self._root then
         return
     end
@@ -4335,6 +4356,9 @@ function P.Dependency:_dependencySync(_: any?, immediate: boolean?)
     end
     if self._refreshRail then
         self._refreshRail()
+    end
+    if self._refreshStatus then
+        self._refreshStatus()
     end
     self:_refreshState()
     local changed = self._lastActive ~= active
