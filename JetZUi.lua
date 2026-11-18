@@ -472,23 +472,30 @@ function U.cfg(c: any): Payload
     return {}
 end
 
-function U.copyText(value: string): boolean
+function U.global(name: string): any
     local env = getfenv()
-    local fn = rawget(env, "setclipboard") or rawget(env, "toclipboard")
-    if type(fn) ~= "function" then
-        local getGlobal = rawget(env, "getgenv")
-        if type(getGlobal) == "function" then
-            local ok, globals = pcall(getGlobal)
-            if ok and type(globals) == "table" then
-                fn = rawget(globals, "setclipboard") or rawget(globals, "toclipboard")
-            end
-        end
+    local value = rawget(env, name)
+    if value ~= nil then return value end
+    local getGlobal = rawget(env, "getgenv")
+    if type(getGlobal) == "function" then
+        local ok, globals = pcall(getGlobal)
+        if ok and type(globals) == "table" then return rawget(globals, name) end
     end
-    if type(fn) ~= "function" then
-        return false
-    end
+    return nil
+end
+
+function U.copyText(value: string): boolean
+    local fn = U.global("setclipboard") or U.global("toclipboard")
+    if type(fn) ~= "function" then return false end
     local ok = pcall(fn, value)
     return ok
+end
+
+function U.readClipboard(): string?
+    local fn = U.global("getclipboard")
+    if type(fn) ~= "function" then return nil end
+    local ok, value = pcall(fn)
+    return if ok and type(value) == "string" then value else nil
 end
 
 function U.copy(v: any): any
@@ -1800,6 +1807,9 @@ function P.Value:_commit(v: any, silent: boolean?, instant: boolean?): (boolean,
     end
     if self._w and self._w._syncDependencies then
         self._w:_syncDependencies(self)
+    end
+    if self._w and self._w._profileManager and self._flag then
+        self._w._profileManager:ControlChanged(self)
     end
     if equivalent then
         return true, false
@@ -3981,6 +3991,7 @@ function Library:CreateWindow(options: WindowOptions?): (WindowHandle | false, s
     w._theme = U.theme(c.Theme, c.Accent)
     w._flags, w._keys, w._down, w._tabs, w._popups, w._settings, w._toasts = {}, {}, {}, {}, {}, {}, {}
     w._dependencies = {}
+    w._profileManager = P.ProfileManager.new(w, c.Persistence or c.Settings)
     w._themePreset = "JetZ Dark"
     w._settingsLanguage = "English"
     w._responsive, w._animated, w._focusables, w._particles = {}, {}, {}, {}
@@ -4963,6 +4974,9 @@ function U.ready(owner: any, n: any): any
     if n._pendingDependency ~= nil then
         n:SetDependency(n._pendingDependency, n._pendingDependencyMode)
         n._pendingDependency, n._pendingDependencyMode = nil, nil
+    end
+    if n._w and n._w._profileManager and n._flag then
+        n._w._profileManager:Hydrate(n)
     end
     return n
 end
@@ -8829,6 +8843,379 @@ function U.decode(value: any, depth: number): (boolean, any)
         result[i] = v
     end
     return true, result
+end
+
+
+P.ProfileManager = {}
+P.ProfileManager.__index = P.ProfileManager
+
+function U.profileName(value: any): string?
+    if type(value) ~= "string" then return nil end
+    local name = value:gsub('[%z\1-\31<>:"/\\|?*]', "_"):match("^%s*(.-)%s*$") or ""
+    name = name:gsub("%.+$", ""):gsub("^%.+", ""):gsub("%s+$", "")
+    if #name > 64 then name = name:sub(1, 64) end
+    if name == "" or name == "." or name == ".." then return nil end
+    local upper = name:upper()
+    if upper == "CON" or upper == "PRN" or upper == "AUX" or upper == "NUL"
+        or upper:match("^COM%d$") or upper:match("^LPT%d$")
+    then name = "_" .. name end
+    return name
+end
+
+function P.ProfileManager.new(w: any, options: any): any
+    local c = U.cfg(options)
+    local self = setmetatable({}, P.ProfileManager)
+    self.window, self.api = w, {}
+    for _, key in { "isfolder", "makefolder", "isfile", "readfile", "writefile", "delfile", "listfiles" } do
+        self.api[key] = U.global(key)
+    end
+    self.available = true
+    for _, key in { "isfolder", "makefolder", "isfile", "readfile", "writefile" } do
+        if type(self.api[key]) ~= "function" then self.available = false end
+    end
+    self.gameName = U.profileName(c.GameName) or U.profileName(w._name) or ("Place_" .. tostring(game.PlaceId))
+    self.placeId = game.PlaceId
+    self.root = U.str(c.ConfigRoot, "JetZ/Configs")
+    self.folder = self.root .. "/" .. self.gameName
+    self.indexPath, self.autoloadPath = self.folder .. "/index.json", self.root .. "/autoload.json"
+    self.activeProfile, self.dirty, self.pending, self.applying = nil, false, nil, false
+    self.lastResult = nil
+    self.autoloadState = self.available and "Idle" or "FilesystemUnavailable"
+    if self.available then
+        self:EnsureFolder(self.folder)
+        self:PrepareAutoload()
+    end
+    return self
+end
+
+function P.ProfileManager:Call(key: string, ...: any): (boolean, any)
+    local fn = self.api[key]
+    if type(fn) ~= "function" then return false, "FilesystemUnavailable" end
+    local ok, result = pcall(fn, ...)
+    return if ok then true, result else false, tostring(result)
+end
+
+function P.ProfileManager:EnsureFolder(path: string): (boolean, any)
+    if not self.available then return false, "FilesystemUnavailable" end
+    local current = ""
+    for part in path:gmatch("[^/]+") do
+        current = if current == "" then part else current .. "/" .. part
+        local ok, exists = self:Call("isfolder", current)
+        if not ok then return false, exists end
+        if not exists then
+            local made, why = self:Call("makefolder", current)
+            if not made then return false, why end
+        end
+    end
+    return true
+end
+
+function P.ProfileManager:Read(path: string): (any, any)
+    if not self.available then return nil, "FilesystemUnavailable" end
+    local ok, exists = self:Call("isfile", path)
+    if not ok or not exists then return nil, ok and "MissingFile" or exists end
+    local readOK, raw = self:Call("readfile", path)
+    if not readOK or type(raw) ~= "string" then return nil, readOK and "InvalidJSON" or raw end
+    local decodedOK, data = pcall(Http.JSONDecode, Http, raw)
+    if not decodedOK or type(data) ~= "table" then return nil, "InvalidJSON" end
+    return data, nil
+end
+
+function P.ProfileManager:Write(path: string, data: any): (boolean, any)
+    local folder = path:match("^(.*)/[^/]+$")
+    if folder then
+        local ready, why = self:EnsureFolder(folder)
+        if not ready then return false, why end
+    end
+    local encodedOK, raw = pcall(Http.JSONEncode, Http, data)
+    if not encodedOK or type(raw) ~= "string" then return false, "InvalidJSON" end
+    local wrote, why = self:Call("writefile", path, raw)
+    if not wrote then return false, why end
+    local verifyOK, verify = self:Call("readfile", path)
+    if not verifyOK or type(verify) ~= "string" then return false, "WriteVerificationFailed" end
+    local valid = pcall(Http.JSONDecode, Http, verify)
+    return if valid then true, nil else false, "WriteVerificationFailed"
+end
+
+function P.ProfileManager:Path(name: string): string
+    return self.folder .. "/" .. name .. ".json"
+end
+
+function P.ProfileManager:Names(): { string }
+    local names = {}
+    local index = self:Read(self.indexPath)
+    if type(index) == "table" and type(index.Profiles) == "table" then
+        for _, value in index.Profiles do
+            local clean = U.profileName(value)
+            if clean and not table.find(names, clean) then table.insert(names, clean) end
+        end
+    elseif type(self.api.listfiles) == "function" then
+        local ok, files = self:Call("listfiles", self.folder)
+        if ok and type(files) == "table" then
+            for _, path in files do
+                if type(path) == "string" then
+                    local name = path:match("([^/\\]+)%.json$")
+                    if name and name ~= "index" and not table.find(names, name) then table.insert(names, name) end
+                end
+            end
+        end
+    end
+    table.sort(names, function(a,b) return a:lower() < b:lower() end)
+    return names
+end
+
+function P.ProfileManager:Index(name: string, present: boolean)
+    local names = self:Names()
+    local at = table.find(names, name)
+    if present and not at then table.insert(names, name) elseif not present and at then table.remove(names, at) end
+    table.sort(names, function(a,b) return a:lower() < b:lower() end)
+    self:Write(self.indexPath, { Version = 1, Profiles = names, UpdatedAt = os.time() })
+    self:RefreshUI()
+end
+
+function P.ProfileManager:Snapshot(): any
+    local config, notSaved = self.window:ExportConfig(false)
+    return { Version = 1, Game = self.gameName, PlaceId = self.placeId, UpdatedAt = os.time(), Config = config, NotSaved = notSaved }
+end
+
+function P.ProfileManager:ReadProfile(name: string): (any, any)
+    local clean = U.profileName(name)
+    if not clean then return nil, "InvalidName" end
+    local data, why = self:Read(self:Path(clean))
+    if not data then return nil, why end
+    if data.Version ~= 1 or type(data.Config) ~= "table" then return nil, "UnsupportedProfile" end
+    return data, nil
+end
+
+function P.ProfileManager:Save(name: string, createOnly: boolean?): (boolean, any)
+    local clean = U.profileName(name)
+    if not clean then return false, "InvalidName" end
+    local ok, exists = self:Call("isfile", self:Path(clean))
+    if not ok then return false, exists end
+    if createOnly and exists then return false, "ProfileExists" end
+    local wrote, why = self:Write(self:Path(clean), self:Snapshot())
+    if wrote then
+        self.activeProfile, self.dirty = clean, false
+        self:Index(clean, true)
+        self:RefreshUI()
+    end
+    return wrote, why
+end
+
+function P.ProfileManager:SetPending(config: any, silent: boolean?)
+    if type(config) ~= "table" then self.pending = nil return end
+    self.pending = {
+        Flags = table.clone(type(config.Flags) == "table" and config.Flags or config),
+        Extras = table.clone(type(config.Extras) == "table" and config.Extras or {}),
+        Silent = silent == true,
+    }
+end
+
+function P.ProfileManager:Hydrate(control: any)
+    local pending, flag = self.pending, control._flag
+    if not pending or not flag or pending.Flags[flag] == nil then return end
+    local ok, value = U.decode(pending.Flags[flag], 0)
+    if ok then
+        local valid, canonical = control:_normalize(value)
+        if valid then
+            self.applying = true
+            control:_commit(canonical, pending.Silent, true)
+            local meta = pending.Extras[flag]
+            if type(meta) == "table" then
+                if control._kind == "ColorPicker" and U.finite(meta.Alpha) and control.SetAlpha then
+                    control:SetAlpha(meta.Alpha, true)
+                elseif control._kind == "Keybind" and type(meta.Mode) == "string" and control.SetKeybindMode then
+                    control:SetKeybindMode(meta.Mode)
+                elseif control._kind == "Toggle" or control._kind == "Checkbox" then
+                    if meta.Key ~= nil and control.SetKeybind then
+                        local keyOK, key = U.decode(meta.Key, 0)
+                        if keyOK then control:SetKeybind(key) end
+                    end
+                    if type(meta.Mode) == "string" and control.SetKeybindMode then control:SetKeybindMode(meta.Mode) end
+                end
+            end
+            self.applying = false
+        end
+    end
+    pending.Flags[flag], pending.Extras[flag] = nil, nil
+    if next(pending.Flags) == nil then self.pending, self.autoloadState = nil, "Ready" end
+end
+
+function P.ProfileManager:Apply(data: any, silent: boolean?): (boolean, any)
+    if type(data) ~= "table" or type(data.Config) ~= "table" then return false, "UnsupportedProfile" end
+    self.applying = true
+    local ok, report = self.window:ImportConfig(data.Config, { Silent = silent == true, Atomic = true, IgnoreUnknown = true })
+    self.applying = false
+    if not ok then self.lastResult = report return false, report end
+    self:SetPending(data.Config, silent)
+    if self.pending then
+        for flag in table.clone(self.pending.Flags) do
+            local control = self.window._flags[flag]
+            if control then self:Hydrate(control) end
+        end
+    end
+    self.lastResult = report
+    return true, report
+end
+
+function P.ProfileManager:Load(name: string, silent: boolean?): (boolean, any)
+    local clean = U.profileName(name)
+    if not clean then return false, "InvalidName" end
+    local data, why = self:ReadProfile(clean)
+    if not data then return false, why end
+    local ok, report = self:Apply(data, silent)
+    if ok then self.activeProfile, self.dirty, self.autoloadState = clean, false, "Ready" self:RefreshUI() end
+    return ok, report
+end
+
+function P.ProfileManager:Delete(name: string): (boolean, any)
+    local clean = U.profileName(name)
+    if not clean then return false, "InvalidName" end
+    if type(self.api.delfile) ~= "function" then return false, "FilesystemUnavailable" end
+    local auto = self:GetAutoload()
+    if auto.enabled and auto.profile == clean then self:SetAutoload(nil, false) end
+    local ok, why = self:Call("delfile", self:Path(clean))
+    if ok then
+        self:Index(clean, false)
+        if self.activeProfile == clean then self.activeProfile, self.dirty = nil, false end
+        self:RefreshUI()
+    end
+    return ok, why
+end
+
+function P.ProfileManager:Duplicate(name: string, newName: string): (boolean, any)
+    local data, why = self:ReadProfile(name)
+    local clean = U.profileName(newName)
+    if not data then return false, why end
+    if not clean then return false, "InvalidName" end
+    local checked, exists = self:Call("isfile", self:Path(clean))
+    if not checked then return false, exists end
+    if exists then return false, "ProfileExists" end
+    data.UpdatedAt = os.time()
+    local ok, err = self:Write(self:Path(clean), data)
+    if ok then self:Index(clean, true) end
+    return ok, err
+end
+
+function P.ProfileManager:Rename(name: string, newName: string): (boolean, any)
+    local old, new = U.profileName(name), U.profileName(newName)
+    if not old or not new then return false, "InvalidName" end
+    if old == new then return true end
+    local auto = self:GetAutoload()
+    local ok, why = self:Duplicate(old, new)
+    if not ok then return false, why end
+    local deleted, deleteWhy = self:Delete(old)
+    if not deleted then return false, deleteWhy end
+    if auto.enabled and auto.profile == old then self:SetAutoload(new, true) end
+    if self.activeProfile == old then self.activeProfile = new end
+    self:RefreshUI()
+    return true
+end
+
+function P.ProfileManager:AutoloadData(): any
+    local data = self:Read(self.autoloadPath)
+    return if type(data) == "table" and data.Version == 1 and type(data.Games) == "table" then data else { Version = 1, Games = {} }
+end
+
+function P.ProfileManager:GetAutoload(): any
+    local record = self:AutoloadData().Games[tostring(self.placeId)]
+    return if type(record) == "table" and record.Game == self.gameName then table.clone(record) else { enabled = false }
+end
+
+function P.ProfileManager:SetAutoload(name: string?, enabled: boolean): (boolean, any)
+    if not self.available then return false, "FilesystemUnavailable" end
+    local data, key = self:AutoloadData(), tostring(self.placeId)
+    if enabled then
+        local clean = U.profileName(name)
+        if not clean then return false, "InvalidName" end
+        local checked, exists = self:Call("isfile", self:Path(clean))
+        if not checked or not exists then return false, checked and "MissingProfile" or exists end
+        data.Games[key] = { enabled = true, profile = clean, Game = self.gameName, PlaceId = self.placeId }
+    else
+        data.Games[key] = { enabled = false, Game = self.gameName, PlaceId = self.placeId }
+    end
+    local ok, why = self:Write(self.autoloadPath, data)
+    if ok then self:RefreshUI() end
+    return ok, why
+end
+
+function P.ProfileManager:PrepareAutoload()
+    local auto = self:GetAutoload()
+    if not auto.enabled or type(auto.profile) ~= "string" then self.autoloadState = "Disabled" return end
+    local data, why = self:ReadProfile(auto.profile)
+    if not data then self.autoloadState = "Failed: " .. tostring(why) return end
+    self.activeProfile, self.dirty, self.autoloadState = auto.profile, false, "Hydrating"
+    self:SetPending(data.Config, false)
+end
+
+function P.ProfileManager:ApplyAutoload(): (boolean, any)
+    local auto = self:GetAutoload()
+    if not auto.enabled or type(auto.profile) ~= "string" then return false, "AutoloadDisabled" end
+    return self:Load(auto.profile, false)
+end
+
+function P.ProfileManager:ControlChanged(_: any)
+    if not self.applying and self.activeProfile then
+        self.dirty = true
+        self:RefreshUI()
+    end
+end
+
+function P.ProfileManager:RefreshUI()
+    local ui = self.ui
+    if not ui then return end
+    local names = self:Names()
+    if ui.Profile then
+        ui.Profile:SetValues(#names > 0 and names or { "No profiles" }, true)
+        if self.activeProfile and table.find(names, self.activeProfile) then ui.Profile:SetValue(self.activeProfile, true) end
+    end
+    if ui.Status then ui.Status:SetText("Active: " .. (self.activeProfile or "None") .. (self.dirty and "  •  Unsaved changes" or "")) end
+    if ui.AutoloadStatus then
+        local auto = self:GetAutoload()
+        ui.AutoloadStatus:SetText(if auto.enabled then "Autoload: " .. tostring(auto.profile) else "Autoload: Off")
+    end
+end
+
+function P.Window:SaveProfile(name: string) return self._profileManager:Save(name, false) end
+function P.Window:CreateProfile(name: string) return self._profileManager:Save(name, true) end
+function P.Window:LoadProfile(name: string, silent: boolean?) return self._profileManager:Load(name, silent) end
+function P.Window:RefreshProfiles(): { string } return self._profileManager:Names() end
+function P.Window:GetActiveProfile(): string? return self._profileManager.activeProfile end
+function P.Window:GetPersistenceStatus(): any
+    local m = self._profileManager
+    return { available=m.available, game=m.gameName, placeId=m.placeId, folder=m.folder, canDelete=type(m.api.delfile)=="function", canList=type(m.api.listfiles)=="function", autoloadState=m.autoloadState, dirty=m.dirty }
+end
+function P.Window:ExportProfile(name: string?): (string?, any)
+    local data, why
+    if name then data, why = self._profileManager:ReadProfile(name) else data = self._profileManager:Snapshot() end
+    if not data then return nil, why end
+    local ok, json = pcall(Http.JSONEncode, Http, data)
+    return if ok then json else nil, if ok then nil else tostring(json)
+end
+function P.Window:ImportProfile(name: string, json: string, overwrite: boolean?): (boolean, any)
+    local clean = U.profileName(name)
+    if not clean or type(json) ~= "string" or #json > 2097152 then return false, "InvalidProfile" end
+    local ok, data = pcall(Http.JSONDecode, Http, json)
+    if not ok or type(data) ~= "table" or data.Version ~= 1 or type(data.Config) ~= "table" then return false, "InvalidProfile" end
+    local path = self._profileManager:Path(clean)
+    local checked, exists = self._profileManager:Call("isfile", path)
+    if not checked then return false, exists end
+    if exists and overwrite ~= true then return false, "ProfileExists" end
+    data.Game, data.PlaceId, data.UpdatedAt = self._profileManager.gameName, game.PlaceId, os.time()
+    local wrote, err = self._profileManager:Write(path, data)
+    if wrote then self._profileManager:Index(clean, true) end
+    return wrote, err
+end
+function P.Window:DuplicateProfile(name: string, newName: string) return self._profileManager:Duplicate(name, newName) end
+function P.Window:RenameProfile(name: string, newName: string) return self._profileManager:Rename(name, newName) end
+function P.Window:DeleteProfile(name: string) return self._profileManager:Delete(name) end
+function P.Window:SetAutoload(name: string) return self._profileManager:SetAutoload(name, true) end
+function P.Window:DisableAutoload() return self._profileManager:SetAutoload(nil, false) end
+function P.Window:GetAutoload() return self._profileManager:GetAutoload() end
+function P.Window:ApplyAutoload() return self._profileManager:ApplyAutoload() end
+function P.Window:GetConfigDiagnostics(): any
+    local m = self._profileManager
+    return { available=m.available, activeProfile=m.activeProfile, dirty=m.dirty, autoloadState=m.autoloadState, pending=m.pending~=nil, folder=m.folder, lastResult=m.lastResult }
 end
 
 function P.Window:ExportConfig(json: boolean?)
