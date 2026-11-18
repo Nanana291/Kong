@@ -229,6 +229,10 @@ export type PageHandle = Controller & {
     Clear: (self: any) -> (),
 }
 export type WindowHandle = Controller & {
+    SpectatePlayer: (self: any, player: Player) -> boolean,
+    StopSpectating: (self: any) -> boolean,
+    GetSpectateTarget: (self: any) -> Player?,
+    IsSpectating: (self: any) -> boolean,
     SetTitle: (self: any, title: string) -> boolean,
     GetTitle: (self: any) -> string,
     SetLogo: (self: any, logo: any) -> boolean,
@@ -398,6 +402,9 @@ local D = {
         Section = 12,
     },
     Animation = {
+        spectateIn = 0.21,
+        spectateOut = 0.16,
+        spectateTarget = 0.16,
         micro = 0.08,
         fast = 0.14,
         hover = 0.10,
@@ -13609,9 +13616,8 @@ do
         return if U.finite(v) then string.format("%.1f st", v) else "—"
     end
 
-    local function playerInfo(p: Player, cache: Payload, character: Model?): Payload
+    local function playerInfo(p: Player, cache: Payload, h: Humanoid?): Payload
         local image = cache[p.UserId]
-        local h = character and character:FindFirstChildOfClass("Humanoid")
         return {
             Key = p.UserId,
             Player = p.DisplayName,
@@ -13629,7 +13635,7 @@ do
         if self._dead or self._people[p.UserId] ~= record then
             return
         end
-        local data = playerInfo(p, self._thumbs, record.character)
+        local data = playerInfo(p, self._thumbs, record.humanoid)
         record.info = data
         if tbl then
             if tbl:GetRow(p.UserId) then
@@ -13647,13 +13653,13 @@ do
     end
 
     function P.Utilities:_thumbnail(p: Player)
-        local key = p.UserId
-        if key <= 0 or self._thumbs[key] ~= nil then
+        local key, life = p.UserId, self._peopleLife
+        if not life or key <= 0 or self._thumbs[key] ~= nil then
             return
         end
         if #self._thumbKeys >= 384 then
             for i, old in self._thumbKeys do
-                if not self._people[old] then
+                if not self._people[old] and not self._thumbPending[old] then
                     self._thumbs[old] = nil
                     table.remove(self._thumbKeys, i)
                     break
@@ -13661,41 +13667,54 @@ do
             end
         end
         table.insert(self._thumbKeys, key)
-        self._thumbs[key] = false
+        self._thumbs[key], self._thumbPending[key] = false, 1
         table.insert(self._thumbQueue, key)
         self:_pumpThumbnails()
     end
 
     function P.Utilities:_pumpThumbnails()
-        local life = self._life
+        local life = self._peopleLife
+        if not life or life._dead then
+            return
+        end
         while self._thumbJobs < 4 and #self._thumbQueue > 0 do
             local key = table.remove(self._thumbQueue, 1)
             if not self._people[key] then
-                self._thumbs[key] = nil
+                self._thumbs[key], self._thumbPending[key] = nil, nil
+                U.remove(self._thumbKeys, key)
                 continue
             end
             self._thumbJobs += 1
             local slot = "thumbnail:" .. tostring(key)
             life:Give(
                 task.defer(function()
-                    local ok, image = pcall(
+                    local ok, image, ready = pcall(
                         Players.GetUserThumbnailAsync,
                         Players,
                         key,
                         Enum.ThumbnailType.HeadShot,
                         Enum.ThumbnailSize.Size100x100
                     )
-                    if self._dead then
+                    if self._dead or self._peopleLife ~= life or life._dead then
                         return
                     end
                     life:Forget(slot)
                     self._thumbJobs -= 1
-                    if ok and type(image) == "string" and image ~= "" then
-                        self._thumbs[key] = image
-                    end
                     local record = self._people[key]
-                    if record then
-                        self:_updatePlayer(record)
+                    if ok and ready == false and self._thumbPending[key] == 1 and record then
+                        self._thumbPending[key] = 2
+                        U.later(self._w, life, "thumbnailRetry:" .. tostring(key), 1, function()
+                            table.insert(self._thumbQueue, key)
+                            self:_pumpThumbnails()
+                        end)
+                    else
+                        self._thumbPending[key] = nil
+                        if ok and type(image) == "string" and image ~= "" then
+                            self._thumbs[key] = image
+                        end
+                        if record then
+                            self:_updatePlayer(record)
+                        end
                     end
                     self:_pumpThumbnails()
                 end),
@@ -13706,19 +13725,20 @@ do
 
     function P.Utilities:_track(p: Player)
         local key = p.UserId
-        if self._people[key] then
+        if self._people[key] or not self._peopleLife then
             return
         end
         local life = U.scope()
-        self._life:Give(life, "player:" .. tostring(key))
-        local record = { player = p, root = nil }
+        self._peopleLife:Give(life, "player:" .. tostring(key))
+        local record = { player = p, root = nil, humanoid = nil }
         self._people[key] = record
         local function character(model: Model?)
             record.character = model
             local scope = U.scope()
             life:Give(scope, "character")
             local function changed()
-                record.root = U.playerRoot(p)
+                local root = model and model:FindFirstChild("HumanoidRootPart")
+                record.root = if root and root:IsA("BasePart") then root else nil
                 self:_updatePlayer(record)
                 if self._target == p then
                     self:_applySubject()
@@ -13727,42 +13747,44 @@ do
                         self:_applySubject()
                     end)
                 end
+                self:_queueSpectateArrows()
+            end
+            local function watchHumanoid()
+                scope:Remove("health")
+                local h = model and model:FindFirstChildOfClass("Humanoid")
+                record.humanoid = h
+                if h then
+                    local alive = h.Health > 0
+                    scope:Give(
+                        h.HealthChanged:Connect(function(value: number)
+                            if (value > 0) ~= alive then
+                                alive = value > 0
+                                changed()
+                            end
+                        end),
+                        "health"
+                    )
+                end
+                changed()
             end
             if model then
-                local function watchHumanoid()
-                    scope:Remove("health")
-                    local h = model:FindFirstChildOfClass("Humanoid")
-                    if h then
-                        local alive = h.Health > 0
-                        scope:Give(
-                            h.HealthChanged:Connect(function(value: number)
-                                if (value > 0) ~= alive then
-                                    alive = value > 0
-                                    changed()
-                                end
-                            end),
-                            "health"
-                        )
+                scope:Give(model.ChildAdded:Connect(function(node: Instance)
+                    if node:IsA("Humanoid") then
+                        watchHumanoid()
+                    elseif node.Name == "HumanoidRootPart" then
+                        changed()
                     end
-                    changed()
-                end
-                for _, event in { model.ChildAdded, model.ChildRemoved } do
-                    scope:Give(event:Connect(function(node: Instance)
-                        if node:IsA("Humanoid") then
-                            watchHumanoid()
-                        elseif node.Name == "HumanoidRootPart" then
-                            changed()
-                        end
-                    end))
-                end
-                watchHumanoid()
-            else
-                record.root = nil
-                self:_updatePlayer(record)
-                if self._target == p then
-                    self:_restoreSubject(false)
-                end
+                end))
+                scope:Give(model.ChildRemoved:Connect(function(node: Instance)
+                    if node:IsA("Humanoid") then
+                        -- Resolve after Roblox/consumer teardown has removed the old child.
+                        U.later(self._w, scope, "humanoid", nil, watchHumanoid)
+                    elseif node.Name == "HumanoidRootPart" then
+                        U.later(self._w, scope, "root", nil, changed)
+                    end
+                end))
             end
+            watchHumanoid()
         end
         life:Give(p.CharacterAdded:Connect(character))
         life:Give(p.CharacterRemoving:Connect(function()
@@ -13771,6 +13793,12 @@ do
         for _, property in { "Team", "Neutral", "DisplayName", "Name" } do
             life:Give(p:GetPropertyChangedSignal(property):Connect(function()
                 self:_updatePlayer(record)
+                if property == "Team" or property == "Neutral" then
+                    if self._target then
+                        self:_applySubject()
+                    end
+                    self:_queueSpectateArrows()
+                end
             end))
         end
         character(p.Character)
@@ -13780,29 +13808,51 @@ do
     end
 
     function P.Utilities:_ensurePeople()
-        if self._tracking then
+        if self._peopleLife then
             return
         end
-        self._tracking = true
+        local life = U.scope()
+        self._peopleLife = life
+        self._thumbPending = {}
+        self._life:Give(life, "people")
         for _, p in Players:GetPlayers() do
             self:_track(p)
         end
-        self._life:Give(Players.PlayerAdded:Connect(function(p: Player)
+        life:Give(Players.PlayerAdded:Connect(function(p: Player)
             self:_track(p)
+            self:_queueSpectateArrows()
         end))
-        self._life:Give(Players.PlayerRemoving:Connect(function(p: Player)
+        life:Give(Players.PlayerRemoving:Connect(function(p: Player)
+            self._people[p.UserId] = nil
+            life:Remove("player:" .. tostring(p.UserId))
+            if self._playerTable then
+                self._playerTable:RemoveRow(p.UserId)
+            end
             if self._target == p then
-                self:StopSpectating()
+                local neighbor = self:_spectateNeighbor(p, 1)
+                if not neighbor or not self:Spectate(neighbor) then
+                    self:StopSpectating()
+                end
             end
             if self._avatarPlayer == p and self._avatar and self._avatar:IsOpen() then
                 self._avatar:Close()
             end
-            self._people[p.UserId] = nil
-            self._life:Remove("player:" .. tostring(p.UserId))
-            if self._playerTable then
-                self._playerTable:RemoveRow(p.UserId)
-            end
+            self:_queueSpectateArrows()
         end))
+    end
+
+    function P.Utilities:_releasePeopleIfIdle()
+        if not self._peopleLife or self._target or self._avatar or (self._playerTable and not self._playerTable._dead) then
+            return
+        end
+        self._peopleLife = nil
+        self._life:Remove("people")
+        table.clear(self._people)
+        for key in self._thumbPending do
+            self._thumbs[key] = nil
+            U.remove(self._thumbKeys, key)
+        end
+        self._thumbPending, self._thumbQueue, self._thumbJobs = {}, {}, 0
     end
 
     function P.Utilities:_distancePage()
@@ -13823,26 +13873,645 @@ do
         end
     end
 
-    function P.Utilities:_canSpectate(target: Player?): boolean
-        if target == nil or target == Players.LocalPlayer or target.Parent ~= Players then
-            return false
-        end
-        if type(self._options.CanSpectate) ~= "function" then
-            return true
-        end
-        local ok, permitted = U.call(self._w, "Spectate permission", self._options.CanSpectate, target)
-        return ok and permitted ~= false
+    -- Measured from the 795 × 158 reference card; all values are logical HUD pixels.
+    local SpectateDesign = {
+        Width = 476,
+        Height = 94,
+        Radius = 10,
+        HaloPadding = 12,
+        Rail = 6.5,
+        Check = 31,
+        CheckCenter = 43.5,
+        TextX = 77,
+        TitleSize = 19,
+        DetailSize = 15,
+        Eye = 20,
+        Avatar = 56,
+        Ring = 1.45,
+        Arrow = 26,
+        ArrowGap = 7,
+        AvatarGap = 13,
+        Right = 15,
+        RecoveryX = 60,
+        RecoveryY = 30,
+        Margin = 7,
+        Start = V(16, 82),
+        InScale = 0.94,
+        OutScale = 0.96,
+        Lift = 4,
+    }
+    P.SpectateHud = U.class(P.Base)
+
+    local function spectateHint(n: any, anchor: GuiObject, text: string): any
+        local hint = setmetatable({
+            _w = n._w,
+            _life = U.scope(),
+            _tooltip = text,
+            _owner = n,
+            _root = anchor,
+            _visible = true,
+        }, P.Base)
+        n._life:Give(hint._life)
+        U.hints(hint, anchor)
+        return hint
     end
 
-    function P.Utilities:_restoreSubject(clear: boolean)
-        local camera = self._subjectCamera
-        if camera and camera.CameraSubject == self._appliedSubject then
-            local old = self._originalSubject
-            local own = humanoid(Players.LocalPlayer)
-            if old and old.Parent then
-                camera.CameraSubject = old
-            elseif own then
+    local function spectateAction(n: any, name: string, icon: string, onPress: () -> (), checked: boolean?, flip: boolean?)
+        local w, life = n._w, n._life
+        local state, enabled = "idle", true
+        local face = U.frame(n._card, { Name = name .. " Face", AnchorPoint = V(0.5, 0.5), ZIndex = 3 })
+        U.corner(face, if checked then 6 else 5)
+        local scale = U.make("UIScale", face, { Scale = 1 })
+        local border = U.make("UIStroke", face, { Thickness = 1, Transparency = 0.5 })
+        local fill = U.fill(w, life, face, function(c: Payload)
+            if checked and n._checked then
+                return if state == "press" then c.Accent:Lerp(c.Background, 0.14) else c.Accent
+            elseif enabled and state == "press" then
+                return c.Pressed or c.AccentMuted
+            elseif enabled and state ~= "idle" then
+                return c.Hover
+            end
+            return c.SurfaceRaised:Lerp(c.Surface, 0.26)
+        end)
+        local outline = U.paint(w, life, border, "Color", function(c: Payload)
+            if checked and n._checked then
+                return c.Accent
+            end
+            return if enabled and state ~= "idle" then c.AccentMuted else c.Stroke
+        end)
+        local function ink(c: Payload)
+            if checked then
+                return c.AccentInk
+            end
+            return if not enabled
+                then c.TextDisabled
+                elseif state ~= "idle" then c.Accent
+                else c.TextSecondary:Lerp(c.Text, 0.32)
+        end
+        local glyph = U.icon(
+            w,
+            life,
+            face,
+            icon,
+            if checked then 22 else 14,
+            ink,
+            { Position = S(0, 0), Size = S(1, 1), Rotation = if flip then 180 else 0 }
+        )
+        local drawing = glyph:FindFirstChildOfClass("Frame")
+        local image = if not checked and drawing then drawing:FindFirstChildOfClass("ImageLabel") else nil
+        local function paint()
+            fill()
+            outline()
+            if image then
+                image.ImageColor3 = ink(w._theme._colors)
+            end
+            if checked then
+                glyph.Visible = n._checked
+                border.Transparency = if n._checked then 0.82 else 0.5
+            end
+        end
+        local button = U.button(
+            n,
+            life,
+            n._root,
+            {
+                Name = name,
+                AnchorPoint = V(0.5, 0.5),
+                ZIndex = 32,
+            },
+            onPress,
+            function(nextState: string)
+                if state == nextState then
+                    return
+                end
+                state = nextState
+                paint()
+                U.tween(
+                    w,
+                    life,
+                    scale,
+                    "press:" .. name,
+                    "micro",
+                    { Scale = if enabled and state == "press" then 0.94 else 1 },
+                    Gui.ReducedMotionEnabled
+                )
+            end
+        )
+        U.focusable(n, life, button, onPress)
+        spectateHint(n, button, name)
+        return {
+            hit = button,
+            face = face,
+            paint = paint,
+            setEnabled = function(value: boolean)
+                enabled = value
+                button.Interactable, button.Selectable = value, value
+                if not value then
+                    state = "idle"
+                    life:Remove("press:" .. name)
+                    scale.Scale = 1
+                    if Gui.SelectedObject == button then
+                        Gui.SelectedObject = nil
+                    end
+                end
+                paint()
+            end,
+        }
+    end
+
+    function P.SpectateHud:_place(position: Vector2)
+        local area = self._w:_area()
+        local width, height = self._width, self._height
+        local recoverX, recoverY =
+            math.min(SpectateDesign.RecoveryX, width, area.X), math.min(SpectateDesign.RecoveryY, height, area.Y)
+        local actual = V(
+            math.clamp(position.X, recoverX - width, math.max(recoverX - width, area.X - recoverX)),
+            math.clamp(position.Y, recoverY - height, math.max(recoverY - height, area.Y - recoverY))
+        )
+        self._root.Position = O(actual.X, actual.Y)
+        return actual
+    end
+
+    function P.SpectateHud:_lineContent()
+        local detail = self._line
+        local width, size = self._textWidth, self._detailSize
+        local full = if self._waiting then "Waiting for:" else "Current target:"
+        local short = if self._waiting then "Waiting:" else "Target:"
+        local label = if width - U.measure(full, size) >= 61
+            then full
+            elseif width - U.measure(short, size) >= 48 then short
+            else ""
+        local offset = if label == "" then 0 else U.measure(label, size) + (if self._compact then 6 else 7)
+        self._prefix.Text = label
+        self._prefix.Size = O(math.max(0, offset), self._lineHeight)
+        self._nameClip.Position = O(offset, 0)
+        self._nameClip.Size = UDim2.new(1, -offset, 1, 0)
+        detail.Visible = self._displayKey ~= nil
+    end
+
+    function P.SpectateHud:_measure()
+        if self._dead then
+            return
+        end
+        local d, w = SpectateDesign, self._w
+        local area = w:_area()
+        -- Mouse keeps the exact reference weights. Touch distributes wider invisible
+        -- targets between smaller visible faces, not by down-scaling the entire card.
+        local width = math.max(1, math.min(if w._useTouch and area.X < 900 then 456 else d.Width, area.X - d.Margin * 2))
+        local compact = width < 430
+        local narrow = width < 390
+        local height = if narrow then 84 elseif compact then 88 else d.Height
+        local touch = w._useTouch or compact
+        local outerHit = if touch then D.TouchHit else 31
+        local arrowFace = if touch then (if narrow then 29 else 31) else d.Arrow
+        local arrowStep = if touch then outerHit + (if narrow then 2 else 4) else d.Arrow + d.ArrowGap
+        local right = if narrow then 7 elseif touch then 10 else d.Right - (outerHit - arrowFace) / 2
+        local nextX = width - right - outerHit / 2
+        local prevX = nextX - arrowStep
+        local avatarSize = if width < 335 then 37 elseif narrow then 43 elseif touch then 50 else d.Avatar
+        local avatarGap = if narrow then 6 elseif touch then 9 else (d.AvatarGap - (outerHit - arrowFace) / 2)
+        local avatarX = prevX - outerHit / 2 - avatarGap - avatarSize / 2
+        local checkX = if narrow then 28 elseif touch then 33 else d.CheckCenter
+        local textX = if narrow then 54 elseif touch then 64 else d.TextX
+        local textRoom = math.max(0, avatarX - avatarSize / 2 - (if narrow then 7 else 12) - textX)
+        local titleSize = if narrow then 15 elseif touch then 18 else d.TitleSize
+        local detailSize = if narrow then 13 elseif touch then 14 else d.DetailSize
+        self._width, self._height, self._compact = width, height, compact
+        self._textWidth, self._detailSize, self._lineHeight = textRoom, detailSize, if narrow then 21 else 25
+        self._root.Size = O(width, height)
+        self:_place(self._controller._widgetPosition or d.Start)
+
+        local function actionLayout(action: any, x: number, visible: number, hit: number)
+            action.face.Position, action.face.Size = O(x, height / 2), O(visible, visible)
+            action.hit.Position, action.hit.Size = O(x, height / 2), O(hit, hit)
+        end
+        actionLayout(self._stop, checkX, if narrow then 29 else d.Check, if touch then D.TouchHit else 37)
+        actionLayout(self._prev, prevX, arrowFace, outerHit)
+        actionLayout(self._next, nextX, arrowFace, outerHit)
+        self._avatarShell.Position, self._avatarShell.Size = O(avatarX, height / 2), O(avatarSize, avatarSize)
+        self._avatarHintHit.Position, self._avatarHintHit.Size = self._avatarShell.Position, self._avatarShell.Size
+
+        local titleY = if narrow then 16 elseif compact then 18 else 19
+        local titleH = if narrow then 24 else 28
+        local idealTextWidth = U.measure(self._heading.Text, titleSize)
+        local eyeSize = if narrow then 15 else d.Eye
+        local eyeGap = if touch then 5 else 8
+        local showEye = idealTextWidth + eyeGap + eyeSize <= textRoom
+        self._heading.Position = O(textX, titleY)
+        self._heading.Size = O(if showEye then idealTextWidth + 1 else textRoom, titleH)
+        self._heading.TextSize = titleSize
+        self._eye.Size = O(eyeSize, eyeSize)
+        self._eye.Position = O(textX + idealTextWidth + eyeGap, titleY + titleH / 2)
+        self._eye.Visible = showEye
+        self._line.Position = O(textX, if narrow then 43 elseif compact then 47 else 51)
+        self._line.Size = O(textRoom, self._lineHeight)
+        self._prefix.TextSize, self._nameLabel.TextSize = detailSize, detailSize
+        self:_lineContent()
+    end
+
+    function P.SpectateHud:_clearTargetMotion()
+        for _, slot in { "avatarFront", "avatarGhost", "targetName", "ringPulse" } do
+            self._life:Remove(slot)
+        end
+        self._portrait.ImageTransparency = 0
+        self._ghost.ImageTransparency = 1
+        self._nameLabel.TextTransparency = 0
+        self._nameLabel.Position = O(0, 0)
+        self._ring.Thickness, self._ring.Transparency = SpectateDesign.Ring, 0.07
+    end
+
+    function P.SpectateHud:_setTarget(player: Player, ready: boolean, image: string?)
+        local id = player.UserId
+        local shifted = self._displayKey ~= nil and self._displayKey ~= id
+        local oldImage = self._portrait.Image
+        local imageChanged = oldImage ~= (image or "")
+        local snap = Gui.ReducedMotionEnabled or self._w._speed <= 0
+        local name = if player.DisplayName ~= "" then player.DisplayName else player.Name
+        self._displayKey, self._waiting = id, not ready
+        self._prefix.TextTransparency = 0
+        self._nameLabel.Text = name
+        local hint = self._avatarHint
+        local username = if player.Name ~= name then "@" .. player.Name else ""
+        if hint._tooltip ~= username then
+            if self._w._tip and self._w._tip.owner == hint then
+                self._w:_hideTip()
+            end
+            hint._tooltip = username
+            U.hints(hint, self._avatarHintHit)
+        end
+        self:_lineContent()
+
+        if not shifted and not imageChanged then
+            return
+        end
+        local w, life = self._w, self._life
+        if imageChanged then
+            local outgoing = oldImage
+            if
+                oldImage ~= ""
+                and self._ghost.Image ~= ""
+                and self._ghost.ImageTransparency < self._portrait.ImageTransparency
+            then
+                outgoing = self._ghost.Image
+            end
+            self._portrait.Image = image or ""
+            self._fallback.Visible = not image or image == ""
+            if not snap then
+                -- A cache fill for the same player must not cancel the caption/ring
+                -- transition, nor reset a fading portrait if we were on a placeholder.
+                if outgoing ~= "" then
+                    life:Remove("avatarGhost")
+                    self._ghost.Image, self._ghost.ImageTransparency = outgoing, 0
+                    U.tween(w, life, self._ghost, "avatarGhost", "spectateTarget", { ImageTransparency = 1 })
+                end
+                life:Remove("avatarFront")
+                if image and image ~= "" then
+                    self._portrait.ImageTransparency = 0.56
+                    U.tween(w, life, self._portrait, "avatarFront", "spectateTarget", { ImageTransparency = 0 })
+                else
+                    self._portrait.ImageTransparency = 0
+                end
+            end
+        end
+        if snap then
+            self:_clearTargetMotion()
+            return
+        end
+        if shifted then
+            life:Remove("targetName")
+            life:Remove("ringPulse")
+            self._nameLabel.Position, self._nameLabel.TextTransparency = O(3, 0), 0.36
+            U.tween(w, life, self._nameLabel, "targetName", "spectateTarget", { Position = O(0, 0), TextTransparency = 0 })
+            self._ring.Thickness, self._ring.Transparency = SpectateDesign.Ring + 0.65, 0
+            U.tween(
+                w,
+                life,
+                self._ring,
+                "ringPulse",
+                "spectateTarget",
+                { Thickness = SpectateDesign.Ring, Transparency = 0.07 }
+            )
+        end
+    end
+
+    function P.SpectateHud:_setArrows(enabled: boolean)
+        self._prev.setEnabled(enabled)
+        self._next.setEnabled(enabled)
+    end
+
+    function P.SpectateHud:_rest()
+        self._life:Remove("presence")
+        self._life:Remove("presenceScale")
+        self._canvas.Position = S(0.5, 0.5)
+        self._canvas.GroupTransparency = 0
+        self._scale.Scale = 1
+    end
+
+    function P.SpectateHud:_show()
+        self._life:Remove("dismiss")
+        if self._visible then
+            return
+        end
+        self._visible, self._root.Visible, self._checked = true, true, true
+        self._stop.setEnabled(true)
+        self:_measure()
+        local w, life = self._w, self._life
+        local snap = Gui.ReducedMotionEnabled or w._speed <= 0
+        U.tween(w, life, self._canvas, "presence", "spectateIn", { GroupTransparency = 0, Position = S(0.5, 0.5) }, snap)
+        U.tween(w, life, self._scale, "presenceScale", "spectateIn", { Scale = 1 }, snap)
+    end
+
+    function P.SpectateHud:_hide()
+        if not self._visible then
+            return
+        end
+        local w, life, controller = self._w, self._life, self._controller
+        self._checked, self._visible = false, false
+        self._stop.setEnabled(false)
+        self:_setArrows(false)
+        self:_clearTargetMotion()
+        w:_quiet(self)
+        local snap = Gui.ReducedMotionEnabled or w._speed <= 0
+        if snap then
+            controller._life:Remove("widget")
+            return
+        end
+        U.tween(w, life, self._canvas, "presence", "spectateOut", {
+            GroupTransparency = 1,
+            Position = UDim2.new(0.5, 0, 0.5, SpectateDesign.Lift),
+        })
+        U.tween(w, life, self._scale, "presenceScale", "spectateOut", { Scale = SpectateDesign.OutScale })
+        U.later(self, life, "dismiss", D.Animation.spectateOut / w._speed, function()
+            if not self._visible and controller._widget == self then
+                controller._life:Remove("widget")
+            end
+        end)
+    end
+
+    function P.SpectateHud._mount(controller: any): any
+        local w, d = controller._w, SpectateDesign
+        local root = U.frame(w._safe, { ZIndex = 28, Visible = false, Size = O(d.Width, d.Height) })
+        local n =
+            U.adopt(w, U.node(w, P.SpectateHud, "SpectateWidget", { Name = "SpectateWidget", Visible = false }, w, root))
+        local life = n._life
+        n._controller = controller
+        n._checked, n._waiting = false, false
+        local pad = d.HaloPadding
+        local canvas = U.make("CanvasGroup", root, {
+            Name = "Spectate HUD Motion",
+            Size = UDim2.new(1, pad * 2, 1, pad * 2),
+            AnchorPoint = V(0.5, 0.5),
+            Position = UDim2.new(0.5, 0, 0.5, d.Lift),
+            GroupTransparency = 1,
+        })
+        n._canvas = canvas
+        n._scale = U.make("UIScale", canvas, { Scale = d.InScale })
+        for _, layer in { { 11, 0.97 }, { 7, 0.952 }, { 3, 0.923 } } do
+            local edge = layer[1]
+            local halo = U.frame(canvas, {
+                Name = "Ambient Accent",
+                Size = UDim2.new(1, (edge - pad) * 2, 1, (edge - pad) * 2),
+                Position = O(pad - edge, pad - edge + 1),
+                BackgroundTransparency = layer[2],
+            })
+            U.corner(halo, d.Radius + edge)
+            U.make("UIGradient", halo, {
+                Transparency = NumberSequence.new({
+                    NumberSequenceKeypoint.new(0, 0.04),
+                    NumberSequenceKeypoint.new(0.55, 0.27),
+                    NumberSequenceKeypoint.new(1, 0.73),
+                }),
+            })
+            U.paint(w, life, halo, "BackgroundColor3", function(c: Payload)
+                return c.Accent:Lerp(c.Background, 0.48)
+            end)
+        end
+        local shade = U.frame(canvas, {
+            Name = "Contact Shadow",
+            Position = O(pad - 1, pad + 2),
+            Size = UDim2.new(1, -pad * 2 + 2, 1, -pad * 2 + 2),
+            BackgroundColor3 = Black,
+            BackgroundTransparency = 0.68,
+        })
+        U.corner(shade, d.Radius + 1)
+        local card = U.frame(canvas, {
+            Name = "Spectate Card",
+            Size = UDim2.new(1, -pad * 2, 1, -pad * 2),
+            Position = O(pad, pad),
+            BackgroundTransparency = 0,
+            BackgroundColor3 = White,
+            ZIndex = 2,
+        })
+        n._card = card
+        U.corner(card, d.Radius)
+        local surface = U.make("UIGradient", card, { Rotation = 90 })
+        U.paint(w, life, surface, "Color", function(c: Payload)
+            return ColorSequence.new(c.Surface:Lerp(c.Background, 0.47), c.Surface:Lerp(c.Background, 0.65))
+        end)
+        U.paint(w, life, U.make("UIStroke", card, { Thickness = 1, Transparency = 0.36 }), "Color", "Stroke")
+
+        local mask = U.frame(card, {
+            Name = "Rail Clip",
+            Size = UDim2.new(0, d.Rail, 1, 0),
+            ClipsDescendants = true,
+            ZIndex = 3,
+        })
+        local rail = U.line(w, life, mask, "Accent", {
+            Name = "Accent Rail",
+            Size = UDim2.new(0, d.Radius * 2, 1, 0),
+        })
+        U.corner(rail, d.Radius)
+        U.make("UIGradient", rail, {
+            Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0.03),
+                NumberSequenceKeypoint.new(0.20, 0),
+                NumberSequenceKeypoint.new(d.Rail / (d.Radius * 2), 0.23),
+                NumberSequenceKeypoint.new(1, 0.85),
+            }),
+        })
+
+        n._heading = U.text(w, life, card, "Control", "Spectating Player", "Text", { Name = "Spectate Heading" })
+        n._eye = U.icon(w, life, card, "eye", 24, function(c: Payload)
+            return c.TextSecondary:Lerp(c.TextMuted, 0.45)
+        end, { AnchorPoint = V(0, 0.5), Name = "Spectate Eye" })
+        n._line = U.frame(card, { Name = "Target Line", ClipsDescendants = true, Visible = false })
+        n._prefix = U.text(w, life, n._line, "Control", "", function(c: Payload)
+            return c.TextSecondary:Lerp(c.TextMuted, 0.53)
+        end, { Name = "Target Prefix" })
+        n._nameClip = U.frame(n._line, { ClipsDescendants = true })
+        n._nameLabel = U.text(w, life, n._nameClip, "Control", "", "Text", { Name = "Target Name" })
+
+        local avatar = U.line(w, life, card, "SurfaceRaised", { Name = "Portrait", AnchorPoint = V(0.5, 0.5), ZIndex = 3 })
+        n._avatarShell = avatar
+        U.make("UICorner", avatar, { CornerRadius = UDim.new(0.5, 0) })
+        local glow = U.make("UIStroke", avatar, { Thickness = 3.6, Transparency = 0.86 })
+        U.paint(w, life, glow, "Color", "Accent")
+        -- Keep the main ring on a separate holder; one stroke per GuiObject.
+        local ringHost = U.frame(avatar, { Size = S(1, 1), ZIndex = 4 })
+        U.make("UICorner", ringHost, { CornerRadius = UDim.new(0.5, 0) })
+        n._ring = U.make("UIStroke", ringHost, { Thickness = d.Ring, Transparency = 0.07 })
+        U.paint(w, life, n._ring, "Color", "Accent")
+        n._fallback = U.icon(w, life, avatar, "user", 22, "TextMuted", { Size = S(1, 1) })
+        local function picture(name: string, opacity: number, z: number)
+            local image = U.make("ImageLabel", avatar, {
+                Name = name,
+                Position = O(1, 1),
+                Size = UDim2.new(1, -2, 1, -2),
+                Image = "",
+                ScaleType = Enum.ScaleType.Crop,
+                ImageTransparency = opacity,
+                ZIndex = z,
+            })
+            U.make("UICorner", image, { CornerRadius = UDim.new(0.5, 0) })
+            return image
+        end
+        n._portrait = picture("Target Thumbnail", 0, 2)
+        n._ghost = picture("Previous Thumbnail", 1, 3)
+
+        local dragSurface = U.frame(root, { Name = "HUD Drag Surface", Size = S(1, 1), ZIndex = 29, Active = true })
+        n._avatarHintHit = U.frame(root, { AnchorPoint = V(0.5, 0.5), ZIndex = 30, Active = false })
+        n._avatarHint = spectateHint(n, n._avatarHintHit, "")
+        n._stop = spectateAction(n, "Stop spectating", "check", function()
+            controller:StopSpectating()
+        end, true)
+        n._prev = spectateAction(n, "Previous player", "chevron-right", function()
+            controller:_stepSpectate(-1)
+        end, false, true)
+        n._next = spectateAction(n, "Next player", "chevron-right", function()
+            controller:_stepSpectate(1)
+        end)
+        n._stop.hit.NextSelectionRight, n._prev.hit.NextSelectionLeft = n._prev.hit, n._stop.hit
+        n._prev.hit.NextSelectionRight, n._next.hit.NextSelectionLeft = n._next.hit, n._prev.hit
+        local function drag(input: InputObject)
+            local from = U.point(input)
+            if
+                not U.hitType(input)
+                or U.inside(n._stop.hit, from)
+                or U.inside(n._prev.hit, from)
+                or U.inside(n._next.hit, from)
+            then
+                return
+            end
+            local p = root.Position
+            local origin, started = V(p.X.Offset, p.Y.Offset), false
+            w:_take(n, input, {
+                Axis = "any",
+                Move = function(position: Vector2)
+                    if not started then
+                        if (position - from).Magnitude < D.PressSlop then
+                            return
+                        end
+                        started = true
+                        n:_rest()
+                    end
+                    controller._widgetPosition = n:_place(origin + (position - from))
+                end,
+            })
+        end
+        life:Give(dragSurface.InputBegan:Connect(drag))
+        life:Give(n._avatarHintHit.InputBegan:Connect(drag))
+        life:Give(w._safe:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+            n:_measure()
+        end))
+        life:Give(Gui:GetPropertyChangedSignal("ReducedMotionEnabled"):Connect(function()
+            if Gui.ReducedMotionEnabled then
+                if n._visible then
+                    n:_rest()
+                    n:_clearTargetMotion()
+                else
+                    controller._life:Remove("widget")
+                end
+            end
+        end))
+        w._responsive[n] = true
+        life:Give(function()
+            w._responsive[n] = nil
+        end)
+        n._beforeDestroy = function()
+            if controller._widget == n then
+                controller._widget = nil
+            end
+        end
+        n:_measure()
+        return n
+    end
+
+    function P.Utilities:_canSpectate(target: Player?): boolean
+        if
+            self._dead
+            or target == nil
+            or target == Players.LocalPlayer
+            or target.Parent ~= Players
+            or type(self._options.CanSpectate) ~= "function"
+        then
+            return false
+        end
+        local ok, permitted = U.call(self._w, "Spectate permission", self._options.CanSpectate, target)
+        return ok and permitted == true and not self._dead and target.Parent == Players
+    end
+
+    function P.Utilities:_spectateHumanoid(p: Player): Humanoid?
+        local record = self._people[p.UserId]
+        local h = record and record.player == p and record.humanoid
+        return if h and h.Parent == record.character and h.Health > 0 then h else nil
+    end
+
+    function P.Utilities:_recoverLocalSubject(camera: Camera, expected: Humanoid)
+        local p = Players.LocalPlayer
+        if not p or self._dead or self._w._dead or camera ~= workspace.CurrentCamera then
+            return
+        end
+        local life = U.scope()
+        self._life:Give(life, "restoreSubject")
+        local function eligible(): boolean
+            return not self._dead
+                and not U.spectateOwner
+                and workspace.CurrentCamera == camera
+                and camera.CameraSubject == expected
+        end
+        local function attempt(model: Model?)
+            if not eligible() then
+                self._life:Remove("restoreSubject")
+                return
+            end
+            local h = model and model:FindFirstChildOfClass("Humanoid")
+            if h and h.Health > 0 then
+                camera.CameraSubject = h
+                self._life:Remove("restoreSubject")
+            elseif model then
+                life:Give(
+                    model.ChildAdded:Connect(function(child: Instance)
+                        if child:IsA("Humanoid") then
+                            attempt(model)
+                        end
+                    end),
+                    "waitingHumanoid"
+                )
+            end
+        end
+        life:Give(p.CharacterAdded:Connect(attempt))
+        life:Give(workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+            self._life:Remove("restoreSubject")
+        end))
+        U.later(self._w, life, "expire", 12, function()
+            self._life:Remove("restoreSubject")
+        end)
+        attempt(p.Character)
+    end
+
+    function P.Utilities:_restoreSubject(clear: boolean, recover: boolean?)
+        local camera, applied = self._subjectCamera, self._appliedSubject
+        if camera and applied and camera.CameraSubject == applied then
+            local own, old = humanoid(Players.LocalPlayer), self._originalSubject
+            if own and own.Parent and own.Health > 0 then
                 camera.CameraSubject = own
+            elseif old and old.Parent and old ~= applied and (not old:IsA("Humanoid") or old.Health > 0) then
+                camera.CameraSubject = old
+            elseif recover then
+                self:_recoverLocalSubject(camera, applied)
+            elseif not clear then
+                -- Keep ownership until the replacement local character is usable.
+                return
             end
         end
         self._appliedSubject = nil
@@ -13853,10 +14522,14 @@ do
 
     function P.Utilities:_applySubject()
         local target = self._target
-        if not target then
+        if not target or U.spectateOwner ~= self then
             return
         end
-        if not self:_canSpectate(target) then
+        local authorized = self:_canSpectate(target)
+        if self._target ~= target or U.spectateOwner ~= self then
+            return
+        end
+        if not authorized then
             self:StopSpectating()
             return
         end
@@ -13866,134 +14539,89 @@ do
             self._subjectCamera = camera
             self._originalSubject = camera and camera.CameraSubject
         end
-        local h = humanoid(target)
+        local h = self:_spectateHumanoid(target)
         if camera and h then
             if camera.CameraSubject ~= h then
                 camera.CameraSubject = h
             end
             self._appliedSubject = h
+        else
+            self:_restoreSubject(false)
         end
     end
 
     function P.Utilities:_spectateRender()
         local widget, target = self._widget, self._target
-        if not widget or not target then
+        if not widget or not target or not widget._visible then
             return
         end
-        local h = humanoid(target)
-        widget.detail.Text = if h
-            then (if self._w._useTouch then "" else "Current target: ") .. target.DisplayName
-            else "Waiting for " .. target.DisplayName
-        widget.avatar.Image = self._thumbs[target.UserId] or ""
+        local image = self._thumbs[target.UserId]
+        widget:_setTarget(target, self:_spectateHumanoid(target) ~= nil, if type(image) == "string" then image else nil)
     end
 
-    function P.Utilities:_stepSpectate(direction: number)
-        local pool = {}
+    function P.Utilities:_spectateNeighbor(from: Player, direction: number): Player?
+        local nearest, wrap
+        local pivot = from.UserId
         for _, record in self._people do
             local p = record.player
-            if self:_canSpectate(p) then
-                table.insert(pool, p)
+            if p == from or not self:_spectateHumanoid(p) or not self:_canSpectate(p) then
+                continue
+            end
+            local id = p.UserId
+            if not wrap or (if direction > 0 then id < wrap.UserId else id > wrap.UserId) then
+                wrap = p
+            end
+            if direction > 0 then
+                if id > pivot and (not nearest or id < nearest.UserId) then
+                    nearest = p
+                end
+            elseif id < pivot and (not nearest or id > nearest.UserId) then
+                nearest = p
             end
         end
-        table.sort(pool, function(a: Player, b: Player)
-            return a.UserId < b.UserId
-        end)
-        if #pool == 0 then
-            self:StopSpectating()
-            return
-        end
-        local index = table.find(pool, self._target) or 1
-        self:Spectate(pool[(index - 1 + direction) % #pool + 1])
+        return nearest or wrap
     end
 
-    function P.Utilities:_openWidget()
-        local w = self._w
-        if self._widget then
-            local n = self._widget.node
-            n._life:Remove("dismiss")
-            n._root.Visible, n._visible = true, true
-            U.tween(w, n._life, n._root, "presence", "fast", { GroupTransparency = 0 }, Gui.ReducedMotionEnabled)
+    function P.Utilities:_queueSpectateArrows()
+        local life = self._spectateLife
+        if not life or not self._target or not self._widget then
             return
         end
-        local root = U.make("CanvasGroup", w._safe, { ZIndex = 28, GroupTransparency = 1, Active = true })
-        local n = U.adopt(w, U.node(w, P.Base, "SpectateWidget", { Name = "SpectateWidget" }, w, root))
-        self._life:Give(n, "widget")
-        local life = n._life
-        U.fill(w, life, root, "SurfaceRaised")
-        U.corner(root, D.PopupRadius)
-        U.line(w, life, root, "Accent", { Size = UDim2.new(0, 3, 1, 0) })
-        local hit = if w._useTouch then D.TouchHit else 34
-        local stop = U.utilButton(n, life, root, nil, "check", function()
-            self:StopSpectating()
-        end, true)
-        stop.Name = "Stop spectating"
-        stop.Position, stop.Size = O(9, 7), O(hit, hit)
-        U.hints(
-            setmetatable({ _w = w, _life = life, _tooltip = "Stop spectating", _owner = n, _visible = true }, P.Base),
-            stop
-        )
-        local heading = U.text(w, life, root, "Control", "Spectating Player", "Text", {
-            Position = O(hit + 17, 4),
-            Size = UDim2.new(1, -(hit * 3 + 64), 0, 24),
-        })
-        local detail = U.text(w, life, root, "Muted", "", "TextSecondary", {
-            Position = O(hit + 17, 26),
-            Size = UDim2.new(1, -(hit * 3 + 64), 0, 24),
-        })
-        heading.Active = true
-        local avatar = U.make("ImageLabel", root, {
-            AnchorPoint = V(1, 0.5),
-            Position = UDim2.new(1, -2 * hit - 15, 0.5, 0),
-            Size = O(30, 30),
-            ScaleType = Enum.ScaleType.Crop,
-        })
-        U.fill(w, life, avatar, "AccentMuted")
-        U.corner(avatar, 15)
-        local previous = U.utilButton(n, life, root, nil, "arrow-left", function()
-            self:_stepSpectate(-1)
+        U.later(self._w, life, "navigation", nil, function()
+            local target = self._target
+            if not target then
+                return
+            end
+            local enabled = self:_spectateNeighbor(target, 1) ~= nil
+            if self._widget and self._target == target then
+                self._widget:_setArrows(enabled)
+            end
         end)
-        previous.Name = "Previous player"
-        local nextPlayer = U.utilButton(n, life, root, nil, "chevron-right", function()
-            self:_stepSpectate(1)
-        end)
-        nextPlayer.Name = "Next player"
-        previous.Position, previous.Size = UDim2.new(1, -2 * hit - 10, 0, 7), O(hit, hit)
-        nextPlayer.Position, nextPlayer.Size = UDim2.new(1, -hit - 6, 0, 7), O(hit, hit)
-        self._widget = { node = n, detail = detail, avatar = avatar, position = V(16, 82) }
-        local function clamp()
-            local area = w:_area()
-            local width, height = math.max(1, math.min(445, area.X - 20)), hit + 14
-            local pos = self._widget.position
-            root.Size = O(width, height)
-            root.Position =
-                O(math.clamp(pos.X, 0, math.max(0, area.X - width)), math.clamp(pos.Y, 0, math.max(0, area.Y - height)))
+    end
+
+    function P.Utilities:_stepSpectate(direction: number): boolean
+        local target = self._target
+        if not target then
+            return false
         end
-        life:Give(w._safe:GetPropertyChangedSignal("AbsoluteSize"):Connect(clamp))
-        life:Give(heading.InputBegan:Connect(function(input: InputObject)
-            local start = root.Position
-            local from = U.point(input)
-            w:_take(n, input, {
-                Move = function(p: Vector2)
-                    self._widget.position = V(start.X.Offset, start.Y.Offset) + (p - from)
-                    clamp()
-                    self._widget.position = V(root.Position.X.Offset, root.Position.Y.Offset)
-                end,
-            })
-        end))
-        clamp()
-        U.tween(w, life, root, "presence", "fast", { GroupTransparency = 0 }, Gui.ReducedMotionEnabled)
+        local nextTarget = self:_spectateNeighbor(target, direction)
+        if self._target ~= target then
+            return false
+        end
+        if nextTarget then
+            return self:Spectate(nextTarget)
+        end
+        self:_queueSpectateArrows()
+        return false
     end
 
     function P.Utilities:Spectate(target: any)
         if typeof(target) ~= "Instance" or not target:IsA("Player") or not self:_canSpectate(target) then
-            self:_toast("Spectate unavailable", "That player cannot be a camera target right now.", true)
+            self:_toast("Spectate unavailable", "This experience has not authorized that player as a camera target.", true)
             return false
         end
         if self._freecamOn then
-            local hostFreecam = self._options.Freecam
-            local ok, stopped = if type(hostFreecam) == "function"
-                then U.call(self._w, "Release freecam", hostFreecam, false)
-                else true, U.localFreecam(false)
+            local ok, stopped = U.call(self._w, "Release freecam", self._options.Freecam, false)
             if not ok or stopped ~= true then
                 self:_toast("Camera in use", "Disable freecam before spectating.", true)
                 return false
@@ -14003,35 +14631,54 @@ do
                 self._freecamControl:SetValue(false, true)
             end
         end
+        if self._dead or target.Parent ~= Players then
+            return false
+        end
+        local previous = U.spectateOwner
+        if previous and previous ~= self then
+            previous:StopSpectating()
+        end
+        self._life:Remove("restoreSubject")
         self:_ensurePeople()
-        self._target = target
-        self:_thumbnail(target)
-        self:_openWidget()
+        self._target, U.spectateOwner = target, self
+        if not self._spectateLife then
+            local life = U.scope()
+            self._spectateLife = life
+            self._life:Give(life, "spectateSubject")
+            life:Give(workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+                self:_applySubject()
+            end))
+        end
         self:_applySubject()
+        if self._target ~= target then
+            return false
+        end
+        if not self._widget then
+            local widget = P.SpectateHud._mount(self)
+            self._widget = widget
+            self._life:Give(widget, "widget")
+        end
+        self._widget:_show()
         self:_spectateRender()
+        self:_thumbnail(target)
+        self:_queueSpectateArrows()
         return true
     end
 
     function P.Utilities:StopSpectating()
-        self._target = nil
-        self:_restoreSubject(true)
-        local widget, w = self._widget, self._w
-        if widget and not w._dead then
-            local n = widget.node
-            n._visible = false
-            w:_quiet(n)
-            local snap = w._speed <= 0 or Gui.ReducedMotionEnabled
-            U.tween(w, n._life, n._root, "presence", "fast", { GroupTransparency = 1 }, snap)
-            if snap then
-                n._root.Visible = false
-            else
-                U.later(n, n._life, "dismiss", D.Animation.fast / w._speed, function()
-                    if not self._target then
-                        n._root.Visible = false
-                    end
-                end)
-            end
+        if not self._target then
+            return true
         end
+        self._target, self._spectateLife = nil, nil
+        if U.spectateOwner == self then
+            U.spectateOwner = nil
+        end
+        self._life:Remove("spectateSubject")
+        self:_restoreSubject(true, true)
+        if self._widget and not self._w._dead then
+            self._widget:_hide()
+        end
+        self:_releasePeopleIfIdle()
         return true
     end
 
@@ -14154,6 +14801,12 @@ do
             end,
         })
         self._playerTable = board
+        board._life:Give(function()
+            if self._playerTable == board then
+                self._playerTable = nil
+                self:_releasePeopleIfIdle()
+            end
+        end)
         board:OnResultCountChanged(function(count: number)
             results.Text = tostring(count) .. (count == 1 and " result" or " results")
         end)
@@ -14253,7 +14906,6 @@ do
             if n._restoreCamera then
                 n:_restoreCamera(true)
             end
-            n:_applySubject()
         end))
         if Players.LocalPlayer and type(options.Movement) == "function" then
             n._life:Give(Players.LocalPlayer.CharacterRemoving:Connect(function()
@@ -14262,6 +14914,7 @@ do
         end
         n._life:Give(function()
             n._dead = true
+            if U.spectateOwner == n then U.spectateOwner = nil end
             n:_restoreSubject(true)
             if n._restoreCamera then
                 n:_restoreCamera()
@@ -14295,6 +14948,23 @@ do
 
     function P.Window:GetUtilities()
         return self._utilities
+    end
+
+    -- Camera policy is resolved by Utilities.CanSpectate in the host experience.
+    function P.Window:SpectatePlayer(player: Player): boolean
+        return self._utilities ~= nil and self._utilities:Spectate(player)
+    end
+
+    function P.Window:StopSpectating(): boolean
+        return self._utilities == nil or self._utilities:StopSpectating()
+    end
+
+    function P.Window:GetSpectateTarget(): Player?
+        return if self._utilities then self._utilities:GetSpectateTarget() else nil
+    end
+
+    function P.Window:IsSpectating(): boolean
+        return self:GetSpectateTarget() ~= nil
     end
 end
 
@@ -14544,6 +15214,7 @@ do
         life:Give(function()
             if self._avatar == dialog then
                 self._avatar, self._avatarUpdate, self._avatarPlayer = nil, nil, nil
+                self:_releasePeopleIfIdle()
             end
         end)
         local function layout()
@@ -14647,8 +15318,6 @@ do
         if not self._w:IsVisible() then
             return false
         end
-        self:_ensurePeople()
-        self:_thumbnail(p)
         local dialog = self._w:CreateDialog({
             Title = "View Avatar",
             Width = 820,
@@ -14656,9 +15325,12 @@ do
             Buttons = { { Name = "Done" } },
             BuildContent = function(host: Frame, life: any, controller: any)
                 self._avatar, self._avatarPlayer = controller, p
+                self:_ensurePeople()
+                self:_thumbnail(p)
                 self:_avatarContent(host, life, controller, p)
             end,
         })
+        if not dialog then self:_releasePeopleIfIdle() end
         return dialog ~= nil
     end
 end
