@@ -13930,6 +13930,7 @@ do
         InScale = 0.94,
         OutScale = 0.96,
         Lift = 4,
+        Compact = 0.67,
     }
     P.SpectateHud = U.class(P.Base)
 
@@ -14088,27 +14089,36 @@ do
         local area = w:_area()
         -- Mouse keeps the exact reference weights. Touch distributes wider invisible
         -- targets between smaller visible faces, not by down-scaling the entire card.
-        local width = math.max(1, math.min(if w._useTouch and area.X < 900 then 456 else d.Width, area.X - d.Margin * 2))
-        local compact = width < 430
-        local narrow = width < 390
-        local height = if narrow then 84 elseif compact then 88 else d.Height
+        local width = math.max(
+            1,
+            math.min(
+                (if w._useTouch and area.X < 900 then 456 else d.Width) * d.Compact,
+                (area.X - d.Margin * 2) * d.Compact
+            )
+        )
+        local compact = width < 430 * d.Compact
+        local narrow = width < 390 * d.Compact
+        local height = (if narrow then 84 elseif compact then 88 else d.Height) * d.Compact
         local touch = w._useTouch or compact
-        local outerHit = if touch then D.TouchHit else 31
-        local arrowFace = if touch then (if narrow then 29 else 31) else d.Arrow
-        local arrowStep = if touch then outerHit + (if narrow then 2 else 4) else d.Arrow + d.ArrowGap
-        local right = if narrow then 7 elseif touch then 10 else d.Right - (outerHit - arrowFace) / 2
+        local outerHit = (if touch then D.TouchHit else 31) * d.Compact
+        local arrowFace = (if touch then (if narrow then 29 else 31) else d.Arrow) * d.Compact
+        local arrowStep = (if touch then outerHit + (if narrow then 2 else 4) else d.Arrow + d.ArrowGap) * d.Compact
+        local right = (if narrow then 7 elseif touch then 10 else d.Right - (outerHit - arrowFace) / 2) * d.Compact
         local nextX = width - right - outerHit / 2
         local prevX = nextX - arrowStep
-        local avatarSize = if width < 335 then 37 elseif narrow then 43 elseif touch then 50 else d.Avatar
-        local avatarGap = if narrow then 6 elseif touch then 9 else (d.AvatarGap - (outerHit - arrowFace) / 2)
+        local avatarSize = (if width < 335 * d.Compact then 37 elseif narrow then 43 elseif touch then 50 else d.Avatar)
+            * d.Compact
+        local avatarGap = (if narrow then 6 elseif touch then 9 else (d.AvatarGap - (outerHit - arrowFace) / 2))
+            * d.Compact
         local avatarX = prevX - outerHit / 2 - avatarGap - avatarSize / 2
-        local checkX = if narrow then 28 elseif touch then 33 else d.CheckCenter
-        local textX = if narrow then 54 elseif touch then 64 else d.TextX
-        local textRoom = math.max(0, avatarX - avatarSize / 2 - (if narrow then 7 else 12) - textX)
-        local titleSize = if narrow then 15 elseif touch then 18 else d.TitleSize
-        local detailSize = if narrow then 13 elseif touch then 14 else d.DetailSize
+        local checkX = (if narrow then 28 elseif touch then 33 else d.CheckCenter) * d.Compact
+        local textX = (if narrow then 54 elseif touch then 64 else d.TextX) * d.Compact
+        local textRoom = math.max(0, avatarX - avatarSize / 2 - (if narrow then 7 else 12) * d.Compact - textX)
+        local titleSize = (if narrow then 15 elseif touch then 18 else d.TitleSize) * d.Compact
+        local detailSize = (if narrow then 13 elseif touch then 14 else d.DetailSize) * d.Compact
         self._width, self._height, self._compact = width, height, compact
-        self._textWidth, self._detailSize, self._lineHeight = textRoom, detailSize, if narrow then 21 else 25
+        self._textWidth, self._detailSize, self._lineHeight =
+            textRoom, detailSize, (if narrow then 21 else 25) * d.Compact
         self._root.Size = O(width, height)
         self:_place(self._controller._widgetPosition or d.Start)
 
@@ -14116,17 +14126,22 @@ do
             action.face.Position, action.face.Size = O(x, height / 2), O(visible, visible)
             action.hit.Position, action.hit.Size = O(x, height / 2), O(hit, hit)
         end
-        actionLayout(self._stop, checkX, if narrow then 29 else d.Check, if touch then D.TouchHit else 37)
+        actionLayout(
+            self._stop,
+            checkX,
+            (if narrow then 29 else d.Check) * d.Compact,
+            (if touch then D.TouchHit else 37) * d.Compact
+        )
         actionLayout(self._prev, prevX, arrowFace, outerHit)
         actionLayout(self._next, nextX, arrowFace, outerHit)
         self._avatarShell.Position, self._avatarShell.Size = O(avatarX, height / 2), O(avatarSize, avatarSize)
         self._avatarHintHit.Position, self._avatarHintHit.Size = self._avatarShell.Position, self._avatarShell.Size
 
-        local titleY = if narrow then 16 elseif compact then 18 else 19
-        local titleH = if narrow then 24 else 28
+        local titleY = (if narrow then 16 elseif compact then 18 else 19) * d.Compact
+        local titleH = (if narrow then 24 else 28) * d.Compact
         local idealTextWidth = U.measure(self._heading.Text, titleSize)
-        local eyeSize = if narrow then 15 else d.Eye
-        local eyeGap = if touch then 5 else 8
+        local eyeSize = (if narrow then 15 else d.Eye) * d.Compact
+        local eyeGap = (if touch then 5 else 8) * d.Compact
         local showEye = idealTextWidth + eyeGap + eyeSize <= textRoom
         self._heading.Position = O(textX, titleY)
         self._heading.Size = O(if showEye then idealTextWidth + 1 else textRoom, titleH)
@@ -14134,7 +14149,7 @@ do
         self._eye.Size = O(eyeSize, eyeSize)
         self._eye.Position = O(textX + idealTextWidth + eyeGap, titleY + titleH / 2)
         self._eye.Visible = showEye
-        self._line.Position = O(textX, if narrow then 43 elseif compact then 47 else 51)
+        self._line.Position = O(textX, (if narrow then 43 elseif compact then 47 else 51) * d.Compact)
         self._line.Size = O(textRoom, self._lineHeight)
         self._prefix.TextSize, self._nameLabel.TextSize = detailSize, detailSize
         self:_lineContent()
@@ -14148,7 +14163,7 @@ do
         self._ghost.ImageTransparency = 1
         self._nameLabel.TextTransparency = 0
         self._nameLabel.Position = O(0, 0)
-        self._ring.Thickness, self._ring.Transparency = SpectateDesign.Ring, 0.07
+        self._ring.Thickness, self._ring.Transparency = SpectateDesign.Ring * SpectateDesign.Compact, 0.07
     end
 
     function P.SpectateHud:_setTarget(player: Player, ready: boolean, image: string?)
@@ -14213,14 +14228,14 @@ do
             life:Remove("ringPulse")
             self._nameLabel.Position, self._nameLabel.TextTransparency = O(3, 0), 0.36
             U.tween(w, life, self._nameLabel, "targetName", "spectateTarget", { Position = O(0, 0), TextTransparency = 0 })
-            self._ring.Thickness, self._ring.Transparency = SpectateDesign.Ring + 0.65, 0
+            self._ring.Thickness, self._ring.Transparency = (SpectateDesign.Ring + 0.65) * SpectateDesign.Compact, 0
             U.tween(
                 w,
                 life,
                 self._ring,
                 "ringPulse",
                 "spectateTarget",
-                { Thickness = SpectateDesign.Ring, Transparency = 0.07 }
+                { Thickness = SpectateDesign.Ring * SpectateDesign.Compact, Transparency = 0.07 }
             )
         end
     end
@@ -14281,18 +14296,22 @@ do
 
     function P.SpectateHud._mount(controller: any): any
         local w, d = controller._w, SpectateDesign
-        local root = U.frame(w._safe, { ZIndex = 28, Visible = false, Size = O(d.Width, d.Height) })
+        local root = U.frame(w._safe, {
+            ZIndex = 28,
+            Visible = false,
+            Size = O(d.Width * d.Compact, d.Height * d.Compact),
+        })
         local n =
             U.adopt(w, U.node(w, P.SpectateHud, "SpectateWidget", { Name = "SpectateWidget", Visible = false }, w, root))
         local life = n._life
         n._controller = controller
         n._checked, n._waiting = false, false
-        local pad = d.HaloPadding
+        local pad = d.HaloPadding * d.Compact
         local canvas = U.make("CanvasGroup", root, {
             Name = "Spectate HUD Motion",
             Size = UDim2.new(1, pad * 2, 1, pad * 2),
             AnchorPoint = V(0.5, 0.5),
-            Position = UDim2.new(0.5, 0, 0.5, d.Lift),
+            Position = UDim2.new(0.5, 0, 0.5, d.Lift * d.Compact),
             GroupTransparency = 1,
         })
         n._canvas = canvas
@@ -14305,7 +14324,7 @@ do
                 Position = O(pad - edge, pad - edge + 1),
                 BackgroundTransparency = layer[2],
             })
-            U.corner(halo, d.Radius + edge)
+            U.corner(halo, (d.Radius + edge) * d.Compact)
             U.make("UIGradient", halo, {
                 Transparency = NumberSequence.new({
                     NumberSequenceKeypoint.new(0, 0.04),
@@ -14324,7 +14343,7 @@ do
             BackgroundColor3 = Black,
             BackgroundTransparency = 0.68,
         })
-        U.corner(shade, d.Radius + 1)
+        U.corner(shade, (d.Radius + 1) * d.Compact)
         local card = U.frame(canvas, {
             Name = "Spectate Card",
             Size = UDim2.new(1, -pad * 2, 1, -pad * 2),
@@ -14334,7 +14353,7 @@ do
             ZIndex = 2,
         })
         n._card = card
-        U.corner(card, d.Radius)
+        U.corner(card, d.Radius * d.Compact)
         local surface = U.make("UIGradient", card, { Rotation = 90 })
         U.paint(w, life, surface, "Color", function(c: Payload)
             return ColorSequence.new(c.Surface:Lerp(c.Background, 0.47), c.Surface:Lerp(c.Background, 0.65))
@@ -14343,15 +14362,15 @@ do
 
         local mask = U.frame(card, {
             Name = "Rail Clip",
-            Size = UDim2.new(0, d.Rail, 1, 0),
+            Size = UDim2.new(0, d.Rail * d.Compact, 1, 0),
             ClipsDescendants = true,
             ZIndex = 3,
         })
         local rail = U.line(w, life, mask, "Accent", {
             Name = "Accent Rail",
-            Size = UDim2.new(0, d.Radius * 2, 1, 0),
+            Size = UDim2.new(0, d.Radius * 2 * d.Compact, 1, 0),
         })
-        U.corner(rail, d.Radius)
+        U.corner(rail, d.Radius * d.Compact)
         U.make("UIGradient", rail, {
             Transparency = NumberSequence.new({
                 NumberSequenceKeypoint.new(0, 0.03),
@@ -14380,9 +14399,9 @@ do
         -- Keep the main ring on a separate holder; one stroke per GuiObject.
         local ringHost = U.frame(avatar, { Size = S(1, 1), ZIndex = 4 })
         U.make("UICorner", ringHost, { CornerRadius = UDim.new(0.5, 0) })
-        n._ring = U.make("UIStroke", ringHost, { Thickness = d.Ring, Transparency = 0.07 })
+        n._ring = U.make("UIStroke", ringHost, { Thickness = d.Ring * d.Compact, Transparency = 0.07 })
         U.paint(w, life, n._ring, "Color", "Accent")
-        n._fallback = U.icon(w, life, avatar, "user", 22, "TextMuted", { Size = S(1, 1) })
+        n._fallback = U.icon(w, life, avatar, "user", 22 * d.Compact, "TextMuted", { Size = S(1, 1) })
         local function picture(name: string, opacity: number, z: number)
             local image = U.make("ImageLabel", avatar, {
                 Name = name,
