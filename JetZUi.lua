@@ -315,8 +315,8 @@ local D = {
         ReadoutWidth = 105,
         ReadoutHeight = 23,
         Step = 16,
-        MinWidth = 320,
-        MinHeight = 225,
+        MinWidth = 240,
+        MinHeight = 180,
         MaxWidth = 2400,
         MaxHeight = 1600,
     },
@@ -4235,8 +4235,9 @@ end
 
 function P.Window:_resizeTo(target: Vector2): boolean
     local g, limits = self._layout, D.Resize
-    -- Clamp growth at the current top-left so pulling against an edge never moves the window.
-    local available = (self:_area() - self._position - V(g.Margin, g.Margin)) / self._scale
+    -- Free resize: the window may grow across the whole viewport and is re-centred
+    -- afterwards, so it is never limited by the space left of its current top-left.
+    local available = (self:_area() - V(2 * g.Margin, 2 * g.Margin)) / self._scale
     local maxWidth = math.max(g.Width, math.min(limits.MaxWidth, math.floor(available.X)))
     local maxHeight = math.max(g.Height, math.min(limits.MaxHeight, math.floor(available.Y)))
     local width = math.clamp(math.round(target.X), math.min(g.Width, limits.MinWidth), maxWidth)
@@ -4244,7 +4245,15 @@ function P.Window:_resizeTo(target: Vector2): boolean
     if width == g.Width and height == g.Height then
         return false
     end
+    -- Growing past the right/bottom edge nudges the window back inside by the minimum
+    -- distance, so dragging never jumps and the size stays free on both axes.
+    local area, scaled = self:_area(), V(width * self._scale, height * self._scale)
+    local limit = V(math.max(0, area.X - scaled.X), math.max(0, area.Y - scaled.Y))
     self._manual = true
+    self._position = V(
+        math.round(math.clamp(self._position.X, math.min(0, limit.X), limit.X)),
+        math.round(math.clamp(self._position.Y, math.min(0, limit.Y), limit.Y))
+    )
     return self:SetSize(V(width, height))
 end
 
@@ -5526,7 +5535,9 @@ function P.Dependency:_layoutChevron()
         return
     end
     local h = math.max(20, self._owner._heading.AbsoluteSize.Y / self._w._scale)
-    self._chevronButton.Position = O(self._owner._titleLeft, math.max(0, (h - 20) / 2))
+    -- Lead with the settings chevron and keep the title after it, so a toggle with
+    -- settings reads as [chevron] [switch] [name] instead of [switch] [chevron] [name].
+    self._chevronButton.Position = O(0, math.max(0, (h - 20) / 2))
 end
 
 function P.Dependency:IsActive(): boolean
@@ -5997,6 +6008,10 @@ function U.row(owner: any, kind: string, c: Payload, variant: string): any
         end
         if self._reserveRatio then
             reserve = math.floor(math.max(reserve, (root.AbsoluteSize.X / w._scale) * self._reserveRatio))
+        end
+        if self._checkBox then
+            local lead = if self._settings and self._checkAnchor == 0 then 24 else 0
+            self._checkBox.Position = UDim2.new(self._checkAnchor, lead, 0.5, 0)
         end
         local gear = self._gear and self._gear.Visible
         local gearWidth = if gear then (if g.Touch then g.Hit else 25) else 0
@@ -6733,6 +6748,7 @@ function Build.Check(owner: any, c: Payload, kind: string)
     local size = if switch then 34 else D.Check
     local anchor = if alignRight then 1 else 0
     local box = U.frame(hit, { Name = "Check", AnchorPoint = V(anchor, 0.5), Position = S(anchor, 0.5), Size = O(size, D.Check) })
+    n._checkBox, n._checkAnchor = box, anchor
     U.corner(box, if switch then 11 else 3)
     local glyph, dot
     if switch then
@@ -6783,6 +6799,10 @@ function Build.Check(owner: any, c: Payload, kind: string)
     end
     function n:_layoutRender()
         self._titleLeft = if alignRight then 5 elseif w._layout.Touch then (if switch then 46 else 33) else (if switch then 56 else 44)
+        -- The settings chevron leads the row, so the title clears it as well.
+        if self._settings and not alignRight then
+            self._titleLeft += 22
+        end
         self:_bindRender()
         hit.Size = UDim2.new(1, -self._keyWidth, 1, 0)
     end
@@ -13753,6 +13773,14 @@ do
                 scope:Remove("health")
                 local h = model and model:FindFirstChildOfClass("Humanoid")
                 record.humanoid = h
+                if self._target == p then
+                    -- Re-attach the camera as soon as the followed character respawns.
+                    U.later(self._w, scope, "spectateSubject", nil, function()
+                        if self._target == p then
+                            self:_applySubject()
+                        end
+                    end)
+                end
                 if h then
                     local alive = h.Health > 0
                     scope:Give(
@@ -13829,8 +13857,11 @@ do
                 self._playerTable:RemoveRow(p.UserId)
             end
             if self._target == p then
-                local neighbor = self:_spectateNeighbor(p, 1)
-                if not neighbor or not self:Spectate(neighbor) then
+                -- Follow the remaining players instead of dropping the session.
+                local neighbor = self:_spectateNeighbor(p, 1) or self:_spectateNeighbor(p, -1)
+                if neighbor then
+                    self:_requestSpectate(neighbor)
+                else
                     self:StopSpectating()
                 end
             end
@@ -14436,24 +14467,53 @@ do
         return n
     end
 
-    function P.Utilities:_canSpectate(target: Player?): boolean
-        if
-            self._dead
-            or target == nil
-            or target == Players.LocalPlayer
-            or target.Parent ~= Players
-            or type(self._options.CanSpectate) ~= "function"
-        then
-            return false
+    function P.Utilities:_spectateTargetIssue(target: any): string?
+        if self._dead or self._w._dead then
+            return "This JetZ window is closed."
         end
-        local ok, permitted = U.call(self._w, "Spectate permission", self._options.CanSpectate, target)
-        return ok and permitted == true and not self._dead and target.Parent == Players
+        if typeof(target) ~= "Instance" or not target:IsA("Player") then
+            return "Select a player from this server first."
+        end
+        if target == Players.LocalPlayer then
+            return "Pick another player to spectate."
+        end
+        if target.Parent ~= Players then
+            return "That player has left this server."
+        end
+        return nil
+    end
+
+    function P.Utilities:_canSpectate(target: any): (boolean, string?)
+        local issue = self:_spectateTargetIssue(target)
+        if issue then
+            return false, issue
+        end
+        -- Spectating is available by default. An optional policy may only deny it, and a
+        -- failing policy is never treated as a denial, so the player can always spectate.
+        local policy = self._options.CanSpectate
+        if type(policy) == "function" then
+            local ok, permitted = U.call(self._w, "Spectate permission", policy, target)
+            issue = self:_spectateTargetIssue(target)
+            if issue then
+                return false, issue
+            end
+            if ok and permitted == false then
+                return false, "The game has not approved this target."
+            end
+        end
+        return true, nil
     end
 
     function P.Utilities:_spectateHumanoid(p: Player): Humanoid?
         local record = self._people[p.UserId]
         local h = record and record.player == p and record.humanoid
-        return if h and h.Parent == record.character and h.Health > 0 then h else nil
+        if h and h.Parent then
+            return h
+        end
+        -- The tracked record can lag behind a late character spawn, so read the live
+        -- character as a fallback instead of refusing to spectate.
+        local character = p and p.Character
+        return if character then character:FindFirstChildOfClass("Humanoid") else nil
     end
 
     function P.Utilities:_recoverLocalSubject(camera: Camera, expected: Humanoid)
@@ -14520,18 +14580,18 @@ do
         end
     end
 
-    function P.Utilities:_applySubject()
+    function P.Utilities:_applySubject(): string?
         local target = self._target
         if not target or U.spectateOwner ~= self then
-            return
+            return nil
         end
-        local authorized = self:_canSpectate(target)
+        local authorized, issue = self:_canSpectate(target)
         if self._target ~= target or U.spectateOwner ~= self then
-            return
+            return nil
         end
         if not authorized then
             self:StopSpectating()
-            return
+            return issue
         end
         local camera = workspace.CurrentCamera
         if camera ~= self._subjectCamera then
@@ -14545,9 +14605,8 @@ do
                 camera.CameraSubject = h
             end
             self._appliedSubject = h
-        else
-            self:_restoreSubject(false)
         end
+        return nil
     end
 
     function P.Utilities:_spectateRender()
@@ -14564,7 +14623,7 @@ do
         local pivot = from.UserId
         for _, record in self._people do
             local p = record.player
-            if p == from or not self:_spectateHumanoid(p) or not self:_canSpectate(p) then
+            if p == from then
                 continue
             end
             local id = p.UserId
@@ -14615,24 +14674,27 @@ do
         return false
     end
 
-    function P.Utilities:Spectate(target: any)
-        if typeof(target) ~= "Instance" or not target:IsA("Player") or not self:_canSpectate(target) then
-            self:_toast("Spectate unavailable", "This experience has not authorized that player as a camera target.", true)
-            return false
+    function P.Utilities:_requestSpectate(target: any): (boolean, string?)
+        local authorized, issue = self:_canSpectate(target)
+        if not authorized then
+            return false, issue
         end
         if self._freecamOn then
-            local ok, stopped = U.call(self._w, "Release freecam", self._options.Freecam, false)
+            local hostFreecam = self._options.Freecam
+            local ok, stopped = if type(hostFreecam) == "function"
+                then U.call(self._w, "Release freecam", hostFreecam, false)
+                else true, U.localFreecam(false)
             if not ok or stopped ~= true then
-                self:_toast("Camera in use", "Disable freecam before spectating.", true)
-                return false
+                return false, "Disable Freecam before spectating."
             end
             self._freecamOn = false
             if self._freecamControl then
                 self._freecamControl:SetValue(false, true)
             end
         end
-        if self._dead or target.Parent ~= Players then
-            return false
+        issue = self:_spectateTargetIssue(target)
+        if issue then
+            return false, issue
         end
         local previous = U.spectateOwner
         if previous and previous ~= self then
@@ -14649,9 +14711,9 @@ do
                 self:_applySubject()
             end))
         end
-        self:_applySubject()
+        local subjectIssue = self:_applySubject()
         if self._target ~= target then
-            return false
+            return false, subjectIssue or "The spectate request ended. Try again."
         end
         if not self._widget then
             local widget = P.SpectateHud._mount(self)
@@ -14662,7 +14724,15 @@ do
         self:_spectateRender()
         self:_thumbnail(target)
         self:_queueSpectateArrows()
-        return true
+        return true, nil
+    end
+
+    function P.Utilities:Spectate(target: any): boolean
+        local started, issue = self:_requestSpectate(target)
+        if not started then
+            self:_toast("Spectate unavailable", issue, true)
+        end
+        return started
     end
 
     function P.Utilities:StopSpectating()
@@ -14704,7 +14774,7 @@ do
             {
                 Name = "Spectate",
                 Icon = "eye",
-                Disabled = not self:_canSpectate(p),
+                Disabled = p == Players.LocalPlayer,
                 Callback = function()
                     self:Spectate(p)
                 end,
@@ -15186,19 +15256,31 @@ do
             applyBones(showBones)
             highlight(showBones)
         end)
-        cards[2] = option("Focus Camera", "Follow this player", "crosshair", function()
-            if self:Spectate(p) then
-                dialog:Close()
+        local permissionStatus = U.text(w, life, info, "Muted", "", "Warning", {
+            Name = "Spectate Feedback",
+            Position = O(12, 54),
+            Size = UDim2.new(1, -24, 0, 34),
+            TextWrapped = true,
+            TextTruncate = Enum.TextTruncate.None,
+            Visible = false,
+        })
+        local function followPlayer()
+            local started, issue = self:_requestSpectate(p)
+            if not dialog:IsOpen() then
+                return
             end
-        end)
+            if started then
+                dialog:Close()
+            else
+                permissionStatus.Text = issue or "Could not start spectating."
+                permissionStatus.Visible = true
+            end
+        end
+        cards[2] = option("Focus Camera", "Follow this player", "crosshair", followPlayer)
         cards[3] = option("Copy Outfit", "Export avatar asset IDs", "box", function()
             self:_copyOutfit(p)
         end)
-        cards[4] = option("Spectate Player", "Show the camera widget", "play", function()
-            if self:Spectate(p) then
-                dialog:Close()
-            end
-        end)
+        cards[4] = option("Spectate Player", "Open the spectate widget", "play", followPlayer)
         cards[1].Interactable, cards[1].Selectable = false, false
         local function update()
             local record = self._people[p.UserId]
@@ -15206,9 +15288,6 @@ do
             local d = record and record.distance
             meta.Text = "Team: " .. team .. "  ·  " .. (if U.finite(d) then string.format("%.1f st", d) else "—")
             name.Text, uname.Text, avatar.Image = p.DisplayName, "@" .. p.Name, self._thumbs[p.UserId] or ""
-            local allowed = self:_canSpectate(p)
-            cards[2].Interactable, cards[2].Selectable = allowed, allowed
-            cards[4].Interactable, cards[4].Selectable = allowed, allowed
         end
         self._avatarUpdate = update
         life:Give(function()
