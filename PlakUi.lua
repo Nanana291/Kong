@@ -5,7 +5,7 @@
 -- PLAK is native GUI geometry. Catalog thumbnails are real Roblox content; optional HTTP only enriches metadata.
 local ModuleStartedAt = os.clock()
 -- Product policy: public reward gateway is fixed, independent of FlowAuth helper/host overrides.
-local KEY_REWARD_URL = "https://flowauth.net/v1/projects/3405/rewards/public/complete/407?reward=reward-mv4jrbf3"
+local KEY_REWARD_URL = "https://flowauth.net/reward/22cb301da4b50eaf7e00d61e44a6ac85"
 local Loader =
     { AuthHandoffVersion = 2, FlowInitVersion = 1, FlowInitPromptVersion = 1, VerifiedPresentationVersion = 1 }
 local Services = {
