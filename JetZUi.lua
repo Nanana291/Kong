@@ -274,7 +274,7 @@ type Payload = { [any]: any }
 local U = {}
 local P: Payload = {}
 local Build: Payload = {}
-local Library: any = { Version = "1.7.0" }
+local Library: any = { Version = "1.7.1" }
 
 local V = Vector2.new
 local O = UDim2.fromOffset
@@ -3601,10 +3601,8 @@ function P.Window:_reflow()
     local drawer = self._sidebarVisible
         and width < D.DrawerBreakpoint
         and (not touch or area.X < area.Y * 1.18 or width < 515)
-    if drawer and touch and area.X < area.Y * 1.18 and not self._userSize then
-        width = math.floor(math.min(available.X, 600))
-        height = math.floor(math.min(available.Y, 730))
-    end
+    -- Touch windows keep their configured/default logical size. The viewport may
+    -- shrink it, but portrait mode must not silently enlarge the mobile default.
     local compact = drawer or width < D.LandscapeBreakpoint or (touch and area.Y < 550)
     local sidebar = if drawer or not self._sidebarVisible then 0 elseif compact then D.LandscapeSidebar else D.Sidebar
     local gutter = if compact then D.TouchGutter else D.Left
@@ -5087,7 +5085,8 @@ function Library:CreateWindow(options: WindowOptions?): (WindowHandle | false, s
     w._premiumURL = U.str(c.PremiumURL or c.StoreURL, "https://plak-hub.mysellauth.com/")
     w._responsive, w._animated, w._focusables, w._particles = {}, {}, {}, {}
     w._suppressed = setmetatable({}, { __mode = "k" })
-    w._size, w._position = V(D.Width, D.Height), Vector2.zero
+    w._useTouch = if type(c.Touch) == "boolean" then c.Touch else Input.TouchEnabled
+    w._size, w._position = if w._useTouch then V(590, 312) else V(D.Width, D.Height), Vector2.zero
     w._scale, w._speed =
         math.clamp(U.number(c.Scale, 1), D.MinScale, D.MaxScale), math.clamp(U.number(c.AnimationSpeed, 1), 0, 4)
     if w._speed > 0 then
@@ -5095,7 +5094,6 @@ function Library:CreateWindow(options: WindowOptions?): (WindowHandle | false, s
     end
     w._theme._contrast = math.clamp(U.number(c.Contrast, 1), 0.45, 2)
     w._theme:_apply()
-    w._useTouch = if type(c.Touch) == "boolean" then c.Touch else Input.TouchEnabled
     w._draggable, w._resizable, w._drawerOpen, w._sidebarVisible =
         c.Draggable ~= false, c.Resizable ~= false, false, true
     w._hideKeyEnabled = true
