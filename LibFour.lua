@@ -5388,10 +5388,10 @@ local Library do
                     Parent = Items["Indicator"].Instance,
                     Name = "\0",
                     ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-                    Color = FromRGB(0, 0, 0),
+                    Color = FromRGB(60, 60, 60),
                     Thickness = 1,
-                    Transparency = 0.5
-                }) Items["IndicatorStroke"]:AddToTheme({Color = "Outline"})
+                    Transparency = 0
+                })
 
                 Items["CheckImage"] = Instances:Create("ImageLabel", {
                     Parent = Items["Indicator"].Instance,
@@ -5438,11 +5438,11 @@ local Library do
                 end})
 
                 Items["Toggle"]:OnHover(function()
-                    --Items["Indicator"]:Tween(TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Size = UDim2New(0, 21, 0, 21), Position = UDim2New(0, -3, 0, -3)})
+                    Items["Indicator"]:Tween(TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Size = UDim2New(0, 21, 0, 21), Position = UDim2New(0, -3, 0, -3)})
                 end)
 
                 Items["Toggle"]:OnHoverLeave(function()
-                    --Items["Indicator"]:Tween(TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Size = UDim2New(0, 18, 0, 18), Position = UDim2New(0, 0, 0, 0)})
+                    Items["Indicator"]:Tween(TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Size = UDim2New(0, 18, 0, 18), Position = UDim2New(0, 0, 0, 0)})
                 end)
             end
 
@@ -5476,7 +5476,7 @@ local Library do
                     Items["IndicatorGradient"].Instance.Enabled = false
                     Items["Indicator"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = Library.Theme.Element})
                     Items["CheckImage"]:Tween(TweenInfo.new(Library.Tween.Time, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {ImageTransparency = 1, Size = UDim2New(0, 0, 0, 0)})
-                    Items["IndicatorStroke"]:Tween(nil, {Transparency = 0.5})
+                    Items["IndicatorStroke"]:Tween(nil, {Transparency = 0})
                 end
 
                 if Toggle.Callback then 
