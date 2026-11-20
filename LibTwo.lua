@@ -972,8 +972,8 @@ local Library do
     end
 
     Library.NextFlag = function(self)
-        local FlagNumber = self.UnnamedFlags + 1
-        return StringFormat("flag_number_%s_%s", FlagNumber, HttpService:GenerateGUID(false))
+        self.UnnamedFlags = self.UnnamedFlags + 1
+        return StringFormat("flag_number_%s", self.UnnamedFlags)
     end
 
     Library.AddToTheme = function(self, Item, Properties)
