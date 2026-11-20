@@ -4748,7 +4748,12 @@ function P.Island._mount(w: any): any
             end)
         end
     end))
-    screen.Parent = w._gui.Parent
+    local host = w._gui.Parent
+    if host then
+        pcall(function()
+            screen.Parent = host
+        end)
+    end
     return island
 end
 
@@ -5023,15 +5028,35 @@ function P.Window:_chrome()
     end
 end
 
+-- gethui() is the executor container drawn above the game UI; a cutscene, a loading
+-- screen or a PlayerGui reset cannot clear it. CoreGui is the next best host, and both
+-- are probed because neither is guaranteed to be exposed to this context.
+function U.protectedHost(): Instance?
+    local okHidden, hidden = pcall(function()
+        return gethui and gethui()
+    end)
+    if okHidden and typeof(hidden) == "Instance" then
+        return hidden
+    end
+    local ok, service = pcall(function()
+        return game:GetService("CoreGui")
+    end)
+    if ok and typeof(service) == "Instance" then
+        return service
+    end
+    return nil
+end
+
 function Library:CreateWindow(options: WindowOptions?): (WindowHandle | false, string?)
     local c = U.cfg(options)
     local parent = c.Parent
-    if parent == nil then
+    local defaultParent = parent == nil
+    if defaultParent then
         local player = Players.LocalPlayer
         if not player then
             return U.issue(nil, "CreateWindow", "call from a Roblox client")
         end
-        parent = player:FindFirstChildOfClass("PlayerGui")
+        parent = U.protectedHost() or player:FindFirstChildOfClass("PlayerGui")
         if not parent then
             return U.issue(nil, "CreateWindow", "PlayerGui is not available yet")
         end
@@ -5040,7 +5065,16 @@ function Library:CreateWindow(options: WindowOptions?): (WindowHandle | false, s
         return U.issue(nil, "CreateWindow", "Parent must be a client UI host")
     end
     local id = "JetZUi_" .. string.sub(U.str(c.Id, "Main"), 1, 80)
+    -- The previous window can live in any accepted host, because the host may have
+    -- changed between runs, so every candidate is inspected.
+    local myPlayer = Players.LocalPlayer
+    local playerGui = myPlayer and myPlayer:FindFirstChildOfClass("PlayerGui")
     local prior = parent:FindFirstChild(id)
+    for _, host in { U.protectedHost(), playerGui } do
+        if not prior and typeof(host) == "Instance" and host ~= parent then
+            prior = host:FindFirstChild(id)
+        end
+    end
     if prior then
         if prior:IsA("ScreenGui") and prior:GetAttribute("JetZUiOwner") == true then
             local owner = roots[prior]
@@ -5071,6 +5105,32 @@ function Library:CreateWindow(options: WindowOptions?): (WindowHandle | false, s
         SafeAreaCompatibility = Enum.SafeAreaCompatibility.None,
     })
     gui:SetAttribute("JetZUiOwner", true)
+    -- Parent a host once, while the instance is fresh. Moving an existing ScreenGui is
+    -- what raises "The Parent property of <id> is locked", so a host refused by this
+    -- client falls back to the next one instead of failing the whole window.
+    local function mount(host: Instance?): boolean
+        if typeof(host) ~= "Instance" then
+            return false
+        end
+        local accepted = pcall(function()
+            gui.Parent = host
+        end)
+        return accepted and gui.Parent == host
+    end
+    if not mount(parent) then
+        local resolved = nil
+        for _, candidate in { U.protectedHost(), playerGui } do
+            if candidate ~= parent and mount(candidate) then
+                resolved = candidate
+                break
+            end
+        end
+        if not resolved then
+            gui:Destroy()
+            return U.issue(nil, "CreateWindow", "this client rejected every UI host")
+        end
+        parent = resolved
+    end
     local safe = U.frame(gui, { Size = S(1, 1), Name = "SafeViewport" })
     local shell = U.frame(safe, { Name = "Window", Active = true, ZIndex = 1 })
     local w = U.node(nil, P.Window, "Window", { Name = U.str(c.Title, "JetZ"), Visible = c.Visible }, nil, shell)
@@ -5108,13 +5168,47 @@ function Library:CreateWindow(options: WindowOptions?): (WindowHandle | false, s
         c.Particles == true, math.clamp(math.round(U.number(c.ParticleCount, 16)), 0, D.ParticleMax), "Float"
     w:_chrome()
     w:SetVersion(U.str(c.Version))
-    local ok, why = pcall(function()
-        gui.Parent = parent
-    end)
-    if not ok then
+    -- Already mounted right after creation; moving it now would be the locked-Parent write.
+    if w._dead or gui.Parent ~= parent then
         w:Destroy()
-        return U.issue(nil, "CreateWindow", why)
+        return false, "Window was removed while opening"
     end
+    local function liveHost(): Instance?
+        local player = Players.LocalPlayer
+        if player and player.Parent then
+            local guiHost = player:FindFirstChildOfClass("PlayerGui")
+            if guiHost then
+                return guiHost
+            end
+        end
+        return U.protectedHost()
+    end
+    w._life:Give(gui.AncestryChanged:Connect(function()
+        if w._dead or gui.Parent or w._guiDestroying then
+            return
+        end
+        w._remounts = (w._remounts or 0) + 1
+        if not liveHost() or w._remounts > 3 then
+            w:Destroy()
+            return
+        end
+        U.later(w, w._life, "remount", 1.2, function()
+            if w._dead or gui.Parent or w._guiDestroying then
+                return
+            end
+            local nextHost = liveHost()
+            if not nextHost then
+                w:Destroy()
+                return
+            end
+            local mounted = pcall(function()
+                gui.Parent = nextHost
+            end)
+            if not mounted or gui.Parent ~= nextHost then
+                w:Destroy()
+            end
+        end)
+    end))
     roots[gui] = w
     U.resolveExperienceName(w)
     local stop = U.make("BindableFunction", gui, { Name = "Shutdown" })
@@ -5124,11 +5218,6 @@ function Library:CreateWindow(options: WindowOptions?): (WindowHandle | false, s
     end
     w._life:Give(gui.Destroying:Connect(function()
         w:Destroy()
-    end))
-    w._life:Give(gui.AncestryChanged:Connect(function()
-        if not gui.Parent then
-            w:Destroy()
-        end
     end))
     local function viewportChanged()
         w:_release(true)
