@@ -47,6 +47,7 @@ local Settings = {
 local TITLE = "Plak"
 local REWARD = "https://flowauth.net/v1/projects/3405/rewards/public/complete/407?reward=reward-mv4jrbf3"
 local DISCORD = "https://dsc.gg/plak"
+local STORE = "https://plak-hub.mysellauth.com/"
 local REGISTRY = "https://raw.githubusercontent.com/Nanana291/Plak/refs/heads/main/Games.json"
 local PREFS_FILE = "PLAK/ui_preferences.json"
 local OWNER = "__PlakUiLoader"
@@ -2067,13 +2068,13 @@ function View.aboutCard(parent, name, glyph, callback)
     return c
 end
 function View.purchase()
-    View.link(Settings.store or DISCORD, Settings.store and "Store Link Copied" or "Discord Link Copied")
+    View.link(Settings.store or STORE, "Store Link Copied")
 end
 function View.buildAbout()
     local a = { page = UI.routes.About, cards = {} }
     UI.about = a
     a.heading = View.heading(a.page, "brandPair", "About Plak", "Script hub for Roblox games.")
-    a.discord = View.aboutCard(a.page, "Join our Discord", "discord", function()
+    a.discord = View.aboutCard(a.page, "Plak Community", "discord", function()
         if State.callbacks.Social then
             U.call(State.callbacks.Social, "discord", Loader)
         else
@@ -2081,19 +2082,22 @@ function View.buildAbout()
         end
     end)
     a.discord.base, a.discord.restEdge = C(34, 23, 28), 0.30
-    a.discord.detail.Text = "Get updates, scripts and support."
+    a.discord.detail.Text = "Join our Discord"
+    a.discord.button.root:SetAttribute("ActionLabel", "Copy Plak Community Discord invite")
     a.discord.url = U.label(a.discord.panel, "Invite", DISCORD, 11, C(243, 158, 169), "medium")
-    a.discord.external = U.icon(a.discord.panel, "external", 25, C(254, 195, 204))
-    a.discord.external.ZIndex = 3
+    a.discord.copyIcon = U.icon(a.discord.panel, "copy", 23, C(254, 195, 204))
+    a.discord.copyIcon.ZIndex = 3
     a.discord.url.ZIndex = 3
     a.lifetime = View.aboutCard(a.page, "Lifetime Key", "crown", View.purchase)
     a.lifetime.base, a.lifetime.restEdge = C(39, 24, 32), 0.38
     a.lifetime.detail.Text = "One-time purchase"
+    a.lifetime.button.root:SetAttribute("ActionLabel", "Copy Plak store link for Lifetime Key")
     a.lifetime.foot = U.label(a.lifetime.panel, "Term", "Lifetime access", 11, Theme.secondary)
     a.lifetime.footIcon = U.icon(a.lifetime.panel, "infinity", 14, Theme.coral)
     a.monthly = View.aboutCard(a.page, "Monthly Key", "calendar", View.purchase)
     a.monthly.base, a.monthly.restEdge = C(37, 26, 33), 0.43
     a.monthly.detail.Text = "Monthly license"
+    a.monthly.button.root:SetAttribute("ActionLabel", "Copy Plak store link for Monthly Key")
     a.monthly.foot = U.label(a.monthly.panel, "Term", "Monthly access", 11, Theme.secondary)
     a.monthly.footIcon = U.icon(a.monthly.panel, "calendar", 14, Theme.coral)
     a.cards = { a.discord, a.lifetime, a.monthly }
@@ -2122,7 +2126,8 @@ function View.layoutAbout(g)
     local discordH = compact and 85 or 96
     local left = compact and 14 or 22
     local discord = a.discord
-    discord.group.Visible = Settings.community and not Settings.communityDismissed
+    -- PlakUi's saved dismissal applied to its launcher promo, not this About widget.
+    discord.group.Visible = Settings.community
     if discord.group.Visible then
         U.place(discord.group, x, y, width, discordH)
         discord.rest = O(x, y)
@@ -2132,7 +2137,7 @@ function View.layoutAbout(g)
         U.place(discord.title, textX, compact and 9 or 16, width - textX - 44, 25)
         U.place(discord.detail, textX, compact and 33 or 43, width - textX - 44, 18)
         U.place(discord.url, textX, compact and 55 or 64, width - textX - 42, 17)
-        U.place(discord.external, width - 41, (discordH - 25) / 2, 25, 25)
+        U.place(discord.copyIcon, width - 40, (discordH - 23) / 2, 23, 23)
         discord.url.Text = Settings.communityLink or DISCORD
         y += discordH + 15
     end
