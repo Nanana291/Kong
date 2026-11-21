@@ -3595,7 +3595,7 @@ function P.Window:_reflow()
     local area, s = self:_area(), self._scale
     local touch = self._useTouch
     local m = if touch then D.MobileSafe else D.DesktopSafe
-    local available = V(math.max(1, (area.X - 2 * m) / s), math.max(1, (area.Y - 2 * m) / s))
+    local available = V(math.max(1, area.X / s), math.max(1, area.Y / s))
     local width = math.floor(math.min(self._size.X, available.X))
     local height = math.floor(math.min(self._size.Y, available.Y))
     local drawer = self._sidebarVisible
@@ -5100,8 +5100,9 @@ function Library:CreateWindow(options: WindowOptions?): (WindowHandle | false, s
         ResetOnSpawn = false,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
         DisplayOrder = math.clamp(math.round(U.number(c.DisplayOrder, 70)), -100000, 100000),
-        ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets,
-        ClipToDeviceSafeArea = true,
+        ScreenInsets = Enum.ScreenInsets.None,
+        IgnoreGuiInset = true,
+        ClipToDeviceSafeArea = false,
         SafeAreaCompatibility = Enum.SafeAreaCompatibility.None,
     })
     gui:SetAttribute("JetZUiOwner", true)
@@ -5146,7 +5147,7 @@ function Library:CreateWindow(options: WindowOptions?): (WindowHandle | false, s
     w._responsive, w._animated, w._focusables, w._particles = {}, {}, {}, {}
     w._suppressed = setmetatable({}, { __mode = "k" })
     w._useTouch = if type(c.Touch) == "boolean" then c.Touch else Input.TouchEnabled
-    w._size, w._position = if w._useTouch then V(620, 350) else V(D.Width, D.Height), Vector2.zero
+    w._size, w._position = if w._useTouch then V(620, 325) else V(D.Width, D.Height), Vector2.zero
     w._scale, w._speed =
         math.clamp(U.number(c.Scale, 1), D.MinScale, D.MaxScale), math.clamp(U.number(c.AnimationSpeed, 1), 0, 4)
     if w._speed > 0 then
