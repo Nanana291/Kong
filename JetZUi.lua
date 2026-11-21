@@ -5146,7 +5146,7 @@ function Library:CreateWindow(options: WindowOptions?): (WindowHandle | false, s
     w._responsive, w._animated, w._focusables, w._particles = {}, {}, {}, {}
     w._suppressed = setmetatable({}, { __mode = "k" })
     w._useTouch = if type(c.Touch) == "boolean" then c.Touch else Input.TouchEnabled
-    w._size, w._position = if w._useTouch then V(600, 350) else V(D.Width, D.Height), Vector2.zero
+    w._size, w._position = if w._useTouch then V(620, 350) else V(D.Width, D.Height), Vector2.zero
     w._scale, w._speed =
         math.clamp(U.number(c.Scale, 1), D.MinScale, D.MaxScale), math.clamp(U.number(c.AnimationSpeed, 1), 0, 4)
     if w._speed > 0 then
